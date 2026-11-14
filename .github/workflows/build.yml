@@ -20,7 +20,7 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      # The GitHub runner already has the Android SDK; AGP downloads any missing platform itself.
 
       - uses: gradle/actions/setup-gradle@v4
         with:
