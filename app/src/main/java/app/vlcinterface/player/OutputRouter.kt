@@ -44,9 +44,20 @@ class OutputRouter(private val context: Context) {
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = refresh()
     }
 
+    private val handler = Handler(Looper.getMainLooper())
+
+    /** Routing can change without any device being added or removed (e.g. Android's output switcher), so re-check often. */
+    private val poller: Runnable = object : Runnable {
+        override fun run() {
+            try { refresh() } catch (_: Exception) {}
+            handler.postDelayed(this, 1500)
+        }
+    }
+
     init {
-        am.registerAudioDeviceCallback(callback, Handler(Looper.getMainLooper()))
+        am.registerAudioDeviceCallback(callback, handler)
         refresh()
+        handler.postDelayed(poller, 1500)
     }
 
     val active: OutputDevice? get() = _devices.value.firstOrNull { it.active }
@@ -103,7 +114,7 @@ class OutputRouter(private val context: Context) {
             }
         }
         list.sortBy { when (it.kind) { OutputKind.SPEAKER -> 0; OutputKind.WIRED, OutputKind.USB -> 1; OutputKind.BLUETOOTH -> if (it.connected) 2 else 3; else -> 4 } }
-        _devices.value = list
+        if (list != _devices.value) _devices.value = list
         val after = active
         if (before?.key != after?.key) onActiveChanged?.invoke(before, after)
     }

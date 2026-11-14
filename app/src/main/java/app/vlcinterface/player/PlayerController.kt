@@ -74,6 +74,28 @@ class PlayerController(private val context: Context, private val store: Store) {
         createEngine(store.current.subStyle)
     }
 
+    /** Radio "now playing" (ICY metadata) changes without any player event, so read it every few seconds. */
+    private val metaPoller: Runnable = object : Runnable {
+        override fun run() {
+            try {
+                val s = _state.value
+                if (s.item?.isRadio == true) {
+                    val m = mp.media
+                    val np = m?.getMeta(IMedia.Meta.NowPlaying, true)?.trim().orEmpty()
+                        .ifEmpty { m?.getMeta(IMedia.Meta.Title, true)?.trim().orEmpty().takeIf { it != s.item.title && !it.startsWith("http") } ?: "" }
+                    m?.release()
+                    if (np != s.nowPlaying) _state.value = _state.value.copy(nowPlaying = np)
+                }
+            } catch (_: Exception) {
+            }
+            main.postDelayed(this, 3000)
+        }
+    }
+
+    init {
+        main.post(metaPoller)
+    }
+
     private fun createEngine(style: SubStyle) {
         libVlc = LibVLC(context, buildOptions(style))
         styleInUse = style
@@ -281,10 +303,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 _state.value = s.copy(isPlaying = false, ended = true)
                 s.item?.let { item -> store.update { st -> st.copy(recent = st.recent.filterNot { it.uri == item.uri }) } }
             }
-            MediaPlayer.Event.TimeChanged -> {
-                val np = if (s.item?.isRadio == true) (mp.media?.getMeta(IMedia.Meta.NowPlaying) ?: "") else ""
-                _state.value = s.copy(time = ev.timeChanged, nowPlaying = np)
-            }
+            MediaPlayer.Event.TimeChanged -> _state.value = s.copy(time = ev.timeChanged)
             MediaPlayer.Event.LengthChanged -> _state.value = s.copy(length = ev.lengthChanged)
             MediaPlayer.Event.Buffering -> _state.value = s.copy(buffering = ev.buffering)
             MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESSelected, MediaPlayer.Event.Vout -> refreshTracks()
