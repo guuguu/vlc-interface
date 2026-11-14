@@ -594,13 +594,13 @@ private fun SyncControls(subs: Boolean, p: PlayerState, compact: Boolean, onDone
             steps.forEach { (d, l) -> SyncBtn(l) { set(value + d) } }
             SyncBtn("Reset") { set(0) }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SyncBtn(if (subs) "1 · Heard the line" else "1 · Saw it", highlight = step1) { q.t1 = System.currentTimeMillis(); step1 = true }
             SyncBtn(if (subs) "2 · Saw the text" else "2 · Heard it") {
                 if (step1) { set(value - (System.currentTimeMillis() - q.t1)); step1 = false }
             }
         }
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text("Apply to", color = Color(0xFFE2E4E8), fontSize = 12.sp)
             if (subs) {
                 Pill("This file", selected = scope == "file") { scope = "file" }
@@ -633,7 +633,7 @@ private fun BoxScope.OverlaySync(subs: Boolean, p: PlayerState, opacity: Int, on
     Column(Modifier.align(if (top) Alignment.TopCenter else Alignment.BottomCenter).safeDrawingPadding().padding(12.dp).widthIn(max = 720.dp).fillMaxWidth()
         .clip(RoundedCornerShape(16.dp)).background(Color(0xFF101216).copy(alpha = opacity / 100f)).border(1.dp, Color(0x2EFFFFFF), RoundedCornerShape(16.dp))
         .padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        FlowRow(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(if (subs) "Subtitle sync" else "Sound sync", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Text("Panel $opacity%", color = Color(0xFFE2E4E8), fontSize = 12.sp)
             Slider(opacity.toFloat(), { v -> store.update { it.copy(settings = it.settings.copy(syncPanelOpacity = v.toInt())) } }, valueRange = 20f..80f,
