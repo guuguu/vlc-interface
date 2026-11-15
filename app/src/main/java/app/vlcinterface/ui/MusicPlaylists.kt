@@ -113,6 +113,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     val conf = androidx.compose.ui.platform.LocalConfiguration.current
     val landscape = conf.screenWidthDp > conf.screenHeightDp
     // VU meters sideways: narrower in proportion to the shorter screen height.
+    // Sideways: song name and artist · album smaller in the same proportion as the picture (190 / 280).
+    val tk = if (landscape) 190f / 280f else 1f
     val vuK = if (landscape) (conf.screenHeightDp.toFloat() / conf.screenWidthDp).coerceIn(0.35f, 1f) else 1f
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().padding(end = if (meters) (21 * vuK).dp else 0.dp)) {
@@ -147,12 +149,12 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (coverNote.isNotEmpty()) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 // Tap the song name: its folder in Libraries.
-                Text(item.title, color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                Text(item.title, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.clickable { openItemFolder(nav, item) })
                 // Long-press the album: ReplayGain scan of the whole album (its songs in the current folder / queue).
                 var rgAlbum by remember { mutableStateOf(false) }
                 val albumName = p.metaAlbum.ifEmpty { item.album }
-                Text(listOfNotNull(p.metaArtist.ifEmpty { null }, p.metaAlbum.ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = 15.sp, textAlign = TextAlign.Center,
+                Text(listOfNotNull(p.metaArtist.ifEmpty { null }, p.metaAlbum.ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = (15 * tk).sp, textAlign = TextAlign.Center,
                     modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { if (albumName.isNotBlank()) rgAlbum = true }))
                 // Why a song didn't play (shown here too, not only on the video player); the queue goes on by itself.
                 if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
