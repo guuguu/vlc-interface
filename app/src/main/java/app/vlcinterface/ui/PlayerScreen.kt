@@ -498,7 +498,6 @@ private fun TracksPanel(p: PlayerState, onPanel: (Panel) -> Unit) {
             Text("Audio offset  ", color = C.muted, fontSize = 13.sp)
             Text("${p.audioDelayMs} ms", color = C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Pill("Sync sound") { onPanel(Panel.SYNC_AUDIO) }
-            Pill("Hue & sat", modifier = Modifier.padding(start = 6.dp)) { onPanel(Panel.PICTURE) }
         }
         Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             SectionTitle("Subtitles", Modifier.weight(1f))
