@@ -309,8 +309,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     val left = curLeft + p.queue.drop(p.index + 1).sumOf { q -> (if (q.endMs > 0) q.endMs - q.startMs else q.durationMs).coerceAtLeast(0) }
                     val tl = left / 1000
                     val leftTxt = if (tl >= 3600) "%d:%02d:%02d".format(tl / 3600, tl / 60 % 60, tl % 60) else "%d:%02d".format(tl / 60, tl % 60)
-                    val ofWhat = when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
-                    Text("Queue ›  $leftTxt left in $ofWhat", color = accent(), fontSize = 13.sp, modifier = Modifier.clickable { nav.go(Screen.Queue) }.padding(8.dp)) }
+                    Text("Queue ›  $leftTxt", color = accent(), fontSize = 13.sp, modifier = Modifier.clickable { nav.go(Screen.Queue) }.padding(8.dp)) }
                 next.forEachIndexed { i, n ->
                     Row(Modifier.fillMaxWidth().clickable { player.jumpTo(p.index + 1 + i) }.padding(vertical = if (landscape) 5.dp else 8.dp)) {
                         Text("${i + 1}.", color = C.muted, modifier = Modifier.width(28.dp))
