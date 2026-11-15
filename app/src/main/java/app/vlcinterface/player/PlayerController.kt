@@ -97,6 +97,8 @@ data class PlayerState(
     val rgInfo: String = "",
     val sleepUntil: Long = 0,
     val sleepEndOfTrack: Boolean = false,
+    /** Sleep after this many songs (the playing one counts as 1); 0 = off. */
+    val sleepSongs: Int = 0,
 ) {
     val hasNext: Boolean get() = index >= 0 && index + 1 < queue.size
     val hasPrev: Boolean get() = index > 0
@@ -797,7 +799,15 @@ class PlayerController(private val context: Context, private val store: Store) {
         endHandled = true
         if (s.sleepEndOfTrack) { main.post { stop() }; return }
         s.item?.let { item -> store.update { st -> st.copy(recent = st.recent.filterNot { it.uri == item.uri }) } }
-        val n = nextIndex(_state.value, manual = false)
+        // Sleep after a number of songs: count down; when the queue / playlist runs out first, go on from its beginning.
+        var wrap = false
+        if (s.sleepSongs > 0) {
+            val left = s.sleepSongs - 1
+            if (left <= 0) { _state.value = _state.value.copy(sleepSongs = 0); main.post { stop() }; return }
+            _state.value = _state.value.copy(sleepSongs = left)
+            wrap = true
+        }
+        val n = nextIndex(_state.value, manual = false) ?: if (wrap && _state.value.queue.isNotEmpty()) 0 else null
         if (n != null) main.post { startItem(n, -1) }
         else {
             _state.value = _state.value.copy(isPlaying = false, ended = true)
@@ -954,10 +964,47 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun setSleep(minutes: Int) {
         val s = _state.value
         _state.value = when {
-            minutes > 0 -> s.copy(sleepUntil = System.currentTimeMillis() + minutes * 60_000L, sleepEndOfTrack = false)
-            minutes == -1 -> s.copy(sleepUntil = 0, sleepEndOfTrack = true)
-            else -> s.copy(sleepUntil = 0, sleepEndOfTrack = false)
+            minutes > 0 -> s.copy(sleepUntil = System.currentTimeMillis() + minutes * 60_000L, sleepEndOfTrack = false, sleepSongs = 0)
+            minutes == -1 -> s.copy(sleepUntil = 0, sleepEndOfTrack = false, sleepSongs = 1)
+            else -> s.copy(sleepUntil = 0, sleepEndOfTrack = false, sleepSongs = 0)
         }
+    }
+
+    /** Sleep after [n] songs, the playing one included (fewer left in the queue / playlist → it goes on from its beginning). */
+    fun setSleepSongs(n: Int) {
+        _state.value = _state.value.copy(sleepUntil = 0, sleepEndOfTrack = false, sleepSongs = n.coerceIn(1, 999))
+    }
+
+    /**
+     * Sleep at the end of this album: its songs are taken from the Library (the album's folder, album order),
+     * played from the current song to the album's last one, then playback stops. Returns how many songs that is.
+     */
+    suspend fun sleepAfterAlbum(): Int {
+        val s = _state.value
+        val item = s.item ?: return 0
+        val fk = item.folderKey
+        val src = store.current.sources.firstOrNull { it.id == item.sourceId }
+        val songs: List<PlayItem> = try {
+            when {
+                fk.startsWith("local:") -> {
+                    val vol = fk.removePrefix("local:").substringBefore(':'); val rel = fk.removePrefix("local:").substringAfter(':')
+                    app.vlcinterface.sources.MusicLibrary.collectLocal(context, app.vlcinterface.sources.LocalFolder("$vol:$rel", rel, rel, 0, vol), false)
+                }
+                src != null && fk.isNotEmpty() -> app.vlcinterface.sources.Browse.list(src, fk).getOrNull()?.let { l ->
+                    app.vlcinterface.sources.MusicLibrary.playOrder(l, fk.trimEnd('/').substringAfterLast('/')).map { app.vlcinterface.sources.MusicLibrary.toPlayItem(it, src, fk) }
+                } ?: emptyList()
+                else -> emptyList()
+            }
+        } catch (_: Exception) { emptyList() }
+        val album = songs.filter { it.isMusic && (item.album.isBlank() || it.album.equals(item.album, true)) }
+        val at = album.indexOfFirst { it.uri == item.uri }
+        val rest = if (at >= 0) album.drop(at + 1) else s.queue.drop(s.index + 1).takeWhile { it.album.equals(item.album, true) && it.album.isNotBlank() }
+        val restUris = rest.map { it.uri }.toSet()
+        val cur = _state.value
+        // The album's next songs follow right after this one (the rest of the queue stays behind them).
+        val q = cur.queue.take(cur.index + 1) + rest + cur.queue.drop(cur.index + 1).filter { it.uri !in restUris }
+        _state.value = cur.copy(queue = q, sleepUntil = 0, sleepEndOfTrack = false, sleepSongs = 1 + rest.size)
+        return 1 + rest.size
     }
 
     val isPlaying: Boolean get() = mp.isPlaying

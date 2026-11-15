@@ -136,7 +136,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     RgScanDialog(nav, { songs }, RgModeSingle, "ReplayGain: $albumName") { rgAlbum = false }
                 }
                 val badges = listOfNotNull(if (item.trackNo > 0) "Track ${item.trackNo}" else null, p.rgInfo.ifEmpty { null },
-                    if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else if (p.sleepEndOfTrack) "Sleep after this song" else null)
+                    if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min"
+                    else if (p.sleepSongs == 1) "Sleep after this song" else if (p.sleepSongs > 1) "Sleep after ${p.sleepSongs} songs" else null)
                 // Tap the badges (or the title area) for the song's tags and ReplayGain values.
                 var showInfo by remember { mutableStateOf(false) }
                 Text(if (badges.isNotEmpty()) badges.joinToString(" · ") + "  ⓘ" else "Tags & ReplayGain ⓘ", color = accent(), fontSize = 12.sp,
@@ -178,6 +179,33 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 else -> "Open source"
             }
             Pill("☰  $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { openOrigin(nav) }
+            // Sleep: number input (up to 3 digits) for "After … songs" and "Custom minutes…".
+            var sleepAsk by remember { mutableStateOf("") }
+            var sleepNote by remember { mutableStateOf("") }
+            val sleepScope = rememberCoroutineScope()
+            if (sleepAsk.isNotEmpty()) {
+                var num by remember(sleepAsk) { mutableStateOf("") }
+                androidx.compose.material3.AlertDialog(onDismissRequest = { sleepAsk = "" }, containerColor = C.panel,
+                    title = { Text(if (sleepAsk == "songs") "Sleep after how many songs?" else "Sleep after how many minutes?", color = C.text) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            androidx.compose.material3.OutlinedTextField(num, { v -> num = v.filter { it.isDigit() }.take(3) }, singleLine = true,
+                                label = { Text(if (sleepAsk == "songs") "Songs (1–999)" else "Minutes (1–999)") },
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                            if (sleepAsk == "songs") Text("The playing song counts as 1. If the queue or playlist has fewer songs left, it goes on from its beginning.", color = C.muted, fontSize = 12.sp)
+                        }
+                    },
+                    confirmButton = {
+                        STextButton({
+                            val n = num.toIntOrNull() ?: 0
+                            if (n > 0) { if (sleepAsk == "songs") player.setSleepSongs(n) else player.setSleep(n) }
+                            sleepAsk = ""
+                        }, enabled = (num.toIntOrNull() ?: 0) > 0) { Text("Set", color = accent()) }
+                    },
+                    dismissButton = { STextButton({ sleepAsk = "" }) { Text("Cancel") } },
+                )
+            }
+            if (sleepNote.isNotEmpty()) { Text(sleepNote, color = C.muted, fontSize = 12.sp); LaunchedEffect(sleepNote) { kotlinx.coroutines.delay(4000); sleepNote = "" } }
             // RG button state and its question live outside the auto-fitting row (that row is laid out more than once).
             var rgAsk by remember { mutableStateOf<app.vlcinterface.sources.Rg?>(null) }
             val rgScope = rememberCoroutineScope()
@@ -217,11 +245,14 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     }
                 }
                 Box {
-                    Pill("Sleep", selected = p.sleepUntil > 0 || p.sleepEndOfTrack) { sleepMenu = true }
+                    Pill("Sleep", selected = p.sleepUntil > 0 || p.sleepSongs > 0) { sleepMenu = true }
                     SDropdownMenu(sleepMenu, { sleepMenu = false }) {
-                        listOf(15, 30, 45, 60, 90).forEach { m -> SMenuItem({ Text("$m minutes") }, { player.setSleep(m); sleepMenu = false }) }
-                        SMenuItem({ Text("After this song") }, { player.setSleep(-1); sleepMenu = false })
-                        SMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
+                        SMenuItem({ Text("After 1 song (this one)") }, { player.setSleepSongs(1); sleepMenu = false })
+                        SMenuItem({ Text("After this album") }, { sleepMenu = false; sleepScope.launch { val n = player.sleepAfterAlbum(); if (n <= 1) sleepNote = "No more songs of this album after this one: stops after this song" } })
+                        SMenuItem({ Text("After … songs") }, { sleepMenu = false; sleepAsk = "songs" })
+                        SMenuItem({ Text("30 minutes") }, { player.setSleep(30); sleepMenu = false })
+                        SMenuItem({ Text("Custom minutes…") }, { sleepMenu = false; sleepAsk = "minutes" })
+                        if (p.sleepUntil > 0 || p.sleepSongs > 0) SMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
                     }
                 }
             }
