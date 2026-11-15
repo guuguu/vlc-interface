@@ -169,6 +169,7 @@ object RgScanner {
             coroutineContext.ensureActive()
             // Skip rule: a track is skipped when tagged; an album only when every file in it is tagged.
             if (!rescan) {
+                _state.value = _state.value.copy(phase = "Checking existing tags", current = g.first().title)
                 val tagged = g.map { it to (ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r -> if (albumMode) r.trackGain != null && r.albumGain != null else r.trackGain != null } ?: false) }
                 if (tagged.all { it.second }) {
                     g.forEach { results += RgResult(it.title, "skipped — already tagged", true) }
@@ -213,13 +214,30 @@ object RgScanner {
 
     // ---------- decoding ----------
 
+    /**
+     * SMB file for Android's decoder. The decoder asks for many small pieces; each one was a network round trip,
+     * which made scanning a NAS crawl. Now it reads 1 MB at a time and serves the small pieces from memory.
+     */
     private class SmbSource(f: SmbFile) : MediaDataSource() {
         private val raf: SmbRandomAccessFile = f.openRandomAccess("r") as SmbRandomAccessFile
         private val len = f.length()
+        private val block = ByteArray(1 shl 20)
+        private var blockStart = -1L
+        private var blockLen = 0
         @Synchronized override fun readAt(position: Long, buffer: ByteArray, offset: Int, size: Int): Int {
             if (position >= len) return -1
-            raf.seek(position)
-            return raf.read(buffer, offset, minOf(size.toLong(), len - position).toInt())
+            if (blockStart < 0 || position < blockStart || position >= blockStart + blockLen) {
+                raf.seek(position)
+                var n = 0
+                val want = minOf(block.size.toLong(), len - position).toInt()
+                while (n < want) { val r = raf.read(block, n, want - n); if (r <= 0) break; n += r }
+                blockStart = position; blockLen = n
+                if (n <= 0) return -1
+            }
+            val from = (position - blockStart).toInt()
+            val count = minOf(size, blockLen - from)
+            System.arraycopy(block, from, buffer, offset, count)
+            return count
         }
         override fun getSize() = len
         override fun close() { try { raf.close() } catch (_: Exception) {} }
@@ -243,6 +261,8 @@ object RgScanner {
                 ?: throw IllegalStateException("no audio track the phone can decode")
             ex.selectTrack(ti)
             val fmt = ex.getTrackFormat(ti)
+            val durUs = if (fmt.containsKey(MediaFormat.KEY_DURATION)) fmt.getLong(MediaFormat.KEY_DURATION) else 0L
+            var lastReport = 0L
             val mime = fmt.getString(MediaFormat.KEY_MIME)!!
             var rate = fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             var ch = fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
@@ -255,15 +275,27 @@ object RgScanner {
             var buf = FloatArray(0)
             val info = MediaCodec.BufferInfo()
             var inDone = false
+            var lastOut = System.currentTimeMillis()
             try {
                 while (true) {
+                    // Safety: a decoder that stops answering after the end of the file must not hang the scan.
+                    if (inDone && System.currentTimeMillis() - lastOut > 5000) break
                     if (!inDone) {
                         val ii = codec.dequeueInputBuffer(10_000)
                         if (ii >= 0) {
                             val ib = codec.getInputBuffer(ii)!!
                             val n = ex.readSampleData(ib, 0)
                             if (n < 0) { codec.queueInputBuffer(ii, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM); inDone = true }
-                            else { codec.queueInputBuffer(ii, 0, n, ex.sampleTime, 0); ex.advance() }
+                            else {
+                                val t = ex.sampleTime
+                                codec.queueInputBuffer(ii, 0, n, t, 0); ex.advance()
+                                // Progress inside the file, so a long track on a slow NAS never looks stuck.
+                                val now = System.currentTimeMillis()
+                                if (durUs > 0 && now - lastReport > 500) {
+                                    lastReport = now
+                                    _state.value = _state.value.copy(phase = "Measuring ${(t * 100 / durUs).coerceIn(0, 100)}%")
+                                }
+                            }
                         }
                     }
                     val oi = codec.dequeueOutputBuffer(info, 10_000)
@@ -275,6 +307,7 @@ object RgScanner {
                             meter = Loudness(rate, ch)
                         }
                         oi >= 0 -> {
+                            lastOut = System.currentTimeMillis()
                             val ob = codec.getOutputBuffer(oi)!!
                             if (meter == null) meter = Loudness(rate, ch)
                             if (info.size > 0) {
@@ -334,13 +367,24 @@ object RgScanner {
                 .execute().let { r -> if (!r.isSuccessful) { r.close(); throw IllegalStateException("HTTP ${r.code}") }; r.body!!.byteStream() }
             else -> null
         } ?: throw IllegalStateException("can't read the file")
-        input.use { i -> dst.outputStream().use { o -> i.copyTo(o, 256 * 1024) } }
+        input.use { i -> dst.outputStream().use { o -> copy(i, o, "Reading the file") } }
+    }
+
+    /** Copies with progress on the scan page (big files over the network take a while). */
+    private fun copy(i: java.io.InputStream, o: java.io.OutputStream, what: String, total: Long = -1) {
+        val buf = ByteArray(256 * 1024); var n = 0L; var last = 0L
+        while (true) {
+            val r = i.read(buf); if (r < 0) break
+            o.write(buf, 0, r); n += r
+            val now = System.currentTimeMillis()
+            if (now - last > 500) { last = now; _state.value = _state.value.copy(phase = "$what " + if (total > 0) "${n * 100 / total}%" else "${n / 1_000_000} MB") }
+        }
     }
 
     private fun upload(ctx: Context, item: PlayItem, src: Source?, tmp: File) {
         val u = item.uri
         when {
-            u.startsWith("content://") -> ctx.contentResolver.openOutputStream(Uri.parse(u), "wt")!!.use { o -> tmp.inputStream().use { it.copyTo(o, 256 * 1024) } }
+            u.startsWith("content://") -> ctx.contentResolver.openOutputStream(Uri.parse(u), "wt")!!.use { o -> tmp.inputStream().use { copy(it, o, "Saving", tmp.length()) } }
             u.startsWith("file://") || u.startsWith("/") -> {
                 val f = File(if (u.startsWith("/")) u else Uri.parse(u).path!!)
                 val t = File(f.parentFile, f.name + ".rgtmp"); tmp.copyTo(t, true); if (!t.renameTo(f)) { f.delete(); t.renameTo(f) }
@@ -350,7 +394,7 @@ object RgScanner {
                 val cx = SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain)
                 val orig = SmbFile(u, cx)
                 val t = SmbFile("$u.rgtmp", cx)
-                t.outputStream.use { o -> tmp.inputStream().use { it.copyTo(o, 256 * 1024) } }
+                t.outputStream.use { o -> tmp.inputStream().use { copy(it, o, "Saving to the server", tmp.length()) } }
                 if (t.length() != tmp.length()) { t.delete(); throw IllegalStateException("copy on the server is incomplete") }
                 orig.delete()
                 t.renameTo(SmbFile(u, cx))
