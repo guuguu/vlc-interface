@@ -130,6 +130,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 val albumName = p.metaAlbum.ifEmpty { item.album }
                 Text(listOfNotNull(p.metaArtist.ifEmpty { null }, p.metaAlbum.ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = 15.sp, textAlign = TextAlign.Center,
                     modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { if (albumName.isNotBlank()) rgAlbum = true }))
+                // Why a song didn't play (shown here too, not only on the video player); the queue goes on by itself.
+                if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 if (rgAlbum) {
                     val songs = p.queue.filter { it.isMusic && it.album.equals(albumName, true) && (it.folderKey == item.folderKey || item.folderKey.isEmpty()) }
                         .ifEmpty { p.queue.filter { it.isMusic && it.album.equals(albumName, true) } }.ifEmpty { listOf(item) }

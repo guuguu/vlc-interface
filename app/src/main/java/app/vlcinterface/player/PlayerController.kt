@@ -629,7 +629,19 @@ class PlayerController(private val context: Context, private val store: Store) {
         triedBridge = false
         val oldPfd = currentPfd
         currentPfd = null
-        val media = makeMedia(item, s0, useBridge = item.smbVersion == "SMB1")
+        val media = try { makeMedia(item, s0, useBridge = item.smbVersion == "SMB1") } catch (e: Exception) {
+            // The file can't be opened at all (gone, moved, phone permission lost…): say so and go on with the next one,
+            // instead of the queue silently stopping on the song before.
+            try { oldPfd?.close() } catch (_: Exception) {}
+            stopping = true; mp.stop(); main.postDelayed({ stopping = false }, 500)
+            _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, ended = false,
+                metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, rgInfo = "",
+                error = "Can't open ${item.title}: ${e.message ?: e.javaClass.simpleName}")
+            endHandled = false
+            failsInRow++
+            if (failsInRow < 5) main.postDelayed({ if (_state.value.item === item && !endHandled) handleEnd(_state.value) }, 1_000)
+            return
+        }
         stopping = true                      // the "stopped" of the old media isn't the end of a song
         mp.setMedia(media)
         media.release()
