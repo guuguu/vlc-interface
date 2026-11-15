@@ -161,6 +161,13 @@ class OutputRouter(private val context: Context) {
         } else openSwitcher()
     }
 
+    /**
+     * True while the app plays on a device it picked itself and Android routes media elsewhere
+     * (e.g. phone speaker chosen while Bluetooth is connected). Android's volume (buttons, swipe) then
+     * changes the other device, so the app's own volume is used instead.
+     */
+    val overriding: Boolean get() = chosen != null && NativeAudio.active && chosen != lastRouted
+
     /** Opens Android's media output switcher for this app, or Bluetooth settings on older systems. */
     fun openSwitcher(): Boolean {
         if (Build.VERSION.SDK_INT >= 34) {

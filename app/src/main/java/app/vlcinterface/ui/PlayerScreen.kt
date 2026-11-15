@@ -290,8 +290,21 @@ private fun rotate(a: Activity?, landscape: Boolean) {
 private class VolumeDrag(ctx: Context) {
     private val am = ctx.getSystemService(AudioManager::class.java)
     private var base = 0f
-    fun start() { base = am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() }
+    private var own = false
+    private var ownBase = 1f
+    fun start() {
+        // Speaker picked in the app while Android routes media to Bluetooth: Android's volume would change the
+        // Bluetooth device, so the swipe changes the app's volume on the device that is playing.
+        own = app.vlcinterface.App.instance.output.overriding
+        if (own) ownBase = app.vlcinterface.App.instance.player.appVolume
+        base = am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+    }
     fun update(total: Float): Int {
+        if (own) {
+            val p = app.vlcinterface.App.instance.player
+            p.setAppVolume(ownBase + total * 1.25f)
+            return (p.appVolume * 100).toInt()
+        }
         val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
         val nv = kotlin.math.round(base + total * max * 1.25f).toInt().coerceIn(0, max)
         if (nv != am.getStreamVolume(AudioManager.STREAM_MUSIC)) am.setStreamVolume(AudioManager.STREAM_MUSIC, nv, 0)
@@ -508,10 +521,11 @@ private fun PicturePanel(onBack: () -> Unit) {
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Hue", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-            Text("${if (hue > 0) "+" else ""}${hue.toInt()}°", color = accent(), fontWeight = FontWeight.SemiBold)
+            Text("%+.1f°".format(java.util.Locale.US, hue), color = accent(), fontWeight = FontWeight.SemiBold)
         }
-        Slider(hue, { hue = (if (kotlin.math.abs(it) < 4f) 0f else it); player.setPicture(hue, sat, false) },
-            onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = -180f..180f,
+        // Fine range: −20° … +20° over the whole slider, steps of 0.1°.
+        Slider(hue.coerceIn(-20f, 20f), { hue = (if (kotlin.math.abs(it) < 0.3f) 0f else Math.round(it * 10f) / 10f); player.setPicture(hue, sat, false) },
+            onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = -20f..20f,
             colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Saturation", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))

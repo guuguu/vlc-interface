@@ -178,7 +178,7 @@ data class Settings(
                 o.optString("repeat", "off"),
                 o.optBoolean("shuffle", false),
                 o.optString("soundEngine", "app"),
-                o.optDouble("pictureHue", 0.0).toFloat().coerceIn(-180f, 180f),
+                o.optDouble("pictureHue", 0.0).toFloat().coerceIn(-20f, 20f),
                 o.optDouble("pictureSat", 1.0).toFloat().coerceIn(0f, 3f),
                 o.optString("libraryKind", "audio").let { if (it == "video") "video" else "audio" },
                 o.optInt("buttonScale", 75).coerceIn(50, 125),

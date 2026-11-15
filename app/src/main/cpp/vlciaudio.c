@@ -53,6 +53,9 @@ static bool g_started;
 
 /* Gains (linear) set from Kotlin; volume/mute from libVLC. */
 static _Atomic float g_gainL = 1.f, g_gainR = 1.f, g_vol = 1.f;
+/* App volume: used while the app plays on a device Android isn't routing media to (its volume buttons then
+   change the other device), so the app's own volume control works on the device actually playing. */
+static _Atomic float g_appVol = 1.f;
 static atomic_bool g_mute, g_limit;
 
 /* Peaks per written chunk, keyed by play time, read by the UI when that time comes. */
@@ -192,7 +195,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     }
 
     float gl = atomic_load(&g_gainL), gr = atomic_load(&g_gainR);
-    float v = atomic_load(&g_mute) ? 0.f : atomic_load(&g_vol);
+    float v = atomic_load(&g_mute) ? 0.f : atomic_load(&g_vol) * atomic_load(&g_appVol);
     gl *= v; gr *= v;
     bool lim = atomic_load(&g_limit) || gl > 1.f || gr > 1.f;
 
@@ -423,4 +426,10 @@ Java_app_vlcinterface_player_NativeAudio_setDevice(JNIEnv *env, jobject thiz, ji
         if (open_stream() && wasPlaying) ensure_started();
     } else atomic_store(&g_disconnected, true);
     pthread_mutex_unlock(&g_lock);
+}
+
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_setAppVolume(JNIEnv *env, jobject thiz, jfloat v) {
+    (void)env; (void)thiz;
+    atomic_store(&g_appVol, v < 0.f ? 0.f : (v > 2.f ? 2.f : v));
 }

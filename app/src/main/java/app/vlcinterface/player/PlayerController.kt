@@ -372,6 +372,17 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (!playing) main.postDelayed({ mp.pause() }, 400)
     }
 
+    // ---------- volume on a device the app picked itself ----------
+
+    /** App volume 0…2 (1 = as the device is set), used only while [OutputRouter.overriding]. */
+    var appVolume = 1f
+        private set
+
+    fun setAppVolume(v: Float) { appVolume = v.coerceIn(0f, 2f); NativeAudio.appVolume(appVolume) }
+
+    /** Volume buttons / swipe step while the app plays on its own picked device. Returns the new percent (100 = as set). */
+    fun stepAppVolume(up: Boolean): Int { setAppVolume(appVolume + if (up) 0.0667f else -0.0667f); return (appVolume * 100).toInt() }
+
     /** Closing the video player: hue/saturation go back to the original colours (user rule). */
     fun resetPicture() {
         val ps = store.current.settings

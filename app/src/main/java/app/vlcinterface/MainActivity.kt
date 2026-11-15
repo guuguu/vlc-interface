@@ -35,6 +35,25 @@ class MainActivity : ComponentActivity() {
         setContent { AppRoot(nav) { finish() } }
     }
 
+    /**
+     * Volume buttons. Normally Android handles them. While the app plays on a device it picked itself and Android
+     * routes media elsewhere (speaker picked while Bluetooth is connected), Android's buttons would change the other
+     * device and nothing seemed to happen: then they change the app's volume on the device that is playing.
+     */
+    override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
+        val k = event.keyCode
+        if ((k == android.view.KeyEvent.KEYCODE_VOLUME_UP || k == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) && App.instance.output.overriding) {
+            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                val pct = App.instance.player.stepAppVolume(k == android.view.KeyEvent.KEYCODE_VOLUME_UP)
+                volToast?.cancel()
+                volToast = android.widget.Toast.makeText(this, "Volume on ${App.instance.player.currentOutputName.ifEmpty { "this device" }}: $pct %", android.widget.Toast.LENGTH_SHORT).also { it.show() }
+            }
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
+    private var volToast: android.widget.Toast? = null
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)

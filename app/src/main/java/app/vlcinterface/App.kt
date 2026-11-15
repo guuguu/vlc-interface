@@ -35,6 +35,7 @@ class App : Application() {
         player.currentOutputName = output.active?.name ?: ""
         output.onActiveChanged = { before, after, picked ->
             player.currentOutputName = after?.name ?: ""
+            if (!output.overriding) player.setAppVolume(1f)   // back on Android's routing: Android's volume again
             // Picked in the app: the sound was already moved to it (outputChanged would send it back to Android's default).
             if (before?.name != after?.name && !picked) player.outputChanged()
             if (after != null) store.update { it.copy(lastOutput = after.name) }

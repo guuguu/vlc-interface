@@ -25,6 +25,10 @@ object NativeAudio {
     private external fun stats(out: LongArray)
     private external fun reroute()
     private external fun setDevice(id: Int)
+    private external fun setAppVolume(v: Float)
+
+    /** App volume (0…2, 1 = unchanged) for the device the app plays on by itself. */
+    fun appVolume(v: Float) { if (active) try { setAppVolume(v) } catch (_: Throwable) {} }
 
     /** Plays on this device (AudioDeviceInfo id; 0 = Android's default). */
     fun device(id: Int) { if (active) try { setDevice(id) } catch (_: Throwable) {} }
