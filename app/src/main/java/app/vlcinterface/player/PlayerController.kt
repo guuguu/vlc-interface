@@ -42,6 +42,9 @@ data class Origin(
     val localFolderId: String = "",
 )
 
+/** Gain for songs that carry no ReplayGain at all (when ReplayGain is on). */
+const val NO_RG_DB = -5f
+
 data class PlayItem(
     val uri: String,
     val title: String,
@@ -181,8 +184,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val g = if (album) rg?.albumGain ?: rg?.trackGain else rg?.trackGain ?: rg?.albumGain
                 val used = if (g == null) "" else if (album && rg?.albumGain != null || !album && rg?.trackGain == null) "album" else "track"
                 _state.value = _state.value.copy(rgInfo = when {
-                    rg == null -> "RG: tags not readable here"
-                    g == null -> "RG: no tags"
+                    rg == null || g == null -> "No RG · plays −5.00 dB (libVLC)"
                     else -> "RG $used " + (if (g >= 0) "+" else "−") + "%.2f".format(java.util.Locale.US, kotlin.math.abs(g)) + " dB (libVLC)"
                 })
             }
@@ -196,7 +198,9 @@ class PlayerController(private val context: Context, private val store: Store) {
             val gain = if (album) rg?.albumGain ?: rg?.trackGain else rg?.trackGain ?: rg?.albumGain
             val peak = if (album) rg?.albumPeak ?: rg?.trackPeak else rg?.trackPeak ?: rg?.albumPeak
             val used = if (gain == null) "" else if (album && rg?.albumGain != null || !album && rg?.trackGain == null) "album" else "track"
-            var db = if (gain == null) 0f else gain + set.rgPreampDb
+            // No ReplayGain in the song: played 5 dB lower instead (typical untagged masters are loud), and the
+            // player line says so.
+            var db = if (gain == null) NO_RG_DB else gain + set.rgPreampDb
             var limited = false
             if (gain != null && set.rgClipProtect && peak != null && peak > 0f) { val cap = -20f * log10(peak); if (cap < db) { db = cap; limited = true } }
             rgDb = db
@@ -204,8 +208,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             // Shows the song's own value (exactly as in its tags / the scan: track or album). When what is played
             // differs — preamp added, or lowered so the loudest peak can't clip — that is said separately.
             val info = when {
-                rg == null -> "RG: tags not readable here"
-                gain == null -> "RG: no tags"
+                rg == null || gain == null -> "No RG · plays ${f(NO_RG_DB)}"
                 kotlin.math.abs(db - gain) < 0.005f -> "RG $used ${f(gain)}"
                 else -> "RG $used ${f(gain)} · plays ${f(db)}" + when {
                     limited && set.rgPreampDb != 0f -> " (preamp, peak limit)"
@@ -241,7 +244,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val mode = if (appOutputWanted()) "none" else when (s.rgMode) { "track" -> "track"; "album", "auto" -> "album"; else -> "none" }
         o += "--audio-replay-gain-mode=$mode"
         o += "--audio-replay-gain-preamp=${s.rgPreampDb}"
-        o += "--audio-replay-gain-default=0"
+        o += "--audio-replay-gain-default=$NO_RG_DB"      // songs without ReplayGain: 5 dB lower (as with the app's output)
         o += if (s.rgClipProtect) "--audio-replay-gain-peak-protection" else "--no-audio-replay-gain-peak-protection"
         // libVLC never fetches album art from the internet itself (pictures are handled by the app, saved only in album folders).
         o += "--no-metadata-network-access"
