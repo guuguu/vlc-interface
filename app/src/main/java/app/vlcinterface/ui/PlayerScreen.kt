@@ -88,6 +88,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
+import androidx.compose.ui.layout.onSizeChanged
 
 private enum class Panel { NONE, TRACKS, DOWNLOAD, STYLE, SYNC_SUB, SYNC_AUDIO }
 
@@ -117,7 +118,12 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     var panel by remember { mutableStateOf(Panel.NONE) }
     var controls by remember { mutableStateOf(true) }
     var locked by remember { mutableStateOf(false) }
-    var scaleIdx by remember { mutableIntStateOf(0) }
+    var scaleIdx by remember { mutableIntStateOf(scales.indexOfFirst { it.first == player.scale }.coerceAtLeast(0)) }
+    // One video view for the whole player screen: it moves between the portrait and landscape layouts
+    // instead of being recreated, and the picture is re-fitted every time its area changes size.
+    val videoView = remember { VLCVideoLayout(ctx).also { it.keepScreenOn = true } }
+    DisposableEffect(Unit) { onDispose { player.detach(videoView) } }
+    LaunchedEffect(landscape, p.videoW, p.videoH) { kotlinx.coroutines.delay(150); player.refreshSurface() }
     var toast by remember { mutableStateOf("") }
     var touchTick by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
@@ -170,8 +176,12 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
 
     val video: @Composable (Modifier) -> Unit = { m ->
         Box(m.background(Color.Black)) {
-            AndroidView(factory = { c -> VLCVideoLayout(c).also { it.keepScreenOn = true; player.attach(it) } },
-                modifier = Modifier.fillMaxSize(), onRelease = { player.detach(it) })
+            AndroidView(factory = { _ ->
+                    (videoView.parent as? android.view.ViewGroup)?.removeView(videoView)
+                    videoView.also { player.attach(it) }
+                },
+                modifier = Modifier.fillMaxSize().onSizeChanged { player.refreshSurface() },
+                onRelease = { /* the same view is reused by the next layout; detached when the screen closes */ })
             if (!inPip) GestureLayer(
                 onTap = { controls = !controls; touchTick++ },
                 onSeek = { fwd -> val s = st.settings.doubleTapSeekSec * 1000L; player.seekBy(if (fwd) s else -s); toast = if (fwd) "+${st.settings.doubleTapSeekSec} s" else "−${st.settings.doubleTapSeekSec} s" },

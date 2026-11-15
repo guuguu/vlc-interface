@@ -493,7 +493,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         mp.release()
         libVlc.release()
         createEngine(style)
-        if (layout != null) mp.attachViews(layout, null, true, false)
+        if (layout != null) { mp.attachViews(layout, null, true, false); refreshSurface() }
     }
 
     /** Applies a new subtitle style / ReplayGain setting; restarts the current item at the same position. */
@@ -530,7 +530,20 @@ class PlayerController(private val context: Context, private val store: Store) {
         main.postDelayed({ refreshTracks() }, 800)
     }
 
-    fun setScale(scale: MediaPlayer.ScaleType) { mp.setVideoScale(scale) }
+    /** Zoom mode chosen in the player (kept across items, rotation and engine restarts). */
+    var scale: MediaPlayer.ScaleType = MediaPlayer.ScaleType.SURFACE_BEST_FIT
+        private set
+
+    fun setScale(s: MediaPlayer.ScaleType) { scale = s; mp.setVideoScale(s); refreshSurface() }
+
+    /** Re-fits the picture to the current size of the video area (rotation, split screen, PiP, new video size). */
+    fun refreshSurface() {
+        if (attachedLayout == null) return
+        main.post {
+            try { mp.updateVideoSurfaces() } catch (_: Throwable) {}
+            try { mp.setVideoScale(scale) } catch (_: Throwable) {}
+        }
+    }
 
     // ---------- sync offsets ----------
 
@@ -576,6 +589,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (attachedLayout != null) mp.detachViews()
         attachedLayout = layout
         mp.attachViews(layout, null, true, false)
+        refreshSurface()
     }
 
     fun detach(layout: VLCVideoLayout) {
@@ -622,7 +636,8 @@ class PlayerController(private val context: Context, private val store: Store) {
             MediaPlayer.Event.TimeChanged -> _state.value = s.copy(time = ev.timeChanged)
             MediaPlayer.Event.LengthChanged -> _state.value = s.copy(length = ev.lengthChanged)
             MediaPlayer.Event.Buffering -> _state.value = s.copy(buffering = ev.buffering)
-            MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESSelected, MediaPlayer.Event.Vout -> refreshTracks()
+            MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESSelected -> refreshTracks()
+            MediaPlayer.Event.Vout -> { refreshTracks(); refreshSurface() }
             MediaPlayer.Event.EncounteredError -> {
                 val item = s.item
                 // libVLC can't open some SMB servers (SMB1-only): retry once through the in-app bridge.
@@ -661,11 +676,20 @@ class PlayerController(private val context: Context, private val store: Store) {
         val a = mp.audioTracks?.map { Track(it.id, it.name ?: "Track ${it.id}") } ?: emptyList()
         val sp = mp.spuTracks?.map { Track(it.id, it.name ?: "Track ${it.id}") } ?: emptyList()
         val vt = mp.currentVideoTrack
+        // Displayed size: pixel aspect (anamorphic DVDs/TV) and rotation (phone-shot videos) included.
+        var dw = _state.value.videoW; var dh = _state.value.videoH
+        if (vt != null && vt.width > 0 && vt.height > 0) {
+            dw = if (vt.sarNum > 0 && vt.sarDen > 0) (vt.width.toLong() * vt.sarNum / vt.sarDen).toInt() else vt.width
+            dh = vt.height
+            if (vt.orientation >= 4) { val t = dw; dw = dh; dh = t }   // LeftTop…RightBottom = turned 90°/270°
+        }
+        val sizeChanged = dw != _state.value.videoW || dh != _state.value.videoH
         _state.value = _state.value.copy(
             audioTracks = a, spuTracks = sp, audioTrack = mp.audioTrack, spuTrack = mp.spuTrack,
-            videoW = vt?.width ?: _state.value.videoW, videoH = vt?.height ?: _state.value.videoH,
+            videoW = dw, videoH = dh,
             length = if (mp.length > 0) mp.length else _state.value.length,
         )
+        if (sizeChanged) refreshSurface()
     }
 
     /** Radio "now playing" (ICY metadata) changes without any player event, so read it every few seconds. */
