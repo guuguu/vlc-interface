@@ -266,6 +266,31 @@ class PlayerController(private val context: Context, private val store: Store) {
         }, 3000)
     }
 
+    // ---------- picture colour ----------
+
+    /** True when the playing item was opened with the colour filter (live changes possible). */
+    private var pictureFilterOn = false
+
+    private fun pictureNeutral(h: Float, s: Float) = kotlin.math.abs(h) < 0.5f && kotlin.math.abs(s - 1f) < 0.01f
+
+    /**
+     * Hue/saturation from the player. While dragging ([commit] false) changes are applied live when possible;
+     * on release they are saved. The first change on a video reopens it at the same spot (a second at most),
+     * because hardware decoding must switch to a mode the colour filter can work on.
+     */
+    fun setPicture(hue: Float, sat: Float, commit: Boolean) {
+        if (commit) store.update { it.copy(settings = it.settings.copy(pictureHue = hue, pictureSat = sat)) }
+        val s = _state.value
+        val item = s.item ?: return
+        if (item.isMusic || item.isRadio) return
+        if (pictureFilterOn && NativeAudio.picture(libVlc, mp, true, hue, sat)) return
+        if (commit && (pictureFilterOn || !pictureNeutral(hue, sat))) {
+            val pos = mp.time; val playing = mp.isPlaying
+            startItem(s.index, pos)
+            if (!playing) main.postDelayed({ mp.pause() }, 400)
+        }
+    }
+
     /** Settings → Sound engine changed: rebuild the engine and continue where it was. */
     fun applySoundEngine() {
         val s = _state.value
@@ -474,6 +499,15 @@ class PlayerController(private val context: Context, private val store: Store) {
             else -> Media(libVlc, Uri.parse(item.uri))
         }
         media.setHWDecoderEnabled(true, false)
+        // Hue/saturation need decoded frames the filter can touch: hardware decoding without direct rendering.
+        val ps = store.current.settings
+        pictureFilterOn = !item.isMusic && !item.isRadio && !pictureNeutral(ps.pictureHue, ps.pictureSat)
+        if (pictureFilterOn) {
+            media.addOption(":no-mediacodec-dr")
+            media.addOption(":video-filter=adjust")
+            media.addOption(":hue=${ps.pictureHue}")
+            media.addOption(":saturation=${ps.pictureSat}")
+        }
         if (item.isRadio) media.addOption(":network-caching=3000")
         if (item.startMs >= 0) media.addOption(":start-time=${item.startMs / 1000.0}")
         if (item.endMs > 0) media.addOption(":stop-time=${item.endMs / 1000.0}")

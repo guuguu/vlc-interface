@@ -90,7 +90,7 @@ import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.util.VLCVideoLayout
 import androidx.compose.ui.layout.onSizeChanged
 
-private enum class Panel { NONE, TRACKS, DOWNLOAD, STYLE, SYNC_SUB, SYNC_AUDIO }
+private enum class Panel { NONE, TRACKS, DOWNLOAD, STYLE, SYNC_SUB, SYNC_AUDIO, PICTURE }
 
 fun Context.findActivity(): Activity? {
     var c = this
@@ -224,7 +224,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first); toast = scales[scaleIdx].second },
                 onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ })
             when (panel) {
-                Panel.TRACKS, Panel.DOWNLOAD, Panel.STYLE -> SidePanel(landscape, onClose = { panel = Panel.NONE }) {
+                Panel.TRACKS, Panel.DOWNLOAD, Panel.STYLE, Panel.PICTURE -> SidePanel(landscape, onClose = { panel = Panel.NONE }) {
                     PanelContent(panel, p, onPanel = { panel = it })
                 }
                 Panel.SYNC_SUB, Panel.SYNC_AUDIO -> OverlaySync(panel == Panel.SYNC_SUB, p, st.settings.syncPanelOpacity) { panel = Panel.TRACKS }
@@ -247,7 +247,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                                 syncPanelOpen && syncBelowVideo -> PortraitSync(if (panel == Panel.SYNC_SUB) 0 else 1, p, onSwitch = { panel = if (it == 0) Panel.SYNC_SUB else Panel.SYNC_AUDIO }) { panel = Panel.TRACKS }
                                 panel != Panel.NONE -> Column(Modifier.fillMaxSize().padding(12.dp).clip(RoundedCornerShape(18.dp)).background(C.panel)) {
                                     Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Text(when (panel) { Panel.DOWNLOAD -> "Download subtitles"; Panel.STYLE -> "Subtitle style"; else -> "Audio & subtitles" },
+                                        Text(when (panel) { Panel.DOWNLOAD -> "Download subtitles"; Panel.STYLE -> "Subtitle style"; Panel.PICTURE -> "Picture colour"; else -> "Audio & subtitles" },
                                             color = C.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
                                         IconButton({ panel = if (panel == Panel.TRACKS) Panel.NONE else Panel.TRACKS }) { Text("✕", color = C.text) }
                                     }
@@ -428,7 +428,41 @@ private fun PanelContent(panel: Panel, p: PlayerState, onPanel: (Panel) -> Unit)
     when (panel) {
         Panel.DOWNLOAD -> DownloadPanel(p) { onPanel(Panel.TRACKS) }
         Panel.STYLE -> StylePanel { onPanel(Panel.TRACKS) }
+        Panel.PICTURE -> PicturePanel { onPanel(Panel.TRACKS) }
         else -> TracksPanel(p, onPanel)
+    }
+}
+
+/** Hue and saturation sliders, applied to the picture while you drag. */
+@Composable
+private fun PicturePanel(onBack: () -> Unit) {
+    val player = App.instance.player
+    val st by App.instance.store.state.collectAsState()
+    var hue by remember { mutableStateOf(st.settings.pictureHue) }
+    var sat by remember { mutableStateOf(st.settings.pictureSat) }
+    val scroll = rememberScrollState()
+    Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Hue", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text("${if (hue > 0) "+" else ""}${hue.toInt()}°", color = accent(), fontWeight = FontWeight.SemiBold)
+        }
+        Slider(hue, { hue = (if (kotlin.math.abs(it) < 4f) 0f else it); player.setPicture(hue, sat, false) },
+            onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = -180f..180f,
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Saturation", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text("${(sat * 100).toInt()} %", color = accent(), fontWeight = FontWeight.SemiBold)
+        }
+        Slider(sat, { sat = (if (kotlin.math.abs(it - 1f) < 0.03f) 1f else it); player.setPicture(hue, sat, false) },
+            onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = 0f..3f,
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Pill("Reset") { hue = 0f; sat = 1f; player.setPicture(0f, 1f, true) }
+            Pill("Back") { onBack() }
+        }
+        Text("0° and 100 % = original colours. The first change reopens the video at the same spot for a moment. " +
+            "Kept for all videos until you reset it. Music and radio are not affected.", color = C.muted, fontSize = 12.sp)
+        Box(Modifier.height(12.dp))
     }
 }
 
@@ -445,6 +479,12 @@ private fun TracksPanel(p: PlayerState, onPanel: (Panel) -> Unit) {
             Text("Audio offset  ", color = C.muted, fontSize = 13.sp)
             Text("${p.audioDelayMs} ms", color = C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Pill("Sync sound") { onPanel(Panel.SYNC_AUDIO) }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(10.dp)).background(C.card2).padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            val ps = App.instance.store.current.settings
+            Text("Picture  ", color = C.muted, fontSize = 13.sp)
+            Text("hue ${ps.pictureHue.toInt()}° · saturation ${(ps.pictureSat * 100).toInt()} %", color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Pill("Hue & saturation") { onPanel(Panel.PICTURE) }
         }
         Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             SectionTitle("Subtitles", Modifier.weight(1f))

@@ -374,3 +374,22 @@ Java_app_vlcinterface_player_NativeAudio_stats(JNIEnv *env, jobject thiz, jlongA
     v[11] = (jlong)(atomic_load(&g_vol) * 1000.f); v[12] = atomic_load(&g_mute);
     (*env)->SetLongArrayRegion(env, out, 0, 13, v);
 }
+
+/* Picture hue/saturation, live (libVLC "adjust" filter). Returns 0 when applied. */
+typedef void (*f_adj_int)(void *, unsigned, int);
+typedef void (*f_adj_float)(void *, unsigned, float);
+JNIEXPORT jint JNICALL
+Java_app_vlcinterface_player_NativeAudio_adjust(JNIEnv *env, jobject thiz, jlong libObj, jlong mpObj, jboolean enable, jfloat hue, jfloat sat) {
+    (void)env; (void)thiz;
+    static f_adj_int p_int; static f_adj_float p_float;
+    if (!p_int) p_int = (f_adj_int)find("libvlc_video_set_adjust_int");
+    if (!p_float) p_float = (f_adj_float)find("libvlc_video_set_adjust_float");
+    if (!p_int || !p_float) return -1;
+    void *mp = resolve_player(libObj, mpObj);
+    if (!mp) return -2;
+    /* libvlc_adjust_Enable 0, Contrast 1, Brightness 2, Hue 3, Saturation 4, Gamma 5 */
+    p_float(mp, 3, hue);
+    p_float(mp, 4, sat);
+    p_int(mp, 0, enable ? 1 : 0);
+    return 0;
+}

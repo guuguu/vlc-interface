@@ -125,6 +125,9 @@ data class Settings(
     val shuffle: Boolean = false,
     /** "app" = the app's own output (balance, preamp, meters), falls back by itself; "libvlc" = libVLC's output. */
     val soundEngine: String = "app",
+    /** Picture colour: hue −180…180°, saturation 0…3 (1 = unchanged). */
+    val pictureHue: Float = 0f,
+    val pictureSat: Float = 1f,
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -140,6 +143,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble())
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -166,6 +170,8 @@ data class Settings(
                 o.optString("repeat", "off"),
                 o.optBoolean("shuffle", false),
                 o.optString("soundEngine", "app"),
+                o.optDouble("pictureHue", 0.0).toFloat().coerceIn(-180f, 180f),
+                o.optDouble("pictureSat", 1.0).toFloat().coerceIn(0f, 3f),
             )
         }
     }

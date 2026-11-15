@@ -23,6 +23,11 @@ object NativeAudio {
     private external fun setGains(left: Float, right: Float, limiter: Boolean)
     private external fun readPeaks(out: FloatArray)
     private external fun stats(out: LongArray)
+    private external fun adjust(libObj: Long, mpObj: Long, enable: Boolean, hue: Float, sat: Float): Int
+
+    /** Live picture hue (−180…180°) / saturation (0…3); false if this libVLC build can't do it live. */
+    fun picture(lib: LibVLC, mp: MediaPlayer, enable: Boolean, hue: Float, sat: Float): Boolean =
+        loaded && try { adjust(handle(lib), handle(mp), enable, hue, sat) == 0 } catch (_: Throwable) { false }
 
     /** Turned off for this app run after the watchdog saw no sound come out. */
     @Volatile var failed: Boolean = false
