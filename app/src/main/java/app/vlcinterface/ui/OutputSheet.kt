@@ -16,6 +16,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -51,7 +53,10 @@ fun OutputSheet(onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = C.panel) {
         val scroll = rememberScrollState()
         Column(Modifier.scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Sound output", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                SymButton(onDismiss) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
+                Text("Sound output", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            }
             CardBox {
                 devices.forEach { d ->
                     Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable {
