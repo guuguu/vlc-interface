@@ -248,6 +248,10 @@ fun DeviceSoundList() {
     val names = (devices.filter { it.connected }.map { it.name } + st.devicePreamp.keys + st.deviceBalance.keys).distinct()
     Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Per output device", color = C.text, fontSize = 15.sp)
+        val na = app.vlcinterface.player.NativeAudio
+        Text(if (na.active) "Sound engine: app output — balance, preamp and stereo meters active"
+            else "Sound engine: libVLC output (" + na.reason.ifEmpty { "not attached" } + ") — balance may not apply on every phone, no meters",
+            color = if (na.active) C.muted else C.bad, fontSize = 12.sp)
         Text("Added on top of the general preamp (total max +12 dB). Applied automatically when the output changes.", color = C.muted, fontSize = 12.sp)
         names.forEach { n -> DeviceSoundControls(n) }
     }

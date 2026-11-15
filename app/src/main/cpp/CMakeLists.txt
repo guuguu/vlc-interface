@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(vlciaudio C)
+add_library(vlciaudio SHARED vlciaudio.c)
+target_compile_options(vlciaudio PRIVATE -O2 -Wall)
+target_link_libraries(vlciaudio aaudio log dl m)

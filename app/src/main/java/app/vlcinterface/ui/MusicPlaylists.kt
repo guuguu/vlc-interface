@@ -83,6 +83,14 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import app.vlcinterface.player.NativeAudio
+import kotlin.math.log10
 
 // ---------------- Music player ----------------
 
@@ -97,8 +105,11 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     LaunchedEffect(item.uri) { if (!item.isMusic && !item.isRadio) nav.replace(Screen.Player) }
     var sleepMenu by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
-    Column(Modifier.fillMaxSize()) {
-        BackHeader("Now playing", nav) { OutputPill(openOutput) }
+    val meters = NativeAudio.active
+    Box(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().padding(end = if (meters) 21.dp else 0.dp)) {
+        // No page title: the song name is already shown in the middle of the player.
+        BackHeader("", nav) { OutputPill(openOutput) }
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Cover(p.artworkUrl.ifEmpty { item.artwork }, 280, Modifier.padding(top = 8.dp))
@@ -119,14 +130,22 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
                 Row { Text(fmtTime(pos), color = C.muted, fontSize = 13.sp); Grow(); Text("-" + fmtTime((len - pos).coerceAtLeast(0)), color = C.muted, fontSize = 13.sp) }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                CtlBtn("⏮", 52) { player.prev() }
-                CtlBtn("−${st.settings.doubleTapSeekSec}", 52) { player.seekBy(-st.settings.doubleTapSeekSec * 1000L) }
+            // Skip buttons say where they skip in: the playlist or the folder playback started from.
+            val within = when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
+            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(62.dp)) {
+                    CtlBtn("⏮", 52) { player.prev() }
+                    Text("Prev in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+                Box(Modifier.padding(top = 4.dp)) { CtlBtn("−${st.settings.doubleTapSeekSec}", 44) { player.seekBy(-st.settings.doubleTapSeekSec * 1000L) } }
                 Box(Modifier.size(76.dp).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
                     Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = 26.sp, fontWeight = FontWeight.Bold)
                 }
-                CtlBtn("+${st.settings.doubleTapSeekSec}", 52) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) }
-                CtlBtn("⏭", 52) { player.next() }
+                Box(Modifier.padding(top = 4.dp)) { CtlBtn("+${st.settings.doubleTapSeekSec}", 44) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) } }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(62.dp)) {
+                    CtlBtn("⏭", 52) { player.next() }
+                    Text("Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
             }
             // Prominent shortcut: where the music is playing from (playlist or Library folder).
             val fromLabel = when (p.origin.kind) {
@@ -136,7 +155,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             Pill("☰  $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { openOrigin(nav) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Pill("Shuffle", selected = st.settings.shuffle) { App.instance.store.update { it.copy(settings = it.settings.copy(shuffle = !it.settings.shuffle)) } }
+                Pill(if (st.settings.shuffle) "Random" else "In order", selected = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
                 Pill("Repeat: " + st.settings.repeat.replaceFirstChar { it.uppercase() }, selected = st.settings.repeat != "off") {
                     val next = when (st.settings.repeat) { "off" -> "all"; "all" -> "one"; else -> "off" }
                     App.instance.store.update { it.copy(settings = it.settings.copy(repeat = next)) }
@@ -164,6 +183,48 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             Box(Modifier.height(16.dp))
         }
     }
+    // Stereo level meters: right edge, full height of the player.
+    if (meters) StereoVu(Modifier.align(Alignment.CenterEnd).padding(end = 4.dp).fillMaxHeight().width(15.dp))
+    }
+}
+
+/**
+ * Two vertical meters (left, right): 6 dp wide, 3 dp apart. Fast rise, slow fall;
+ * each has a square peak marker that holds ~1 s, then falls slowly.
+ */
+@Composable
+fun StereoVu(modifier: Modifier) {
+    var lvL by remember { mutableFloatStateOf(0f) }
+    var lvR by remember { mutableFloatStateOf(0f) }
+    var pkL by remember { mutableFloatStateOf(0f) }
+    var pkR by remember { mutableFloatStateOf(0f) }
+    LaunchedEffect(Unit) {
+        val buf = FloatArray(2)
+        var last = 0L; var holdL = 0L; var holdR = 0L
+        fun meter(p: Float): Float = if (p <= 0.00001f) 0f else ((20f * log10(p) + 48f) / 48f).coerceIn(0f, 1f) // −48…0 dBFS
+        while (true) withFrameNanos { t ->
+            val dt = if (last == 0L) 0f else ((t - last) / 1e9f).coerceAtMost(0.1f); last = t
+            NativeAudio.peaks(buf)
+            val nl = meter(buf[0]); val nr = meter(buf[1])
+            lvL = if (nl > lvL) nl else maxOf(nl, lvL - dt * 1.2f)
+            lvR = if (nr > lvR) nr else maxOf(nr, lvR - dt * 1.2f)
+            if (lvL >= pkL) { pkL = lvL; holdL = t } else if (t - holdL > 1_000_000_000L) pkL = maxOf(lvL, pkL - dt * 0.35f)
+            if (lvR >= pkR) { pkR = lvR; holdR = t } else if (t - holdR > 1_000_000_000L) pkR = maxOf(lvR, pkR - dt * 0.35f)
+        }
+    }
+    Canvas(modifier) {
+        val w = 6.dp.toPx(); val gap = 3.dp.toPx(); val h = size.height
+        val zones = listOf(0f to 0.7f to Color(0xFF4CC26A), 0.7f to 0.9f to Color(0xFFE8B23A), 0.9f to 1f to Color(0xFFE5534B))
+        listOf(lvL to pkL, lvR to pkR).forEachIndexed { i, (lv, pk) ->
+            val x = size.width - (2 - i) * w - (1 - i) * gap
+            drawRect(Color(0xFF1A1D23), Offset(x, 0f), Size(w, h))
+            zones.forEach { (range, col) ->
+                val top = minOf(lv, range.second)
+                if (top > range.first) drawRect(col, Offset(x, h * (1f - top)), Size(w, h * (top - range.first)))
+            }
+            if (pk > 0.01f) drawRect(if (pk >= 0.9f) Color(0xFFE5534B) else Color.White, Offset(x, (h * (1f - pk)).coerceAtMost(h - w)), Size(w, w))
+        }
+    }
 }
 
 @Composable
@@ -184,6 +245,8 @@ fun QueueScreen(nav: Navigator) {
         BackHeader("Queue", nav, "${p.queue.size} items") {
             if (p.queue.isNotEmpty()) TextButton({ saveName = "" }) { Text("Save as playlist", color = accent()) }
         }
+        val st by App.instance.store.state.collectAsState()
+        OrderSwitch(st.settings.shuffle, Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) { player.setShuffle(it) }
         val state = rememberLazyListState(initialFirstVisibleItemIndex = (p.index - 2).coerceAtLeast(0))
         LazyColumn(Modifier.weight(1f).scrollbar(state).padding(horizontal = 16.dp), state = state) {
             itemsIndexed(p.queue) { i, q ->
@@ -265,7 +328,8 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
                             val total = pl.items.sumOf { it.durationMs }
                             Text("${pl.items.size} items" + if (total > 0) " · ${fmtTime(total)}" else "", color = C.muted, fontSize = 13.sp)
                         }
-                        Pill("Play", filled = true) { playPlaylist(nav, pl, 0) }
+                        Pill("Play", filled = true) { playPlaylist(nav, pl, 0, random = false) }
+                        Pill("Random", modifier = Modifier.padding(start = 6.dp)) { playPlaylist(nav, pl, pl.items.indices.random(), random = true) }
                     }
                 }
             }
@@ -281,11 +345,30 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
     }
 }
 
-fun playPlaylist(nav: Navigator, pl: Playlist, index: Int) {
+/** [random]: true = random order, false = in order, null = keep the current mode (tap on a song). */
+fun playPlaylist(nav: Navigator, pl: Playlist, index: Int, random: Boolean? = null) {
     if (pl.items.isEmpty()) return
     val items = pl.items.map { MusicLibrary.fromPlEntry(it) }
-    App.instance.player.playQueue(items, index, Origin("playlist", playlistId = pl.id, title = pl.name))
+    App.instance.player.playQueue(items, index, Origin("playlist", playlistId = pl.id, title = pl.name), random = random)
     nav.go(if (items[index.coerceIn(0, items.size - 1)].isMusic) Screen.Music else Screen.Player)
+}
+
+/** "In order" / "Random" switch for the queue. */
+@Composable
+fun OrderSwitch(random: Boolean, modifier: Modifier = Modifier, onChange: (Boolean) -> Unit) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Pill("In order", selected = !random) { onChange(false) }
+        Pill("Random", selected = random) { onChange(true) }
+    }
+}
+
+/** "Play in order" / "Play random" buttons for a list (playlist or Library folder). */
+@Composable
+fun PlayListButtons(modifier: Modifier = Modifier, onPlay: (random: Boolean) -> Unit) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Pill("▶  Play in order", filled = true) { onPlay(false) }
+        Pill("⤮  Play random") { onPlay(true) }
+    }
 }
 
 @Composable
@@ -311,7 +394,6 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
     Column(Modifier.fillMaxSize()) {
         BackHeader(pl.name, nav, "${pl.items.size} items") {
             Pill("+ Add") { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)) }
-            Pill("Play", filled = true, modifier = Modifier.padding(start = 6.dp)) { playPlaylist(nav, pl, 0) }
             Box {
                 IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, "Playlist options", tint = C.text) }
                 DropdownMenu(menu, { menu = false }) {
@@ -328,6 +410,9 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                     DropdownMenuItem({ Text("Delete playlist", color = C.bad) }, { confirmDelete = true; menu = false })
                 }
             }
+        }
+        if (pl.items.isNotEmpty()) PlayListButtons(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) { random ->
+            playPlaylist(nav, pl, if (random) pl.items.indices.random() else 0, random = random)
         }
         val state = rememberLazyListState()
         LaunchedEffect(d.highlight) {

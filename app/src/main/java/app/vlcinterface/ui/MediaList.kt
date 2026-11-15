@@ -140,10 +140,10 @@ fun MediaList(
     var deleteTarget by remember { mutableStateOf<Entry?>(null) }
     val playing by App.instance.player.state.collectAsState()
 
-    fun play(e: Entry) {
+    fun play(e: Entry, random: Boolean? = null) {
         val items = order.map { MusicLibrary.toPlayItem(it, source, folderKey) }
         val i = items.indexOfFirst { it.uri == e.uri }.coerceAtLeast(0)
-        App.instance.player.playQueue(items, i, origin)
+        App.instance.player.playQueue(items, i, origin, random = random)
         if (!items[i].isMusic) nav.go(Screen.Player) else nav.go(Screen.Music)
     }
 
@@ -159,6 +159,12 @@ fun MediaList(
         entries == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
         rows.isEmpty() -> Text("No audio or video here.", color = C.muted, modifier = Modifier.padding(20.dp))
         else -> LazyColumn(Modifier.fillMaxSize().scrollbar(state).padding(horizontal = 16.dp), state = state) {
+            // Play the whole folder (its audio + video files, album order) in order or at random.
+            if (order.size > 1) item {
+                PlayListButtons(Modifier.padding(top = 8.dp, bottom = 4.dp)) { random ->
+                    play(if (random) order.random() else order.first(), random)
+                }
+            }
             items(rows) { r ->
                 when (r) {
                     is Row0.Dir -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).combinedClickable(onClick = { onOpenDir(r.e) }, onLongClick = { menuFor = r.e }),

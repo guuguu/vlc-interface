@@ -20,6 +20,15 @@ android {
         ndk { abiFilters += listOf("arm64-v8a") }
     }
 
+    // Native audio output (AAudio) for balance, preamp and stereo VU levels.
+    ndkVersion = "27.2.12479018"
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
     signingConfigs {
         create("test") {
             // Test key committed for personal test builds only. Replace before any public release.

@@ -27,6 +27,7 @@ import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.util.VLCVideoLayout
 import kotlin.math.log10
+import kotlin.math.pow
 
 data class Track(val id: Int, val name: String)
 
@@ -118,8 +119,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     private var triedBridge = false
     private var dp: DynamicsProcessing? = null
     private var eq: MediaPlayer.Equalizer? = null
-    /** Shuffle order of queue indices (only used when shuffle is on). */
-    private var shuffleOrder: List<Int> = emptyList()
+    /** The queue in its original order while it is shown/played in random order (null = queue is in order). */
+    private var orderedQueue: List<PlayItem>? = null
 
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state
@@ -137,6 +138,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         styleInUse = style
         rgInUse = rgSignature()
         mp = MediaPlayer(libVlc)
+        // Our own audio output: real balance/preamp and stereo levels. Falls back to libVLC's output.
+        NativeAudio.attachTo(libVlc, mp)
         mp.setEventListener { ev -> onEvent(ev) }
         installDialogs()
         setupSoundChain()
@@ -156,6 +159,8 @@ class PlayerController(private val context: Context, private val store: Store) {
             "--avcodec-skiploopfilter=1",
             // A fixed Android audio session, so preamp + balance effects can be attached to it.
             "--audiotrack-session-id=$sessionId",
+            // Fallback output (when our own output cannot attach): AudioTrack, so the session id above is used.
+            "--aout=audiotrack",
         )
         // ReplayGain: only tagged files change; untagged ones get 0 dB.
         val mode = when (s.rgMode) { "track" -> "track"; "album", "auto" -> "album"; else -> "none" }
@@ -185,6 +190,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     // ---------- sound chain: general preamp + per-device preamp + per-device balance ----------
 
     private fun setupSoundChain() {
+        if (NativeAudio.active) { dp?.release(); dp = null; applySoundChain(); return }
         try {
             dp?.release()
             val cfg = DynamicsProcessing.Config.Builder(
@@ -206,6 +212,11 @@ class PlayerController(private val context: Context, private val store: Store) {
         fun att(f: Float): Float = if (f <= 0.001f) -60f else (20f * log10(f)).coerceAtLeast(-60f)
         val left = total + if (bal > 0) att(1f - bal / 100f) else 0f
         val right = total + if (bal < 0) att(1f + bal / 100f) else 0f
+        if (NativeAudio.active) {
+            fun lin(db: Float) = if (db <= -60f) 0f else 10f.pow(db / 20f)
+            NativeAudio.gains(lin(left), lin(right), total > 0f)
+            return
+        }
         val d = dp
         if (d != null) {
             try {
@@ -279,12 +290,41 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     // ---------- queue ----------
 
-    fun playQueue(items: List<PlayItem>, index: Int, origin: Origin, startAt: Long = -1) {
+    /**
+     * Plays [items] from [index]. [random]: true = random order, false = in order, null = keep the current mode.
+     * In random mode the chosen item plays first and the rest of the queue is shuffled after it;
+     * the original order is kept so switching back to "in order" restores it.
+     */
+    fun playQueue(items: List<PlayItem>, index: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null) {
         if (items.isEmpty()) return
-        val i = index.coerceIn(0, items.size - 1)
-        shuffleOrder = if (store.current.settings.shuffle) (items.indices - i).shuffled() else emptyList()
-        _state.value = PlayerState(queue = items, index = i, origin = origin)
+        if (random != null && random != store.current.settings.shuffle) store.update { it.copy(settings = it.settings.copy(shuffle = random)) }
+        var i = index.coerceIn(0, items.size - 1)
+        var q = items
+        if (store.current.settings.shuffle && items.size > 1) {
+            orderedQueue = items
+            q = listOf(items[i]) + items.filterIndexed { j, _ -> j != i }.shuffled()
+            i = 0
+        } else orderedQueue = null
+        _state.value = PlayerState(queue = q, index = i, origin = origin)
         startItem(i, startAt)
+    }
+
+    /** Switches the current queue between random and original order without interrupting the playing item. */
+    fun setShuffle(on: Boolean) {
+        if (on != store.current.settings.shuffle) store.update { it.copy(settings = it.settings.copy(shuffle = on)) }
+        val s = _state.value
+        val cur = s.queue.getOrNull(s.index)
+        if (on) {
+            if (orderedQueue != null || s.queue.size < 2 || cur == null) return
+            orderedQueue = s.queue
+            _state.value = s.copy(queue = listOf(cur) + s.queue.filterIndexed { j, _ -> j != s.index }.shuffled(), index = 0)
+        } else {
+            val o = orderedQueue ?: return
+            orderedQueue = null
+            var idx = o.indexOfFirst { it === cur }
+            if (idx < 0 && cur != null) idx = o.indexOfFirst { it.uri == cur.uri && it.startMs == cur.startMs }
+            _state.value = s.copy(queue = o, index = idx.coerceAtLeast(0))
+        }
     }
 
     fun play(item: PlayItem, startAt: Long = -1, origin: Origin = Origin(if (item.isRadio) "radio" else "single", item.sourceId, item.uri, item.title)) =
@@ -294,19 +334,25 @@ class PlayerController(private val context: Context, private val store: Store) {
         val s = _state.value
         if (s.item == null) { playQueue(items, 0, Origin("single")); return }
         val q = s.queue.toMutableList(); q.addAll(s.index + 1, items)
+        orderedQueue?.let { o ->
+            val at = o.indexOfFirst { it === s.queue.getOrNull(s.index) }
+            orderedQueue = o.toMutableList().also { it.addAll(if (at >= 0) at + 1 else it.size, items) }
+        }
         _state.value = s.copy(queue = q)
     }
 
     fun addToQueue(items: List<PlayItem>) {
         val s = _state.value
         if (s.item == null) { playQueue(items, 0, Origin("single")); return }
+        orderedQueue = orderedQueue?.plus(items)
         _state.value = s.copy(queue = s.queue + items)
     }
 
     fun removeFromQueue(i: Int) {
         val s = _state.value
         if (i == s.index || i !in s.queue.indices) return
-        val q = s.queue.toMutableList(); q.removeAt(i)
+        val q = s.queue.toMutableList(); val gone = q.removeAt(i)
+        orderedQueue = orderedQueue?.filterNot { it === gone }
         _state.value = s.copy(queue = q, index = if (i < s.index) s.index - 1 else s.index)
     }
 
@@ -328,11 +374,16 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun nextIndex(s: PlayerState, manual: Boolean): Int? {
         val repeat = store.current.settings.repeat
         if (!manual && repeat == "one") return s.index
-        if (store.current.settings.shuffle && shuffleOrder.isNotEmpty()) {
-            val n = shuffleOrder.first(); shuffleOrder = shuffleOrder.drop(1); return n
-        }
         return when {
             s.index + 1 < s.queue.size -> s.index + 1
+            // Random + repeat all: a fresh random order for the next round (not starting with the song that just ended).
+            repeat == "all" && store.current.settings.shuffle && s.queue.size > 1 -> {
+                val last = s.queue.getOrNull(s.index)
+                var q = (orderedQueue ?: s.queue).shuffled()
+                if (q.first() === last) q = q.drop(1) + q.first()
+                _state.value = _state.value.copy(queue = q)
+                0
+            }
             repeat == "all" && s.queue.isNotEmpty() -> 0
             else -> null
         }
@@ -400,6 +451,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val layout = attachedLayout
         if (layout != null) mp.detachViews()
         mp.setEventListener(null)
+        NativeAudio.release()
         mp.release()
         libVlc.release()
         createEngine(style)
