@@ -902,6 +902,12 @@ class PlayerController(private val context: Context, private val store: Store) {
         override fun run() {
             val s = _state.value
             val stuck = if (lastTick > 0) System.currentTimeMillis() - lastTick else 0L
+            // The engine says the song is over (ended / stopped by itself) but no end event reached us: go on.
+            // A pause is "paused", and a stop you asked for sets "stopping", so neither counts.
+            if (!endHandled && !stopping && s.item != null && !s.item.isRadio && lastTick > 0) {
+                val ps = try { mp.playerState } catch (_: Throwable) { -1 }
+                if (ps == IMedia.State.Ended || ps == IMedia.State.Stopped) { handleEnd(_state.value); main.postDelayed(this, 1_000); return }
+            }
             if (!endHandled && !stopping && s.isPlaying && s.item != null && !s.item.isRadio) {
                 // Right at the end and the time stopped: the end that never came.
                 if (s.length > 0 && s.time >= s.length - 1_500 && stuck > 2_500) handleEnd(s)
