@@ -855,6 +855,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     private var endHandled = false
     /** Set while the app itself stops / changes the media (that "stopped" is not the end of a song). */
     private var stopping = false
+    /** Songs in a row that failed to play (reset when one plays). */
+    private var failsInRow = 0
     private var lastTick = 0L
 
     /**
@@ -902,6 +904,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         when (ev.type) {
             MediaPlayer.Event.Playing -> {
                 _state.value = s.copy(isPlaying = true, error = "", ended = false, buffering = 100f)
+                failsInRow = 0
                 // Every (re)start of playback — also resuming a paused video — re-applies the sound settings,
                 // so volume / preamp / balance always act at once, not only after some other action.
                 if (!ducked) mp.setVolume(100)
@@ -924,8 +927,10 @@ class PlayerController(private val context: Context, private val store: Store) {
             MediaPlayer.Event.Paused -> { _state.value = s.copy(isPlaying = false); saveProgress() }
             MediaPlayer.Event.Stopped -> {
                 _state.value = s.copy(isPlaying = false)
-                // Some files end with "stopped" instead of "end reached": near the end, that's the end of the song too.
-                if (!endHandled && !stopping && s.item != null && s.length > 0 && s.time >= s.length - 2_000) handleEnd(s)
+                // Some files end with "stopped" instead of "end reached" — also well before the length their header claims
+                // (VBR files, a damaged end). Nobody asked to stop (that sets "stopping"), so it is the end of the song:
+                // go on with the next one instead of halting the queue.
+                if (!endHandled && !stopping && s.item != null && !s.item.isRadio) handleEnd(s)
             }
             MediaPlayer.Event.EndReached -> handleEnd(s)
             MediaPlayer.Event.TimeChanged -> { lastTick = System.currentTimeMillis(); _state.value = s.copy(time = ev.timeChanged) }
@@ -940,12 +945,20 @@ class PlayerController(private val context: Context, private val store: Store) {
                     triedBridge = true
                     ServerLog.log(item.uri, "play", "SMB", item.user, false, "libVLC could not open the file, retrying through the app's SMB bridge")
                     main.post {
+                        stopping = true
                         val m = makeMedia(item, _state.value, useBridge = true)
                         mp.setMedia(m); m.release(); mp.play()
+                        main.postDelayed({ stopping = false }, 500)
                     }
                 } else {
                     if (item != null && !item.uri.startsWith("content://")) ServerLog.log(item.uri, "play", item.uri.substringBefore("://").uppercase(), item.user, false, "Could not play ${item.title}")
                     _state.value = s.copy(isPlaying = false, error = "Could not play this item")
+                    // A song that fails (can't open, or breaks near its end) doesn't halt the queue: go on with the next one.
+                    // Several failures in a row (server gone…) stop instead of racing through the whole list.
+                    if (item != null && !item.isRadio && !endHandled && !stopping) {
+                        failsInRow++
+                        if (failsInRow < 5) main.postDelayed({ if (_state.value.item === item && !endHandled) handleEnd(_state.value) }, 1_000)
+                    }
                 }
             }
         }
