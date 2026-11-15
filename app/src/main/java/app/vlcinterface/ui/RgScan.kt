@@ -149,14 +149,17 @@ fun RgScanScreen(nav: Navigator) {
     }
     val state = rememberLazyListState()
     Column(Modifier.fillMaxSize()) {
-        BackHeader("ReplayGain scan", nav, if (s.running) "${s.done} / ${s.total}" else s.phase)
+        BackHeader("ReplayGain scan", nav, if (s.running) "${(s.progress * 100).toInt()} % · ${s.total} files" else s.phase)
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)).background(C.line)) {
-                Box(Modifier.fillMaxWidth(if (s.total > 0) s.done.toFloat() / s.total else 0f).fillMaxHeight().background(accent()))
+                Box(Modifier.fillMaxWidth(if (s.finished) 1f else s.progress).fillMaxHeight().background(accent()))
             }
             if (s.running) Text("${s.phase}: ${s.current}", color = C.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val ok = s.results.count { it.ok }; val bad = s.results.count { !it.ok }
-            Text("$ok done · $bad with a problem" + if (s.running) " · you can leave this page, the scan continues" else "", color = C.muted, fontSize = 12.sp)
+            // Live counters: they move while files are read, measured and saved (results below appear per album).
+            Text(listOfNotNull(if (s.tagsRead > 0) "Tags read ${s.tagsRead}/${s.total}" else null,
+                "Measured ${s.measured}/${s.total}", "Saved ${s.saved}", if (s.skipped > 0) "Skipped ${s.skipped}" else null,
+                if (s.problems > 0) "Problems ${s.problems}" else null).joinToString(" · "), color = C.text, fontSize = 13.sp)
+            if (s.running) Text("You can leave this page, the scan continues. Results are listed per album once it's measured.", color = C.muted, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (s.running) Pill("Stop") { RgScanner.cancel() } else Pill("Close", filled = true) { nav.back() }
             }

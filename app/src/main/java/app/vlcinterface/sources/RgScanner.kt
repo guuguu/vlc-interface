@@ -54,6 +54,14 @@ data class RgScanState(
     val results: List<RgResult> = emptyList(),
     val finished: Boolean = false,
     val needsPhonePermission: List<String> = emptyList(),
+    // Live counters (shown on the scan page while it works).
+    val tagsRead: Int = 0,
+    val measured: Int = 0,
+    val saved: Int = 0,
+    val skipped: Int = 0,
+    val problems: Int = 0,
+    /** 0…1 of the whole job, including the part of the file being measured / saved right now. */
+    val progress: Float = 0f,
 )
 
 /**
@@ -138,14 +146,27 @@ object RgScanner {
         } catch (_: Exception) { null } finally { try { r.release() } catch (_: Exception) {}; ds?.close() }
     }
 
+    // Overall progress: reading tags 10 % (albums by tags only), measuring 70 %, saving 20 %.
+    @Volatile private var tagWeight = 0f
+    @Volatile private var fileFrac = 0f
+    private fun update(f: (RgScanState) -> RgScanState) {
+        val s = f(_state.value)
+        val n = s.total.coerceAtLeast(1).toFloat()
+        val mw = 0.7f + (0.1f - tagWeight)
+        val p = tagWeight * (s.tagsRead / n) + mw * ((s.measured + s.skipped + fileFrac) / n) + 0.2f * ((s.saved + s.skipped) / n)
+        _state.value = s.copy(progress = p.coerceIn(0f, 1f))
+    }
+
     private suspend fun run(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescan: Boolean, results: ArrayList<RgResult>) {
+        tagWeight = if (mode == RgMode.ALBUMS_BY_TAGS) 0.1f else 0f; fileFrac = 0f
         // Albums by tags: grouped by the tags inside each file (album artist | year | album title), read now,
         // so every album in a mixed selection gets its own album gain. No album title in the file → its folder.
         val tagKey = HashMap<String, String>()
         if (mode == RgMode.ALBUMS_BY_TAGS) items.forEachIndexed { i, it ->
             coroutineContext.ensureActive()
-            _state.value = _state.value.copy(phase = "Reading album tags (${i + 1}/${items.size})", current = it.title)
+            update { s -> s.copy(phase = "Reading album tags (${i + 1}/${items.size})", current = it.title) }
             val t = fileTags(ctx, it)
+            update { s -> s.copy(tagsRead = i + 1) }
             tagKey[it.uri] = if (t != null && t.album.isNotBlank()) "${t.albumArtist.lowercase()}|${t.year}|${t.album.lowercase()}" else "folder:" + physicalFolder(ctx, it)
         }
         // Albums by folders: the real folder each file is in (phone: its storage path; network: its parent folder).
@@ -173,18 +194,20 @@ object RgScanner {
                 val tagged = g.map { it to (ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r -> if (albumMode) r.trackGain != null && r.albumGain != null else r.trackGain != null } ?: false) }
                 if (tagged.all { it.second }) {
                     g.forEach { results += RgResult(it.title, "skipped — already tagged", true) }
-                    done += g.size; _state.value = _state.value.copy(done = done, results = results.toList()); continue
+                    done += g.size; update { s -> s.copy(done = done, skipped = s.skipped + g.size, results = results.toList()) }; continue
                 }
             }
             val measured = ArrayList<Triple<PlayItem, Loudness, String>>()   // item, meter, error
             for (it in g) {
                 coroutineContext.ensureActive()
-                _state.value = _state.value.copy(current = it.title, phase = "Measuring")
+                fileFrac = 0f
+                update { s -> s.copy(current = it.title, phase = "Measuring") }
                 val m: Loudness? = try { measure(ctx, it) } catch (e: Exception) {
                     results += RgResult(it.title, "can't decode: ${e.message ?: e.javaClass.simpleName}", false); null
                 }
                 if (m != null) measured += Triple(it, m, "")
-                done++; _state.value = _state.value.copy(done = done, results = results.toList())
+                fileFrac = 0f
+                done++; update { s -> s.copy(done = done, measured = s.measured + 1, problems = s.problems + if (m == null) 1 else 0, results = results.toList()) }
             }
             if (measured.isEmpty()) continue
             val albumLufs = if (albumMode) Loudness.album(measured.map { it.second.blocks() }) else Double.NaN
@@ -200,9 +223,10 @@ object RgScanner {
                     values["REPLAYGAIN_ALBUM_PEAK"] = "%.6f".format(java.util.Locale.US, albumPeak)
                 }
                 val summary = "track ${values["REPLAYGAIN_TRACK_GAIN"]}" + if (albumMode) " · album ${values["REPLAYGAIN_ALBUM_GAIN"]}" else ""
-                _state.value = _state.value.copy(current = it.title, phase = "Writing")
+                update { s -> s.copy(current = it.title, phase = "Writing") }
                 val where = save(ctx, it, values, target)
                 results += RgResult(it.title, "$summary — $where", !where.startsWith("not"))
+                update { s -> s.copy(saved = s.saved + 1, problems = s.problems + if (where.startsWith("not")) 1 else 0) }
                 ReplayGain.forget(it.uri)
                 if (it.uri.contains("://") && !it.uri.startsWith("content://")) ServerLog.log(it.uri, "replaygain", it.uri.substringBefore("://").uppercase(), it.user, true, "${it.title}: $summary — $where")
                 _state.value = _state.value.copy(results = results.toList())
@@ -293,7 +317,8 @@ object RgScanner {
                                 val now = System.currentTimeMillis()
                                 if (durUs > 0 && now - lastReport > 500) {
                                     lastReport = now
-                                    _state.value = _state.value.copy(phase = "Measuring ${(t * 100 / durUs).coerceIn(0, 100)}%")
+                                    fileFrac = (t.toFloat() / durUs).coerceIn(0f, 1f)
+                                    update { s -> s.copy(phase = "Measuring ${(t * 100 / durUs).coerceIn(0, 100)}%") }
                                 }
                             }
                         }
@@ -377,7 +402,7 @@ object RgScanner {
             val r = i.read(buf); if (r < 0) break
             o.write(buf, 0, r); n += r
             val now = System.currentTimeMillis()
-            if (now - last > 500) { last = now; _state.value = _state.value.copy(phase = "$what " + if (total > 0) "${n * 100 / total}%" else "${n / 1_000_000} MB") }
+            if (now - last > 500) { last = now; update { s -> s.copy(phase = "$what " + if (total > 0) "${n * 100 / total}%" else "${n / 1_000_000} MB") } }
         }
     }
 

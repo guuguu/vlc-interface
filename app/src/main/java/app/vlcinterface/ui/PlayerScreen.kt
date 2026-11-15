@@ -434,8 +434,8 @@ private fun SeekRow(p: PlayerState, modifier: Modifier) {
         Text(fmtTime(if (dragging != null) (dragging!! * p.length).toLong() else p.time), color = Color.White, fontSize = 13.sp)
         Slider(
             value = dragging ?: frac, onValueChange = { dragging = it },
-            onValueChangeFinished = { dragging?.let { App.instance.player.seekTo((it * p.length).toLong()) }; dragging = null },
-            enabled = p.length > 0, modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+            onValueChangeFinished = { dragging?.let { App.instance.player.seekFraction(it) }; dragging = null },
+            enabled = p.length > 0 || p.item != null, modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
             colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = Color(0x55FFFFFF)),
         )
         Text(if (p.length > 0) "-" + fmtTime(p.length - p.time) else "Live", color = Color.White, fontSize = 13.sp)

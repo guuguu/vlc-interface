@@ -627,7 +627,26 @@ class PlayerController(private val context: Context, private val store: Store) {
         context.stopService(Intent(context, PlaybackService::class.java))
     }
 
-    fun seekTo(ms: Long) { mp.setTime(ms.coerceAtLeast(0)) }
+    fun seekTo(ms: Long) {
+        val t = ms.coerceAtLeast(0)
+        mp.setTime(t)
+        _state.value = _state.value.copy(time = t)   // the bar shows the new place at once
+    }
+
+    /**
+     * Seek bar: [f] = 0…1 of the playing item (a .cue track counts from its own start).
+     * Worked out from the player right now, not from values remembered when the screen was drawn:
+     * those could still be 0 when the song's length wasn't known yet, so every jump went nowhere.
+     */
+    fun seekFraction(f: Float) {
+        val s = _state.value
+        val item = s.item ?: return
+        val base = if (item.startMs > 0) item.startMs else 0
+        val len = if (item.endMs > 0) item.endMs - item.startMs else if (mp.length > 0) mp.length else s.length
+        val frac = f.coerceIn(0f, 1f)
+        if (len > 0) seekTo(base + (frac * len).toLong().coerceAtMost(len - 500).coerceAtLeast(0))
+        else mp.setPosition(frac)
+    }
     fun seekBy(ms: Long) { mp.setTime((mp.time + ms).coerceIn(0, if (mp.length > 0) mp.length else Long.MAX_VALUE)) }
     fun setRate(r: Float) { mp.setRate(r); _state.value = _state.value.copy(rate = r) }
 

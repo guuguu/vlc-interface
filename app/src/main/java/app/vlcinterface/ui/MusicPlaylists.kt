@@ -134,7 +134,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 val base = if (item.startMs > 0) item.startMs else 0
                 val pos = (p.time - base).coerceAtLeast(0)
                 Slider(drag ?: if (len > 0) (pos.toFloat() / len).coerceIn(0f, 1f) else 0f, { drag = it },
-                    onValueChangeFinished = { drag?.let { player.seekTo(base + (it * len).toLong()) }; drag = null }, enabled = len > 0,
+                    onValueChangeFinished = { drag?.let { player.seekFraction(it) }; drag = null }, enabled = len > 0 || p.item != null,
                     colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
                 Row { Text(fmtTime(pos), color = C.muted, fontSize = 13.sp); Grow(); Text("-" + fmtTime((len - pos).coerceAtLeast(0)), color = C.muted, fontSize = 13.sp) }
             }
