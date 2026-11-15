@@ -535,6 +535,8 @@ class PlayerController(private val context: Context, private val store: Store) {
             i = 0
         } else orderedQueue = null
         _state.value = PlayerState(queue = q, index = i, origin = origin)
+        // A playlist / folder / queue: ask about the battery setting again if it would stop playback in the background.
+        if (items.size > 1) app.vlcinterface.ui.Battery.request()
         startItem(i, startAt)
     }
 

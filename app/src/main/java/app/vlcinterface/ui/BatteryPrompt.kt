@@ -11,14 +11,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
-import app.vlcinterface.App
 
 /** Battery "Unrestricted" for this app, so Android doesn't stop playback while the app is in the background. */
 object Battery {
+    /** A question waits to be shown (app start; any playlist / folder / queue started). */
+    val pending = kotlinx.coroutines.flow.MutableStateFlow(true)
+    fun request() { pending.value = true }
+
     fun unrestricted(ctx: Context): Boolean =
         (ctx.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(ctx.packageName)
 
@@ -34,18 +34,16 @@ object Battery {
 }
 
 /**
- * One time, when something first plays: if the battery setting may stop playback in the background, explain it
- * and offer Android's permission. Not asked again after an answer (Settings → Playback has it too).
+ * Asked at every app start and whenever a playlist, folder or queue starts playing, as long as the app's
+ * battery setting isn't "Unrestricted" (once it is, never again). "Not now" only skips that occasion.
  */
 @Composable
 fun BatteryPromptHost() {
     val ctx = LocalContext.current
-    val st by App.instance.store.state.collectAsState()
-    val p by App.instance.player.state.collectAsState()
-    var dismissed by remember { mutableStateOf(false) }
-    if (dismissed || st.settings.batteryAsked || !p.isPlaying) return
-    if (Battery.unrestricted(ctx)) return
-    fun done() { dismissed = true; App.instance.store.update { it.copy(settings = it.settings.copy(batteryAsked = true)) } }
+    val want by Battery.pending.collectAsState()
+    if (!want) return
+    if (Battery.unrestricted(ctx)) { Battery.pending.value = false; return }
+    fun done() { Battery.pending.value = false }
     AlertDialog(onDismissRequest = { done() }, containerColor = C.panel,
         title = { Text("Keep playing in the background", color = C.text) },
         text = {
