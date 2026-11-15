@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.sp
 import app.vlcinterface.App
 import app.vlcinterface.data.Playlist
 import app.vlcinterface.data.Source
+import app.vlcinterface.player.PlayItem
 import app.vlcinterface.sources.RgMode
 import app.vlcinterface.sources.RgScanner
 import app.vlcinterface.sources.RgTarget
