@@ -480,12 +480,16 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
     Column(Modifier.fillMaxSize()) {
         BackHeader(b.title, nav, if (scanning) "Reading tags…" else b.uri) {
             if (src != null) {
+                val ctxPin = androidx.compose.ui.platform.LocalContext.current
                 val path = android.net.Uri.decode(b.uri.substringAfter("://").substringAfter('/', "")).let { "/" + it.trimEnd('/') }
                 val pinned = src.pins.contains(path)
                 SymButton({
                     App.instance.store.update { s -> s.copy(sources = s.sources.map { if (it.id == src.id) it.copy(pins = if (pinned) it.pins - path else it.pins + path) else it }) }
                     // Pinned folders are indexed (songs searchable from the Songs list / player); unpinned → index dropped.
-                    if (pinned) app.vlcinterface.sources.NetIndex.remove(src, path) else app.vlcinterface.sources.NetIndex.build(src, path)
+                    if (pinned) app.vlcinterface.sources.NetIndex.remove(src, path) else {
+                        app.vlcinterface.sources.NetIndex.build(src, path)
+                        android.widget.Toast.makeText(ctxPin, "Pinned — indexing its songs for search in the background", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 }) { SymIcon(Icons.Filled.Star, if (pinned) "Unpin folder" else "Pin folder", tint = if (pinned) accent() else C.muted) }
             }
             SymButton({ reload++ }) {

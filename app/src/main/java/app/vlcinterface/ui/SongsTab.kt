@@ -180,6 +180,8 @@ fun SongsTab(nav: Navigator) {
         }
         // The found song stays marked for a few seconds.
         LaunchedEffect(focus) { if (focus.isNotEmpty()) { delay(4_000); focus = "" } }
+        val indexing by app.vlcinterface.sources.NetIndex.busy.collectAsState()
+        if (indexing.isNotEmpty()) Text("★ $indexing", color = accent(), fontSize = 11.sp)
         Text("Tap songs to select them · long-press for the play time and a new playlist", color = C.muted, fontSize = 11.sp)
         if (loading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
         LazyColumn(Modifier.weight(1f).scrollbar(state), state = state) {
