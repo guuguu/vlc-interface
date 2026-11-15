@@ -998,13 +998,21 @@ class PlayerController(private val context: Context, private val store: Store) {
         } catch (_: Exception) { emptyList() }
         val album = songs.filter { it.isMusic && (item.album.isBlank() || it.album.equals(item.album, true)) }
         val at = album.indexOfFirst { it.uri == item.uri }
-        val rest = if (at >= 0) album.drop(at + 1) else s.queue.drop(s.index + 1).takeWhile { it.album.equals(item.album, true) && it.album.isNotBlank() }
-        val restUris = rest.map { it.uri }.toSet()
         val cur = _state.value
-        // The album's next songs follow right after this one (the rest of the queue stays behind them).
-        val q = cur.queue.take(cur.index + 1) + rest + cur.queue.drop(cur.index + 1).filter { it.uri !in restUris }
-        _state.value = cur.copy(queue = q, sleepUntil = 0, sleepEndOfTrack = false, sleepSongs = 1 + rest.size)
-        return 1 + rest.size
+        if (at < 0) {
+            // Album not found in the Library: stop after the album's songs that follow in the queue.
+            val rest = cur.queue.drop(cur.index + 1).takeWhile { it.album.equals(item.album, true) && it.album.isNotBlank() }
+            _state.value = cur.copy(sleepUntil = 0, sleepEndOfTrack = false, sleepSongs = 1 + rest.size)
+            return 1 + rest.size
+        }
+        // The album folder takes over (user rule): the queue / playlist is set aside and the album plays in its own
+        // order from the current song to its last one, then stops. The playing song isn't interrupted.
+        val origin = if (fk.startsWith("local:")) Origin("local", title = item.album.ifEmpty { "Album" }, localFolderId = fk.removePrefix("local:"))
+            else Origin("folder", sourceId = src?.id ?: "", uri = fk, title = item.album.ifEmpty { "Album" })
+        orderedQueue = null
+        val q = album.toMutableList().also { it[at] = cur.item ?: it[at] }   // keep the playing item object
+        _state.value = cur.copy(queue = q, index = at, origin = origin, sleepUntil = 0, sleepEndOfTrack = false, sleepSongs = album.size - at)
+        return album.size - at
     }
 
     val isPlaying: Boolean get() = mp.isPlaying
