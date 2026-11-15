@@ -663,6 +663,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, buffering = 0f, error = "", ended = false,
             rgInfo = "", userPaused = false)
         loadReplayGain(item, _state.value)
+        NativeAudio.deepBuffer(item.isMusic || item.isRadio)
         am.requestAudioFocus(focusRequest)
         endHandled = false; lastTick = 0L
         mp.play()

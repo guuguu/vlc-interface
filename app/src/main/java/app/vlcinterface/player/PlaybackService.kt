@@ -40,10 +40,13 @@ class PlaybackService : Service() {
                 // Stays in the foreground (and keeps the phone awake) through the gap between two songs: losing it there
                 // let Android freeze the app right after a song ended, so the next one never started and the
                 // notification vanished. Only a real pause (or the end) lets it go.
-                player.state.map { (it.item != null) to (it.isPlaying || !it.userPaused) }.distinctUntilChanged().collect { (hasItem, active) ->
+                // Wi-Fi is held only for music from the network: playing phone files leaves the 2.4 GHz radio
+                // quieter, which Bluetooth (same band) is grateful for.
+                player.state.map { Triple(it.item != null, it.isPlaying || !it.userPaused, it.item?.uri?.let { u -> !u.startsWith("content://") && !u.startsWith("file://") && !u.startsWith("/") } == true) }
+                    .distinctUntilChanged().collect { (hasItem, active, net) ->
                     when {
                         !hasItem -> finish()
-                        active -> { startForeground(MediaCenter.ID, app.media.build(player.state.value), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK); hold(true) }
+                        active -> { startForeground(MediaCenter.ID, app.media.build(player.state.value), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK); hold(true, net) }
                         else -> { stopForeground(STOP_FOREGROUND_DETACH); hold(false) }
                     }
                 }
@@ -56,15 +59,17 @@ class PlaybackService : Service() {
     private var wake: android.os.PowerManager.WakeLock? = null
     private var wifi: android.net.wifi.WifiManager.WifiLock? = null
 
-    private fun hold(on: Boolean) {
+    private fun hold(on: Boolean, net: Boolean = false) {
         try {
             if (on) {
                 if (wake == null) wake = (getSystemService(POWER_SERVICE) as android.os.PowerManager)
                     .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "vlcinterface:playback").apply { setReferenceCounted(false) }
                 wake?.acquire(4 * 60 * 60 * 1000L)
-                if (wifi == null) wifi = (applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager)
-                    .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "vlcinterface:playback").apply { setReferenceCounted(false) }
-                wifi?.acquire()
+                if (net) {
+                    if (wifi == null) wifi = (applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager)
+                        .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "vlcinterface:playback").apply { setReferenceCounted(false) }
+                    wifi?.acquire()
+                } else wifi?.takeIf { it.isHeld }?.release()
             } else {
                 wake?.takeIf { it.isHeld }?.release()
                 wifi?.takeIf { it.isHeld }?.release()

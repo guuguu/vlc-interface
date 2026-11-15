@@ -92,6 +92,19 @@ static void on_error(AAudioStream *s, void *u, aaudio_result_t err) {
     atomic_store(&g_disconnected, true);
 }
 
+/* Music: the largest output buffer the phone allows, so Bluetooth (and a busy phone) has plenty of sound queued
+ * and never runs dry. The extra delay is measured (latency_us), so timing and meters stay right. */
+static atomic_bool g_deep = false;
+
+static int32_t g_defaultBuf = 0;   /* the stream's own buffer size when opened (used for video) */
+
+static void apply_buffer(void) {
+    if (!g_stream) return;
+    int32_t cap = AAudioStream_getBufferCapacityInFrames(g_stream);
+    int32_t want = atomic_load(&g_deep) ? cap : g_defaultBuf;
+    if (want > 0 && want <= cap) AAudioStream_setBufferSizeInFrames(g_stream, want);
+}
+
 static void close_stream(void) {
     if (g_stream) {
         AAudioStream_requestStop(g_stream);
@@ -126,6 +139,8 @@ static bool open_stream(void) {
     if (r != AAUDIO_OK) { g_stream = NULL; LOGW("open failed %d", r); return false; }
     g_rate = (unsigned)AAudioStream_getSampleRate(g_stream);
     atomic_store(&g_disconnected, false);
+    g_defaultBuf = AAudioStream_getBufferSizeInFrames(g_stream);
+    apply_buffer();
     return true;
 }
 
@@ -426,6 +441,16 @@ JNIEXPORT void JNICALL
 Java_app_vlcinterface_player_NativeAudio_reroute(JNIEnv *env, jobject thiz) {
     (void)env; (void)thiz;
     atomic_store(&g_disconnected, true);
+}
+
+/* Deep buffer on/off (music on / video off), applied to the open stream at once. */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_setDeep(JNIEnv *env, jobject thiz, jboolean on) {
+    (void)env; (void)thiz;
+    atomic_store(&g_deep, on ? true : false);
+    pthread_mutex_lock(&g_lock);
+    apply_buffer();
+    pthread_mutex_unlock(&g_lock);
 }
 
 /* Plays on this output device (AudioDeviceInfo id), or Android's default routing with 0. Takes effect at once. */

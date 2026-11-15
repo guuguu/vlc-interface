@@ -26,6 +26,10 @@ object NativeAudio {
     private external fun reroute()
     private external fun setDevice(id: Int)
     private external fun setAppVolume(v: Float)
+    private external fun setDeep(on: Boolean)
+
+    /** Music: biggest output buffer (steady Bluetooth); video: normal buffer (picture and sound in step). */
+    fun deepBuffer(on: Boolean) { if (active) try { setDeep(on) } catch (_: Throwable) {} }
 
     /** App volume (0…2, 1 = unchanged) for the device the app plays on by itself. */
     fun appVolume(v: Float) { if (active) try { setAppVolume(v) } catch (_: Throwable) {} }
