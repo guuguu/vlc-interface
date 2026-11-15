@@ -411,12 +411,14 @@ class PlayerController(private val context: Context, private val store: Store) {
     var appVolume = 1f
         private set
 
-    fun setAppVolume(v: Float) { appVolume = v.coerceIn(0f, 2f); NativeAudio.appVolume(appVolume * fadeK) }
+    fun setAppVolume(v: Float) { appVolume = v.coerceIn(0f, 2f); NativeAudio.appVolume(if (sleepClosing) 0f else appVolume * fadeK) }
 
     // ---------- sleep fade ----------
 
     /** Sleep: the last 2 minutes before playback stops, the volume goes down by itself in 40 steps (one every 3 s). */
     private var fadeK = 1f
+    private var fadeLocked = false
+    @Volatile private var sleepClosing = false
 
     private fun applyFade(k: Float) {
         if (k == fadeK) return
@@ -440,9 +442,19 @@ class PlayerController(private val context: Context, private val store: Store) {
         override fun run() {
             val s = _state.value
             val left = if (s.item != null && s.isPlaying) msToSleep(s) else -1
-            // 40 steps over the last 120 s (one every 3 s); anything else (no sleep, sleep turned off, paused) = full volume.
-            val k = if (left in 0..120_000) ((left + 2_999) / 3_000).toInt().coerceIn(0, 40) / 40f else 1f
-            applyFade(k)
+            // 40 steps over the last 120 s (one every 3 s). Once the fade has begun it only goes down — the song
+            // ending, the pause before closing or the close itself can never bring the volume back up (that
+            // was the loud burst at the end). It's released only when sleep is turned off or the app starts again.
+            val sleepSet = s.sleepUntil > 0 || s.sleepSongs > 0 || s.sleepEndOfTrack
+            if (!sleepSet && !sleepClosing) fadeLocked = false
+            val k = when {
+                sleepClosing -> 0f
+                left in 0..120_000 -> ((left + 2_999) / 3_000).toInt().coerceIn(0, 40) / 40f
+                fadeLocked -> fadeK
+                else -> 1f
+            }
+            if (k < 1f) fadeLocked = true
+            applyFade(if (fadeLocked) minOf(k, fadeK) else k)
             main.postDelayed(this, 500)
         }
     }
@@ -867,6 +879,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val now = System.currentTimeMillis()
         sleptAt.value = now
         try { sleepPrefs.edit().putLong("at", now).commit() } catch (_: Exception) {}
+        sleepClosing = true; fadeLocked = true
         fadeK = 0f; NativeAudio.appVolume(0f); try { mp.setVolume(0) } catch (_: Exception) {}
         try { mp.pause() } catch (_: Exception) {}
         try {
@@ -1016,13 +1029,13 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun handleEnd(s: PlayerState) {
         if (endHandled) return
         endHandled = true
-        if (s.sleepEndOfTrack) { main.post { sleepStop() }; return }
+        if (s.sleepEndOfTrack) { sleepStop(); return }
         s.item?.let { item -> store.update { st -> st.copy(recent = st.recent.filterNot { it.uri == item.uri }) } }
         // Sleep after a number of songs: count down; when the queue / playlist runs out first, go on from its beginning.
         var wrap = false
         if (s.sleepSongs > 0) {
             val left = s.sleepSongs - 1
-            if (left <= 0) { _state.value = _state.value.copy(sleepSongs = 0); main.post { sleepStop() }; return }
+            if (left <= 0) { sleepStop(); _state.value = _state.value.copy(sleepSongs = 0); return }
             _state.value = _state.value.copy(sleepSongs = left)
             wrap = true
         }
@@ -1071,7 +1084,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 // Every (re)start of playback — also resuming a paused video — re-applies the sound settings,
                 // so volume / preamp / balance always act at once, not only after some other action.
                 if (!ducked) mp.setVolume((100 * fadeK).toInt())
-                NativeAudio.appVolume(appVolume * fadeK)
+                NativeAudio.appVolume(if (sleepClosing) 0f else appVolume * fadeK)
                 applySoundChain()
                 if (pendingSeek > 500) { mp.setTime(pendingSeek) }   // continue exactly where it was (RG button, engine restarts…)
                 pendingSeek = -1
