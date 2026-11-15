@@ -712,7 +712,13 @@ class PlayerController(private val context: Context, private val store: Store) {
             media.addOption(":brightness=$b")
             media.addOption(":gamma=$g")
         }
-        if (item.isRadio) media.addOption(":network-caching=3000")
+        // Bigger read-ahead so a busy phone or network never runs the decoder dry (smooth playback):
+        // songs keep 3 s from the network / 1.5 s from the phone; videos 2.5 s / 1 s (seeking stays quick).
+        when {
+            item.isRadio -> media.addOption(":network-caching=3000")
+            item.isMusic -> { media.addOption(":network-caching=3000"); media.addOption(":file-caching=1500") }
+            else -> { media.addOption(":network-caching=2500"); media.addOption(":file-caching=1000") }
+        }
         if (item.startMs >= 0) media.addOption(":start-time=${item.startMs / 1000.0}")
         if (item.endMs > 0) media.addOption(":stop-time=${item.endMs / 1000.0}")
         if (item.isMusic) {

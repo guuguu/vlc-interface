@@ -21,6 +21,8 @@
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/resource.h>
+#include <errno.h>
 
 #define TAG "vlciaudio"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -170,8 +172,17 @@ static inline float limit(float x) {
     return x < 0 ? -y : y;
 }
 
+/* libVLC's audio thread feeding our output: raised once to Android's "urgent audio" priority (-19), the level
+ * the system's own audio threads use, so other work on the phone doesn't make the sound stutter. */
+static __thread int t_prio_done = 0;
+
 static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     (void)d;
+    if (!t_prio_done) {
+        t_prio_done = 1;
+        int r = setpriority(PRIO_PROCESS, (id_t)gettid(), -19);
+        __android_log_print(ANDROID_LOG_INFO, "vlciaudio", "audio thread priority -19: %s", r == 0 ? "ok" : strerror(errno));
+    }
     pthread_mutex_lock(&g_lock);
     if (atomic_load(&g_disconnected) || !g_stream) {
         /* Output changed (headphones, Bluetooth…): reopen on the new device. */
