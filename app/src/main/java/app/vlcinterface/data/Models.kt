@@ -147,7 +147,7 @@ data class Settings(
     /** The one-time "battery: Unrestricted" question was answered. */
     val batteryAsked: Boolean = false,
     /** The app turns with the phone (on) or stays upright (off; the video player's rotate button still works). */
-    val autoRotate: Boolean = true,
+    val autoRotate: Boolean = false,
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -201,7 +201,7 @@ data class Settings(
                 o.optJSONObject("pictureByFile")?.let { j -> j.keys().asSequence().associateWith { j.getString(it) } } ?: emptyMap(),
                 o.optInt("songsScrollSpeed", 100).coerceIn(0, 300),
                 o.optBoolean("batteryAsked", false),
-                o.optBoolean("autoRotate", true),
+                o.optBoolean("autoRotate", false),
             )
         }
     }
