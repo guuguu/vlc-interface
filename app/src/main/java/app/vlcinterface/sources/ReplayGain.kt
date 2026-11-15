@@ -36,7 +36,8 @@ object ReplayGain {
             val parts = try { fetch(ctx, uri, user, pass, domain, smbVersion) } catch (_: Exception) { null }
             // Tags in the file first; values the scanner kept in the app for files it couldn't (or wasn't asked to) write.
             val inFile = parts?.let { parse(it.first + it.second) }
-            val rg = if (inFile?.any == true) inFile else RgStore.get(uri) ?: inFile ?: return@withContext null
+            // Values the scanner kept in the app are newer than what's in the file (removed again when the file gets written).
+            val rg = RgStore.get(uri) ?: inFile ?: return@withContext null
             cache[uri] = rg
             rg
         }
@@ -47,46 +48,89 @@ object ReplayGain {
         return out.copyOf(n)
     }
 
-    /** (head, tail) bytes; tail may be empty. */
-    private fun fetch(ctx: Context, uri: String, user: String, pass: String, domain: String, smbVersion: String): Pair<ByteArray, ByteArray>? {
+    /** A file the tag reader can read anywhere in (phone, local, SMB incl. SMB1, HTTP/WebDAV). */
+    private interface Ranged : java.io.Closeable {
+        val size: Long
+        fun read(off: Long, len: Int): ByteArray
+    }
+
+    private fun open(ctx: Context, uri: String, user: String, pass: String, domain: String, smbVersion: String): Ranged? {
         val scheme = uri.substringBefore("://", "").lowercase()
         return when {
             scheme == "content" -> {
-                val u = Uri.parse(uri)
-                val head = ctx.contentResolver.openInputStream(u)?.use { readFully(it, HEAD) } ?: return null
-                val tail = try {
-                    ctx.contentResolver.openFileDescriptor(u, "r")?.use { pfd ->
-                        val size = pfd.statSize
-                        if (size > HEAD) java.io.FileInputStream(pfd.fileDescriptor).use { fis ->
-                            fis.channel.position(size - TAIL); readFully(fis, TAIL)
-                        } else ByteArray(0)
-                    } ?: ByteArray(0)
-                } catch (_: Exception) { ByteArray(0) }
-                head to tail
+                val pfd = ctx.contentResolver.openFileDescriptor(Uri.parse(uri), "r") ?: return null
+                val fis = java.io.FileInputStream(pfd.fileDescriptor)
+                object : Ranged {
+                    override val size = pfd.statSize
+                    override fun read(off: Long, len: Int): ByteArray { fis.channel.position(off); return readFully(fis, len) }
+                    override fun close() { fis.close(); pfd.close() }
+                }
             }
             scheme == "file" || scheme.isEmpty() -> {
-                val f = File(if (scheme == "file") Uri.parse(uri).path ?: return null else uri)
-                RandomAccessFile(f, "r").use { raf ->
-                    val head = ByteArray(minOf(HEAD.toLong(), raf.length()).toInt()); raf.readFully(head)
-                    val tail = if (raf.length() > HEAD) { raf.seek(raf.length() - TAIL); ByteArray(TAIL).also { raf.readFully(it) } } else ByteArray(0)
-                    head to tail
+                val raf = RandomAccessFile(File(if (scheme == "file") Uri.parse(uri).path ?: return null else uri), "r")
+                object : Ranged {
+                    override val size = raf.length()
+                    override fun read(off: Long, len: Int): ByteArray { raf.seek(off); val b = ByteArray(minOf(len.toLong(), size - off).toInt().coerceAtLeast(0)); raf.readFully(b); return b }
+                    override fun close() = raf.close()
                 }
             }
             scheme == "smb" -> {
                 val f = SmbFile(uri, SmbProbe.fileContext(smbVersion, user, pass, domain))
-                val size = f.length()
-                val head = f.inputStream.use { readFully(it, HEAD) }
-                val tail = if (size > HEAD) f.openRandomAccess("r").use { r -> r.seek(size - TAIL); ByteArray(TAIL).also { b -> r.readFully(b) } } else ByteArray(0)
-                head to tail
+                val raf = f.openRandomAccess("r")
+                object : Ranged {
+                    override val size = f.length()
+                    override fun read(off: Long, len: Int): ByteArray {
+                        raf.seek(off); val b = ByteArray(minOf(len.toLong(), size - off).toInt().coerceAtLeast(0))
+                        var n = 0; while (n < b.size) { val r = raf.read(b, n, b.size - n); if (r <= 0) break; n += r }
+                        return b.copyOf(n)
+                    }
+                    override fun close() = raf.close()
+                }
             }
-            scheme == "http" || scheme == "https" -> {
-                fun get(range: String): ByteArray = Net.http.newCall(Request.Builder().url(uri).header("Range", range)
-                    .header("User-Agent", Net.UA)
-                    .apply { if (user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(user, pass)) }.build())
-                    .execute().use { r -> if (!r.isSuccessful) ByteArray(0) else r.body?.byteStream()?.let { readFully(it, HEAD) } ?: ByteArray(0) }
-                get("bytes=0-${HEAD - 1}") to get("bytes=-$TAIL")
+            scheme == "http" || scheme == "https" -> object : Ranged {
+                override val size: Long by lazy {
+                    Net.http.newCall(req().header("Range", "bytes=0-0").build()).execute().use { r ->
+                        r.header("Content-Range")?.substringAfterLast('/')?.toLongOrNull() ?: -1L }
+                }
+                fun req() = Request.Builder().url(uri).header("User-Agent", Net.UA)
+                    .apply { if (user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(user, pass)) }
+                override fun read(off: Long, len: Int): ByteArray = Net.http.newCall(req().header("Range", "bytes=$off-${off + len - 1}").build())
+                    .execute().use { r -> if (!r.isSuccessful) ByteArray(0) else r.body?.byteStream()?.let { readFully(it, len) } ?: ByteArray(0) }
+                override fun close() {}
             }
             else -> null   // sftp/ftp/nfs/upnp: read by libVLC only
+        }
+    }
+
+    /**
+     * The bytes that hold the tags: the start of the file (whole ID3v2 tag even when a big picture comes first;
+     * FLAC: the Vorbis comment block even after a large embedded picture) plus the last 64 KB (APEv2, MP4 tags at the end).
+     */
+    private fun fetch(ctx: Context, uri: String, user: String, pass: String, domain: String, smbVersion: String): Pair<ByteArray, ByteArray>? {
+        val r = open(ctx, uri, user, pass, domain, smbVersion) ?: return null
+        return r.use {
+            var head = r.read(0, HEAD)
+            if (head.size >= 10 && head[0] == 'I'.code.toByte() && head[1] == 'D'.code.toByte() && head[2] == '3'.code.toByte()) {
+                val tagSize = ((head[6].toInt() and 0x7F) shl 21) or ((head[7].toInt() and 0x7F) shl 14) or ((head[8].toInt() and 0x7F) shl 7) or (head[9].toInt() and 0x7F)
+                val total = tagSize + 20
+                if (total > head.size) head = r.read(0, minOf(total, 32 shl 20))
+            }
+            var extra = ByteArray(0)
+            if (head.size >= 4 && String(head, 0, 4, Charsets.ISO_8859_1) == "fLaC") {
+                var off = 4L
+                for (guard in 0 until 64) {
+                    val h = if (off + 4 <= head.size) head.copyOfRange(off.toInt(), off.toInt() + 4) else r.read(off, 4)
+                    if (h.size < 4) break
+                    val last = h[0].toInt() and 0x80 != 0
+                    val type = h[0].toInt() and 0x7F
+                    val len = ((h[1].toInt() and 0xFF) shl 16) or ((h[2].toInt() and 0xFF) shl 8) or (h[3].toInt() and 0xFF)
+                    if (type == 4 && off + 4 + len > head.size) extra = r.read(off + 4, len)    // VORBIS_COMMENT beyond what was read
+                    off += 4 + len
+                    if (last) break
+                }
+            }
+            val tail = if (r.size > HEAD) r.read(r.size - TAIL, TAIL) else ByteArray(0)
+            (head + extra) to tail
         }
     }
 

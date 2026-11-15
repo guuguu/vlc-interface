@@ -393,6 +393,7 @@ object RgScanner {
                 if (tmp.length() > 512 * 1024) java.io.RandomAccessFile(tmp, "r").use { r -> r.seek(tmp.length() - 65536); ByteArray(65536).also { r.readFully(it) } } else ByteArray(0))
             if (check.trackGain == null) throw IllegalStateException("tag check failed")
             upload(ctx, item, src, tmp)
+            RgStore.remove(item.uri)       // the file now holds the newest values
             "written to the file"
         } catch (e: Exception) {
             RgStore.put(item.uri, values)
@@ -473,6 +474,10 @@ object RgStore {
         try { file.writeText(JSONObject(map.mapValues { JSONObject(it.value) }).toString()) } catch (_: Exception) {}
     }
 
+    @Synchronized fun remove(uri: String) {
+        if (map.remove(uri) != null) try { file.writeText(JSONObject(map.mapValues { JSONObject(it.value) }).toString()) } catch (_: Exception) {}
+    }
+
     @Synchronized fun get(uri: String): Rg? = map[uri]?.let { v ->
         fun f(k: String) = v[k]?.replace("dB", "")?.trim()?.toFloatOrNull()
         Rg(f("REPLAYGAIN_TRACK_GAIN"), f("REPLAYGAIN_TRACK_PEAK"), f("REPLAYGAIN_ALBUM_GAIN"), f("REPLAYGAIN_ALBUM_PEAK"))
@@ -499,9 +504,18 @@ object TagWriter {
             else -> {
                 val tag = af.tagOrCreateAndSetDefault
                 when (tag) {
-                    is org.jaudiotagger.tag.flac.FlacTag -> values.forEach { (k, v) -> tag.vorbisCommentTag.setField(k, v) }
-                    is org.jaudiotagger.tag.vorbiscomment.VorbisCommentTag -> values.forEach { (k, v) -> tag.setField(k, v) }
+                    // Old values written by other programs in another letter case (replaygain_… / REPLAYGAIN_…)
+                    // are removed first, so the file never holds two different values for the same thing.
+                    is org.jaudiotagger.tag.flac.FlacTag -> values.forEach { (k, v) ->
+                        for (old in setOf(k, k.lowercase())) try { tag.vorbisCommentTag.deleteField(old) } catch (_: Exception) {}
+                        tag.vorbisCommentTag.setField(k, v)
+                    }
+                    is org.jaudiotagger.tag.vorbiscomment.VorbisCommentTag -> values.forEach { (k, v) ->
+                        for (old in setOf(k, k.lowercase())) try { tag.deleteField(old) } catch (_: Exception) {}
+                        tag.setField(k, v)
+                    }
                     is org.jaudiotagger.tag.mp4.Mp4Tag -> values.forEach { (k, v) ->
+                        for (old in setOf(k, k.lowercase())) try { tag.deleteField("----:com.apple.iTunes:$old") } catch (_: Exception) {}
                         tag.setField(org.jaudiotagger.tag.mp4.field.Mp4TagReverseDnsField("----:com.apple.iTunes:${k.lowercase()}", "com.apple.iTunes", k.lowercase(), v))
                     }
                     else -> throw IllegalStateException("can't write ReplayGain tags to .${f.extension} files")
