@@ -71,11 +71,11 @@ import kotlinx.coroutines.withContext
 
 /** Album cover / thumbnail from a content:// uri (phone) or a file:// / path (libVLC cache). */
 @Composable
-fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, artist: String = "", album: String = "",
-          download: Boolean = false, onDownloaded: (String) -> Unit = {}) {
+fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayItem? = null,
+          download: Boolean = false, onNote: (String) -> Unit = {}, onFound: () -> Unit = {}) {
     val ctx = LocalContext.current
     val online = download && App.instance.store.current.settings.coverDownload
-    val bmp by produceState<Bitmap?>(null, url, artist, album, online) {
+    val bmp by produceState<Bitmap?>(null, url, item?.uri, online) {
         value = withContext(Dispatchers.IO) {
             val own = try {
                 when {
@@ -85,13 +85,15 @@ fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, artist: Strin
                     else -> null
                 }
             } catch (_: Exception) { null }
-            // No picture in the files: the album picture stored from the internet (looked up only where asked).
-            // No album picture either: a picture of the artist / band.
-            val ca = app.vlcinterface.sources.CoverArt
-            val file = if (album.isBlank() && artist.isBlank()) null
-                else if (online) ca.get(artist, album) ?: ca.getArtist(artist)
-                else ca.cached(artist, album) ?: ca.cachedArtist(artist)
-            own ?: file?.let { f -> BitmapFactory.decodeFile(f.path)?.also { withContext(Dispatchers.Main) { onDownloaded(f.path) } } }
+            // No picture inside the file: the album folder's picture (cover.jpg, folder.jpg, artist.jpg…);
+            // in the player also from the internet (album, then artist / band), saved into that folder.
+            own ?: item?.let { it0 ->
+                if (download) {
+                    val r = app.vlcinterface.sources.CoverArt.forPlayer(ctx, it0, it0.artist, it0.album, online)
+                    withContext(Dispatchers.Main) { if (r.note.isNotEmpty()) onNote(r.note); if (r.bitmap != null) onFound() }
+                    r.bitmap
+                } else app.vlcinterface.sources.CoverArt.folderOnly(ctx, it0)
+            }
         }
     }
     Box(modifier.size(sizeDp.dp).clip(RoundedCornerShape(8.dp)).background(C.card2), contentAlignment = Alignment.Center) {
@@ -212,7 +214,7 @@ fun MediaList(
                             onRgScan = if (App.instance.store.current.settings.libraryKind == "audio") ({ rgTarget = itemsOfDir(r.e) }) else null) }
                     }
                     is Row0.Header -> Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Cover(r.g.artwork, 56, artist = r.g.artist, album = r.g.album)
+                        Cover(r.g.artwork, 56, item = r.g.entries.firstOrNull()?.let { MusicLibrary.toPlayItem(it, source, folderKey) })
                         Column(Modifier.padding(start = 12.dp).weight(1f)) {
                             Text(r.g.album, color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             val sub = listOfNotNull(r.g.artist.ifEmpty { null }, if (r.g.year > 0) r.g.year.toString() else null,

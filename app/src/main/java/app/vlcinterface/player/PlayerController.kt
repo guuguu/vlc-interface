@@ -213,6 +213,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         o += "--audio-replay-gain-preamp=${s.rgPreampDb}"
         o += "--audio-replay-gain-default=0"
         o += if (s.rgClipProtect) "--audio-replay-gain-peak-protection" else "--no-audio-replay-gain-peak-protection"
+        // libVLC never fetches album art from the internet itself (pictures are handled by the app, saved only in album folders).
+        o += "--no-metadata-network-access"
         // Subtitle look (text subtitles rendered by freetype).
         o += "--freetype-font=${style.font}"
         o += "--freetype-color=${style.color}"

@@ -102,9 +102,18 @@ fun SettingsScreen(nav: Navigator) {
             CardBox {
                 ToggleRow("Automatic scanning", "Off: only scans when you tap Rescan", s.autoScan) { set(s.copy(autoScan = it)) }; Divider()
                 ToggleRow("Watch folders for changes", "Off: no background file watching", s.watchFolders) { set(s.copy(watchFolders = it)) }; Divider()
-                ToggleRow("Album pictures from the internet", "For albums with no picture in their files (MusicBrainz / Cover Art Archive); artist or band photo when the album has none (Wikimedia). Kept in the app", s.coverDownload) { set(s.copy(coverDownload = it)) }
-                var covers by remember { mutableIntStateOf(app.vlcinterface.sources.CoverArt.count()) }
-                if (covers > 0) { Divider(); ValueRow("Stored album pictures", "Tap to delete them all", "$covers") { app.vlcinterface.sources.CoverArt.clear(); covers = 0 } }
+                ToggleRow("Album pictures from the internet", "For albums with no picture (MusicBrainz / Cover Art Archive); artist or band photo when the album has none (Wikimedia). Resized for the phone and saved only in the album folder (cover.jpg / artist.jpg)", s.coverDownload) { set(s.copy(coverDownload = it)) }
+                Divider()
+                val ctx = LocalContext.current
+                var granted by remember { mutableStateOf(app.vlcinterface.sources.CoverArt.phoneAccessGranted(ctx)) }
+                val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
+                    if (uri != null) try {
+                        ctx.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                        granted = true
+                    } catch (_: Exception) {}
+                }
+                ValueRow("Phone music folders", if (granted) "Album pictures can be saved in phone album folders" else "Allow once (e.g. pick Music) so pictures can be saved next to the songs",
+                    if (granted) "Allowed ✓" else "Allow") { pick.launch(null) }
             }
             SectionTitle("Look")
             CardBox {

@@ -119,6 +119,7 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
             when {
                 url.startsWith("file://") -> BitmapFactory.decodeFile(Uri.parse(url).path)
                 url.startsWith("/") -> BitmapFactory.decodeFile(url)
+                url.startsWith("mem:") -> app.vlcinterface.sources.CoverArt.memory(url.removePrefix("mem:"))
                 else -> null
             }
         } catch (_: Exception) { null }
