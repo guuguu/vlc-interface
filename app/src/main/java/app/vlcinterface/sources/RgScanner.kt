@@ -250,7 +250,7 @@ object RgScanner {
      * SMB file for Android's decoder. The decoder asks for many small pieces; each one was a network round trip,
      * which made scanning a NAS crawl. Now it reads 1 MB at a time and serves the small pieces from memory.
      */
-    private class SmbSource(f: SmbFile) : MediaDataSource() {
+    internal class SmbSource(f: SmbFile) : MediaDataSource() {
         private val raf: SmbRandomAccessFile = f.openRandomAccess("r") as SmbRandomAccessFile
         private val len = f.length()
         private val block = ByteArray(1 shl 20)
@@ -523,5 +523,58 @@ object TagWriter {
                 af.commit()
             }
         }
+    }
+}
+
+
+/** "Tags & ReplayGain" for one file: the tag records Android reads from it, plus the ReplayGain values. */
+object MediaInfo {
+    data class Info(val tags: List<Pair<String, String>>, val fileRg: Rg?, val appRg: Rg?, val error: String = "")
+
+    suspend fun read(ctx: Context, item: PlayItem): Info = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        val r = android.media.MediaMetadataRetriever()
+        var ds: MediaDataSource? = null
+        val tags = ArrayList<Pair<String, String>>()
+        var err = ""
+        try {
+            val u = item.uri
+            when {
+                u.startsWith("content://") -> r.setDataSource(ctx, Uri.parse(u))
+                u.startsWith("file://") -> r.setDataSource(Uri.parse(u).path)
+                u.startsWith("/") -> r.setDataSource(u)
+                u.startsWith("smb://") -> { ds = RgScanner.SmbSource(SmbFile(u, SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); r.setDataSource(ds) }
+                u.startsWith("http") -> r.setDataSource(u, if (item.user.isNotEmpty()) mapOf("Authorization" to okhttp3.Credentials.basic(item.user, item.password)) else emptyMap())
+                else -> throw IllegalStateException("tags can't be read from this kind of source")
+            }
+            fun add(label: String, key: Int, f: (String) -> String = { it }) { r.extractMetadata(key)?.trim()?.takeIf { it.isNotEmpty() }?.let { tags += label to f(it) } }
+            add("Title", android.media.MediaMetadataRetriever.METADATA_KEY_TITLE)
+            add("Artist", android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST)
+            add("Album artist", android.media.MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)
+            add("Album", android.media.MediaMetadataRetriever.METADATA_KEY_ALBUM)
+            add("Year", android.media.MediaMetadataRetriever.METADATA_KEY_YEAR)
+            add("Date", android.media.MediaMetadataRetriever.METADATA_KEY_DATE)
+            add("Track", android.media.MediaMetadataRetriever.METADATA_KEY_CD_TRACK_NUMBER)
+            add("Disc", android.media.MediaMetadataRetriever.METADATA_KEY_DISC_NUMBER)
+            add("Genre", android.media.MediaMetadataRetriever.METADATA_KEY_GENRE)
+            add("Composer", android.media.MediaMetadataRetriever.METADATA_KEY_COMPOSER)
+            add("Writer", android.media.MediaMetadataRetriever.METADATA_KEY_WRITER)
+            add("Compilation", android.media.MediaMetadataRetriever.METADATA_KEY_COMPILATION)
+            add("Duration", android.media.MediaMetadataRetriever.METADATA_KEY_DURATION) { ms ->
+                ms.toLongOrNull()?.let { val t = it / 1000; if (t >= 3600) "%d:%02d:%02d".format(t / 3600, t / 60 % 60, t % 60) else "%d:%02d".format(t / 60, t % 60) } ?: ms }
+            add("Bitrate", android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE) { b -> b.toLongOrNull()?.let { "${it / 1000} kbit/s" } ?: b }
+            add("Sample rate", android.media.MediaMetadataRetriever.METADATA_KEY_SAMPLERATE) { "$it Hz" }
+            add("Bits per sample", android.media.MediaMetadataRetriever.METADATA_KEY_BITS_PER_SAMPLE)
+            add("Format", android.media.MediaMetadataRetriever.METADATA_KEY_MIMETYPE)
+            val w = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+            val h = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+            if (w != null && h != null) tags += "Video" to "$w × $h"
+            add("Rotation", android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION) { "$it°" }
+            if (r.embeddedPicture != null) tags += "Embedded picture" to "yes"
+        } catch (e: Exception) { err = e.message ?: e.javaClass.simpleName }
+        finally { try { r.release() } catch (_: Exception) {}; ds?.close() }
+        tags += "File" to item.fileName.ifEmpty { Uri.decode(item.uri).substringAfterLast('/') }
+        tags += "Location" to Uri.decode(item.uri).let { u -> if (u.startsWith("content://")) item.folderKey.removePrefix("local:").ifEmpty { u } else u.substringBeforeLast('/') }
+        val fileRg = ReplayGain.fromFile(ctx, item.uri, item.user, item.password, item.domain, item.smbVersion)
+        Info(tags, fileRg, RgStore.get(item.uri), err)
     }
 }

@@ -177,3 +177,51 @@ fun RgScanScreen(nav: Navigator) {
         }
     }
 }
+
+/** "Tags & ReplayGain" for one audio or video file. */
+@Composable
+fun TagInfoDialog(item: PlayItem, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    var info by remember { mutableStateOf<app.vlcinterface.sources.MediaInfo.Info?>(null) }
+    LaunchedEffect(item.uri) { info = app.vlcinterface.sources.MediaInfo.read(ctx.applicationContext, item) }
+    AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
+        title = { Text("Tags & ReplayGain", color = C.text) },
+        text = {
+            val scroll = rememberScrollState()
+            Column(Modifier.verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                val i = info
+                if (i == null) { Text("Reading the file…", color = C.muted); return@Column }
+                if (i.error.isNotEmpty()) Text("Tags: ${i.error}", color = C.bad, fontSize = 12.sp)
+                Text("Tag records", color = C.text, fontWeight = FontWeight.SemiBold)
+                i.tags.forEach { (k, v) ->
+                    Row(Modifier.fillMaxWidth()) {
+                        Text(k, color = C.muted, fontSize = 13.sp, modifier = Modifier.width(120.dp))
+                        Text(v, color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                    }
+                }
+                if (item.isMusic) {
+                    @Composable fun rg(title: String, r: app.vlcinterface.sources.Rg?) {
+                        Text(title, color = C.text, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp))
+                        if (r == null || !r.any) { Text("none", color = C.muted, fontSize = 13.sp); return }
+                        fun g(v: Float?) = v?.let { "%+.2f dB".format(java.util.Locale.US, it) } ?: "—"
+                        fun pk(v: Float?) = v?.let { "%.6f".format(java.util.Locale.US, it) } ?: "—"
+                        listOf("Track gain" to g(r.trackGain), "Track peak" to pk(r.trackPeak), "Album gain" to g(r.albumGain), "Album peak" to pk(r.albumPeak)).forEach { (k, v) ->
+                            Row(Modifier.fillMaxWidth()) {
+                                Text(k, color = C.muted, fontSize = 13.sp, modifier = Modifier.width(120.dp))
+                                Text(v, color = if (v == "—") C.muted else accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                    rg("ReplayGain in the file", i.fileRg)
+                    rg("ReplayGain kept in the app", i.appRg)
+                    Text(when {
+                        i.appRg?.any == true -> "The player uses the values kept in the app."
+                        i.fileRg?.any == true -> "The player uses the values in the file."
+                        else -> "No ReplayGain values: this file plays unchanged. Long-press → ReplayGain scan to measure it."
+                    }, color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+        },
+        confirmButton = { STextButton(onDismiss) { Text("Close", color = accent()) } },
+    )
+}

@@ -153,6 +153,7 @@ fun MediaList(
     var addTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
     var deleteTarget by remember { mutableStateOf<Entry?>(null) }
     var rgTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
+    var infoItem by remember { mutableStateOf<PlayItem?>(null) }
     // Multi-select (songs and folders): long-press → Select…, then taps tick/untick.
     var selected by remember(entries) { mutableStateOf(setOf<String>()) }
     fun toggle(e: Entry) { selected = if (e.uri in selected) selected - e.uri else selected + e.uri }
@@ -265,7 +266,8 @@ fun MediaList(
                                 onAddPlaylist = { addTarget = { listOf(MusicLibrary.toPlayItem(e, source, folderKey)) } },
                                 onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null,
                                 onSelect = { toggle(e) },
-                                onRgScan = { rgTarget = { listOf(MusicLibrary.toPlayItem(e, source, folderKey)) } }) }
+                                onRgScan = { rgTarget = { listOf(MusicLibrary.toPlayItem(e, source, folderKey)) } },
+                                onInfo = { infoItem = MusicLibrary.toPlayItem(e, source, folderKey) }) }
                         }
                     }
                     is Row0.Video -> {
@@ -283,7 +285,8 @@ fun MediaList(
                                 onPlayNext = { App.instance.player.playNext(listOf(MusicLibrary.toPlayItem(e, source, folderKey))) },
                                 onQueue = { App.instance.player.addToQueue(listOf(MusicLibrary.toPlayItem(e, source, folderKey))) },
                                 onAddPlaylist = { addTarget = { listOf(MusicLibrary.toPlayItem(e, source, folderKey)) } },
-                                onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null) }
+                                onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null,
+                                onInfo = { infoItem = MusicLibrary.toPlayItem(e, source, folderKey) }) }
                         }
                     }
                 }
@@ -294,6 +297,7 @@ fun MediaList(
 
     addTarget?.let { t -> AddToPlaylistDialog(t) { addTarget = null; selected = emptySet() } }
     rgTarget?.let { t -> RgScanDialog(nav, t) { rgTarget = null; selected = emptySet() } }
+    infoItem?.let { it0 -> TagInfoDialog(it0) { infoItem = null } }
     deleteTarget?.let { e ->
         DeleteDialog(listOf(e.uri), e.name, if (e.size > 0) e.size else 0, 1, onDone = { deleted -> deleteTarget = null; if (deleted) onRefresh() })
     }
@@ -303,13 +307,14 @@ fun MediaList(
 fun EntryMenu(
     e: Entry, isDir: Boolean, source: Source?, onDismiss: () -> Unit,
     onPlayNext: () -> Unit, onQueue: () -> Unit, onAddPlaylist: () -> Unit, onDelete: (() -> Unit)?,
-    onSelect: (() -> Unit)? = null, onRgScan: (() -> Unit)? = null,
+    onSelect: (() -> Unit)? = null, onRgScan: (() -> Unit)? = null, onInfo: (() -> Unit)? = null,
 ) {
     SDropdownMenu(expanded = true, onDismissRequest = onDismiss) {
         if (onSelect != null) SMenuItem(text = { Text("Select…") }, onClick = { onSelect(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Play all next" else "Play next") }, onClick = { onPlayNext(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Add all to queue" else "Add to queue") }, onClick = { onQueue(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Add all to playlist…" else "Add to playlist…") }, onClick = { onAddPlaylist(); onDismiss() })
+        if (onInfo != null) SMenuItem(text = { Text("Tags & ReplayGain…") }, onClick = { onInfo(); onDismiss() })
         if (onRgScan != null) SMenuItem(text = { Text(if (isDir) "ReplayGain scan (with subfolders)…" else "ReplayGain scan…") }, onClick = { onRgScan(); onDismiss() })
         if (onDelete != null) SMenuItem(text = { Text("Delete…", color = C.bad) }, onClick = { onDelete(); onDismiss() })
     }

@@ -126,7 +126,11 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 Text(listOfNotNull(p.metaArtist.ifEmpty { null }, p.metaAlbum.ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = 15.sp, textAlign = TextAlign.Center)
                 val badges = listOfNotNull(if (item.trackNo > 0) "Track ${item.trackNo}" else null, p.rgInfo.ifEmpty { null },
                     if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else if (p.sleepEndOfTrack) "Sleep after this song" else null)
-                if (badges.isNotEmpty()) Text(badges.joinToString(" · "), color = accent(), fontSize = 12.sp)
+                // Tap the badges (or the title area) for the song's tags and ReplayGain values.
+                var showInfo by remember { mutableStateOf(false) }
+                Text(if (badges.isNotEmpty()) badges.joinToString(" · ") + "  ⓘ" else "Tags & ReplayGain ⓘ", color = accent(), fontSize = 12.sp,
+                    modifier = Modifier.clickable { showInfo = true }.padding(4.dp))
+                if (showInfo) TagInfoDialog(item) { showInfo = false }
             }
             Column(Modifier.fillMaxWidth()) {
                 var drag by remember { mutableStateOf<Float?>(null) }
@@ -399,6 +403,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
     // Multi-select (by position): long-press → Select…, then taps tick/untick.
     var selected by remember(d.id) { mutableStateOf(setOf<Int>()) }
     var rgItems by remember { mutableStateOf<List<PlayItem>?>(null) }
+    var infoPl by remember { mutableStateOf<PlayItem?>(null) }
     var itemMenu by remember { mutableIntStateOf(-1) }
     fun update(f: (Playlist) -> Playlist) = store.update { s -> s.copy(playlists = s.playlists.map { if (it.id == pl.id) f(it) else it }) }
     val phoneCue = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -464,6 +469,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                             SMenuItem({ Text("Play next") }, { App.instance.player.playNext(listOf(MusicLibrary.fromPlEntry(e))); itemMenu = -1 })
                             SMenuItem({ Text("Select…") }, { selected = setOf(i); itemMenu = -1 })
                             SMenuItem({ Text("ReplayGain scan…") }, { rgItems = listOf(MusicLibrary.fromPlEntry(e)); itemMenu = -1 })
+                            SMenuItem({ Text("Tags & ReplayGain…") }, { infoPl = MusicLibrary.fromPlEntry(e); itemMenu = -1 })
                             SMenuItem({ Text("Remove from playlist", color = C.bad) }, { update { p -> p.copy(items = p.items.filterIndexed { j, _ -> j != i }) }; itemMenu = -1 })
                         }
                     }
@@ -474,6 +480,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
     }
 
     rgItems?.let { its -> RgScanDialog(nav, { its }) { rgItems = null; selected = emptySet() } }
+    infoPl?.let { it0 -> TagInfoDialog(it0) { infoPl = null } }
     rename?.let { n ->
         AlertDialog(onDismissRequest = { rename = null }, title = { Text("Rename playlist") },
             text = { OutlinedTextField(n, { rename = it }, singleLine = true) },

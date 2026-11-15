@@ -26,6 +26,10 @@ object ReplayGain {
     private val cache = ConcurrentHashMap<String, Rg>()
     private const val HEAD = 512 * 1024
 
+    /** Only what is written in the file itself (no cache, no values kept in the app). */
+    suspend fun fromFile(ctx: Context, uri: String, user: String, pass: String, domain: String, smbVersion: String): Rg? =
+        withContext(Dispatchers.IO) { try { fetch(ctx, uri, user, pass, domain, smbVersion)?.let { parse(it.first + it.second) } } catch (_: Exception) { null } }
+
     /** After a scan wrote new values. */
     fun forget(uri: String) { cache.remove(uri) }
     private const val TAIL = 64 * 1024
