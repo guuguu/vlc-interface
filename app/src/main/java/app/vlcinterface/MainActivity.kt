@@ -41,6 +41,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(i: Intent?) {
+        if (i?.getBooleanExtra(EXTRA_OPEN_ORIGIN, false) == true) {
+            i.removeExtra(EXTRA_OPEN_ORIGIN)
+            app.vlcinterface.ui.openOrigin(nav)
+            return
+        }
         if (i?.action == Intent.ACTION_VIEW) {
             val data = i.data ?: return
             App.instance.player.play(PlayItem(data.toString(), data.lastPathSegment ?: "Video"))
@@ -82,6 +87,7 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
+        const val EXTRA_OPEN_ORIGIN = "open_origin"
         var instance: MainActivity? = null
         val inPip = mutableStateOf(false)
     }

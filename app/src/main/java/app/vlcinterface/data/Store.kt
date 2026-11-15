@@ -103,6 +103,9 @@ class Store(private val context: Context) {
                 audioOffsets = incoming.audioOffsets + mine.audioOffsets,
                 recent = (mine.recent + incoming.recent.filter { r -> mine.recent.none { it.uri == r.uri } }).take(50),
                 scanned = incoming.scanned + mine.scanned,
+                playlists = mine.playlists + incoming.playlists.filter { p -> mine.playlists.none { it.id == p.id || it.name == p.name } },
+                devicePreamp = incoming.devicePreamp + mine.devicePreamp,
+                deviceBalance = incoming.deviceBalance + mine.deviceBalance,
             )
         }
         return null
@@ -131,6 +134,9 @@ class Store(private val context: Context) {
             .put("recent", JSONArray(s.recent.map { it.toJson() }))
             .put("scanned", s.scanned.toJson())
             .put("lastOutput", s.lastOutput)
+            .put("playlists", JSONArray(s.playlists.map { it.toJson() }))
+            .put("devicePreamp", JSONObject().also { o -> s.devicePreamp.forEach { (k, v) -> o.put(k, v.toDouble()) } })
+            .put("deviceBalance", JSONObject().also { o -> s.deviceBalance.forEach { (k, v) -> o.put(k, v) } })
 
         fun fromJson(o: JSONObject, pw: (String) -> String): AppState {
             fun arr(name: String) = o.optJSONArray(name) ?: JSONArray()
@@ -147,6 +153,9 @@ class Store(private val context: Context) {
                 recent = recent,
                 scanned = o.optJSONObject("scanned").longMap(),
                 lastOutput = o.optString("lastOutput"),
+                playlists = arr("playlists").let { a -> (0 until a.length()).map { Playlist.fromJson(a.getJSONObject(it)) } },
+                devicePreamp = o.optJSONObject("devicePreamp").let { d -> if (d == null) emptyMap() else d.keys().asSequence().associateWith { d.optDouble(it, 0.0).toFloat() } },
+                deviceBalance = o.optJSONObject("deviceBalance").let { d -> if (d == null) emptyMap() else d.keys().asSequence().associateWith { d.optInt(it, 0) } },
             )
         }
     }

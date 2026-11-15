@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-val appVersionName = (findProperty("appVersionName") as String?) ?: "0.1.0"
+val appVersionName = (findProperty("appVersionName") as String?) ?: "0.2.0"
 val appVersionCode = ((findProperty("appVersionCode") as String?) ?: "1").toInt()
 
 android {

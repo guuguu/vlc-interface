@@ -76,6 +76,10 @@ fun OutputSheet(onDismiss: () -> Unit) {
             }
             Text("Tap a device to switch with Android's output switcher. Android plays media on one Bluetooth device at a time.",
                 color = C.muted, fontSize = 12.sp)
+            devices.firstOrNull { it.active }?.let { d ->
+                Text("Preamp and balance for ${d.name}", color = C.muted, fontSize = 13.sp)
+                DeviceSoundControls(d.name)
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Volume", color = C.muted, fontSize = 13.sp)
                 Slider(vol.toFloat(), { vol = it.toInt(); router.setVolumePercent(vol) }, valueRange = 0f..100f, modifier = Modifier.weight(1f).padding(horizontal = 12.dp),

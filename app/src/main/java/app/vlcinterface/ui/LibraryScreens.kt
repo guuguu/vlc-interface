@@ -3,6 +3,7 @@ package app.vlcinterface.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,6 +21,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -38,6 +42,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,22 +58,24 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.vlcinterface.App
+import app.vlcinterface.data.ServerLog
 import app.vlcinterface.data.Source
 import app.vlcinterface.data.Station
 import app.vlcinterface.data.Zone
+import app.vlcinterface.player.Origin
 import app.vlcinterface.player.PlayItem
 import app.vlcinterface.sources.Browse
 import app.vlcinterface.sources.Entry
 import app.vlcinterface.sources.InternalSource
 import app.vlcinterface.sources.LocalFolder
 import app.vlcinterface.sources.M3u
+import app.vlcinterface.sources.MusicLibrary
 import app.vlcinterface.sources.Net
 import app.vlcinterface.sources.RadioBrowser
 import app.vlcinterface.sources.RadioStation
-import app.vlcinterface.sources.SmbProbe
+import app.vlcinterface.sources.SmbErrors
 import app.vlcinterface.sources.Urls
 import app.vlcinterface.sources.VlcBrowse
-import app.vlcinterface.sources.isPlayable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -82,10 +89,16 @@ fun LibraryHeader(title: String, openOutput: () -> Unit, actions: @Composable ()
 }
 
 @Composable
+fun HomeButton(nav: Navigator, tint: Color = C.text) {
+    IconButton({ nav.home(); nav.replace(Screen.Library()) }) { Icon(Icons.Filled.Home, "Home", tint = tint) }
+}
+
+@Composable
 fun BackHeader(title: String, nav: Navigator, sub: String = "", actions: @Composable () -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { nav.back() }) { Icon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
-        Column(Modifier.weight(1f)) {
+        HomeButton(nav)
+        Column(Modifier.weight(1f).padding(start = 4.dp)) {
             Text(title, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -97,6 +110,10 @@ fun BackHeader(title: String, nav: Navigator, sub: String = "", actions: @Compos
 fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         LibraryHeader("Library", openOutput) {
+            when {
+                s.tab != 0 || s.sub != 0 -> HomeButton(nav)
+                else -> {}
+            }
             when {
                 s.tab == 1 -> IconButton({ nav.go(Screen.EditSource(Zone.LAN)) }) { Icon(Icons.Filled.Add, "Add LAN source", tint = C.text) }
                 s.tab == 2 && s.sub == 0 -> IconButton({ nav.go(Screen.EditSource(Zone.INTERNET)) }) { Icon(Icons.Filled.Add, "Add internet storage", tint = C.text) }
@@ -129,29 +146,39 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
                 }
             }
         }
-        BottomBar(nav)
+        BottomBar(nav, current = 0)
     }
 }
 
+/** Library · Playlists · Settings, with the playing bar above it. */
 @Composable
-fun BottomBar(nav: Navigator) {
+fun BottomBar(nav: Navigator, current: Int) {
     val p by App.instance.player.state.collectAsState()
     Column {
         if (p.item != null) MiniPlayer(nav)
         Row(Modifier.fillMaxWidth().height(60.dp).background(C.bg), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            Text("Library", color = accent(), fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.clickable { nav.home() }.padding(12.dp))
-            Text("Settings", color = C.muted, fontSize = 13.sp, modifier = Modifier.clickable { nav.go(Screen.Settings) }.padding(12.dp))
+            listOf("Library", "Playlists", "Settings").forEachIndexed { i, label ->
+                Text(label, color = if (current == i) accent() else C.muted, fontWeight = if (current == i) FontWeight.SemiBold else FontWeight.Normal, fontSize = 13.sp,
+                    modifier = Modifier.clickable {
+                        when (i) {
+                            0 -> { nav.home(); nav.replace(Screen.Library()) }
+                            1 -> { nav.home(); nav.go(Screen.Playlists) }
+                            else -> nav.go(Screen.Settings)
+                        }
+                    }.padding(12.dp))
+            }
         }
     }
 }
 
+/** Playing bar: tap opens the folder of the playing file; the arrow opens the full player. */
 @Composable
 fun MiniPlayer(nav: Navigator) {
     val p by App.instance.player.state.collectAsState()
     val item = p.item ?: return
     Row(
         Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.card2)
-            .clickable { if (!item.isRadio) nav.go(Screen.Player) }.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            .clickable { openOrigin(nav) }.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -159,10 +186,14 @@ fun MiniPlayer(nav: Navigator) {
             val sub = when {
                 p.error.isNotEmpty() -> p.error
                 p.nowPlaying.isNotEmpty() -> "Now: ${p.nowPlaying}"
-                p.buffering < 100f && p.isPlaying.not() -> "Buffering…"
-                else -> if (item.isRadio) "Radio" else "${fmtTime(p.time)} / ${fmtTime(p.length)}"
+                p.buffering < 100f && !p.isPlaying -> "Buffering…"
+                item.isRadio -> "Radio"
+                else -> listOfNotNull(p.metaArtist.ifEmpty { null }, "${fmtTime(p.time)} / ${fmtTime(p.length)}").joinToString(" · ")
             }
             Text(sub, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        if (!item.isRadio) IconButton({ nav.go(if (item.isMusic) Screen.Music else Screen.Player) }) {
+            Icon(Icons.Filled.KeyboardArrowUp, "Open player", tint = C.text)
         }
         IconButton({ App.instance.player.togglePause() }) {
             Text(if (p.isPlaying) "❚❚" else "▶", color = accent(), fontSize = 18.sp)
@@ -179,17 +210,21 @@ fun InternalTab(nav: Navigator) {
     val st by App.instance.store.state.collectAsState()
     var folders by remember { mutableStateOf<List<LocalFolder>?>(null) }
     var busy by remember { mutableStateOf("") }
+    var reload by remember { mutableIntStateOf(0) }
+    var menuFor by remember { mutableStateOf<LocalFolder?>(null) }
+    var addFolder by remember { mutableStateOf<LocalFolder?>(null) }
+    var deleteFolder by remember { mutableStateOf<Pair<LocalFolder, List<Entry>>?>(null) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { folders = InternalSource.folders(ctx) }
+    LaunchedEffect(reload) { folders = InternalSource.folders(ctx) }
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp)) {
         val recent = st.recent.firstOrNull()
         if (recent != null) {
             SectionTitle("Continue watching")
             CardBox(Modifier.clickable {
-                App.instance.player.play(PlayItem(recent.uri, recent.title, sourceId = recent.sourceId,
-                    user = st.sources.firstOrNull { it.id == recent.sourceId }?.user ?: "",
-                    password = st.sources.firstOrNull { it.id == recent.sourceId }?.password ?: ""))
+                val src = st.sources.firstOrNull { it.id == recent.sourceId }
+                App.instance.player.play(PlayItem(recent.uri, recent.title, sourceId = recent.sourceId, user = src?.user ?: "",
+                    password = src?.password ?: "", smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: ""))
                 nav.go(Screen.Player)
             }) {
                 Column(Modifier.padding(14.dp)) {
@@ -209,7 +244,7 @@ fun InternalTab(nav: Navigator) {
                     folders?.forEach { f -> withTimeoutOrNull(20_000) { InternalSource.rescan(ctx, f.relativePath) } }
                     val now = System.currentTimeMillis()
                     App.instance.store.update { s -> s.copy(scanned = s.scanned + (folders ?: emptyList()).associate { it.id to now }) }
-                    folders = InternalSource.folders(ctx); busy = ""
+                    reload++; busy = ""
                 }
             }
         }
@@ -217,18 +252,26 @@ fun InternalTab(nav: Navigator) {
             folders == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
             folders!!.isEmpty() -> Text("No videos or music found. Allow access to videos and music when Android asks, then tap Rescan all.", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
             else -> folders!!.forEach { f ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable { nav.go(Screen.Folder(f)) }, verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).combinedClickable(onClick = { nav.go(Screen.Folder(f)) }, onLongClick = { menuFor = f }),
+                    verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) { Text("▤", color = accent()) }
                     Column(Modifier.weight(1f).padding(start = 14.dp)) {
                         Text(f.name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                         Text("${f.count} files · ${ago(st.scanned[f.id] ?: 0)}", color = C.muted, fontSize = 13.sp)
+                    }
+                    Box {
+                        if (menuFor == f) EntryMenu(Entry(f.name, f.relativePath, true), true, null, onDismiss = { menuFor = null },
+                            onPlayNext = { scope.launch { App.instance.player.playNext(MusicLibrary.collectLocal(ctx, f, true)) } },
+                            onQueue = { scope.launch { App.instance.player.addToQueue(MusicLibrary.collectLocal(ctx, f, true)) } },
+                            onAddPlaylist = { addFolder = f },
+                            onDelete = { scope.launch { deleteFolder = f to InternalSource.files(ctx, f, true) } })
                     }
                     IconButton({
                         scope.launch {
                             busy = f.id
                             withTimeoutOrNull(20_000) { InternalSource.rescan(ctx, f.relativePath) }
                             App.instance.store.update { s -> s.copy(scanned = s.scanned + (f.id to System.currentTimeMillis())) }
-                            folders = InternalSource.folders(ctx); busy = ""
+                            reload++; busy = ""
                         }
                     }) {
                         if (busy == f.id) CircularProgressIndicator(Modifier.size(18.dp), color = accent(), strokeWidth = 2.dp)
@@ -240,44 +283,27 @@ fun InternalTab(nav: Navigator) {
         }
         Box(Modifier.height(16.dp))
     }
-}
-
-@Composable
-fun FolderScreen(nav: Navigator, folder: LocalFolder) {
-    val ctx = LocalContext.current
-    var files by remember { mutableStateOf<List<Entry>?>(null) }
-    LaunchedEffect(folder.id) { files = InternalSource.files(ctx, folder) }
-    Column(Modifier.fillMaxSize()) {
-        BackHeader(folder.name, nav, folder.relativePath)
-        EntryList(files, error = "", onOpen = { e, all ->
-            val items = all.filter { !it.isDir }.map { PlayItem(it.uri, it.name, folderKey = "local:${folder.id}") }
-            App.instance.player.play(items.first { it.uri == e.uri }.copy(siblings = items))
-            nav.go(Screen.Player)
-        })
+    addFolder?.let { f -> AddToPlaylistDialog({ MusicLibrary.collectLocal(ctx, f, true) }) { addFolder = null } }
+    deleteFolder?.let { (f, files) ->
+        if (files.isEmpty()) deleteFolder = null
+        else DeleteDialog(files.map { it.uri }, f.name, files.sumOf { it.size.coerceAtLeast(0) }, files.size) { deleteFolder = null; reload++ }
     }
 }
 
 @Composable
-fun EntryList(entries: List<Entry>?, error: String, onOpen: (Entry, List<Entry>) -> Unit) {
-    val scroll = rememberScrollState()
-    Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp)) {
-        when {
-            error.isNotEmpty() -> Text(error, color = C.bad, fontSize = 14.sp, modifier = Modifier.padding(vertical = 16.dp))
-            entries == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
-            entries.isEmpty() -> Text("Nothing here.", color = C.muted, modifier = Modifier.padding(vertical = 16.dp))
-            else -> entries.forEach { e ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { onOpen(e, entries) }, verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (e.isDir) "▤" else if (isPlayable(e.name)) "▶" else "·", color = accent(), modifier = Modifier.padding(end = 14.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(e.name, color = C.text, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        val meta = listOfNotNull(e.meta.ifEmpty { null }, if (e.size > 0) "%.1f MB".format(e.size / 1e6) else null).joinToString(" · ")
-                        if (meta.isNotEmpty()) Text(meta, color = C.muted, fontSize = 12.sp)
-                    }
-                }
-                Divider()
-            }
+fun FolderScreen(nav: Navigator, folder: LocalFolder, highlight: String) {
+    val ctx = LocalContext.current
+    var files by remember { mutableStateOf<List<Entry>?>(null) }
+    var reload by remember { mutableIntStateOf(0) }
+    LaunchedEffect(folder.id, reload) { files = InternalSource.files(ctx, folder) }
+    Column(Modifier.fillMaxSize()) {
+        BackHeader(folder.name, nav, folder.relativePath)
+        Box(Modifier.weight(1f)) {
+            MediaList(nav, files, "", folder.name.removeSuffix(" (SD card)"), null, "local:${folder.volume}:${folder.relativePath}",
+                Origin("local", folder.volume, folder.relativePath, folder.name, localFolderId = folder.id), highlight,
+                onOpenDir = {}, onRefresh = { reload++ })
         }
-        Box(Modifier.height(16.dp))
+        BottomBar(nav, current = 0)
     }
 }
 
@@ -289,12 +315,16 @@ fun SourcesTab(nav: Navigator, zone: Zone) {
     val list = st.sources.filter { it.zone == zone && it.proto != "m3u" }
     val online = remember { mutableStateMapOf<String, Boolean>() }
     var found by remember { mutableStateOf<List<Entry>?>(null) }
+    // Re-check reachability every 20 s while the tab is visible.
     LaunchedEffect(list.map { it.id }) {
-        list.forEach { s ->
-            launch {
-                val host = Urls.hostOnly(s.host)
-                online[s.id] = if (s.proto == "upnp") true else Net.reachable(host, if (s.port > 0) s.port else s.defaultPort)
+        while (true) {
+            list.forEach { s ->
+                launch {
+                    val host = Urls.hostOnly(s.host)
+                    online[s.id] = if (s.proto == "upnp") true else Net.reachable(host, if (s.port > 0) s.port else s.defaultPort)
+                }
             }
+            kotlinx.coroutines.delay(20_000)
         }
     }
     if (zone == Zone.LAN) LaunchedEffect(Unit) { found = VlcBrowse.discover() }
@@ -353,7 +383,7 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
             nav.go(Screen.Browse(s.id, Urls.forSource(s), s.name))
         }, verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) {
-                Text(s.proto.uppercase().take(6), color = a, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(if (s.smbVersion == "SMB1") "SMB1" else s.proto.uppercase().take(6), color = a, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
                 Text(s.name.ifEmpty { s.host }, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
@@ -362,6 +392,7 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
             val (label, col) = when (online) { null -> "…" to C.muted; true -> "Online" to C.ok; false -> "Offline" to C.muted }
             Text(label, color = col, fontSize = 12.sp)
             if (s.zone == Zone.INTERNET) Text(if (s.wifiOnly) " Wi-Fi only" else " Any network", color = C.muted, fontSize = 11.sp)
+            IconButton({ nav.go(Screen.LogPage(ServerLog.keyOf(s.host))) }) { Icon(Icons.Filled.Info, "Log for ${s.name}", tint = C.muted) }
             IconButton({ nav.go(Screen.EditSource(s.zone, s.id)) }) { Icon(Icons.Filled.MoreVert, "Edit ${s.name}", tint = C.muted) }
         }
         FlowRow(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -372,7 +403,7 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
             }
             Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable {
                 App.instance.store.update { st -> st.copy(sources = st.sources.map { if (it.id == s.id) it.copy(lastScan = System.currentTimeMillis()) else it }) }
-                nav.go(Screen.Browse(s.id, Urls.forSource(s), s.name))
+                nav.go(Screen.Browse(s.id, Urls.forSource(s), s.name, highlight = "\u0000rescan"))
             }.padding(horizontal = 12.dp, vertical = 7.dp)) { Text("↻ Rescan", color = a, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
         }
     }
@@ -384,20 +415,31 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
     val src = st.sources.firstOrNull { it.id == b.sourceId }
     var entries by remember(b.uri) { mutableStateOf<List<Entry>?>(null) }
     var error by remember(b.uri) { mutableStateOf("") }
-    var reload by remember { mutableStateOf(0) }
+    var reload by remember { mutableIntStateOf(if (b.highlight == "\u0000rescan") 1 else 0) }
+    var scanning by remember { mutableStateOf(false) }
     LaunchedEffect(b.uri, reload) {
         entries = null; error = ""
         if (src == null) { error = "Source not found"; return@LaunchedEffect }
-        var r = Browse.list(src, b.uri)
-        // Fall back to jcifs-ng for SMB servers libVLC cannot open (e.g. SMB1-only).
-        if (r.isFailure && src.proto == "smb") {
-            val folder = b.uri.substringAfter("smb://").substringAfter('/', "")
-            r = SmbProbe.list(Urls.hostOnly(src.host), android.net.Uri.decode(folder), src.smbVersion, src.user, src.password, src.domain)
+        val started = System.currentTimeMillis()
+        val r = Browse.list(src, b.uri)
+        r.onSuccess { l ->
+            ServerLog.log(src.host, if (reload > 0) "rescan" else "browse", src.proto.uppercase(), src.user, true, "Listed ${Urls.nameOf(b.uri)}: ${l.size} items", startedAt = started)
+            entries = MusicLibrary.withCachedTags(l)
+            // Tags are read only on a manual Rescan (no automatic scanning).
+            if (reload > 0 && l.any { it.isAudio }) {
+                scanning = true
+                entries = MusicLibrary.scanTags(src, l, force = true)
+                scanning = false
+                App.instance.store.update { s -> s.copy(sources = s.sources.map { if (it.id == src.id) it.copy(lastScan = System.currentTimeMillis()) else it }) }
+            }
+        }.onFailure { e ->
+            val why = SmbErrors.explain(e, src.user.isEmpty(), b.uri.substringAfter("://").split('/').getOrElse(1) { "" })
+            ServerLog.log(src.host, "browse", src.proto.uppercase(), src.user, false, why, SmbErrors.ntStatus(e), started)
+            error = "Could not open: $why"
         }
-        r.onSuccess { entries = it }.onFailure { error = "Could not open: ${it.message ?: "unknown error"}" }
     }
     Column(Modifier.fillMaxSize()) {
-        BackHeader(b.title, nav, b.uri) {
+        BackHeader(b.title, nav, if (scanning) "Reading tags…" else b.uri) {
             if (src != null) {
                 val path = android.net.Uri.decode(b.uri.substringAfter("://").substringAfter('/', "")).let { "/" + it.trimEnd('/') }
                 val pinned = src.pins.contains(path)
@@ -405,19 +447,17 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
                     App.instance.store.update { s -> s.copy(sources = s.sources.map { if (it.id == src.id) it.copy(pins = if (pinned) it.pins - path else it.pins + path) else it }) }
                 }) { Icon(Icons.Filled.Star, if (pinned) "Unpin folder" else "Pin folder", tint = if (pinned) accent() else C.muted) }
             }
-            IconButton({ reload++ }) { Icon(Icons.Filled.Refresh, "Rescan", tint = C.text) }
-        }
-        EntryList(entries, error, onOpen = { e, all ->
-            if (e.isDir) nav.go(Screen.Browse(b.sourceId, e.uri, e.name))
-            else {
-                val items = all.filter { !it.isDir && isPlayable(it.name) }.map {
-                    PlayItem(it.uri, it.name, folderKey = b.uri, sourceId = b.sourceId, user = src?.user ?: "", password = src?.password ?: "")
-                }
-                val chosen = items.firstOrNull { it.uri == e.uri } ?: PlayItem(e.uri, e.name, folderKey = b.uri, sourceId = b.sourceId, user = src?.user ?: "", password = src?.password ?: "")
-                App.instance.player.play(chosen.copy(siblings = items))
-                nav.go(Screen.Player)
+            IconButton({ reload++ }) {
+                if (scanning) CircularProgressIndicator(Modifier.size(18.dp), color = accent(), strokeWidth = 2.dp)
+                else Icon(Icons.Filled.Refresh, "Rescan", tint = C.text)
             }
-        })
+        }
+        Box(Modifier.weight(1f)) {
+            MediaList(nav, entries, error, Urls.nameOf(b.uri), src, b.uri, Origin("folder", b.sourceId, b.uri, b.title),
+                if (b.highlight.startsWith("\u0000")) "" else b.highlight,
+                onOpenDir = { e -> nav.go(Screen.Browse(b.sourceId, e.uri, e.name)) }, onRefresh = { reload++ })
+        }
+        BottomBar(nav, current = 0)
     }
 }
 

@@ -115,6 +115,14 @@ data class Settings(
     val pauseOnDisconnect: Boolean = true,
     val rememberOutputPerDevice: Boolean = true,
     val sameOutputVideoRadio: Boolean = true,
+    val startVolume: Int = 40,
+    val preampDb: Float = 0f,
+    val rgMode: String = "auto", // off, track, album, auto
+    val rgPreampDb: Float = 0f,
+    val rgClipProtect: Boolean = true,
+    val allowSmb1: Boolean = true,
+    val repeat: String = "off", // off, all, one
+    val shuffle: Boolean = false,
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -127,6 +135,9 @@ data class Settings(
         .put("pauseOnDisconnect", pauseOnDisconnect)
         .put("rememberOutputPerDevice", rememberOutputPerDevice)
         .put("sameOutputVideoRadio", sameOutputVideoRadio)
+        .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
+        .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
+        .put("repeat", repeat).put("shuffle", shuffle)
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -144,6 +155,14 @@ data class Settings(
                 passwordTransform(o.optString("osPassword")),
                 o.optBoolean("pauseOnDisconnect", true), o.optBoolean("rememberOutputPerDevice", true),
                 o.optBoolean("sameOutputVideoRadio", true),
+                o.optInt("startVolume", 40).coerceIn(0, 100),
+                o.optDouble("preampDb", 0.0).toFloat().coerceIn(-12f, 12f),
+                o.optString("rgMode", "auto"),
+                o.optDouble("rgPreampDb", 0.0).toFloat().coerceIn(-6f, 6f),
+                o.optBoolean("rgClipProtect", true),
+                o.optBoolean("allowSmb1", true),
+                o.optString("repeat", "off"),
+                o.optBoolean("shuffle", false),
             )
         }
     }
@@ -168,6 +187,54 @@ data class RecentItem(
     }
 }
 
+/** One entry of a playlist or the queue. startMs/endMs are used for tracks cut from a single file by a .cue sheet. */
+data class PlEntry(
+    val uri: String,
+    val title: String,
+    val sourceId: String = "",
+    val artist: String = "",
+    val album: String = "",
+    val durationMs: Long = 0,
+    val startMs: Long = -1,
+    val endMs: Long = -1,
+    val trackNo: Int = 0,
+    val folderKey: String = "",
+) {
+    fun toJson(): JSONObject = JSONObject().put("uri", uri).put("title", title).put("sourceId", sourceId)
+        .put("artist", artist).put("album", album).put("durationMs", durationMs).put("startMs", startMs)
+        .put("endMs", endMs).put("trackNo", trackNo).put("folderKey", folderKey)
+
+    /** Identity for de-duplication (same file and same cut). */
+    val key: String get() = "$uri#$startMs"
+
+    companion object {
+        fun fromJson(o: JSONObject) = PlEntry(
+            o.optString("uri"), o.optString("title"), o.optString("sourceId"), o.optString("artist"),
+            o.optString("album"), o.optLong("durationMs"), o.optLong("startMs", -1), o.optLong("endMs", -1),
+            o.optInt("trackNo"), o.optString("folderKey"),
+        )
+    }
+}
+
+data class Playlist(
+    val id: String = UUID.randomUUID().toString(),
+    val name: String,
+    val items: List<PlEntry> = emptyList(),
+    val lastIndex: Int = 0,
+    val lastPosition: Long = 0,
+) {
+    fun toJson(): JSONObject = JSONObject().put("id", id).put("name", name)
+        .put("items", JSONArray(items.map { it.toJson() })).put("lastIndex", lastIndex).put("lastPosition", lastPosition)
+
+    companion object {
+        fun fromJson(o: JSONObject): Playlist {
+            val a = o.optJSONArray("items") ?: JSONArray()
+            return Playlist(o.optString("id", UUID.randomUUID().toString()), o.optString("name"),
+                (0 until a.length()).map { PlEntry.fromJson(a.getJSONObject(it)) }, o.optInt("lastIndex"), o.optLong("lastPosition"))
+        }
+    }
+}
+
 data class AppState(
     val settings: Settings = Settings(),
     val sources: List<Source> = emptyList(),
@@ -181,6 +248,11 @@ data class AppState(
     /** internal folder id -> last scan time */
     val scanned: Map<String, Long> = emptyMap(),
     val lastOutput: String = "",
+    val playlists: List<Playlist> = emptyList(),
+    /** output device name -> extra preamp dB */
+    val devicePreamp: Map<String, Float> = emptyMap(),
+    /** output device name -> balance -100 (left) .. 100 (right) */
+    val deviceBalance: Map<String, Int> = emptyMap(),
 )
 
 fun JSONArray?.strings(): List<String> {

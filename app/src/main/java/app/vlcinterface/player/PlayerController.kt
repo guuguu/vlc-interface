@@ -1,13 +1,23 @@
 package app.vlcinterface.player
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import android.media.audiofx.DynamicsProcessing
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import app.vlcinterface.data.RecentItem
+import app.vlcinterface.data.ServerLog
 import app.vlcinterface.data.Store
 import app.vlcinterface.data.SubStyle
+import app.vlcinterface.sources.AUDIO_EXT
+import app.vlcinterface.sources.SmbBridge
+import app.vlcinterface.sources.ext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.videolan.libvlc.Dialog
@@ -16,8 +26,19 @@ import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.util.VLCVideoLayout
+import kotlin.math.log10
 
 data class Track(val id: Int, val name: String)
+
+/** Where playback was started from: used by "open folder" taps and the music screen's shortcut. */
+data class Origin(
+    val kind: String = "single", // folder, local, playlist, radio, link, single
+    val sourceId: String = "",
+    val uri: String = "",
+    val title: String = "",
+    val playlistId: String = "",
+    val localFolderId: String = "",
+)
 
 data class PlayItem(
     val uri: String,
@@ -28,12 +49,26 @@ data class PlayItem(
     val sourceId: String = "",
     val user: String = "",
     val password: String = "",
-    /** Other playable items in the same folder, for previous / next. */
-    val siblings: List<PlayItem> = emptyList(),
-)
+    val artist: String = "",
+    val album: String = "",
+    val trackNo: Int = 0,
+    val durationMs: Long = 0,
+    /** Cut from a single file by a .cue sheet. */
+    val startMs: Long = -1,
+    val endMs: Long = -1,
+    val artwork: String = "",
+    /** SMB version detected for the source ("SMB1" plays through the in-app bridge). */
+    val smbVersion: String = "",
+    val domain: String = "",
+) {
+    val isMusic: Boolean get() = !isRadio && (Uri.decode(uri).ext() in AUDIO_EXT || title.ext() in AUDIO_EXT || startMs >= 0)
+}
 
 data class PlayerState(
     val item: PlayItem? = null,
+    val queue: List<PlayItem> = emptyList(),
+    val index: Int = -1,
+    val origin: Origin = Origin(),
     val isPlaying: Boolean = false,
     val time: Long = 0,
     val length: Long = 0,
@@ -47,74 +82,86 @@ data class PlayerState(
     val spuDelayMs: Long = 0,
     val rate: Float = 1f,
     val nowPlaying: String = "",
+    val metaArtist: String = "",
+    val metaAlbum: String = "",
+    val artworkUrl: String = "",
     val buffering: Float = 100f,
     val error: String = "",
     val ended: Boolean = false,
-)
+    val rgInfo: String = "",
+    val sleepUntil: Long = 0,
+    val sleepEndOfTrack: Boolean = false,
+) {
+    val hasNext: Boolean get() = index >= 0 && index + 1 < queue.size
+    val hasPrev: Boolean get() = index > 0
+    val upNext: List<PlayItem> get() = if (index >= 0) queue.drop(index + 1).take(2) else emptyList()
+}
 
-/** One libVLC instance + one MediaPlayer for the whole app (video and radio). */
+/** One libVLC instance + one MediaPlayer for the whole app (video, music and radio), with a play queue. */
 class PlayerController(private val context: Context, private val store: Store) {
     private val main = Handler(Looper.getMainLooper())
+    private val am = context.getSystemService(AudioManager::class.java)
+    private val sessionId: Int = am.generateAudioSessionId()
     lateinit var libVlc: LibVLC
         private set
     private lateinit var mp: MediaPlayer
     private var attachedLayout: VLCVideoLayout? = null
     private var styleInUse: SubStyle? = null
+    private var rgInUse: String = ""
     private var pendingSeek: Long = -1
     private var offsetsApplied = false
     private var currentPfd: android.os.ParcelFileDescriptor? = null
+    private var triedBridge = false
+    private var dp: DynamicsProcessing? = null
+    private var eq: MediaPlayer.Equalizer? = null
+    /** Shuffle order of queue indices (only used when shuffle is on). */
+    private var shuffleOrder: List<Int> = emptyList()
 
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state
 
-    /** Name of the current audio output, used for per-device sound offsets. */
+    /** Name of the current audio output, used for per-device offsets, preamp and balance. */
     var currentOutputName: String = ""
+        set(v) { field = v; if (::mp.isInitialized) applySoundChain() }
 
     init {
         createEngine(store.current.subStyle)
     }
 
-    /** Radio "now playing" (ICY metadata) changes without any player event, so read it every few seconds. */
-    private val metaPoller: Runnable = object : Runnable {
-        override fun run() {
-            try {
-                val s = _state.value
-                if (s.item?.isRadio == true) {
-                    val m = mp.media
-                    val np = m?.getMeta(IMedia.Meta.NowPlaying, true)?.trim().orEmpty()
-                        .ifEmpty { m?.getMeta(IMedia.Meta.Title, true)?.trim().orEmpty().takeIf { it != s.item.title && !it.startsWith("http") } ?: "" }
-                    m?.release()
-                    if (np != s.nowPlaying) _state.value = _state.value.copy(nowPlaying = np)
-                }
-            } catch (_: Exception) {
-            }
-            main.postDelayed(this, 3000)
-        }
-    }
-
-    init {
-        main.post(metaPoller)
-    }
-
     private fun createEngine(style: SubStyle) {
         libVlc = LibVLC(context, buildOptions(style))
         styleInUse = style
+        rgInUse = rgSignature()
         mp = MediaPlayer(libVlc)
         mp.setEventListener { ev -> onEvent(ev) }
         installDialogs()
+        setupSoundChain()
+    }
+
+    private fun rgSignature(): String {
+        val s = store.current.settings
+        return "${s.rgMode}|${s.rgPreampDb}|${s.rgClipProtect}"
     }
 
     private fun buildOptions(style: SubStyle): ArrayList<String> {
+        val s = store.current.settings
         val o = arrayListOf(
             "--audio-time-stretch",
             "--network-caching=1500",
             "--http-reconnect",
             "--avcodec-skiploopfilter=1",
+            // A fixed Android audio session, so preamp + balance effects can be attached to it.
+            "--audiotrack-session-id=$sessionId",
         )
+        // ReplayGain: only tagged files change; untagged ones get 0 dB.
+        val mode = when (s.rgMode) { "track" -> "track"; "album", "auto" -> "album"; else -> "none" }
+        o += "--audio-replay-gain-mode=$mode"
+        o += "--audio-replay-gain-preamp=${s.rgPreampDb}"
+        o += "--audio-replay-gain-default=0"
+        o += if (s.rgClipProtect) "--audio-replay-gain-peak-protection" else "--no-audio-replay-gain-peak-protection"
         // Subtitle look (text subtitles rendered by freetype).
         o += "--freetype-font=${style.font}"
         o += "--freetype-color=${style.color}"
-        // libVLC's relative size is inverted: smaller number = bigger text, 16 = normal.
         val rel = (16f * 100f / style.sizePct.coerceIn(50, 200)).toInt().coerceIn(4, 40)
         o += "--freetype-rel-fontsize=$rel"
         if (style.bold) o += "--freetype-bold"
@@ -124,11 +171,77 @@ class PlayerController(private val context: Context, private val store: Store) {
             "box" -> { o += "--freetype-outline-thickness=0"; o += "--freetype-background-opacity=160"; o += "--freetype-background-color=0" }
             else -> { o += "--freetype-outline-thickness=0"; o += "--freetype-shadow-opacity=0" }
         }
-        // Distance from the bottom edge in pixels; "top" pushes subtitles up most of the screen height.
-        val h = context.resources.displayMetrics.heightPixels.coerceAtMost(context.resources.displayMetrics.widthPixels)
+        val dm = context.resources.displayMetrics
+        val h = dm.heightPixels.coerceAtMost(dm.widthPixels)
         val margin = if (style.position == "top") (h * (88 - style.edgePct) / 100) else (h * style.edgePct / 100)
         o += "--sub-margin=$margin"
         return o
+    }
+
+    // ---------- sound chain: general preamp + per-device preamp + per-device balance ----------
+
+    private fun setupSoundChain() {
+        try {
+            dp?.release()
+            val cfg = DynamicsProcessing.Config.Builder(
+                DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION, 2,
+                false, 0, false, 0, false, 0, true
+            ).build()
+            dp = DynamicsProcessing(0, sessionId, cfg).also { it.enabled = true }
+        } catch (e: Exception) {
+            dp = null
+        }
+        applySoundChain()
+    }
+
+    fun applySoundChain() {
+        val st = store.current
+        val dev = currentOutputName
+        val total = (st.settings.preampDb + (st.devicePreamp[dev] ?: 0f)).coerceIn(-24f, 12f)
+        val bal = (st.deviceBalance[dev] ?: 0).coerceIn(-100, 100)
+        fun att(f: Float): Float = if (f <= 0.001f) -60f else (20f * log10(f)).coerceAtLeast(-60f)
+        val left = total + if (bal > 0) att(1f - bal / 100f) else 0f
+        val right = total + if (bal < 0) att(1f + bal / 100f) else 0f
+        val d = dp
+        if (d != null) {
+            try {
+                d.setInputGainbyChannel(0, left)
+                d.setInputGainbyChannel(1, right)
+                d.setLimiterAllChannelsTo(DynamicsProcessing.Limiter(true, total > 0f, 0, 1f, 60f, 10f, -1f, 0f))
+                return
+            } catch (_: Exception) {
+            }
+        }
+        // Fallback without balance: libVLC's equalizer pre-amplifier.
+        try {
+            val e = eq ?: MediaPlayer.Equalizer.create().also { eq = it }
+            e.setPreAmp(total.coerceIn(-20f, 20f))
+            mp.setEqualizer(e)
+        } catch (_: Exception) {
+        }
+    }
+
+    // ---------- audio focus + "headphones unplugged" ----------
+
+    private var resumeOnGain = false
+    private val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+        .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+        .setOnAudioFocusChangeListener({ change ->
+            when (change) {
+                AudioManager.AUDIOFOCUS_LOSS -> { resumeOnGain = false; pause() }
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> { if (mp.isPlaying) { resumeOnGain = true; mp.pause() } }
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> mp.setVolume(30)
+                AudioManager.AUDIOFOCUS_GAIN -> { mp.setVolume(100); if (resumeOnGain) { resumeOnGain = false; mp.play() } }
+            }
+        }, main)
+        .build()
+
+    private val noisy = object : BroadcastReceiver() {
+        override fun onReceive(c: Context?, i: Intent?) { if (store.current.settings.pauseOnDisconnect) pause() }
+    }
+
+    init {
+        context.registerReceiver(noisy, IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY), Context.RECEIVER_NOT_EXPORTED)
     }
 
     // ---------- login prompts from libVLC (SMB, FTP, SFTP, HTTP auth) ----------
@@ -160,32 +273,123 @@ class PlayerController(private val context: Context, private val store: Store) {
         pendingUser = user; pendingPass = pass
     }
 
+    // ---------- queue ----------
+
+    fun playQueue(items: List<PlayItem>, index: Int, origin: Origin, startAt: Long = -1) {
+        if (items.isEmpty()) return
+        val i = index.coerceIn(0, items.size - 1)
+        shuffleOrder = if (store.current.settings.shuffle) (items.indices - i).shuffled() else emptyList()
+        _state.value = PlayerState(queue = items, index = i, origin = origin)
+        startItem(i, startAt)
+    }
+
+    fun play(item: PlayItem, startAt: Long = -1, origin: Origin = Origin(if (item.isRadio) "radio" else "single", item.sourceId, item.uri, item.title)) =
+        playQueue(listOf(item), 0, origin, startAt)
+
+    fun playNext(items: List<PlayItem>) {
+        val s = _state.value
+        if (s.item == null) { playQueue(items, 0, Origin("single")); return }
+        val q = s.queue.toMutableList(); q.addAll(s.index + 1, items)
+        _state.value = s.copy(queue = q)
+    }
+
+    fun addToQueue(items: List<PlayItem>) {
+        val s = _state.value
+        if (s.item == null) { playQueue(items, 0, Origin("single")); return }
+        _state.value = s.copy(queue = s.queue + items)
+    }
+
+    fun removeFromQueue(i: Int) {
+        val s = _state.value
+        if (i == s.index || i !in s.queue.indices) return
+        val q = s.queue.toMutableList(); q.removeAt(i)
+        _state.value = s.copy(queue = q, index = if (i < s.index) s.index - 1 else s.index)
+    }
+
+    fun jumpTo(i: Int) { if (i in _state.value.queue.indices) startItem(i, -1) }
+
+    fun next(): Boolean {
+        val s = _state.value
+        val n = nextIndex(s, manual = true) ?: return false
+        startItem(n, -1); return true
+    }
+
+    fun prev() {
+        val s = _state.value
+        val item = s.item ?: return
+        if (mp.time > 4000 || s.index <= 0) { seekTo(if (item.startMs >= 0) item.startMs else 0); return }
+        startItem(s.index - 1, -1)
+    }
+
+    private fun nextIndex(s: PlayerState, manual: Boolean): Int? {
+        val repeat = store.current.settings.repeat
+        if (!manual && repeat == "one") return s.index
+        if (store.current.settings.shuffle && shuffleOrder.isNotEmpty()) {
+            val n = shuffleOrder.first(); shuffleOrder = shuffleOrder.drop(1); return n
+        }
+        return when {
+            s.index + 1 < s.queue.size -> s.index + 1
+            repeat == "all" && s.queue.isNotEmpty() -> 0
+            else -> null
+        }
+    }
+
     // ---------- playback ----------
 
-    fun play(item: PlayItem, startAt: Long = -1) {
+    private fun startItem(i: Int, startAt: Long) {
         saveProgress()
+        val s0 = _state.value
+        val item = s0.queue.getOrNull(i) ?: return
         val wanted = store.current.subStyle
-        if (wanted != styleInUse) recreateEngine(wanted)
+        if (wanted != styleInUse || rgSignature() != rgInUse) recreateEngine(wanted)
         setCredentials(item.user, item.password)
+        triedBridge = false
         val oldPfd = currentPfd
         currentPfd = null
-        val media = if (item.uri.startsWith("content://")) {
-            val pfd = context.contentResolver.openFileDescriptor(Uri.parse(item.uri), "r")
-            currentPfd = pfd
-            if (pfd != null) Media(libVlc, pfd.fileDescriptor) else Media(libVlc, Uri.parse(item.uri))
-        } else Media(libVlc, Uri.parse(item.uri))
-        media.setHWDecoderEnabled(true, false)
-        if (item.isRadio) media.addOption(":network-caching=3000")
+        val media = makeMedia(item, s0, useBridge = item.smbVersion == "SMB1")
         mp.setMedia(media)
         media.release()
         try { oldPfd?.close() } catch (_: Exception) {}
         offsetsApplied = false
-        val resume = if (startAt >= 0) startAt else if (!item.isRadio && store.current.settings.resume)
+        val resume = if (startAt >= 0) startAt else if (!item.isRadio && store.current.settings.resume && item.startMs < 0)
             store.current.recent.firstOrNull { it.uri == item.uri }?.position ?: -1 else -1
         pendingSeek = resume
-        _state.value = PlayerState(item = item)
+        _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, videoW = 0, videoH = 0,
+            audioTracks = emptyList(), spuTracks = emptyList(), audioDelayMs = 0, spuDelayMs = 0, rate = 1f, nowPlaying = "",
+            metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, buffering = 0f, error = "", ended = false,
+            rgInfo = if (item.isMusic && store.current.settings.rgMode != "off") "RG ${rgModeFor(s0)}" else "")
+        am.requestAudioFocus(focusRequest)
         mp.play()
+        applySoundChain()
         startService()
+    }
+
+    private fun rgModeFor(s: PlayerState): String = when (store.current.settings.rgMode) {
+        "track" -> "track"; "album" -> "album"
+        else -> if (store.current.settings.shuffle || s.origin.kind == "playlist") "track" else "album"
+    }
+
+    private fun makeMedia(item: PlayItem, s: PlayerState, useBridge: Boolean): Media {
+        val media = when {
+            item.uri.startsWith("content://") -> {
+                val pfd = context.contentResolver.openFileDescriptor(Uri.parse(item.uri), "r")
+                currentPfd = pfd
+                if (pfd != null) Media(libVlc, pfd.fileDescriptor) else Media(libVlc, Uri.parse(item.uri))
+            }
+            useBridge && item.uri.startsWith("smb://") ->
+                Media(libVlc, Uri.parse(SmbBridge.urlFor(item.uri, item.smbVersion.ifEmpty { "SMB1" }, item.user, item.password, item.domain)))
+            else -> Media(libVlc, Uri.parse(item.uri))
+        }
+        media.setHWDecoderEnabled(true, false)
+        if (item.isRadio) media.addOption(":network-caching=3000")
+        if (item.startMs >= 0) media.addOption(":start-time=${item.startMs / 1000.0}")
+        if (item.endMs > 0) media.addOption(":stop-time=${item.endMs / 1000.0}")
+        if (item.isMusic) {
+            if (store.current.settings.rgMode != "off") media.addOption(":audio-replay-gain-mode=${rgModeFor(s)}")
+        } else {
+            media.addOption(":audio-replay-gain-mode=none")
+        }
+        return media
     }
 
     private fun recreateEngine(style: SubStyle) {
@@ -198,22 +402,24 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (layout != null) mp.attachViews(layout, null, true, false)
     }
 
-    /** Applies a new subtitle style; restarts the current item at the same position (needed for freetype options). */
+    /** Applies a new subtitle style / ReplayGain setting; restarts the current item at the same position. */
     fun applyStyle() {
         val s = _state.value
-        val item = s.item ?: run { recreateEngine(store.current.subStyle); return }
+        if (s.item == null) { recreateEngine(store.current.subStyle); return }
         val pos = mp.time
         val playing = mp.isPlaying
-        play(item, pos)
+        startItem(s.index, pos)
         if (!playing) main.postDelayed({ mp.pause() }, 400)
     }
 
-    fun togglePause() { if (mp.isPlaying) mp.pause() else mp.play() }
+    fun togglePause() { if (mp.isPlaying) mp.pause() else { am.requestAudioFocus(focusRequest); mp.play() } }
+    fun resume() { if (!mp.isPlaying && _state.value.item != null) { am.requestAudioFocus(focusRequest); mp.play() } }
     fun pause() { if (mp.isPlaying) mp.pause() }
     fun stop() {
         saveProgress()
         mp.stop()
         currentPfd?.close(); currentPfd = null
+        am.abandonAudioFocusRequest(focusRequest)
         _state.value = PlayerState()
         context.stopService(Intent(context, PlaybackService::class.java))
     }
@@ -249,7 +455,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val item = _state.value.item ?: return
         val key = if (scope == "folder" && item.folderKey.isNotEmpty()) "folder:${item.folderKey}" else "file:${item.uri}"
         val v = _state.value.spuDelayMs
-        store.update { st -> st.copy(subOffsets = st.subOffsets + (key to v)) }
+        store.update { st -> st.copy(subOffsets = if (v == 0L) st.subOffsets - key else st.subOffsets + (key to v)) }
     }
 
     /** scope: "file" or "device" */
@@ -291,23 +497,61 @@ class PlayerController(private val context: Context, private val store: Store) {
         val s = _state.value
         when (ev.type) {
             MediaPlayer.Event.Playing -> {
-                _state.value = s.copy(isPlaying = true, error = "", ended = false)
+                _state.value = s.copy(isPlaying = true, error = "", ended = false, buffering = 100f)
                 if (pendingSeek > 5_000) { mp.setTime(pendingSeek) }
                 pendingSeek = -1
                 if (!offsetsApplied) { offsetsApplied = true; applyStoredOffsets() }
                 refreshTracks()
+                readMeta()
             }
             MediaPlayer.Event.Paused -> { _state.value = s.copy(isPlaying = false); saveProgress() }
             MediaPlayer.Event.Stopped -> _state.value = s.copy(isPlaying = false)
             MediaPlayer.Event.EndReached -> {
-                _state.value = s.copy(isPlaying = false, ended = true)
+                if (s.sleepEndOfTrack) { main.post { stop() }; return }
                 s.item?.let { item -> store.update { st -> st.copy(recent = st.recent.filterNot { it.uri == item.uri }) } }
+                val n = nextIndex(s, manual = false)
+                if (n != null) main.post { startItem(n, -1) }
+                else {
+                    _state.value = s.copy(isPlaying = false, ended = true)
+                    // Nothing follows: stop and remove the notification.
+                    main.postDelayed({ if (_state.value.ended) stop() }, 300)
+                }
             }
             MediaPlayer.Event.TimeChanged -> _state.value = s.copy(time = ev.timeChanged)
             MediaPlayer.Event.LengthChanged -> _state.value = s.copy(length = ev.lengthChanged)
             MediaPlayer.Event.Buffering -> _state.value = s.copy(buffering = ev.buffering)
             MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESSelected, MediaPlayer.Event.Vout -> refreshTracks()
-            MediaPlayer.Event.EncounteredError -> _state.value = s.copy(isPlaying = false, error = "Could not play this item")
+            MediaPlayer.Event.EncounteredError -> {
+                val item = s.item
+                // libVLC can't open some SMB servers (SMB1-only): retry once through the in-app bridge.
+                if (item != null && item.uri.startsWith("smb://") && !triedBridge && store.current.settings.allowSmb1) {
+                    triedBridge = true
+                    ServerLog.log(item.uri, "play", "SMB", item.user, false, "libVLC could not open the file, retrying through the app's SMB bridge")
+                    main.post {
+                        val m = makeMedia(item, _state.value, useBridge = true)
+                        mp.setMedia(m); m.release(); mp.play()
+                    }
+                } else {
+                    if (item != null && !item.uri.startsWith("content://")) ServerLog.log(item.uri, "play", item.uri.substringBefore("://").uppercase(), item.user, false, "Could not play ${item.title}")
+                    _state.value = s.copy(isPlaying = false, error = "Could not play this item")
+                }
+            }
+        }
+    }
+
+    private fun readMeta() {
+        try {
+            val m = mp.media ?: return
+            val artist = m.getMeta(IMedia.Meta.Artist, true)?.trim().orEmpty()
+            val album = m.getMeta(IMedia.Meta.Album, true)?.trim().orEmpty()
+            val art = m.getMeta(IMedia.Meta.ArtworkURL, true)?.trim().orEmpty()
+            m.release()
+            val s = _state.value
+            _state.value = s.copy(
+                metaArtist = s.metaArtist.ifEmpty { artist }, metaAlbum = s.metaAlbum.ifEmpty { album },
+                artworkUrl = s.artworkUrl.ifEmpty { art },
+            )
+        } catch (_: Exception) {
         }
     }
 
@@ -322,10 +566,34 @@ class PlayerController(private val context: Context, private val store: Store) {
         )
     }
 
+    /** Radio "now playing" (ICY metadata) changes without any player event, so read it every few seconds. */
+    private val metaPoller: Runnable = object : Runnable {
+        override fun run() {
+            try {
+                val s = _state.value
+                if (s.sleepUntil > 0 && System.currentTimeMillis() >= s.sleepUntil) stop()
+                val item = s.item
+                if (item != null && item.isRadio) {
+                    val m = mp.media
+                    val np = m?.getMeta(IMedia.Meta.NowPlaying, true)?.trim().orEmpty()
+                        .ifEmpty { m?.getMeta(IMedia.Meta.Title, true)?.trim().orEmpty().takeIf { it != item.title && !it.startsWith("http") } ?: "" }
+                    m?.release()
+                    if (np != s.nowPlaying) _state.value = _state.value.copy(nowPlaying = np)
+                }
+            } catch (_: Exception) {
+            }
+            main.postDelayed(this, 3000)
+        }
+    }
+
+    init {
+        main.post(metaPoller)
+    }
+
     fun saveProgress() {
         val s = _state.value
         val item = s.item ?: return
-        if (item.isRadio) return
+        if (item.isRadio || item.startMs >= 0) return
         val pos = mp.time
         val len = if (mp.length > 0) mp.length else s.length
         if (pos < 5_000) return
@@ -343,6 +611,16 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
+    /** minutes > 0: stop after that time; minutes == -1: stop at the end of the current item; 0: off. */
+    fun setSleep(minutes: Int) {
+        val s = _state.value
+        _state.value = when {
+            minutes > 0 -> s.copy(sleepUntil = System.currentTimeMillis() + minutes * 60_000L, sleepEndOfTrack = false)
+            minutes == -1 -> s.copy(sleepUntil = 0, sleepEndOfTrack = true)
+            else -> s.copy(sleepUntil = 0, sleepEndOfTrack = false)
+        }
+    }
+
     val isPlaying: Boolean get() = mp.isPlaying
-    val volumeLevel: Int get() = mp.volume
+    val position: Long get() = mp.time
 }

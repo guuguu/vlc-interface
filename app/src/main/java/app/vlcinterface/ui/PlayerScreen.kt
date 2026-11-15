@@ -80,6 +80,7 @@ import app.vlcinterface.player.PlayerState
 import app.vlcinterface.sources.OpenSubtitles
 import app.vlcinterface.sources.OsHash
 import app.vlcinterface.sources.SubResult
+import app.vlcinterface.sources.SubtitleFiles
 import app.vlcinterface.sources.Urls
 import app.vlcinterface.sources.guessTitle
 import kotlinx.coroutines.Job
@@ -136,7 +137,6 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         if (controls && panel == Panel.NONE) { delay(4000); if (p.isPlaying) controls = false }
     }
     LaunchedEffect(toast) { if (toast.isNotEmpty()) { delay(900); toast = "" } }
-    LaunchedEffect(p.ended) { if (p.ended) next(p)?.let { player.play(it) } }
 
     // Auto-download subtitles when nothing in the preferred languages is present.
     LaunchedEffect(p.item?.uri) {
@@ -154,7 +154,14 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         os.search(hash?.first, if (hash == null) title else "", if (hash == null) year else "", langs).onSuccess { list ->
             val best = list.firstOrNull { it.hashMatch } ?: list.firstOrNull()
             if (best != null && (best.hashMatch || hash == null)) {
-                os.download(ctx, best, item.title).onSuccess { f -> player.addSubtitleFile(Uri.fromFile(f)); toast = "Subtitles added (${best.language})" }
+                os.download(best).onSuccess { (bytes, ext) ->
+                    val name = SubtitleFiles.nameFor(item, ext)
+                    // Never overwrite an existing subtitle without asking: skip the automatic download then.
+                    if (!SubtitleFiles.existsNextToVideo(item, name)) {
+                        val (ref, _) = SubtitleFiles.saveDownloaded(ctx, item, bytes, ext)
+                        player.addSubtitleFile(Uri.fromFile(ref.local)); toast = "Subtitles added (${best.language})"
+                    }
+                }
             }
         }
     }
@@ -229,18 +236,6 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     }
 }
 
-private fun next(p: PlayerState): PlayItem? {
-    val item = p.item ?: return null
-    val i = item.siblings.indexOfFirst { it.uri == item.uri }
-    return if (i >= 0 && i + 1 < item.siblings.size) item.siblings[i + 1].copy(siblings = item.siblings) else null
-}
-
-private fun prev(p: PlayerState): PlayItem? {
-    val item = p.item ?: return null
-    val i = item.siblings.indexOfFirst { it.uri == item.uri }
-    return if (i > 0) item.siblings[i - 1].copy(siblings = item.siblings) else null
-}
-
 private fun rotate(a: Activity?, landscape: Boolean) {
     a?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 }
@@ -312,6 +307,7 @@ private fun BoxScope.ControlsOverlay(
     Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         IconButton({ nav.back() }) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
+        HomeButton(nav, Color.White)
         Text(p.item?.title ?: "", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (!compact) OutputPill(openOutput)
         OverlayChip("Audio & subs") { onTouch(); onPanel() }
@@ -335,8 +331,8 @@ private fun BoxScope.ControlsOverlay(
             OverlayChip(scaleLabel, onScale)
             Text("  ⟳", color = Color.White, fontSize = 20.sp, modifier = Modifier.clickable(onClick = onRotate).padding(10.dp))
             Grow()
-            Text("⏮", color = Color.White, fontSize = 20.sp, modifier = Modifier.clickable { prev(p)?.let { player.play(it) } }.padding(10.dp))
-            Text("⏭", color = Color.White, fontSize = 20.sp, modifier = Modifier.clickable { next(p)?.let { player.play(it) } }.padding(10.dp))
+            Text("⏮", color = Color.White, fontSize = 20.sp, modifier = Modifier.clickable { player.prev() }.padding(10.dp))
+            Text("⏭", color = Color.White, fontSize = 20.sp, modifier = Modifier.clickable { player.next() }.padding(10.dp))
             Text("PiP", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable(onClick = onPip).padding(10.dp))
         }
     } else Row(Modifier.align(Alignment.BottomEnd).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -463,6 +459,7 @@ private fun DownloadPanel(p: PlayerState, onBack: () -> Unit) {
     var results by remember { mutableStateOf<List<SubResult>?>(null) }
     var status by remember { mutableStateOf("") }
     var hash by remember { mutableStateOf<String?>(null) }
+    var pending by remember { mutableStateOf<Triple<ByteArray, String, String>?>(null) }
     val os = remember(st.settings) { OpenSubtitles(st.settings) }
 
     fun search() {
@@ -503,14 +500,34 @@ private fun DownloadPanel(p: PlayerState, onBack: () -> Unit) {
                 Pill("Use", filled = true) {
                     scope.launch {
                         status = "Downloading…"
-                        os.download(ctx, r, item.title).onSuccess { f ->
-                            App.instance.player.addSubtitleFile(Uri.fromFile(f)); status = "Applied ${f.name}"; onBack()
+                        os.download(r).onSuccess { (bytes, ext) ->
+                            val name = SubtitleFiles.nameFor(item, ext)
+                            if (SubtitleFiles.existsNextToVideo(item, name)) { pending = Triple(bytes, ext, name); status = "" }
+                            else {
+                                val (ref, where) = SubtitleFiles.saveDownloaded(ctx, item, bytes, ext)
+                                App.instance.player.addSubtitleFile(Uri.fromFile(ref.local)); status = where; onBack()
+                            }
                         }.onFailure { status = it.message ?: "Download failed" }
                     }
                 }
             }
         }
-        Text("Saved inside the app; fine-tune timing with Sync.", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
+        Text("Saved with the video's name next to the video when possible; fine-tune timing with Sync.", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
+    }
+    pending?.let { (bytes, ext, name) ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { pending = null },
+            title = { Text("Replace the existing subtitle?") },
+            text = { Text("$name already exists next to the video and will be overwritten.") },
+            confirmButton = { androidx.compose.material3.TextButton({
+                pending = null
+                scope.launch {
+                    val (ref, where) = SubtitleFiles.saveDownloaded(ctx, item, bytes, ext)
+                    App.instance.player.addSubtitleFile(Uri.fromFile(ref.local)); status = where; onBack()
+                }
+            }) { Text("Replace") } },
+            dismissButton = { androidx.compose.material3.TextButton({ pending = null; status = "Kept the existing subtitle" }) { Text("Cancel") } },
+        )
     }
 }
 
@@ -584,6 +601,9 @@ private fun SyncControls(subs: Boolean, p: PlayerState, compact: Boolean, onDone
     var scope by remember(subs) { mutableStateOf(if (subs) "file" else "device") }
     val q = remember(subs) { QuickSync() }
     var step1 by remember(subs) { mutableStateOf(false) }
+    var info by remember { mutableStateOf("") }
+    val co = rememberCoroutineScope()
+    val ctx = LocalContext.current
     val steps = listOf(-1000L to "−1 s", -100L to "−0.1 s", -50L to "−0.05 s", 50L to "+0.05 s", 100L to "+0.1 s", 1000L to "+1 s")
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(if (value >= 0) "+$value ms" else "$value ms", color = accent(), fontSize = if (compact) 22.sp else 32.sp, fontWeight = FontWeight.Bold,
@@ -610,10 +630,33 @@ private fun SyncControls(subs: Boolean, p: PlayerState, compact: Boolean, onDone
                 Pill(player.currentOutputName.ifEmpty { "This output" }, selected = scope == "device") { scope = "device" }
             }
             Pill("Done", filled = true) {
-                if (subs) player.saveSpuDelay(scope) else player.saveAudioDelay(scope)
-                onDone()
+                val item = p.item
+                if (subs && scope == "file" && item != null && value != 0L) {
+                    // Write the correction into the subtitle file itself when it is a separate file.
+                    co.launch {
+                        val ref = SubtitleFiles.findSidecar(ctx, item)
+                        if (ref != null) {
+                            SubtitleFiles.applyShift(ctx, ref, value).onSuccess { msg ->
+                                player.setSpuDelay(0); player.saveSpuDelay("file")
+                                player.addSubtitleFile(Uri.fromFile(ref.local)); info = msg
+                            }.onFailure { player.saveSpuDelay("file"); info = "Saved for this file in the app" }
+                        } else { player.saveSpuDelay("file"); info = "Subtitle is inside the video: offset saved for this file" }
+                        onDone()
+                    }
+                } else {
+                    if (subs) player.saveSpuDelay(scope) else player.saveAudioDelay(scope)
+                    onDone()
+                }
             }
         }
+        val item = p.item
+        if (subs && item != null) {
+            val ref = SubtitleFiles.current(item)
+            if (ref != null && SubtitleFiles.canUndo(ctx, ref)) SyncBtn("Undo timing change") {
+                co.launch { SubtitleFiles.undo(ctx, ref).onSuccess { info = it; player.addSubtitleFile(Uri.fromFile(ref.local)) } }
+            }
+        }
+        if (info.isNotEmpty()) Text(info, color = Color(0xFFE2E4E8), fontSize = 12.sp)
     }
 }
 

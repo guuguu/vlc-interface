@@ -24,13 +24,21 @@ import app.vlcinterface.sources.LocalFolder
 sealed interface Screen {
     /** tab: 0 Internal, 1 LAN, 2 Internet; sub (Internet): 0 Storage, 1 Radio, 2 Streams */
     data class Library(val tab: Int = 0, val sub: Int = 0) : Screen
-    data class Folder(val folder: LocalFolder) : Screen
-    data class Browse(val sourceId: String, val uri: String, val title: String) : Screen
+    data class Folder(val folder: LocalFolder, val highlight: String = "") : Screen
+    data class Browse(val sourceId: String, val uri: String, val title: String, val highlight: String = "") : Screen
     data class EditSource(val zone: Zone, val sourceId: String? = null, val draft: Source? = null) : Screen
     data class SmbDetect(val input: String, val draft: Source) : Screen
     data object Player : Screen
     data object Settings : Screen
     data object Backup : Screen
+    data object Playlists : Screen
+    data class PlaylistDetail(val id: String, val highlight: String = "") : Screen
+    data object Queue : Screen
+    data object Music : Screen
+    data object Logs : Screen
+    data class LogPage(val key: String) : Screen
+    /** Browse a saved source to pick a .cue file for a playlist. */
+    data class PickCue(val playlistId: String, val sourceId: String, val uri: String) : Screen
 }
 
 class Navigator {
@@ -59,13 +67,20 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
             ) {
                 when (top) {
                     is Screen.Library -> LibraryScreen(nav, top, openOutput)
-                    is Screen.Folder -> FolderScreen(nav, top.folder)
+                    is Screen.Folder -> FolderScreen(nav, top.folder, top.highlight)
                     is Screen.Browse -> BrowseScreen(nav, top)
                     is Screen.EditSource -> EditSourceScreen(nav, top)
                     is Screen.SmbDetect -> SmbDetectScreen(nav, top)
                     is Screen.Player -> PlayerScreen(nav, openOutput)
                     is Screen.Settings -> SettingsScreen(nav)
                     is Screen.Backup -> BackupScreen(nav)
+                    is Screen.Playlists -> PlaylistsScreen(nav, openOutput)
+                    is Screen.PlaylistDetail -> PlaylistDetailScreen(nav, top)
+                    is Screen.Queue -> QueueScreen(nav)
+                    is Screen.Music -> MusicScreen(nav, openOutput)
+                    is Screen.Logs -> LogsScreen(nav)
+                    is Screen.LogPage -> LogPageScreen(nav, top.key)
+                    is Screen.PickCue -> PickCueScreen(nav, top)
                 }
                 if (showOutput) OutputSheet(onDismiss = { showOutput = false })
             }

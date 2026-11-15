@@ -43,6 +43,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Target of notification / lock-screen taps: does nothing while the phone is locked. -->
+        <activity
+            android:name=".OpenOriginActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:showWhenLocked="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <service
             android:name=".player.PlaybackService"
             android:exported="false"

@@ -157,26 +157,25 @@ class OpenSubtitles(private val settings: Settings) {
         }
     }
 
-    /** Downloads one subtitle into the app's folder and returns the file. */
-    suspend fun download(ctx: Context, res: SubResult, movieName: String): Result<File> = withContext(Dispatchers.IO) {
+    /** Downloads one subtitle; returns its bytes and its own file extension (srt, ass, …). */
+    suspend fun download(res: SubResult): Result<Pair<ByteArray, String>> = withContext(Dispatchers.IO) {
         try {
             val t = login() ?: return@withContext Result.failure(Exception("Add your OpenSubtitles username and password in Settings"))
             val body = JSONObject().put("file_id", res.fileId).toString()
+            var fileName = ""
             val link = Net.http.newCall(
                 req("/download").header("Authorization", "Bearer $t")
                     .post(body.toRequestBody("application/json".toMediaType())).build()
             ).execute().use { r ->
                 val txt = r.body?.string() ?: ""
                 if (!r.isSuccessful) return@withContext Result.failure(Exception(JSONObject(txt.ifEmpty { "{}" }).optString("message", "Download refused (${r.code})")))
-                JSONObject(txt).optString("link")
+                val o = JSONObject(txt)
+                fileName = o.optString("file_name")
+                o.optString("link")
             }
-            val dir = File(ctx.filesDir, "subtitles").apply { mkdirs() }
-            val safe = movieName.substringBeforeLast('.').replace(Regex("[^A-Za-z0-9._ -]"), "_").take(80)
-            val out = File(dir, "$safe.${res.language}.${res.format.lowercase()}")
-            Net.http.newCall(Request.Builder().url(link).build()).execute().use { r ->
-                out.writeBytes(r.body?.bytes() ?: ByteArray(0))
-            }
-            Result.success(out)
+            val bytes = Net.http.newCall(Request.Builder().url(link).build()).execute().use { r -> r.body?.bytes() ?: ByteArray(0) }
+            val ext = fileName.ext().ifEmpty { res.format.lowercase() }.ifEmpty { "srt" }
+            Result.success(bytes to ext)
         } catch (e: Exception) {
             Result.failure(e)
         }

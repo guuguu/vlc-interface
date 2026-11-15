@@ -42,26 +42,50 @@ object InternalSource {
         map.values.sortedBy { it.name.lowercase() }
     }
 
-    suspend fun files(ctx: Context, folder: LocalFolder): List<Entry> = withContext(Dispatchers.IO) {
+    suspend fun files(ctx: Context, folder: LocalFolder, recursive: Boolean = false): List<Entry> = withContext(Dispatchers.IO) {
         val out = ArrayList<Entry>()
-        for (coll in collections) {
-            val proj = arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.SIZE)
-            try {
-                ctx.contentResolver.query(
-                    coll, proj,
-                    "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.VOLUME_NAME}=?",
-                    arrayOf(folder.relativePath, folder.volume),
-                    MediaStore.MediaColumns.DISPLAY_NAME
-                )?.use { c ->
-                    while (c.moveToNext()) {
-                        val uri = ContentUris.withAppendedId(coll, c.getLong(0))
-                        out += Entry(c.getString(1) ?: "?", uri.toString(), false, c.getLong(2))
-                    }
+        val sel = if (recursive) "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND ${MediaStore.MediaColumns.VOLUME_NAME}=?"
+            else "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.VOLUME_NAME}=?"
+        val args = arrayOf(if (recursive) folder.relativePath + "%" else folder.relativePath, folder.volume)
+        // Videos
+        val vcoll = collections[0]
+        try {
+            ctx.contentResolver.query(vcoll, arrayOf(MediaStore.MediaColumns._ID, MediaStore.MediaColumns.DISPLAY_NAME,
+                MediaStore.MediaColumns.SIZE, MediaStore.MediaColumns.DURATION, MediaStore.MediaColumns.RELATIVE_PATH), sel, args, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val uri = ContentUris.withAppendedId(vcoll, c.getLong(0))
+                    out += Entry(c.getString(1) ?: "?", uri.toString(), false, c.getLong(2), meta = c.getString(4) ?: "", durationMs = c.getLong(3))
                 }
-            } catch (_: SecurityException) {
             }
+        } catch (_: SecurityException) {
         }
-        out.sortedBy { it.name.lowercase() }
+        // Music with tags
+        val acoll = collections[1]
+        try {
+            ctx.contentResolver.query(acoll, arrayOf(
+                MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME, MediaStore.Audio.Media.SIZE,
+                MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.ALBUM_ARTIST,
+                MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.YEAR, MediaStore.Audio.Media.TRACK,
+                MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.CD_TRACK_NUMBER, MediaStore.Audio.Media.DISC_NUMBER,
+                MediaStore.MediaColumns.RELATIVE_PATH,
+            ), sel, args, null)?.use { c ->
+                while (c.moveToNext()) {
+                    val uri = ContentUris.withAppendedId(acoll, c.getLong(0))
+                    val name = c.getString(1) ?: "?"
+                    val rawTrack = c.getInt(8)
+                    val cdTrack = c.getString(10)?.substringBefore('/')?.trim()?.toIntOrNull()
+                    val disc = c.getString(11)?.substringBefore('/')?.trim()?.toIntOrNull() ?: (if (rawTrack >= 1000) rawTrack / 1000 else 0)
+                    val track = cdTrack ?: (rawTrack % 1000)
+                    val title = c.getString(3).orEmpty().let { t -> if (t.isBlank() || t == name.substringBeforeLast('.')) "" else t }
+                    fun clean(v: String?) = v.orEmpty().let { if (it == "<unknown>") "" else it }
+                    out += Entry(name, uri.toString(), false, c.getLong(2), meta = c.getString(12) ?: "",
+                        title = title, artist = clean(c.getString(4)), albumArtist = clean(c.getString(5)), album = clean(c.getString(6)),
+                        year = c.getInt(7), track = track, disc = disc, durationMs = c.getLong(9), artwork = uri.toString())
+                }
+            }
+        } catch (_: SecurityException) {
+        }
+        out.filter { isPlayable(it.name) }
     }
 
     /** Asks Android to re-index one folder (manual rescan). */

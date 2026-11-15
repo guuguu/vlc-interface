@@ -115,8 +115,10 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
             OutlinedButton({
                 testing = true; test = ""
                 scope.launch {
+                    val started = System.currentTimeMillis()
                     val r = Browse.list(s, Urls.forSource(s))
-                    test = r.fold({ "✓ Connected · ${it.size} items" }, { "✕ ${it.message}" }); testing = false
+                    test = r.fold({ "✓ Connected · ${it.size} items" }, { "✕ " + app.vlcinterface.sources.SmbErrors.explain(it, s.user.isEmpty()) }); testing = false
+                    app.vlcinterface.data.ServerLog.log(s.host, "test", s.proto.uppercase(), s.user, r.isSuccess, test.drop(2), r.exceptionOrNull()?.let { app.vlcinterface.sources.SmbErrors.ntStatus(it) } ?: "", started)
                 }
             }, Modifier.weight(1f)) { if (testing) CircularProgressIndicator(Modifier.height(18.dp), color = accent()) else Text("Test connection") }
             Button({

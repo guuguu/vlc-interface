@@ -23,10 +23,24 @@ data class Entry(
     val isDir: Boolean,
     val size: Long = -1,
     val meta: String = "",
-)
+    /** Tags (music): empty / 0 when unknown. */
+    val title: String = "",
+    val artist: String = "",
+    val albumArtist: String = "",
+    val album: String = "",
+    val year: Int = 0,
+    val track: Int = 0,
+    val disc: Int = 0,
+    val durationMs: Long = 0,
+    val artwork: String = "",
+) {
+    val isAudio: Boolean get() = !isDir && name.ext() in AUDIO_EXT
+    val isVideo: Boolean get() = !isDir && name.ext() in VIDEO_EXT
+    val display: String get() = title.ifEmpty { name }
+}
 
 val VIDEO_EXT = setOf("mkv", "mp4", "avi", "mov", "m4v", "wmv", "ts", "m2ts", "webm", "mpg", "mpeg", "flv", "3gp", "ogv", "vob", "iso")
-val AUDIO_EXT = setOf("mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "wma", "ape", "alac")
+val AUDIO_EXT = setOf("mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "wma", "ape", "alac", "aiff", "aif", "dsf", "dff", "mka", "wv", "mpc")
 val SUB_EXT = setOf("srt", "ass", "ssa", "sub", "vtt", "idx")
 
 fun String.ext(): String = substringAfterLast('/').substringAfterLast('.', "").lowercase()
@@ -138,9 +152,20 @@ object VlcBrowse {
 
 /** Browses any saved source with the right backend. */
 object Browse {
-    suspend fun list(s: Source, uri: String): Result<List<Entry>> = when (s.proto) {
-        "webdav" -> WebDav.list(uri, s.user, s.password)
-        "http" -> HttpIndex.list(uri, s.user, s.password)
-        else -> VlcBrowse.browse(uri, s.user, s.password)
+    /** Raw listing (all files); used for subtitles, covers, .cue lookups. */
+    suspend fun listAll(s: Source, uri: String): Result<List<Entry>> {
+        val r = when (s.proto) {
+            "webdav" -> WebDav.list(uri, s.user, s.password)
+            "http" -> HttpIndex.list(uri, s.user, s.password)
+            else -> VlcBrowse.browse(uri, s.user, s.password)
+        }
+        if (r.isSuccess || s.proto != "smb") return r
+        // libVLC couldn't open it (e.g. SMB1-only): list through jcifs-ng instead.
+        val folder = android.net.Uri.decode(uri.substringAfter("smb://").substringAfter('/', ""))
+        return SmbProbe.list(Urls.hostOnly(s.host), folder, s.smbVersion, s.user, s.password, s.domain)
     }
+
+    /** Library listing: folders plus audio and video files only. */
+    suspend fun list(s: Source, uri: String): Result<List<Entry>> =
+        listAll(s, uri).map { l -> l.filter { it.isDir || isPlayable(it.name) } }
 }

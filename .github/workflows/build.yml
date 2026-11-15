@@ -29,10 +29,14 @@ jobs:
       - name: Work out version
         id: ver
         run: |
+          BASE="$(cat VERSION | tr -d '[:space:]')"
+          MSG="$(git log -1 --pretty=%B)"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             NAME="${GITHUB_REF#refs/tags/v}"
+          elif [[ "$MSG" == *"[release]"* ]]; then
+            NAME="$BASE"
           else
-            NAME="0.1.0-build${GITHUB_RUN_NUMBER}"
+            NAME="${BASE}-build${GITHUB_RUN_NUMBER}"
           fi
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
 

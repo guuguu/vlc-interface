@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -74,6 +75,52 @@ fun SettingsScreen(nav: Navigator) {
                 ToggleRow("Resume where I left off", "Per file", s.resume) { set(s.copy(resume = it)) }; Divider()
                 ToggleRow("Keep audio in background", "Notification controls", s.backgroundAudio) { set(s.copy(backgroundAudio = it)) }
             }
+            SectionTitle("Sound")
+            CardBox {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Start volume", color = C.text, fontSize = 15.sp)
+                            Text("Set every time the app starts, before any sound", color = C.muted, fontSize = 13.sp)
+                        }
+                        Text("${s.startVolume}%", color = accent(), fontWeight = FontWeight.SemiBold)
+                    }
+                    androidx.compose.material3.Slider(s.startVolume.toFloat(), { set(s.copy(startVolume = it.toInt())) }, valueRange = 0f..100f)
+                    Divider()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Preamp (everything)", color = C.text, fontSize = 15.sp)
+                            Text(if (s.preampDb > 0f) "Above 0 dB loud tracks may distort" else "Music, video and radio", color = C.muted, fontSize = 13.sp)
+                        }
+                        Text("%+.1f dB".format(s.preampDb), color = accent(), fontWeight = FontWeight.SemiBold)
+                        TextButton({ set(s.copy(preampDb = 0f)); App.instance.player.applySoundChain() }) { Text("Reset") }
+                    }
+                    androidx.compose.material3.Slider(s.preampDb, { v -> set(s.copy(preampDb = Math.round(v * 2) / 2f)); App.instance.player.applySoundChain() }, valueRange = -12f..12f)
+                }
+                Divider()
+                DeviceSoundList()
+                Divider()
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("ReplayGain (tagged music only)", color = C.text, fontSize = 15.sp)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("off" to "Off", "track" to "Track", "album" to "Album", "auto" to "Auto").forEach { (k, l) ->
+                            Pill(l, selected = s.rgMode == k) { set(s.copy(rgMode = k)) }
+                        }
+                    }
+                    Text("Auto: album gain when playing an album in order, track gain for shuffle and playlists. Videos are never adjusted.", color = C.muted, fontSize = 12.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("ReplayGain pre-amp", color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Text("%+.1f dB".format(s.rgPreampDb), color = accent(), fontSize = 13.sp)
+                    }
+                    androidx.compose.material3.Slider(s.rgPreampDb, { v -> set(s.copy(rgPreampDb = Math.round(v * 2) / 2f)) }, valueRange = -6f..6f)
+                }
+                ToggleRow("Prevent clipping", "Uses the peak values in the tags", s.rgClipProtect) { set(s.copy(rgClipProtect = it)) }
+            }
+            SectionTitle("Network")
+            CardBox {
+                ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }; Divider()
+                ValueRow("Network logs", "One page per server, with Empty log", "Open") { nav.go(Screen.Logs) }
+            }
             SectionTitle("Subtitles")
             CardBox {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -101,7 +148,7 @@ fun SettingsScreen(nav: Navigator) {
                         .border(if (s.accent == c) 3.dp else 0.dp, Color.White, CircleShape).clickable { set(s.copy(accent = c)) })
                 }
             }
-            Text("vlc interface 0.1 · playback by libVLC (LGPL)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
+            Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
         }
     }
 }
@@ -189,4 +236,50 @@ fun BackupScreen(nav: Navigator) {
         },
         dismissButton = { TextButton({ preview = null }) { Text("Cancel") } },
     )
+}
+
+
+/** Per-output preamp and balance, for every device seen so far. */
+@Composable
+fun DeviceSoundList() {
+    val store = App.instance.store
+    val st by store.state.collectAsState()
+    val devices by App.instance.output.devices.collectAsState()
+    val names = (devices.filter { it.connected }.map { it.name } + st.devicePreamp.keys + st.deviceBalance.keys).distinct()
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Per output device", color = C.text, fontSize = 15.sp)
+        Text("Added on top of the general preamp (total max +12 dB). Applied automatically when the output changes.", color = C.muted, fontSize = 12.sp)
+        names.forEach { n -> DeviceSoundControls(n) }
+    }
+}
+
+@Composable
+fun DeviceSoundControls(name: String) {
+    val store = App.instance.store
+    val st by store.state.collectAsState()
+    val pre = st.devicePreamp[name] ?: 0f
+    val bal = st.deviceBalance[name] ?: 0
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Text(name, color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Preamp", color = C.muted, fontSize = 12.sp, modifier = Modifier.width(64.dp))
+            androidx.compose.material3.Slider(pre, { v ->
+                store.update { it.copy(devicePreamp = it.devicePreamp + (name to Math.round(v * 2) / 2f)) }; App.instance.player.applySoundChain()
+            }, valueRange = -12f..12f, modifier = Modifier.weight(1f))
+            Text("%+.1f dB".format(pre), color = accent(), fontSize = 12.sp, modifier = Modifier.width(64.dp))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Balance", color = C.muted, fontSize = 12.sp, modifier = Modifier.width(64.dp))
+            Text("L", color = C.muted, fontSize = 12.sp)
+            androidx.compose.material3.Slider(bal.toFloat(), { v ->
+                val snapped = if (kotlin.math.abs(v) < 6f) 0 else v.toInt()
+                store.update { it.copy(deviceBalance = it.deviceBalance + (name to snapped)) }; App.instance.player.applySoundChain()
+            }, valueRange = -100f..100f, modifier = Modifier.weight(1f).padding(horizontal = 4.dp))
+            Text("R", color = C.muted, fontSize = 12.sp)
+            Text(when { bal == 0 -> "Centre"; bal < 0 -> "L ${-bal}"; else -> "R $bal" }, color = accent(), fontSize = 12.sp,
+                modifier = Modifier.width(64.dp).padding(start = 6.dp).clickable {
+                    store.update { it.copy(deviceBalance = it.deviceBalance + (name to 0)) }; App.instance.player.applySoundChain()
+                })
+        }
+    }
 }

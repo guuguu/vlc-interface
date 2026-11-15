@@ -86,7 +86,6 @@ object HttpIndex {
                     .filter { it.startsWith(target) && it != target }
                     .distinct()
                     .map { Entry(Urls.nameOf(it), it, it.endsWith("/")) }
-                    .filter { it.isDir || isPlayable(it.name) || it.name.ext() in SUB_EXT }
                     .toList()
                 Result.success(entries.sortedWith(compareBy<Entry>({ !it.isDir }, { it.name.lowercase() })))
             }
@@ -175,4 +174,42 @@ object RadioBrowser {
                 Result.failure(e)
             }
         }
+}
+
+/** Playlist files: write M3U8 (relative paths when the media is under the same folder) and read M3U / PLS. */
+object PlaylistFiles {
+    fun toM3u8(items: List<app.vlcinterface.data.PlEntry>, saveFolderUrl: String): String {
+        val sb = StringBuilder("#EXTM3U\n")
+        val base = saveFolderUrl.trimEnd('/') + "/"
+        items.forEach { e ->
+            val sec = if (e.durationMs > 0) e.durationMs / 1000 else -1
+            val label = if (e.artist.isNotEmpty()) "${e.artist} - ${e.title}" else e.title
+            sb.append("#EXTINF:$sec,$label\n")
+            if (e.startMs >= 0) sb.append("#EXTVLCOPT:start-time=${e.startMs / 1000.0}\n")
+            if (e.endMs > 0) sb.append("#EXTVLCOPT:stop-time=${e.endMs / 1000.0}\n")
+            val path = if (e.uri.startsWith(base)) android.net.Uri.decode(e.uri.removePrefix(base)) else e.uri
+            sb.append(path).append('\n')
+        }
+        return sb.toString()
+    }
+
+    /** Returns (title, absolute uri) pairs; relative entries are resolved against [baseUrl] when given. */
+    fun parse(text: String, baseUrl: String = ""): List<Pair<String, String>> {
+        val t = text.removePrefix("﻿")
+        return if (t.trimStart().startsWith("[playlist]", ignoreCase = true)) {
+            val files = HashMap<Int, String>(); val titles = HashMap<Int, String>()
+            t.lineSequence().forEach { l ->
+                val k = l.substringBefore('=').trim(); val v = l.substringAfter('=', "").trim()
+                Regex("""(?i)file(\d+)""").matchEntire(k)?.let { files[it.groupValues[1].toInt()] = v }
+                Regex("""(?i)title(\d+)""").matchEntire(k)?.let { titles[it.groupValues[1].toInt()] = v }
+            }
+            files.toSortedMap().map { (i, f) -> (titles[i] ?: Urls.nameOf(f)) to resolve(f, baseUrl) }.filter { it.second.isNotEmpty() }
+        } else M3u.parse(t).map { it.name to resolve(it.uri, baseUrl) }.filter { it.second.isNotEmpty() }
+    }
+
+    private fun resolve(p: String, base: String): String = when {
+        p.contains("://") -> p
+        base.isNotEmpty() -> base.trimEnd('/') + "/" + Urls.encodePath(p.replace('\\', '/').trimStart('/'))
+        else -> ""
+    }
 }
