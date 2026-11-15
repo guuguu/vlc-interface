@@ -9,6 +9,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -109,8 +110,12 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     var jump by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
     val meters = NativeAudio.active
+    val conf = androidx.compose.ui.platform.LocalConfiguration.current
+    val landscape = conf.screenWidthDp > conf.screenHeightDp
+    // VU meters sideways: narrower in proportion to the shorter screen height.
+    val vuK = if (landscape) (conf.screenHeightDp.toFloat() / conf.screenWidthDp).coerceIn(0.35f, 1f) else 1f
     Box(Modifier.fillMaxSize()) {
-    Column(Modifier.fillMaxSize().padding(end = if (meters) 21.dp else 0.dp)) {
+    Column(Modifier.fillMaxSize().padding(end = if (meters) (21 * vuK).dp else 0.dp)) {
         // No page title: the song name is already shown in the middle of the player.
         BackHeader("", nav, afterHome = {
             // Shortcut to the sound settings (preamp, balance per device, ReplayGain, sound engine).
@@ -119,8 +124,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
         }) { OutputPill(openOutput); ExitButton() }
         if (jump) JumpDialog { jump = false }
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        // Upright: one scrolling page. Sideways: the same page split in two under the track / ReplayGain line —
+        // picture and titles on the left, controls and the rest on the right, each scrolling on its own.
+        val partA: @Composable ColumnScope.() -> Unit = {
             var coverNote by remember(item.uri) { mutableStateOf("") }
             // Long-press the picture: look for it online again (also when it wasn't found before).
             var coverRetry by remember(item.uri) { mutableIntStateOf(0) }
@@ -128,7 +134,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Long-press: all fitting album pictures online; several → choose one from the list.
             var coverPick by remember(item.uri) { mutableStateOf(false) }
             val coverItem = item.copy(artist = p.metaArtist.ifEmpty { item.artist }, album = p.metaAlbum.ifEmpty { item.album })
-            Cover(item.artwork, 280, Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
+            Cover(item.artwork, if (landscape) 190 else 280, Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
                 item = coverItem, download = true, refresh = coverRefresh,
                 onNote = { coverNote = it }, onFound = { player.useDownloadedArtwork(item, "mem:" + item.uri) })
             if (coverPick) CoverPicker(coverItem,
@@ -164,6 +170,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     modifier = Modifier.clickable { showInfo = true }.padding(4.dp))
                 if (showInfo) TagInfoDialog(item) { showInfo = false }
             }
+        }
+        val partB: @Composable ColumnScope.() -> Unit = {
             Column(Modifier.fillMaxWidth()) {
                 var drag by remember { mutableStateOf<Float?>(null) }
                 val len = if (item.endMs > 0) item.endMs - item.startMs else p.length
@@ -289,9 +297,19 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             Box(Modifier.height(16.dp))
         }
+        if (landscape) Row(Modifier.weight(1f).fillMaxWidth()) {
+            val scrollA = rememberScrollState()
+            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scrollA).padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)) { partA() }
+            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)) { partB() }
+        } else Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            partA(); partB()
+        }
     }
     // Stereo level meters: right edge, full height of the player.
-    if (meters) StereoVu(Modifier.align(Alignment.CenterEnd).padding(end = 4.dp).fillMaxHeight().width(15.dp))
+    if (meters) StereoVu(Modifier.align(Alignment.CenterEnd).padding(end = (4 * vuK).dp).fillMaxHeight().width((15 * vuK).dp))
     }
 }
 
@@ -320,7 +338,8 @@ fun StereoVu(modifier: Modifier) {
         }
     }
     Canvas(modifier) {
-        val w = 6.dp.toPx(); val gap = 3.dp.toPx(); val h = size.height
+        // Bars and gap follow the meter's width (15 dp upright; narrower sideways), so they shrink in proportion.
+        val w = size.width * 6f / 15f; val gap = size.width * 3f / 15f; val h = size.height
         val zones = listOf(0f to 0.7f to Color(0xFF4CC26A), 0.7f to 0.9f to Color(0xFFE8B23A), 0.9f to 1f to Color(0xFFE5534B))
         listOf(lvL to pkL, lvR to pkR).forEachIndexed { i, (lv, pk) ->
             val x = size.width - (2 - i) * w - (1 - i) * gap
