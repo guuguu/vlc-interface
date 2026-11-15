@@ -182,13 +182,16 @@ object CoverArt {
     private fun get(url: String): ByteArray? =
         Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }?.takeIf { it.size > 1000 }
 
-    /** Album title variants: as tagged, without "(Remastered)" / "[Deluxe]" / "CD 1", roman ↔ arabic numbers (ELO 2 ↔ ELO II). */
+    /** Album title variants: as tagged, without "(Remastered)" / "[Deluxe]" / "CD 1", without any bracketed extra, roman ↔ arabic numbers (ELO 2 ↔ ELO II). */
     private fun albumVariants(album: String): List<String> {
         val out = LinkedHashSet<String>()
         val a = album.trim(); out += a
         val clean = a.replace(Regex("""\s*[\(\[][^)\]]*(remaster|deluxe|edition|bonus|expanded|anniversary|mono|stereo|disc|cd)[^)\]]*[\)\]]""", RegexOption.IGNORE_CASE), "")
             .replace(Regex("""\s*[-–:]?\s*(disc|cd)\s*\d+\s*$""", RegexOption.IGNORE_CASE), "").trim()
         if (clean.isNotEmpty()) out += clean
+        // Anything else in brackets goes too: catalogue numbers "(C255-8001)", "[Japan]", "(1989)", label names…
+        val bare = a.replace(Regex("""\s*[\(\[\{][^)\]\}]*[\)\]\}]"""), "").replace(Regex("""\s{2,}"""), " ").trim()
+        if (bare.isNotEmpty()) out += bare
         val roman = mapOf("2" to "II", "3" to "III", "4" to "IV", "5" to "V", "6" to "VI", "7" to "VII", "8" to "VIII", "9" to "IX", "10" to "X")
         for (v in out.toList()) {
             roman.forEach { (d, r) ->
@@ -196,7 +199,7 @@ object CoverArt {
                 if (Regex("""\b$r\b""").containsMatchIn(v)) out += v.replace(Regex("""\b$r\b"""), d)
             }
         }
-        return out.toList().take(4)
+        return out.toList().take(5)
     }
 
     /** Does a MusicBrainz artist credit fit the tag? Same name, one inside the other, or initials (ELO = Electric Light Orchestra). */
