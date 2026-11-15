@@ -12,6 +12,9 @@ import app.vlcinterface.player.PlayItem
 import jcifs.smb.SmbFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.async
 import okhttp3.Credentials
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -66,14 +69,18 @@ object MusicLibrary {
     )
 
     /** Reads tags of the audio files in a listing with libVLC (only on a manual Rescan) and caches them. */
-    suspend fun scanTags(src: Source, list: List<Entry>, force: Boolean): List<Entry> = withContext(Dispatchers.IO) {
+    /**
+     * Reads the tags of the audio files in [list] (kept in the tag cache, so only new / changed files are read).
+     * [sem]: when given, files are read in parallel, as many at once as it allows (LAN indexing uses 8).
+     */
+    suspend fun scanTags(src: Source, list: List<Entry>, force: Boolean, sem: kotlinx.coroutines.sync.Semaphore? = null): List<Entry> = withContext(Dispatchers.IO) {
         val player = App.instance.player
         player.setCredentials(src.user, src.password)
-        val out = list.map { e ->
-            if (!e.isAudio) return@map e
+        fun tagOne(e: Entry): Entry {
+            if (!e.isAudio) return e
             val cached = TagCache.get(e.uri)
-            if (cached != null && !force && (cached.size < 0 || cached.size == e.size)) return@map e.applyTags(cached)
-            try {
+            if (cached != null && !force && (cached.size < 0 || cached.size == e.size)) return e.applyTags(cached)
+            return try {
                 val url = if (src.smbVersion == "SMB1" && e.uri.startsWith("smb://"))
                     SmbBridge.urlFor(e.uri, "SMB1", src.user, src.password, src.domain) else e.uri
                 val m = Media(player.libVlc, Uri.parse(url))
@@ -98,6 +105,10 @@ object MusicLibrary {
             } catch (ex: Exception) {
                 e
             }
+        }
+        val out = if (sem == null) list.map(::tagOne)
+        else kotlinx.coroutines.coroutineScope {
+            list.map { e -> async { if (!e.isAudio) e else sem.withPermit { tagOne(e) } } }.awaitAll()
         }
         TagCache.save()
         out

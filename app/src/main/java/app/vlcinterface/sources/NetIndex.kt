@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -93,10 +94,13 @@ object NetIndex {
             try { lock.withLock {
                 val name = pin.trim('/').substringAfterLast('/')
                 busy.value = "Indexing $name…"
-                var n = 0
                 val url = Urls.forSource(src.copy(path = ""), pin)
+                // 8 at once: up to 8 files' tags read in parallel, and subfolders listed side by side.
+                val files = kotlinx.coroutines.sync.Semaphore(8)
+                val dirs = kotlinx.coroutines.sync.Semaphore(8)
+                val count = java.util.concurrent.atomic.AtomicInteger(0)
                 val songs = try {
-                    crawl(src, url, 0) { n += it; busy.value = "Indexing $name… $n songs" }
+                    crawl(src, url, 0, files, dirs) { k -> busy.value = "Indexing $name… ${count.addAndGet(k)} songs" }
                 } catch (e: Exception) {
                     app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, false,
                         "Index of $name not made: ${e.message ?: e.javaClass.simpleName}", url)
@@ -125,15 +129,19 @@ object NetIndex {
         scope.launch { lock.withLock { byPin = byPin - key(src, pin); save(); version.value++ } }
     }
 
-    private suspend fun crawl(src: Source, uri: String, depth: Int, progress: (Int) -> Unit): List<PlayItem> {
+    private suspend fun crawl(src: Source, uri: String, depth: Int, files: kotlinx.coroutines.sync.Semaphore,
+                              dirs: kotlinx.coroutines.sync.Semaphore, progress: (Int) -> Unit): List<PlayItem> {
         if (depth > 12) return emptyList()
         // The pinned folder itself can't be read (NAS off, no network): keep the old index, don't store an empty one.
-        val list = Browse.list(src, uri).getOrElse { if (depth == 0) throw it else return emptyList() }
+        val list = dirs.withPermit { Browse.list(src, uri) }.getOrElse { if (depth == 0) throw it else return emptyList() }
         // Tags: read once and kept (the same cache the Libraries pages use), so a rescan is quick.
-        val tagged = MusicLibrary.scanTags(src, list, force = false)
+        val tagged = MusicLibrary.scanTags(src, list, force = false, sem = files)
         val here = MusicLibrary.playOrder(tagged.filter { it.isAudio }, Urls.nameOf(uri)).map { MusicLibrary.toPlayItem(it, src, uri) }
         progress(here.size)
-        return here + tagged.filter { it.isDir }.flatMap { crawl(src, it.uri, depth + 1, progress) }
+        val sub = kotlinx.coroutines.coroutineScope {
+            tagged.filter { it.isDir }.map { d -> async { crawl(src, d.uri, depth + 1, files, dirs, progress) } }.map { it.await() }
+        }
+        return here + sub.flatten()
     }
 
     private suspend fun save() = withContext(Dispatchers.IO) {
