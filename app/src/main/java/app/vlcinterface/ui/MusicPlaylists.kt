@@ -140,7 +140,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 })
             if (coverNote.isNotEmpty()) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(item.title, color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                // Tap the song name: its folder in Libraries.
+                Text(item.title, color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable { openItemFolder(nav, item) })
                 // Long-press the album: ReplayGain scan of the whole album (its songs in the current folder / queue).
                 var rgAlbum by remember { mutableStateOf(false) }
                 val albumName = p.metaAlbum.ifEmpty { item.album }

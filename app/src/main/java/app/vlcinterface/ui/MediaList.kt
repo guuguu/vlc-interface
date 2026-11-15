@@ -422,6 +422,30 @@ fun openOrigin(nav: Navigator) {
 }
 
 
+/**
+ * Opens the folder the item's file is in, in Libraries (Audio side for songs), with the item marked.
+ * Unknown folder (single link, radio…) → where it was played from.
+ */
+fun openItemFolder(nav: Navigator, item: PlayItem) {
+    val fk = item.folderKey
+    val store = App.instance.store
+    val kind = if (item.isMusic) "audio" else "video"
+    if (store.current.settings.libraryKind != kind) store.update { it.copy(settings = it.settings.copy(libraryKind = kind)) }
+    when {
+        fk.startsWith("local:") -> {
+            val id = fk.removePrefix("local:")
+            val vol = id.substringBefore(':'); val rel = id.substringAfter(':')
+            val name = rel.trimEnd('/').substringAfterLast('/').ifEmpty { rel } +
+                if (vol != android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY) " (SD card)" else ""
+            nav.home(); nav.go(Screen.Folder(LocalFolder(id, name, rel, 0, vol), item.uri))
+        }
+        fk.contains("://") && item.sourceId.isNotEmpty() && store.current.sources.any { it.id == item.sourceId } -> {
+            nav.home(); nav.go(Screen.Browse(item.sourceId, fk, Uri.decode(fk.trimEnd('/').substringAfterLast('/')), item.uri))
+        }
+        else -> openOrigin(nav)
+    }
+}
+
 /** Keeps only the kind chosen with the Libraries Audio / Video switch (folder actions: play all, queue, add to playlist). */
 fun ofKind(items: List<PlayItem>): List<PlayItem> =
     if (App.instance.store.current.settings.libraryKind == "video") items.filter { !it.isMusic } else items.filter { it.isMusic }
