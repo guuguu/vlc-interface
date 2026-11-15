@@ -835,7 +835,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             endHandled = false
             failsInRow++
             if (failsInRow < 5) main.postDelayed({ if (_state.value.item === item && !endHandled) handleEnd(_state.value) }, 1_000)
-                        else _state.value = _state.value.copy(userPaused = true)   // gave up: let the phone sleep again
+                        else askAfterFails(item)
             return
         }
         // In a list: a file that isn't there (moved, deleted) or whose network place can't be reached within 2 s
@@ -853,7 +853,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             _state.value = _state.value.copy(error = "Skipped ${item.title}: ${if (ok == null) "not reachable" else "not found"}")
             failsInRow++
             if (failsInRow < 5) handleEnd(_state.value)
-            else { stop(); _state.value = _state.value.copy(userPaused = true) }
+            else askAfterFails(item)
         }
         stopping = true                      // the "stopped" of the old media isn't the end of a song
         mp.setMedia(media)
@@ -1121,6 +1121,28 @@ class PlayerController(private val context: Context, private val store: Store) {
     private var stopping = false
     /** Songs in a row that failed to play (reset when one plays). */
     private var failsInRow = 0
+
+    /** 5 songs in a row couldn't be played: the place they come from, waiting for an answer (pop-up). */
+    val failAsk = kotlinx.coroutines.flow.MutableStateFlow("")
+
+    private fun askAfterFails(item: PlayItem) {
+        // Nothing plays (or keeps trying to load) while asking; the phone may sleep.
+        endHandled = true
+        stopping = true; try { mp.stop() } catch (_: Exception) {}; main.postDelayed({ stopping = false }, 500)
+        _state.value = _state.value.copy(userPaused = true, isPlaying = false)
+        val u = item.uri
+        failAsk.value = when {
+            u.contains("://") && !u.startsWith("content://") && !u.startsWith("file://") ->
+                u.substringAfter("://").substringAfter('@').substringBeforeLast('/').let { Uri.decode(it) }
+            else -> "this phone"
+        }
+    }
+
+    /** Answer to the pop-up: keep trying the next songs (counted from zero again), or stop playback. */
+    fun failAnswer(keepTrying: Boolean) {
+        failAsk.value = ""
+        if (keepTrying) { failsInRow = 0; endHandled = false; handleEnd(_state.value) } else stop()
+    }
     private var lastTick = 0L
 
     /**
@@ -1235,7 +1257,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                     if (item != null && !item.isRadio && !endHandled && !stopping) {
                         failsInRow++
                         if (failsInRow < 5) main.postDelayed({ if (_state.value.item === item && !endHandled) handleEnd(_state.value) }, 1_000)
-                        else _state.value = _state.value.copy(userPaused = true)   // gave up: let the phone sleep again
+                        else askAfterFails(item)
                     }
                 }
             }

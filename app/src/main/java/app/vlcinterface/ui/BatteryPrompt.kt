@@ -69,3 +69,17 @@ fun SleepClosedHost() {
         confirmButton = { STextButton({ App.instance.player.sleepSeen() }) { Text("OK", color = accent()) } },
     )
 }
+
+
+/** 5 songs in a row couldn't be played: try the next songs from the same place, or stop? */
+@Composable
+fun FailAskHost() {
+    val place by App.instance.player.failAsk.collectAsState()
+    if (place.isEmpty()) return
+    AlertDialog(onDismissRequest = {}, containerColor = C.panel,
+        title = { Text("Songs can't be played", color = C.text) },
+        text = { Text("The last 5 songs couldn't be played (not found or not reachable) from:\n\n$place\n\nKeep trying the next songs?", color = C.text) },
+        confirmButton = { STextButton({ App.instance.player.failAnswer(true) }) { Text("Keep trying", color = accent()) } },
+        dismissButton = { STextButton({ App.instance.player.failAnswer(false) }) { Text("Stop") } },
+    )
+}
