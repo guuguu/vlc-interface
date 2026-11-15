@@ -237,8 +237,11 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first); toast = scales[scaleIdx].second },
                 onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ })
             when (panel) {
-                Panel.TRACKS, Panel.DOWNLOAD, Panel.STYLE, Panel.PICTURE -> SidePanel(landscape, onClose = { panel = Panel.NONE },
-                    onBack = { panel = if (panel == Panel.TRACKS || panel == Panel.PICTURE) Panel.NONE else Panel.TRACKS }) {
+                // Hue & saturation over the full-screen picture: a slim bar at the bottom, nothing darkened,
+                // so most of the picture stays visible and shows the real effect.
+                Panel.PICTURE -> PictureBar(onClose = { panel = Panel.NONE })
+                Panel.TRACKS, Panel.DOWNLOAD, Panel.STYLE -> SidePanel(landscape, onClose = { panel = Panel.NONE },
+                    onBack = { panel = if (panel == Panel.TRACKS) Panel.NONE else Panel.TRACKS }) {
                     PanelContent(panel, p, onPanel = { panel = it })
                 }
                 Panel.SYNC_SUB, Panel.SYNC_AUDIO -> OverlaySync(panel == Panel.SYNC_SUB, p, st.settings.syncPanelOpacity) { panel = Panel.TRACKS }
@@ -541,6 +544,33 @@ private fun PicturePanel(onBack: () -> Unit) {
         Text("0° and 100 % = original colours. The first change reopens the video at the same spot for a moment. " +
             "Back to the original colours when you close the video player. Music and radio are not affected.", color = C.muted, fontSize = 12.sp)
         Box(Modifier.height(12.dp))
+    }
+}
+
+/** Compact hue / saturation bar at the bottom of the full-screen picture (no dimming above it). */
+@Composable
+private fun BoxScope.PictureBar(onClose: () -> Unit) {
+    val player = App.instance.player
+    val st by App.instance.store.state.collectAsState()
+    var hue by remember { mutableStateOf(st.settings.pictureHue) }
+    var sat by remember { mutableStateOf(st.settings.pictureSat) }
+    val colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = Color(0x66FFFFFF))
+    Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xB30F1115)).safeDrawingPadding()
+        .padding(horizontal = 12.dp, vertical = 4.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Hue", color = Color.White, fontSize = 13.sp, modifier = Modifier.width(78.dp))
+            Slider(hue.coerceIn(-20f, 20f), { hue = (if (kotlin.math.abs(it) < 0.3f) 0f else Math.round(it * 10f) / 10f); player.setPicture(hue, sat, false) },
+                onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = -20f..20f, colors = colors, modifier = Modifier.weight(1f).height(32.dp))
+            Text("%+.1f°".format(java.util.Locale.US, hue), color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(56.dp).padding(start = 8.dp))
+            Pill("Reset") { hue = 0f; sat = 1f; player.setPicture(0f, 1f, true) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Saturation", color = Color.White, fontSize = 13.sp, modifier = Modifier.width(78.dp))
+            Slider(sat, { sat = (if (kotlin.math.abs(it - 1f) < 0.03f) 1f else it); player.setPicture(hue, sat, false) },
+                onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = 0f..3f, colors = colors, modifier = Modifier.weight(1f).height(32.dp))
+            Text("${(sat * 100).toInt()} %", color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(56.dp).padding(start = 8.dp))
+            SymButton(onClose) { Text("✕", color = Color.White, fontSize = 18.sp) }
+        }
     }
 }
 
