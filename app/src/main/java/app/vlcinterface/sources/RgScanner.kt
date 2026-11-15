@@ -167,7 +167,7 @@ object RgScanner {
         _state.value = s.copy(progress = p.coerceIn(0f, 1f))
     }
 
-    /** 4 files at once when there are 4 or more to process, else one by one. */
+    /** Up to 4 files at once: one thread per file when there are fewer than 4. */
     private suspend fun <T> parallel(list: List<T>, workers: Int, block: suspend (T) -> Unit) {
         val sem = kotlinx.coroutines.sync.Semaphore(workers)
         kotlinx.coroutines.coroutineScope {
@@ -177,7 +177,7 @@ object RgScanner {
 
     private suspend fun run(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescan: Boolean, results: ArrayList<RgResult>) {
         tagWeight = if (mode == RgMode.ALBUMS_BY_TAGS) 0.1f else 0f; fracs.clear()
-        val workers = if (items.size >= 4) 4 else 1
+        val workers = items.size.coerceIn(1, 4)   // one thread per file, at most 4 at once
         fun addResult(r: RgResult) = synchronized(results) { results += r }
         fun snapshot() = synchronized(results) { results.toList() }
         // Albums by tags: grouped by the tags inside each file (album artist | year | album title), read now,
@@ -212,7 +212,7 @@ object RgScanner {
         val todo = java.util.Collections.synchronizedList(ArrayList<List<PlayItem>>())
         if (rescan) todo += groups else {
             update { s -> s.copy(phase = "Checking existing tags") }
-            parallel(groups, if (groups.size >= 4) 4 else 1) { g ->
+            parallel(groups, groups.size.coerceIn(1, 4)) { g ->
                 // Values of exactly 0.00 dB come from the earlier failed scans (16-bit read as float): scan those again.
                 fun real(v: Float?) = v != null && v != 0f
                 val tagged = g.all { ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r -> if (albumMode) real(r.trackGain) && real(r.albumGain) else real(r.trackGain) } ?: false }
@@ -256,7 +256,7 @@ object RgScanner {
                 writes += it to values
             }
         }
-        parallel(writes, if (writes.size >= 4) 4 else 1) { (it, values) ->
+        parallel(writes, writes.size.coerceIn(1, 4)) { (it, values) ->
             val summary = "track ${values["REPLAYGAIN_TRACK_GAIN"]}" + if (albumMode) " · album ${values["REPLAYGAIN_ALBUM_GAIN"]}" else ""
             update { s -> s.copy(current = it.title, phase = "Writing") }
             val where = save(ctx, it, values, target)
