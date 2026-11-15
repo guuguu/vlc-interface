@@ -138,7 +138,7 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
         }
         // Audio / Video switch: every Library tab then lists only that kind of file.
         val kind = App.instance.store.state.collectAsState().value.settings.libraryKind
-        if (!(s.tab == 2 && s.sub != 0)) Scaled { Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
+        if (!(s.tab == 2 && s.sub != 0) && s.tab != 3) Scaled { Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
             listOf("audio" to "♫  Audio", "video" to "▶  Video").forEach { (k, t) ->
                 Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(8.dp)).background(if (kind == k) accent() else Color.Transparent)
                     .clickable { App.instance.store.update { it.copy(settings = it.settings.copy(libraryKind = k)) } }, contentAlignment = Alignment.Center) {
@@ -148,7 +148,7 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
         }
         } // Audio / Video switch
         Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Internal", "LAN", "Internet").forEachIndexed { i, t ->
+            listOf("Internal", "LAN", "Internet", "Songs").forEachIndexed { i, t ->
                 Pill(t, filled = s.tab == i) { if (s.tab != i) nav.go(Screen.Library(i, s.sub)) }
             }
         }
@@ -166,6 +166,7 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
             when (s.tab) {
                 0 -> InternalTab(nav)
                 1 -> SourcesTab(nav, Zone.LAN)
+                3 -> SongsTab(nav)
                 else -> when (s.sub) {
                     0 -> SourcesTab(nav, Zone.INTERNET)
                     1 -> RadioTab(nav)
