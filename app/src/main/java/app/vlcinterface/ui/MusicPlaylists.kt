@@ -171,7 +171,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 }
                 Box {
                     Pill("Sleep", selected = p.sleepUntil > 0 || p.sleepEndOfTrack) { sleepMenu = true }
-                    DropdownMenu(sleepMenu, { sleepMenu = false }) {
+                    SDropdownMenu(sleepMenu, { sleepMenu = false }) {
                         listOf(15, 30, 45, 60, 90).forEach { m -> SMenuItem({ Text("$m minutes") }, { player.setSleep(m); sleepMenu = false }) }
                         SMenuItem({ Text("After this song") }, { player.setSleep(-1); sleepMenu = false })
                         SMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
@@ -308,7 +308,7 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
         }
     }
     Column(Modifier.fillMaxSize()) {
-        LibraryHeader("Playlists", openOutput) { HomeButton(nav) }
+        LibraryHeader("Playlists", openOutput, nav) { HomeButton(nav) }
         val scroll = rememberScrollState()
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -409,7 +409,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
             Pill("+ Add") { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)) }
             Box {
                 SymButton({ menu = true }) { SymIcon(Icons.Filled.MoreVert, "Playlist options", tint = C.text) }
-                DropdownMenu(menu, { menu = false }) {
+                SDropdownMenu(menu, { menu = false }) {
                     SMenuItem({ Text("Add files or folders…") }, { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)); menu = false })
                     SMenuItem({ Text("Add from .cue file…") }, { cueChoice = true; menu = false })
                     SMenuItem({ Text("Send to NAS…") }, { sendNas = true; menu = false })
@@ -458,7 +458,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                     Text(if (e.durationMs > 0) fmtTime(e.durationMs) else "–:––", color = C.muted, fontSize = 13.sp)
                     Box {
                         SymButton({ itemMenu = i }) { SymIcon(Icons.Filled.MoreVert, "Item options", tint = C.muted) }
-                        DropdownMenu(itemMenu == i, { itemMenu = -1 }) {
+                        SDropdownMenu(itemMenu == i, { itemMenu = -1 }) {
                             if (i > 0) SMenuItem({ Text("Move up") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) }; itemMenu = -1 })
                             if (i < pl.items.size - 1) SMenuItem({ Text("Move down") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) }; itemMenu = -1 })
                             SMenuItem({ Text("Play next") }, { App.instance.player.playNext(listOf(MusicLibrary.fromPlEntry(e))); itemMenu = -1 })
@@ -617,7 +617,7 @@ fun SaveToNasDialog(title: String, defaultName: String, what: String, content: (
         },
         confirmButton = {
             STextButton({
-                val s = src ?: return@TextButton
+                val s = src ?: return@STextButton
                 scope.launch {
                     if (NasWriter.exists(s, Urls.forSource(s.copy(path = ""), folder), name)) askReplace = true else doWrite(name)
                 }

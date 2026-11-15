@@ -237,7 +237,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first); toast = scales[scaleIdx].second },
                 onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ })
             when (panel) {
-                Panel.TRACKS, Panel.DOWNLOAD, Panel.STYLE, Panel.PICTURE -> SidePanel(landscape, onClose = { panel = Panel.NONE }) {
+                Panel.TRACKS, Panel.DOWNLOAD, Panel.STYLE, Panel.PICTURE -> SidePanel(landscape, onClose = { panel = Panel.NONE },
+                    onBack = { panel = if (panel == Panel.TRACKS || panel == Panel.PICTURE) Panel.NONE else Panel.TRACKS }) {
                     PanelContent(panel, p, onPanel = { panel = it })
                 }
                 Panel.SYNC_SUB, Panel.SYNC_AUDIO -> OverlaySync(panel == Panel.SYNC_SUB, p, st.settings.syncPanelOpacity) { panel = Panel.TRACKS }
@@ -259,10 +260,11 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                             when {
                                 syncPanelOpen && syncBelowVideo -> PortraitSync(if (panel == Panel.SYNC_SUB) 0 else 1, p, onSwitch = { panel = if (it == 0) Panel.SYNC_SUB else Panel.SYNC_AUDIO }) { panel = Panel.TRACKS }
                                 panel != Panel.NONE -> Column(Modifier.fillMaxSize().padding(12.dp).clip(RoundedCornerShape(18.dp)).background(C.panel)) {
-                                    Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Row(Modifier.fillMaxWidth().padding(start = 0.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        SymButton({ panel = if (panel == Panel.TRACKS || panel == Panel.PICTURE) Panel.NONE else Panel.TRACKS }) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
                                         Text(when (panel) { Panel.DOWNLOAD -> "Download subtitles"; Panel.STYLE -> "Subtitle style"; Panel.PICTURE -> "Picture colour"; else -> "Audio & subtitles" },
                                             color = C.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                                        SymButton({ panel = if (panel == Panel.TRACKS) Panel.NONE else Panel.TRACKS }) { Text("✕", color = C.text) }
+                                        SymButton({ panel = Panel.NONE }) { Text("✕", color = C.text) }
                                     }
                                     PanelContent(panel, p, onPanel = { panel = it })
                                 }
@@ -469,12 +471,17 @@ private fun PortraitIdle(p: PlayerState, onPanel: () -> Unit, onOutput: () -> Un
 }
 
 @Composable
-private fun SidePanel(landscape: Boolean, onClose: () -> Unit, content: @Composable () -> Unit) {
+private fun SidePanel(landscape: Boolean, onClose: () -> Unit, onBack: (() -> Unit)? = null, content: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().background(Color(0x80000000)).clickable(onClick = onClose))
         Column(Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(if (landscape) 0.6f else 1f)
             .clip(RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)).background(C.panel).safeDrawingPadding().padding(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { SymButton(onClose) { Text("✕", color = C.text, fontSize = 18.sp) } }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // Back: one step up (sub-panel → Audio & subtitles → video); ✕ closes.
+                SymButton(onBack ?: onClose) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
+                Grow()
+                SymButton(onClose) { Text("✕", color = C.text, fontSize = 18.sp) }
+            }
             content()
         }
     }

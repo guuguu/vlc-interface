@@ -125,7 +125,7 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, onDone: 
         },
         confirmButton = {
             STextButton({
-                val its = items ?: return@TextButton
+                val its = items ?: return@STextButton
                 RgScanner.start(ctx.applicationContext, its, mode, target, rescan)
                 onDone(); nav.go(Screen.RgScan)
             }, enabled = !items.isNullOrEmpty() && !RgScanner.state.value.running) { Text("Scan", color = accent()) }

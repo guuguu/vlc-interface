@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.vlcinterface.App
 import app.vlcinterface.player.OutputKind
+import androidx.compose.material.icons.filled.ArrowBack
 
 object C {
     val bg = Color(0xFF0F1115)
@@ -329,4 +330,21 @@ fun AutoFitRow(modifier: Modifier = Modifier, spacing: androidx.compose.ui.unit.
         val h = placeables.maxOf { it.height }
         layout(w, h) { placeables.forEach { it.placeRelative(0, (h - it.height) / 2) } }
     }
+}
+
+
+/** Every menu and submenu starts with "‹ Back", which closes it and returns to the page. */
+@Composable
+fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = Modifier,
+                  content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier) {
+        SMenuItem(text = { Text("‹  Back", color = C.muted) }, onClick = onDismissRequest)
+        content()
+    }
+}
+
+/** Back to the previous page (shown on every page that has one). */
+@Composable
+fun BackButton(nav: Navigator, tint: Color = C.text) {
+    SymButton({ nav.back() }) { SymIcon(Icons.Filled.ArrowBack, "Back to the previous page", tint = tint) }
 }

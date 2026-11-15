@@ -305,7 +305,7 @@ fun EntryMenu(
     onPlayNext: () -> Unit, onQueue: () -> Unit, onAddPlaylist: () -> Unit, onDelete: (() -> Unit)?,
     onSelect: (() -> Unit)? = null, onRgScan: (() -> Unit)? = null,
 ) {
-    DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
+    SDropdownMenu(expanded = true, onDismissRequest = onDismiss) {
         if (onSelect != null) SMenuItem(text = { Text("Select…") }, onClick = { onSelect(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Play all next" else "Play next") }, onClick = { onPlayNext(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Add all to queue" else "Add to queue") }, onClick = { onQueue(); onDismiss() })

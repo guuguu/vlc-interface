@@ -81,8 +81,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
-fun LibraryHeader(title: String, openOutput: () -> Unit, actions: @Composable () -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+fun LibraryHeader(title: String, openOutput: () -> Unit, nav: Navigator? = null, actions: @Composable () -> Unit = {}) {
+    val canBack = nav != null && nav.stack.size > 1
+    Row(Modifier.fillMaxWidth().padding(start = if (canBack) 4.dp else 20.dp, end = 12.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (canBack) BackButton(nav!!)
         Text(title, color = C.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         OutputPill(openOutput)
         actions()
@@ -111,7 +113,7 @@ fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Comp
 @Composable
 fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
-        LibraryHeader("Library", openOutput) {
+        LibraryHeader("Library", openOutput, nav) {
             when {
                 s.tab != 0 || s.sub != 0 -> HomeButton(nav)
                 else -> {}
@@ -135,14 +137,14 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
         } // Audio / Video switch
         Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Internal", "LAN", "Internet").forEachIndexed { i, t ->
-                Pill(t, filled = s.tab == i) { nav.replace(Screen.Library(i, s.sub)) }
+                Pill(t, filled = s.tab == i) { if (s.tab != i) nav.go(Screen.Library(i, s.sub)) }
             }
         }
         if (s.tab == 2) Scaled {
             Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
                 listOf("Storage", "Radio", "Streams & IPTV").forEachIndexed { i, t ->
                     Box(Modifier.weight(1f).height(36.dp).clip(RoundedCornerShape(8.dp)).background(if (s.sub == i) Color(0xFF2A2F38) else Color.Transparent)
-                        .clickable { nav.replace(Screen.Library(2, i)) }, contentAlignment = Alignment.Center) {
+                        .clickable { if (s.sub != i) nav.go(Screen.Library(2, i)) }, contentAlignment = Alignment.Center) {
                         Text(t, color = if (s.sub == i) C.text else C.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
