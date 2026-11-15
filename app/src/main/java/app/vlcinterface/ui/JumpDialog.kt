@@ -16,6 +16,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -42,7 +43,11 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
     val player = App.instance.player
     var library by remember { mutableStateOf<List<PlayItem>?>(null) }
     var query by remember { mutableStateOf("") }
-    LaunchedEffect(Unit) { library = SongsCache.all(ctx.applicationContext) }
+    // Phone songs + indexed ★ LAN folders (servers reachable now); reloaded when the index changes.
+    val indexVer by app.vlcinterface.sources.NetIndex.version.collectAsState()
+    val indexing by app.vlcinterface.sources.NetIndex.busy.collectAsState()
+    LaunchedEffect(Unit) { app.vlcinterface.sources.NetIndex.buildMissing() }
+    LaunchedEffect(indexVer) { library = SongsCache.all(ctx.applicationContext) }
     val queue = player.state.value.queue
     val inQueue = remember(queue) { queue.map { "${it.uri}#${it.startMs}" }.toHashSet() }
     val hits = remember(query, library, queue) {
@@ -66,6 +71,7 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
                         else "Type at least 2 letters · queue and Library are searched"
                     else -> "${hits.size}${if (hits.size == 60) "+" else ""} found"
                 }, color = C.muted, fontSize = 12.sp)
+                if (indexing.isNotEmpty()) Text("★ $indexing — LAN songs appear when done", color = accent(), fontSize = 12.sp)
                 val st = rememberLazyListState()
                 LazyColumn(Modifier.heightIn(max = 380.dp).scrollbar(st), state = st, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     items(hits) { h ->

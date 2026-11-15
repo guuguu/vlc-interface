@@ -29,6 +29,7 @@ class App : Application() {
         app.vlcinterface.sources.RgStore.init(this)
         app.vlcinterface.sources.CoverArt.init(this)
         app.vlcinterface.sources.NetIndex.init(this)
+        app.vlcinterface.sources.NetIndex.buildMissing()      // pinned LAN folders not indexed yet: in the background
         applyStartVolume()
         player = PlayerController(this, store)
         output = OutputRouter(this)

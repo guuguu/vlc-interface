@@ -84,22 +84,38 @@ object NetIndex {
     fun has(src: Source, pin: String) = byPin.containsKey(key(src, pin))
 
     /** (Re)builds the index of one pinned folder, in the background. */
+    private val building = java.util.Collections.synchronizedSet(HashSet<String>())
+
     fun build(src: Source, pin: String) {
+        val k = key(src, pin)
+        if (!building.add(k)) return                     // already queued / running
         scope.launch {
-            lock.withLock {
+            try { lock.withLock {
                 val name = pin.trim('/').substringAfterLast('/')
                 busy.value = "Indexing $name…"
                 var n = 0
+                val url = Urls.forSource(src.copy(path = ""), pin)
                 val songs = try {
-                    crawl(src, Urls.forSource(src.copy(path = ""), pin), 0) { n += it; busy.value = "Indexing $name… $n songs" }
-                } catch (_: Exception) { null }
+                    crawl(src, url, 0) { n += it; busy.value = "Indexing $name… $n songs" }
+                } catch (e: Exception) {
+                    app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, false,
+                        "Index of $name not made: ${e.message ?: e.javaClass.simpleName}", url)
+                    null
+                }
                 if (songs != null) {
-                    byPin = byPin + (key(src, pin) to songs.map { MusicLibrary.toPlEntry(it) })
+                    byPin = byPin + (k to songs.map { MusicLibrary.toPlEntry(it) })
                     save(); version.value++
+                    app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, true,
+                        "Indexed $name: ${songs.size} songs", url)
                 }
                 busy.value = ""
-            }
+            } } finally { building.remove(k) }
         }
+    }
+
+    /** Pinned folders not indexed yet (pinned before indexing existed, or never reachable so far). */
+    fun buildMissing() {
+        App.instance.store.current.sources.forEach { s -> s.pins.filterNot { has(s, it) }.forEach { build(s, it) } }
     }
 
     /** Every pin of a source again (its ↻ Rescan). */

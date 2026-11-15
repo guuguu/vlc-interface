@@ -104,7 +104,7 @@ fun SongsTab(nav: Navigator) {
     LaunchedEffect(indexVer) { songs = sorted(SongsCache.all(ctx.applicationContext)); loading = false }
     // Folders pinned before indexing existed (or never indexed yet): indexed now, in the background.
     LaunchedEffect(Unit) {
-        App.instance.store.current.sources.forEach { s0 -> s0.pins.filterNot { app.vlcinterface.sources.NetIndex.has(s0, it) }.forEach { app.vlcinterface.sources.NetIndex.build(s0, it) } }
+        app.vlcinterface.sources.NetIndex.buildMissing()
     }
     val chosen = songs.filter { it.uri in selected }
     val total = chosen.sumOf { it.durationMs.coerceAtLeast(0) }
