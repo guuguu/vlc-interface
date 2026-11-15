@@ -66,7 +66,7 @@ private fun fmtLong(ms: Long): String {
  * Library → Songs: every song as "artist – album – song   duration" (by artist, album, track — never by song name).
  * Tap to select (highlighted), long-press for the play time of the selection and a new playlist that starts playing.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun SongsTab(nav: Navigator) {
     val ctx = LocalContext.current
@@ -90,8 +90,6 @@ fun SongsTab(nav: Navigator) {
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(if (selected.isEmpty()) "${songs.size} songs" else "${selected.size} selected · ${fmtLong(total)}",
                 color = if (selected.isEmpty()) C.muted else accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            if (selected.size < songs.size) Pill("Select all") { selected = songs.map { it.uri }.toSet() }
-            if (selected.isNotEmpty()) Pill("Deselect all") { selected = emptySet() }
             Pill(if (netBusy.isNotEmpty()) netBusy else "+ LAN / Internet") {
                 if (netBusy.isNotEmpty()) return@Pill
                 netBusy = "Reading…"
@@ -109,12 +107,16 @@ fun SongsTab(nav: Navigator) {
         }
         val state = rememberLazyListState()
         // Play the selection straight away (no playlist made), or add it to the end of the current queue.
-        if (selected.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Pill("▶  Play selected", filled = true) {
+        // Wraps onto a second line when the buttons don't fit (big button size): never overlapping.
+        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (selected.size < songs.size) Pill("Select all") { selected = songs.map { it.uri }.toSet() }
+            if (selected.isNotEmpty()) Pill("Deselect all") { selected = emptySet() }
+            if (selected.isNotEmpty()) Pill("▶  Play selected", filled = true) {
                 App.instance.player.playQueue(chosen, 0, app.vlcinterface.player.Origin("songs", title = "Songs"))
                 nav.go(Screen.Music)
             }
-            Pill("+ Queue") {
+            if (selected.isNotEmpty()) Pill("+ Queue") {
                 App.instance.player.addToQueue(chosen)
                 android.widget.Toast.makeText(ctx, "${chosen.size} song${if (chosen.size == 1) "" else "s"} added to the queue", android.widget.Toast.LENGTH_SHORT).show()
             }
