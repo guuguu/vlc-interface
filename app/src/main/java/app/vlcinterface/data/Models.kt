@@ -199,10 +199,11 @@ data class PlEntry(
     val endMs: Long = -1,
     val trackNo: Int = 0,
     val folderKey: String = "",
+    val fileName: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().put("uri", uri).put("title", title).put("sourceId", sourceId)
         .put("artist", artist).put("album", album).put("durationMs", durationMs).put("startMs", startMs)
-        .put("endMs", endMs).put("trackNo", trackNo).put("folderKey", folderKey)
+        .put("endMs", endMs).put("trackNo", trackNo).put("folderKey", folderKey).put("fileName", fileName)
 
     /** Identity for de-duplication (same file and same cut). */
     val key: String get() = "$uri#$startMs"
@@ -211,7 +212,7 @@ data class PlEntry(
         fun fromJson(o: JSONObject) = PlEntry(
             o.optString("uri"), o.optString("title"), o.optString("sourceId"), o.optString("artist"),
             o.optString("album"), o.optLong("durationMs"), o.optLong("startMs", -1), o.optLong("endMs", -1),
-            o.optInt("trackNo"), o.optString("folderKey"),
+            o.optInt("trackNo"), o.optString("folderKey"), o.optString("fileName"),
         )
     }
 }

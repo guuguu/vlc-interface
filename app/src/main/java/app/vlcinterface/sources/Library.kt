@@ -125,16 +125,16 @@ object MusicLibrary {
         uri = e.uri, title = e.display, folderKey = folderKey, sourceId = src?.id ?: "",
         user = src?.user ?: "", password = src?.password ?: "", artist = e.artist, album = e.album,
         trackNo = e.track, durationMs = e.durationMs, artwork = e.artwork,
-        smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "", audio = e.isAudio,
+        smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "", fileName = e.name,
     )
 
-    fun toPlEntry(p: PlayItem) = PlEntry(p.uri, p.title, p.sourceId, p.artist, p.album, p.durationMs, p.startMs, p.endMs, p.trackNo, p.folderKey)
+    fun toPlEntry(p: PlayItem) = PlEntry(p.uri, p.title, p.sourceId, p.artist, p.album, p.durationMs, p.startMs, p.endMs, p.trackNo, p.folderKey, p.fileName)
 
     fun fromPlEntry(e: PlEntry): PlayItem {
         val src = App.instance.store.current.sources.firstOrNull { it.id == e.sourceId }
         return PlayItem(e.uri, e.title, folderKey = e.folderKey, sourceId = e.sourceId, user = src?.user ?: "", password = src?.password ?: "",
             artist = e.artist, album = e.album, trackNo = e.trackNo, durationMs = e.durationMs, startMs = e.startMs, endMs = e.endMs,
-            smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "")
+            smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "", fileName = e.fileName.ifEmpty { fileNameOf(App.instance, e.uri) })
     }
 
     /**
@@ -203,4 +203,19 @@ object NasWriter {
             r.fold({ "Saved $name" }, { "Could not save $name: ${it.message}" }), startedAt = started)
         r
     }
+}
+
+
+/** File name (with extension) of any address; phone content:// addresses are looked up in Android's media index. */
+fun fileNameOf(ctx: android.content.Context, uri: String): String {
+    if (uri.startsWith("content://")) {
+        try {
+            ctx.contentResolver.query(android.net.Uri.parse(uri), arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) return c.getString(0) ?: ""
+            }
+        } catch (_: Exception) {
+        }
+        return ""
+    }
+    return android.net.Uri.decode(uri.substringBefore('?').trimEnd('/').substringAfterLast('/'))
 }

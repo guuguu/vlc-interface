@@ -100,7 +100,7 @@ object Cue {
             ctx.contentResolver.query(coll, arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.DISPLAY_NAME, MediaStore.Audio.Media.DURATION),
                 "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?", arrayOf(dir, name), null)?.use { c ->
                 if (c.moveToFirst()) PlayItem(android.content.ContentUris.withAppendedId(coll, c.getLong(0)).toString(), name,
-                    folderKey = "local:$dir", durationMs = c.getLong(2)) else null
+                    folderKey = "local:$dir", durationMs = c.getLong(2), fileName = c.getString(1) ?: name) else null
             }
         }
     }

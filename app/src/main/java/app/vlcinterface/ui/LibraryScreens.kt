@@ -224,7 +224,8 @@ fun InternalTab(nav: Navigator) {
             CardBox(Modifier.clickable {
                 val src = st.sources.firstOrNull { it.id == recent.sourceId }
                 val it0 = PlayItem(recent.uri, recent.title, sourceId = recent.sourceId, user = src?.user ?: "",
-                    password = src?.password ?: "", smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "")
+                    password = src?.password ?: "", smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "",
+                    fileName = app.vlcinterface.sources.fileNameOf(ctx, recent.uri))
                 App.instance.player.play(it0)
                 nav.go(if (it0.isMusic) Screen.Music else Screen.Player)
             }) {

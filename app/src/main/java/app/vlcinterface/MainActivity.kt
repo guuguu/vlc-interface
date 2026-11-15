@@ -48,7 +48,8 @@ class MainActivity : ComponentActivity() {
         }
         if (i?.action == Intent.ACTION_VIEW) {
             val data = i.data ?: return
-            val item = PlayItem(data.toString(), data.lastPathSegment ?: "Video", audio = i.type?.startsWith("audio/") == true)
+            val name = app.vlcinterface.sources.fileNameOf(this, data.toString())
+            val item = PlayItem(data.toString(), name.ifEmpty { data.lastPathSegment ?: "Video" }, fileName = name)
             App.instance.player.play(item)
             nav.go(if (item.isMusic) Screen.Music else Screen.Player)
         }
