@@ -889,8 +889,15 @@ class PlayerController(private val context: Context, private val store: Store) {
     private val endWatch = object : Runnable {
         override fun run() {
             val s = _state.value
-            if (!endHandled && !stopping && s.isPlaying && s.item != null && !s.item.isRadio && s.length > 0 &&
-                s.time >= s.length - 1_500 && lastTick > 0 && System.currentTimeMillis() - lastTick > 2_500) handleEnd(s)
+            val stuck = if (lastTick > 0) System.currentTimeMillis() - lastTick else 0L
+            if (!endHandled && !stopping && s.isPlaying && s.item != null && !s.item.isRadio) {
+                // Right at the end and the time stopped: the end that never came.
+                if (s.length > 0 && s.time >= s.length - 1_500 && stuck > 2_500) handleEnd(s)
+                // A song whose header claims more length than it has (VBR / damaged end) can freeze short of it with
+                // no event at all: time not moving while "playing" and not buffering → it's over, go on.
+                else if (s.item.isMusic && s.time > 0 && s.buffering >= 100f &&
+                    stuck > (if (s.item.uri.startsWith("content://") || s.item.uri.startsWith("file://")) 5_000L else 10_000L)) handleEnd(s)
+            }
             main.postDelayed(this, 1_000)
         }
     }
