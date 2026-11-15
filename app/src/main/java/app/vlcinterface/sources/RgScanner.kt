@@ -62,6 +62,8 @@ data class RgScanState(
     val problems: Int = 0,
     /** 0…1 of the whole job, including the part of the file being measured / saved right now. */
     val progress: Float = 0f,
+    /** A failure report waits to be shown as a pop-up (cleared when seen). */
+    val reportPending: Boolean = false,
 )
 
 /**
@@ -78,6 +80,8 @@ object RgScanner {
     @Volatile private var phoneGrant: kotlinx.coroutines.CompletableDeferred<Boolean>? = null
     fun phonePermissionResult(ok: Boolean) { phoneGrant?.complete(ok) }
 
+    fun reportSeen() { _state.value = _state.value.copy(reportPending = false) }
+
     fun cancel() { job?.cancel(); _state.value = _state.value.copy(running = false, finished = true, phase = "Cancelled") }
 
     fun start(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescanTagged: Boolean) {
@@ -85,6 +89,7 @@ object RgScanner {
         val music = items.filter { it.isMusic && it.startMs < 0 }.distinctBy { it.uri }
         val cueSkipped = items.count { it.isMusic && it.startMs >= 0 }
         _state.value = RgScanState(running = true, total = music.size, phase = "Preparing")
+        RgScanService.start(ctx)
         job = scope.launch {
             val results = ArrayList<RgResult>()
             if (cueSkipped > 0) results += RgResult("$cueSkipped .cue tracks", "skipped — part of one big file, scan that file instead", false)
@@ -95,7 +100,8 @@ object RgScanner {
             } catch (e: Exception) {
                 results += RgResult("Scan", "stopped: ${e.message}", false)
             }
-            _state.value = _state.value.copy(running = false, finished = true, current = "", phase = "Done", results = results.toList())
+            _state.value = _state.value.copy(running = false, finished = true, current = "", phase = "Done", results = results.toList(),
+                reportPending = results.any { !it.ok })
         }
     }
 

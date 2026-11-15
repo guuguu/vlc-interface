@@ -71,15 +71,15 @@ import app.vlcinterface.sources.RgTarget
 
 /** ReplayGain scan options (foobar2000-style modes), then the progress page. */
 @Composable
-fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, onDone: () -> Unit) {
+fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, initialMode: RgMode = RgMode.ALBUMS_BY_TAGS, title: String = "ReplayGain scan", onDone: () -> Unit) {
     val ctx = LocalContext.current
     var items by remember { mutableStateOf<List<PlayItem>?>(null) }
-    var mode by remember { mutableStateOf(RgMode.ALBUMS_BY_TAGS) }
+    var mode by remember { mutableStateOf(initialMode) }
     var target by remember { mutableStateOf(RgTarget.FILES) }
     var rescan by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { items = collect().filter { it.isMusic } }
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text("ReplayGain scan", color = C.text) },
+        title = { Text(title, color = C.text) },
         text = {
             val scroll = rememberScrollState()
             Column(Modifier.verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -223,5 +223,77 @@ fun TagInfoDialog(item: PlayItem, onDismiss: () -> Unit) {
             }
         },
         confirmButton = { STextButton(onDismiss) { Text("Close", color = accent()) } },
+    )
+}
+
+/**
+ * ReplayGain scan of the entire library: choose the places (phone + saved storage sources), the music in all
+ * their folders and subfolders is collected, then the usual scan options. Runs in the background with a
+ * notification when it ends and a report of any failures.
+ */
+@Composable
+fun LibraryRgDialog(nav: Navigator, onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    val st by App.instance.store.state.collectAsState()
+    val sources = st.sources.filter { it.proto in setOf("smb", "webdav", "http") }
+    var phone by remember { mutableStateOf(true) }
+    var chosen by remember { mutableStateOf(sources.map { it.id }.toSet()) }
+    var go by remember { mutableStateOf(false) }
+    if (go) {
+        val pick = sources.filter { it.id in chosen }
+        RgScanDialog(nav, {
+            val all = ArrayList<PlayItem>()
+            if (phone) app.vlcinterface.sources.InternalSource.folders(ctx).forEach { f -> all += app.vlcinterface.sources.MusicLibrary.collectLocal(ctx, f, false) }
+            pick.forEach { s -> all += app.vlcinterface.sources.MusicLibrary.collectRecursive(s, app.vlcinterface.sources.Urls.forSource(s)) }
+            all.filter { it.isMusic }.distinctBy { it.uri }
+        }, app.vlcinterface.sources.RgMode.ALBUMS_BY_TAGS, "ReplayGain — entire library", onDone)
+        return
+    }
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("ReplayGain — entire library", color = C.text) },
+        text = {
+            val scroll = rememberScrollState()
+            Column(Modifier.verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Scan all music in these places, with every folder and subfolder:", color = C.muted, fontSize = 13.sp)
+                Row(Modifier.fillMaxWidth().clickable { phone = !phone }, verticalAlignment = Alignment.CenterVertically) {
+                    SCheckbox(phone, { phone = it }); Text("Phone storage (all music folders)", color = C.text, fontSize = 14.sp)
+                }
+                sources.forEach { s ->
+                    Row(Modifier.fillMaxWidth().clickable { chosen = if (s.id in chosen) chosen - s.id else chosen + s.id }, verticalAlignment = Alignment.CenterVertically) {
+                        SCheckbox(s.id in chosen, { chosen = if (it) chosen + s.id else chosen - s.id })
+                        Text("${s.name} (${s.proto.uppercase()})", color = C.text, fontSize = 14.sp)
+                    }
+                }
+                Text("Collecting a big NAS takes a while. The scan keeps running in the background; you get a notification when it ends, and a report if anything failed.",
+                    color = C.muted, fontSize = 12.sp)
+            }
+        },
+        confirmButton = { STextButton({ go = true }, enabled = phone || chosen.isNotEmpty()) { Text("Continue", color = accent()) } },
+        dismissButton = { STextButton(onDone) { Text("Cancel") } },
+    )
+}
+
+/** Pop-up with the failures of a finished scan (shown once, on any page). */
+@Composable
+fun RgFailureReport(nav: Navigator) {
+    val s by RgScanner.state.collectAsState()
+    if (!s.reportPending || !s.finished) return
+    val fails = s.results.filter { !it.ok }
+    AlertDialog(onDismissRequest = { RgScanner.reportSeen() }, containerColor = C.panel,
+        title = { Text("ReplayGain scan: ${fails.size} problem${if (fails.size == 1) "" else "s"}", color = C.text) },
+        text = {
+            val scroll = rememberScrollState()
+            Column(Modifier.verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Saved ${s.saved} · skipped ${s.skipped}", color = C.muted, fontSize = 13.sp)
+                fails.forEach { r ->
+                    Column {
+                        Text(r.name, color = C.text, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(r.status, color = C.bad, fontSize = 12.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton({ RgScanner.reportSeen() }) { Text("OK", color = accent()) } },
+        dismissButton = { STextButton({ RgScanner.reportSeen(); if (nav.top !is Screen.RgScan) nav.go(Screen.RgScan) }) { Text("Open scan page") } },
     )
 }

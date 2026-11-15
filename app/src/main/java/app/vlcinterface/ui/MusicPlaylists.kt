@@ -123,7 +123,16 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (coverNote.isNotEmpty()) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(item.title, color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(listOfNotNull(p.metaArtist.ifEmpty { null }, p.metaAlbum.ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = 15.sp, textAlign = TextAlign.Center)
+                // Long-press the album: ReplayGain scan of the whole album (its songs in the current folder / queue).
+                var rgAlbum by remember { mutableStateOf(false) }
+                val albumName = p.metaAlbum.ifEmpty { item.album }
+                Text(listOfNotNull(p.metaArtist.ifEmpty { null }, p.metaAlbum.ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = 15.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { if (albumName.isNotBlank()) rgAlbum = true }))
+                if (rgAlbum) {
+                    val songs = p.queue.filter { it.isMusic && it.album.equals(albumName, true) && (it.folderKey == item.folderKey || item.folderKey.isEmpty()) }
+                        .ifEmpty { p.queue.filter { it.isMusic && it.album.equals(albumName, true) } }.ifEmpty { listOf(item) }
+                    RgScanDialog(nav, { songs }, RgModeSingle, "ReplayGain: $albumName") { rgAlbum = false }
+                }
                 val badges = listOfNotNull(if (item.trackNo > 0) "Track ${item.trackNo}" else null, p.rgInfo.ifEmpty { null },
                     if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else if (p.sleepEndOfTrack) "Sleep after this song" else null)
                 // Tap the badges (or the title area) for the song's tags and ReplayGain values.

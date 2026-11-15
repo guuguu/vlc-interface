@@ -93,6 +93,8 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.PickMedia -> PickMediaScreen(nav, top)
                 }
                 if (showOutput) OutputSheet(onDismiss = { showOutput = false })
+                // Failures of a finished ReplayGain scan pop up on whatever page is open.
+                RgFailureReport(nav)
             }
             BackHandler(enabled = true) {
                 if (showOutput) showOutput = false else if (!nav.back()) onFinish()

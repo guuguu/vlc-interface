@@ -123,6 +123,17 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
                 s.tab == 2 && s.sub == 0 -> SymButton({ nav.go(Screen.EditSource(Zone.INTERNET)) }) { SymIcon(Icons.Filled.Add, "Add internet storage", tint = C.text) }
                 else -> {}
             }
+            // Library menu.
+            var libMenu by remember { mutableStateOf(false) }
+            var libRg by remember { mutableStateOf(false) }
+            Box {
+                SymButton({ libMenu = true }) { SymIcon(Icons.Filled.MoreVert, "Library menu", tint = C.text) }
+                SDropdownMenu(libMenu, { libMenu = false }) {
+                    SMenuItem({ Text("ReplayGain scan — entire library…") }, { libMenu = false; libRg = true })
+                    SMenuItem({ Text("ReplayGain scan page") }, { libMenu = false; nav.go(Screen.RgScan) })
+                }
+            }
+            if (libRg) LibraryRgDialog(nav) { libRg = false }
         }
         // Audio / Video switch: every Library tab then lists only that kind of file.
         val kind = App.instance.store.state.collectAsState().value.settings.libraryKind

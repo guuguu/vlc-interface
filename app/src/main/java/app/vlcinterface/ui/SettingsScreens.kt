@@ -56,7 +56,13 @@ fun SettingsScreen(nav: Navigator) {
     fun set(n: Settings) = store.update { it.copy(settings = n) }
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
-        BackHeader("Settings", nav) {
+        val ctxV = LocalContext.current
+        // Exact version of this build, e.g. "vlc interface 0.3.0-build29 (29)".
+        val version = remember {
+            try { ctxV.packageManager.getPackageInfo(ctxV.packageName, 0).let { "vlc interface ${it.versionName} (${it.longVersionCode})" } }
+            catch (_: Exception) { "vlc interface ${app.vlcinterface.App.VERSION}" }
+        }
+        BackHeader("Settings", nav, version) {
             Box(Modifier.padding(end = 8.dp).clip(RoundedCornerShape(20.dp)).border(1.dp, C.line, RoundedCornerShape(20.dp))
                 .clickable { nav.go(Screen.Backup) }.padding(horizontal = 14.dp, vertical = 9.dp)) {
                 Text("Export / import", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)

@@ -154,6 +154,7 @@ fun MediaList(
     var deleteTarget by remember { mutableStateOf<Entry?>(null) }
     var rgTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
     var infoItem by remember { mutableStateOf<PlayItem?>(null) }
+    var rgAlbum by remember { mutableStateOf<Pair<String, List<PlayItem>>?>(null) }
     // Multi-select (songs and folders): long-press → Select…, then taps tick/untick.
     var selected by remember(entries) { mutableStateOf(setOf<String>()) }
     fun toggle(e: Entry) { selected = if (e.uri in selected) selected - e.uri else selected + e.uri }
@@ -234,7 +235,11 @@ fun MediaList(
                             onSelect = { toggle(r.e) },
                             onRgScan = if (App.instance.store.current.settings.libraryKind == "audio") ({ rgTarget = itemsOfDir(r.e) }) else null) }
                     }
-                    is Row0.Header -> Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Long-press an album title: ReplayGain scan of that whole album.
+                    is Row0.Header -> Row(Modifier.fillMaxWidth().combinedClickable(onClick = {}, onLongClick = {
+                            val songs = r.g.entries.map { MusicLibrary.toPlayItem(it, source, folderKey) }
+                            rgAlbum = r.g.album to songs
+                        }).padding(top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Cover(r.g.artwork, 56, item = r.g.entries.firstOrNull()?.let { MusicLibrary.toPlayItem(it, source, folderKey) })
                         Column(Modifier.padding(start = 12.dp).weight(1f)) {
                             Text(r.g.album, color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -298,6 +303,7 @@ fun MediaList(
     addTarget?.let { t -> AddToPlaylistDialog(t) { addTarget = null; selected = emptySet() } }
     rgTarget?.let { t -> RgScanDialog(nav, t) { rgTarget = null; selected = emptySet() } }
     infoItem?.let { it0 -> TagInfoDialog(it0) { infoItem = null } }
+    rgAlbum?.let { (name, songs) -> RgScanDialog(nav, { songs }, RgModeSingle, "ReplayGain: $name") { rgAlbum = null } }
     deleteTarget?.let { e ->
         DeleteDialog(listOf(e.uri), e.name, if (e.size > 0) e.size else 0, 1, onDone = { deleted -> deleteTarget = null; if (deleted) onRefresh() })
     }
@@ -419,3 +425,6 @@ fun openOrigin(nav: Navigator) {
 /** Keeps only the kind chosen with the Libraries Audio / Video switch (folder actions: play all, queue, add to playlist). */
 fun ofKind(items: List<PlayItem>): List<PlayItem> =
     if (App.instance.store.current.settings.libraryKind == "video") items.filter { !it.isMusic } else items.filter { it.isMusic }
+
+/** Scan mode for one album picked by its title. */
+val RgModeSingle = app.vlcinterface.sources.RgMode.SINGLE_ALBUM

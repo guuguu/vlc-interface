@@ -41,6 +41,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(i: Intent?) {
+        if (i?.getBooleanExtra(app.vlcinterface.sources.RgScanService.EXTRA_OPEN_RGSCAN, false) == true) {
+            i.removeExtra(app.vlcinterface.sources.RgScanService.EXTRA_OPEN_RGSCAN)
+            if (nav.top !is Screen.RgScan) nav.go(Screen.RgScan)
+            return
+        }
         if (i?.getBooleanExtra(EXTRA_OPEN_ORIGIN, false) == true) {
             i.removeExtra(EXTRA_OPEN_ORIGIN)
             app.vlcinterface.ui.openOrigin(nav)
