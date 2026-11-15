@@ -592,6 +592,15 @@ class PlayerController(private val context: Context, private val store: Store) {
         refreshSurface()
     }
 
+    /** Fresh surfaces for the same view (after it was off screen). */
+    fun reattach(layout: VLCVideoLayout) {
+        if (attachedLayout !== layout) return
+        main.post {
+            try { mp.detachViews(); mp.attachViews(layout, null, true, false) } catch (_: Throwable) {}
+            refreshSurface()
+        }
+    }
+
     fun detach(layout: VLCVideoLayout) {
         if (attachedLayout === layout) {
             mp.detachViews()

@@ -121,7 +121,17 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     var scaleIdx by remember { mutableIntStateOf(scales.indexOfFirst { it.first == player.scale }.coerceAtLeast(0)) }
     // One video view for the whole player screen: it moves between the portrait and landscape layouts
     // instead of being recreated, and the picture is re-fitted every time its area changes size.
-    val videoView = remember { VLCVideoLayout(ctx).also { it.keepScreenOn = true } }
+    val videoView = remember {
+        VLCVideoLayout(ctx).also { v ->
+            v.keepScreenOn = true
+            // If Android ever takes the view off screen and puts it back (PiP, multi-window), give libVLC a fresh surface.
+            var wasDetached = false
+            v.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
+                override fun onViewDetachedFromWindow(view: android.view.View) { wasDetached = true }
+                override fun onViewAttachedToWindow(view: android.view.View) { if (wasDetached) { wasDetached = false; player.reattach(v) } }
+            })
+        }
+    }
     DisposableEffect(Unit) { onDispose { player.detach(videoView) } }
     LaunchedEffect(landscape, p.videoW, p.videoH) { kotlinx.coroutines.delay(150); player.refreshSurface() }
     var toast by remember { mutableStateOf("") }
@@ -197,15 +207,18 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         }
     }
 
-    if (inPip) { video(Modifier.fillMaxSize()); return }
-
     val syncPanelOpen = panel == Panel.SYNC_SUB || panel == Panel.SYNC_AUDIO
-    val syncBelowVideo = !landscape && !videoPortrait
+    val fullscreen = inPip || landscape || videoPortrait
+    val syncBelowVideo = !fullscreen
+    val ratio = (if (p.videoW > 0 && p.videoH > 0) p.videoW.toFloat() / p.videoH else 16f / 9f).coerceIn(1f, 3f)
 
-    if (landscape || videoPortrait) {
-        // Picture fills the screen; controls and panels sit on top of it.
-        Box(Modifier.fillMaxSize()) {
-            video(Modifier.fillMaxSize())
+    // The video is always drawn from this one place, so its view is never moved or recreated when the
+    // phone rotates or PiP starts (moving it made the picture disappear): only its size and position change.
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        video(if (fullscreen) Modifier.fillMaxSize() else Modifier.safeDrawingPadding().fillMaxWidth().aspectRatio(ratio))
+        if (inPip) return@Box
+        if (fullscreen) {
+            // Picture fills the screen; controls and panels sit on top of it.
             if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second,
                 onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS },
                 onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first); toast = scales[scaleIdx].second },
@@ -217,31 +230,33 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 Panel.SYNC_SUB, Panel.SYNC_AUDIO -> OverlaySync(panel == Panel.SYNC_SUB, p, st.settings.syncPanelOpacity) { panel = Panel.TRACKS }
                 else -> {}
             }
-        }
-    } else {
-        // Phone upright with a widescreen video: video on top, everything else below it.
-        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-            val ratio = if (p.videoW > 0 && p.videoH > 0) p.videoW.toFloat() / p.videoH else 16f / 9f
-            Box(Modifier.fillMaxWidth().aspectRatio(ratio.coerceIn(1f, 3f))) {
-                video(Modifier.fillMaxSize())
-                if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second,
-                    onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS },
-                    onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first) },
-                    onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ }, compact = true)
-            }
-            SeekRow(p, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                when {
-                    syncPanelOpen && syncBelowVideo -> PortraitSync(if (panel == Panel.SYNC_SUB) 0 else 1, p, onSwitch = { panel = if (it == 0) Panel.SYNC_SUB else Panel.SYNC_AUDIO }) { panel = Panel.TRACKS }
-                    panel != Panel.NONE -> Column(Modifier.fillMaxSize().padding(12.dp).clip(RoundedCornerShape(18.dp)).background(C.panel)) {
-                        Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(when (panel) { Panel.DOWNLOAD -> "Download subtitles"; Panel.STYLE -> "Subtitle style"; else -> "Audio & subtitles" },
-                                color = C.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                            IconButton({ panel = if (panel == Panel.TRACKS) Panel.NONE else Panel.TRACKS }) { Text("✕", color = C.text) }
+        } else {
+            // Phone upright with a widescreen video: video on top, everything else below it.
+            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+                Box(Modifier.fillMaxWidth().aspectRatio(ratio)) {
+                    if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second,
+                        onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS },
+                        onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first) },
+                        onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ }, compact = true)
+                }
+                Box(Modifier.weight(1f).fillMaxWidth().background(C.bg)) {
+                    Column(Modifier.fillMaxSize()) {
+                        SeekRow(p, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                        Box(Modifier.weight(1f).fillMaxWidth()) {
+                            when {
+                                syncPanelOpen && syncBelowVideo -> PortraitSync(if (panel == Panel.SYNC_SUB) 0 else 1, p, onSwitch = { panel = if (it == 0) Panel.SYNC_SUB else Panel.SYNC_AUDIO }) { panel = Panel.TRACKS }
+                                panel != Panel.NONE -> Column(Modifier.fillMaxSize().padding(12.dp).clip(RoundedCornerShape(18.dp)).background(C.panel)) {
+                                    Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text(when (panel) { Panel.DOWNLOAD -> "Download subtitles"; Panel.STYLE -> "Subtitle style"; else -> "Audio & subtitles" },
+                                            color = C.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                                        IconButton({ panel = if (panel == Panel.TRACKS) Panel.NONE else Panel.TRACKS }) { Text("✕", color = C.text) }
+                                    }
+                                    PanelContent(panel, p, onPanel = { panel = it })
+                                }
+                                else -> PortraitIdle(p, onPanel = { panel = Panel.TRACKS }, onOutput = openOutput)
+                            }
                         }
-                        PanelContent(panel, p, onPanel = { panel = it })
                     }
-                    else -> PortraitIdle(p, onPanel = { panel = Panel.TRACKS }, onOutput = openOutput)
                 }
             }
         }
