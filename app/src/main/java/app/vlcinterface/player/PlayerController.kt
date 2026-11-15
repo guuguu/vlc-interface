@@ -291,6 +291,14 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
+    /** Closing the video player: hue/saturation go back to the original colours (user rule). */
+    fun resetPicture() {
+        val ps = store.current.settings
+        if (pictureNeutral(ps.pictureHue, ps.pictureSat)) return
+        store.update { it.copy(settings = it.settings.copy(pictureHue = 0f, pictureSat = 1f)) }
+        if (pictureFilterOn) NativeAudio.picture(libVlc, mp, false, 0f, 1f)
+    }
+
     /** Settings → Sound engine changed: rebuild the engine and continue where it was. */
     fun applySoundEngine() {
         val s = _state.value
@@ -545,6 +553,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun pause() { if (mp.isPlaying) mp.pause() }
     fun stop() {
         saveProgress()
+        resetPicture()
         mp.stop()
         currentPfd?.close(); currentPfd = null
         am.abandonAudioFocusRequest(focusRequest)

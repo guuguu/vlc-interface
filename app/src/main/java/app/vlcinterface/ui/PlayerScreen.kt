@@ -132,7 +132,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
             })
         }
     }
-    DisposableEffect(Unit) { onDispose { player.detach(videoView) } }
+    DisposableEffect(Unit) { onDispose { player.detach(videoView); player.resetPicture() } }
     LaunchedEffect(landscape, p.videoW, p.videoH) { kotlinx.coroutines.delay(150); player.refreshSurface() }
     var toast by remember { mutableStateOf("") }
     var touchTick by remember { mutableIntStateOf(0) }
@@ -461,7 +461,7 @@ private fun PicturePanel(onBack: () -> Unit) {
             Pill("Back") { onBack() }
         }
         Text("0° and 100 % = original colours. The first change reopens the video at the same spot for a moment. " +
-            "Kept for all videos until you reset it. Music and radio are not affected.", color = C.muted, fontSize = 12.sp)
+            "Back to the original colours when you close the video player. Music and radio are not affected.", color = C.muted, fontSize = 12.sp)
         Box(Modifier.height(12.dp))
     }
 }
