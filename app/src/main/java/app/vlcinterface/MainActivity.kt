@@ -48,8 +48,9 @@ class MainActivity : ComponentActivity() {
         }
         if (i?.action == Intent.ACTION_VIEW) {
             val data = i.data ?: return
-            App.instance.player.play(PlayItem(data.toString(), data.lastPathSegment ?: "Video"))
-            nav.go(Screen.Player)
+            val item = PlayItem(data.toString(), data.lastPathSegment ?: "Video", audio = i.type?.startsWith("audio/") == true)
+            App.instance.player.play(item)
+            nav.go(if (item.isMusic) Screen.Music else Screen.Player)
         }
     }
 

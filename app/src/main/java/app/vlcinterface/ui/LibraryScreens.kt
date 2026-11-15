@@ -223,9 +223,10 @@ fun InternalTab(nav: Navigator) {
             SectionTitle("Continue watching")
             CardBox(Modifier.clickable {
                 val src = st.sources.firstOrNull { it.id == recent.sourceId }
-                App.instance.player.play(PlayItem(recent.uri, recent.title, sourceId = recent.sourceId, user = src?.user ?: "",
-                    password = src?.password ?: "", smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: ""))
-                nav.go(Screen.Player)
+                val it0 = PlayItem(recent.uri, recent.title, sourceId = recent.sourceId, user = src?.user ?: "",
+                    password = src?.password ?: "", smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "")
+                App.instance.player.play(it0)
+                nav.go(if (it0.isMusic) Screen.Music else Screen.Player)
             }) {
                 Column(Modifier.padding(14.dp)) {
                     Text(recent.title, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)

@@ -60,8 +60,13 @@ data class PlayItem(
     /** SMB version detected for the source ("SMB1" plays through the in-app bridge). */
     val smbVersion: String = "",
     val domain: String = "",
+    /** Known to be an audio file (set from the Library listing). */
+    val audio: Boolean = false,
 ) {
-    val isMusic: Boolean get() = !isRadio && (Uri.decode(uri).ext() in AUDIO_EXT || title.ext() in AUDIO_EXT || startMs >= 0)
+    /** Music (not video, not radio): decides music screen vs video player. Phone items have no extension in their
+     *  content:// address, so Android's audio collection path counts too. */
+    val isMusic: Boolean get() = !isRadio && (audio || startMs >= 0 || uri.contains("/audio/media/") ||
+        Uri.decode(uri).substringBefore('?').ext() in AUDIO_EXT || title.ext() in AUDIO_EXT)
 }
 
 data class PlayerState(

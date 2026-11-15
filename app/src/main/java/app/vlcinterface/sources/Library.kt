@@ -125,7 +125,7 @@ object MusicLibrary {
         uri = e.uri, title = e.display, folderKey = folderKey, sourceId = src?.id ?: "",
         user = src?.user ?: "", password = src?.password ?: "", artist = e.artist, album = e.album,
         trackNo = e.track, durationMs = e.durationMs, artwork = e.artwork,
-        smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "",
+        smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "", audio = e.isAudio,
     )
 
     fun toPlEntry(p: PlayItem) = PlEntry(p.uri, p.title, p.sourceId, p.artist, p.album, p.durationMs, p.startMs, p.endMs, p.trackNo, p.folderKey)
