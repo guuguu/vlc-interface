@@ -309,14 +309,15 @@ fun SRadioButton(selected: Boolean, onClick: (() -> Unit)?, modifier: Modifier =
 fun AutoFitRow(modifier: Modifier = Modifier, spacing: androidx.compose.ui.unit.Dp = 6.dp, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     val k = btnScale()
     androidx.compose.ui.layout.SubcomposeLayout(modifier) { c ->
-        fun row(f: Float, slot: Any) = subcompose(slot) {
-            androidx.compose.runtime.CompositionLocalProvider(LocalBtnScale provides f) {
+        fun row(f: Float, slot: Any, measureOnly: Boolean = true) = subcompose(slot) {
+            androidx.compose.runtime.CompositionLocalProvider(LocalBtnScale provides f, LocalMeasureOnly provides measureOnly) {
                 androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(spacing),
                     verticalAlignment = Alignment.CenterVertically, content = content)
             }
         }
         var f = k
         var placeables = row(f, 0).map { it.measure(androidx.compose.ui.unit.Constraints()) }
+        var shrunk = false
         if (c.hasBoundedWidth) {
             // Shrink in up to 4 steps (text that doesn't scale makes it not exactly proportional).
             for (step in 1..4) {
@@ -324,8 +325,11 @@ fun AutoFitRow(modifier: Modifier = Modifier, spacing: androidx.compose.ui.unit.
                 if (w <= c.maxWidth) break
                 f = (f * c.maxWidth / w * 0.97f).coerceAtLeast(0.3f)
                 placeables = row(f, step).map { it.measure(androidx.compose.ui.unit.Constraints()) }
+                shrunk = true
             }
         }
+        // The row that is shown: menus and pop-ups inside it open only from this one (not from the trial layouts).
+        placeables = row(f, "shown", measureOnly = false).map { it.measure(androidx.compose.ui.unit.Constraints()) }
         val w = placeables.maxOf { it.width }.coerceAtMost(if (c.hasBoundedWidth) c.maxWidth else Int.MAX_VALUE)
         val h = placeables.maxOf { it.height }
         layout(w, h) { placeables.forEach { it.placeRelative(0, (h - it.height) / 2) } }
@@ -333,10 +337,14 @@ fun AutoFitRow(modifier: Modifier = Modifier, spacing: androidx.compose.ui.unit.
 }
 
 
+/** True inside the trial layouts of [AutoFitRow]: nothing pops up from there. */
+val LocalMeasureOnly = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 /** Every menu and submenu starts with "‹ Back", which closes it and returns to the page. */
 @Composable
 fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = Modifier,
                   content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
+    if (LocalMeasureOnly.current) return
     androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier) {
         SMenuItem(text = { Text("‹  Back", color = C.muted) }, onClick = onDismissRequest)
         content()

@@ -588,7 +588,18 @@ class PlayerController(private val context: Context, private val store: Store) {
         startService()
     }
 
-    private fun rgModeFor(s: PlayerState): String = when (store.current.settings.rgMode) {
+    /** The album a song belongs to, for the per-album ReplayGain choice: album title + its folder. */
+    fun albumKey(item: PlayItem): String = item.album.trim().lowercase() + "|" + item.folderKey.ifEmpty { item.uri.substringBeforeLast('/') }
+
+    /** Album or song (track) gain for this song's whole album, as picked with the RG button. */
+    fun setAlbumRgChoice(item: PlayItem, choice: String) {
+        val k = albumKey(item)
+        store.update { it.copy(settings = it.settings.copy(rgChoices = it.settings.rgChoices + (k to choice))) }
+    }
+
+    fun albumRgChoice(item: PlayItem): String? = store.current.settings.rgChoices[albumKey(item)]
+
+    private fun rgModeFor(s: PlayerState): String = s.item?.let { albumRgChoice(it) } ?: when (store.current.settings.rgMode) {
         "track" -> "track"; "album" -> "album"
         else -> if (store.current.settings.shuffle || s.origin.kind == "playlist") "track" else "album"
     }

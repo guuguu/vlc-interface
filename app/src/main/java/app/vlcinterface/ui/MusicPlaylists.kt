@@ -178,6 +178,28 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 else -> "Open source"
             }
             Pill("☰  $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { openOrigin(nav) }
+            // RG button state and its question live outside the auto-fitting row (that row is laid out more than once).
+            var rgAsk by remember { mutableStateOf<app.vlcinterface.sources.Rg?>(null) }
+            val rgScope = rememberCoroutineScope()
+            val ctxRg = LocalContext.current
+            rgAsk?.let { rg ->
+                androidx.compose.material3.AlertDialog(onDismissRequest = { rgAsk = null }, containerColor = C.panel,
+                    title = { Text("Which ReplayGain?", color = C.text) },
+                    text = {
+                        Text("This song has both values. Album gain keeps the album's own loud and quiet songs as they are; " +
+                            "song gain makes every song equally loud. Your choice is kept for all songs of \"${item.album.ifEmpty { "this album" }}\" until you change it.",
+                            color = C.muted, fontSize = 13.sp)
+                    },
+                    confirmButton = {
+                        STextButton({ player.setAlbumRgChoice(item, "album"); rgAsk = null; player.toggleReplayGain() }) {
+                            Text("Album  %+.1f dB".format(java.util.Locale.US, rg.albumGain), color = accent()) }
+                    },
+                    dismissButton = {
+                        STextButton({ player.setAlbumRgChoice(item, "track"); rgAsk = null; player.toggleReplayGain() }) {
+                            Text("Song  %+.1f dB".format(java.util.Locale.US, rg.trackGain), color = accent()) }
+                    },
+                )
+            }
             AutoFitRow(spacing = 8.dp) {
                 Pill(if (st.settings.shuffle) "Random" else "In order", selected = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
                 Pill("Repeat: " + st.settings.repeat.replaceFirstChar { it.uppercase() }, selected = st.settings.repeat != "off") {
@@ -185,7 +207,15 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     App.instance.store.update { it.copy(settings = it.settings.copy(repeat = next)) }
                 }
                 // ReplayGain on / off, applied at once (the song continues from where it is).
-                Pill(if (st.settings.rgMode == "off") "RG: Off" else "RG: On", selected = st.settings.rgMode != "off") { player.toggleReplayGain() }
+                Pill(if (st.settings.rgMode == "off") "RG: Off" else "RG: On" + (player.albumRgChoice(item)?.let { if (it == "album") " · album" else " · song" } ?: ""),
+                    selected = st.settings.rgMode != "off") {
+                    if (st.settings.rgMode != "off") player.toggleReplayGain()
+                    else rgScope.launch {
+                        // Both values in the song's tags: ask which one (album gain is then kept for the whole album).
+                        val rg = app.vlcinterface.sources.ReplayGain.read(ctxRg, item.uri, item.user, item.password, item.domain, item.smbVersion)
+                        if (rg?.trackGain != null && rg.albumGain != null) rgAsk = rg else player.toggleReplayGain()
+                    }
+                }
                 Box {
                     Pill("Sleep", selected = p.sleepUntil > 0 || p.sleepEndOfTrack) { sleepMenu = true }
                     SDropdownMenu(sleepMenu, { sleepMenu = false }) {
