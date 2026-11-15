@@ -95,7 +95,7 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, onDone: 
                 Text(when (mode) {
                     RgMode.TRACK -> "Every file gets its own track gain."
                     RgMode.SINGLE_ALBUM -> "Track gain for each file, and one album gain for all selected files together."
-                    RgMode.ALBUMS_BY_TAGS -> "Track + album gain; each album gets its own album gain, saved on that album's songs (grouped by album artist | year | album; songs with no album tag: by folder)."
+                    RgMode.ALBUMS_BY_TAGS -> "Track + album gain; each album gets its own album gain, saved on that album's songs. Albums come from the tags inside the files (album artist | year | album title); a song with no album title in its file goes with its folder."
                     RgMode.ALBUMS_BY_FOLDERS -> "Track + album gain; every folder is one album."
                 }, color = C.muted, fontSize = 12.sp)
                 its?.let { l ->

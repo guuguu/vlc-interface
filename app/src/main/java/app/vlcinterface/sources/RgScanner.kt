@@ -104,8 +104,40 @@ object RgScanner {
             (TagCache.get(it.uri)?.let { t -> "${t.albumArtist.ifEmpty { t.artist }}|${t.year}|" } ?: "${it.artist}||") + it.album
     }
 
+    /** Album tags read from the file itself (album artist / artist, year, album title). */
+    private data class FileTags(val albumArtist: String, val year: String, val album: String)
+
+    private fun fileTags(ctx: Context, item: PlayItem): FileTags? {
+        val r = android.media.MediaMetadataRetriever()
+        var ds: MediaDataSource? = null
+        return try {
+            val u = item.uri
+            when {
+                u.startsWith("content://") -> r.setDataSource(ctx, Uri.parse(u))
+                u.startsWith("file://") -> r.setDataSource(Uri.parse(u).path)
+                u.startsWith("/") -> r.setDataSource(u)
+                u.startsWith("smb://") -> { ds = SmbSource(SmbFile(u, SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); r.setDataSource(ds) }
+                u.startsWith("http") -> r.setDataSource(u, if (item.user.isNotEmpty()) mapOf("Authorization" to okhttp3.Credentials.basic(item.user, item.password)) else emptyMap())
+                else -> return null
+            }
+            fun m(k: Int) = r.extractMetadata(k)?.trim().orEmpty()
+            val album = m(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUM)
+            FileTags(m(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST).ifEmpty { m(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST) },
+                m(android.media.MediaMetadataRetriever.METADATA_KEY_YEAR).ifEmpty { m(android.media.MediaMetadataRetriever.METADATA_KEY_DATE).take(4) }, album)
+        } catch (_: Exception) { null } finally { try { r.release() } catch (_: Exception) {}; ds?.close() }
+    }
+
     private suspend fun run(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescan: Boolean, results: ArrayList<RgResult>) {
-        val groups = items.groupBy { groupKey(it, mode) }.values.toList()
+        // Albums by tags: grouped by the tags inside each file (album artist | year | album title), read now,
+        // so every album in a mixed selection gets its own album gain. No album title in the file → its folder.
+        val tagKey = HashMap<String, String>()
+        if (mode == RgMode.ALBUMS_BY_TAGS) items.forEachIndexed { i, it ->
+            coroutineContext.ensureActive()
+            _state.value = _state.value.copy(phase = "Reading album tags (${i + 1}/${items.size})", current = it.title)
+            val t = fileTags(ctx, it)
+            tagKey[it.uri] = if (t != null && t.album.isNotBlank()) "${t.albumArtist.lowercase()}|${t.year}|${t.album.lowercase()}" else groupKey(it, mode)
+        }
+        val groups = items.groupBy { tagKey[it.uri] ?: groupKey(it, mode) }.values.toList()
         val albumMode = mode != RgMode.TRACK
         var done = 0
         // Phone files: one Android confirmation for all of them, before anything is written.
