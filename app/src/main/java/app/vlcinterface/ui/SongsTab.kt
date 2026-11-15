@@ -2,6 +2,8 @@ package app.vlcinterface.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -33,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -103,14 +106,64 @@ fun SongsTab(nav: Navigator) {
                 }
             }
         }
+        val state = rememberLazyListState()
+        // Play the selection straight away (no playlist made), or add it to the end of the current queue.
+        if (selected.isNotEmpty()) Row(Modifier.fillMaxWidth().padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Pill("▶  Play selected", filled = true) {
+                App.instance.player.playQueue(chosen, 0, app.vlcinterface.player.Origin("songs", title = "Songs"))
+                nav.go(Screen.Music)
+            }
+            Pill("+ Queue") {
+                App.instance.player.addToQueue(chosen)
+                android.widget.Toast.makeText(ctx, "${chosen.size} song${if (chosen.size == 1) "" else "s"} added to the queue", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+        // Search: instant results in a pop-up; picking one scrolls the list to it and marks it.
+        var query by remember { mutableStateOf("") }
+        var focus by remember { mutableStateOf("") }
+        val focusMgr = androidx.compose.ui.platform.LocalFocusManager.current
+        val hits = remember(query, songs) {
+            val q = query.trim().lowercase()
+            if (q.length < 2) emptyList() else {
+                val words = q.split(Regex("\\s+"))
+                songs.filter { s0 -> val t = "${s0.artist} ${s0.album} ${s0.title}".lowercase(); words.all { t.contains(it) } }.take(50)
+            }
+        }
+        var fieldH by remember { mutableStateOf(0) }
+        Box {
+            androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).onGloballyPositioned { fieldH = it.size.height },
+                placeholder = { Text("Search artist, album or song", fontSize = 13.sp) }, textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = C.text),
+                trailingIcon = { if (query.isNotEmpty()) Text("✕", color = C.muted, modifier = Modifier.clickable { query = "" }.padding(10.dp)) })
+            if (hits.isNotEmpty()) androidx.compose.ui.window.Popup(alignment = Alignment.TopStart, offset = androidx.compose.ui.unit.IntOffset(0, fieldH + 4),
+                properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
+                val sc = androidx.compose.foundation.rememberScrollState()
+                Column(Modifier.fillMaxWidth(0.94f).heightIn(max = 340.dp).clip(RoundedCornerShape(10.dp)).background(C.panel)
+                    .border(1.dp, C.line, RoundedCornerShape(10.dp)).scrollbar(sc).verticalScroll(sc).padding(4.dp)) {
+                    Text("${hits.size}${if (hits.size == 50) "+" else ""} found", color = C.muted, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
+                    hits.forEach { h ->
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable {
+                            val i = songs.indexOfFirst { it.uri == h.uri }
+                            focus = h.uri; query = ""; focusMgr.clearFocus()
+                            if (i >= 0) scope.launch { state.animateScrollToItem((i - 3).coerceAtLeast(0)) }
+                        }.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                            Text(h.title, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}", color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
+            }
+        }
+        // The found song stays marked for a few seconds.
+        LaunchedEffect(focus) { if (focus.isNotEmpty()) { delay(4_000); focus = "" } }
         Text("Tap songs to select them · long-press for the play time and a new playlist", color = C.muted, fontSize = 11.sp)
         if (loading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
-        val state = rememberLazyListState()
         LazyColumn(Modifier.weight(1f).scrollbar(state), state = state) {
             items(songs, key = { it.uri }) { s ->
                 val on = s.uri in selected
                 Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(RoundedCornerShape(6.dp))
                     .background(if (on) accent().copy(alpha = 0.22f) else Color.Transparent)
+                    .then(if (s.uri == focus) Modifier.border(2.dp, accent(), RoundedCornerShape(6.dp)) else Modifier)
                     .combinedClickable(onClick = { selected = if (on) selected - s.uri else selected + s.uri },
                         onLongClick = { if (selected.isEmpty()) selected = setOf(s.uri); ask = true })
                     .padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
