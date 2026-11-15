@@ -260,7 +260,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                                     Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Text(when (panel) { Panel.DOWNLOAD -> "Download subtitles"; Panel.STYLE -> "Subtitle style"; Panel.PICTURE -> "Picture colour"; else -> "Audio & subtitles" },
                                             color = C.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                                        IconButton({ panel = if (panel == Panel.TRACKS) Panel.NONE else Panel.TRACKS }) { Text("✕", color = C.text) }
+                                        SymButton({ panel = if (panel == Panel.TRACKS) Panel.NONE else Panel.TRACKS }) { Text("✕", color = C.text) }
                                     }
                                     PanelContent(panel, p, onPanel = { panel = it })
                                 }
@@ -354,12 +354,12 @@ private fun BoxScope.ControlsOverlay(
     val player = App.instance.player
     Box(Modifier.matchParentSize().background(Color(0x66000000)))
     if (locked) {
-        IconButton(onLock, Modifier.align(Alignment.TopEnd).padding(12.dp)) { Icon(Icons.Filled.Lock, "Unlock controls", tint = Color.White) }
+        SymButton(onLock, Modifier.align(Alignment.TopEnd).padding(12.dp)) { SymIcon(Icons.Filled.Lock, "Unlock controls", tint = Color.White) }
         return
     }
     Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        IconButton({ nav.back() }) { Icon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
+        SymButton({ nav.back() }) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
         HomeButton(nav, Color.White)
         Text(p.item?.title ?: "", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (!compact) OutputPill(openOutput)
@@ -371,12 +371,13 @@ private fun BoxScope.ControlsOverlay(
             val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
             player.setRate(rates[(i + 1) % rates.size]); onTouch()
         }
-        IconButton(onLock) { Icon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
+        SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
     }
     Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(if (compact) 28.dp else 56.dp), verticalAlignment = Alignment.CenterVertically) {
         RoundBtn("−10", 52) { player.seekBy(-10_000); onTouch() }
-        Box(Modifier.size(if (compact) 60.dp else 76.dp).clip(CircleShape).background(accent()).clickable { player.togglePause(); onTouch() }, contentAlignment = Alignment.Center) {
-            Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        val k = btnScale()
+        Box(Modifier.size(((if (compact) 60 else 76) * k).dp).clip(CircleShape).background(accent()).clickable { player.togglePause(); onTouch() }, contentAlignment = Alignment.Center) {
+            Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (24 * k).sp, fontWeight = FontWeight.Bold)
         }
         RoundBtn("+10", 52) { player.seekBy(10_000); onTouch() }
     }
@@ -415,14 +416,16 @@ private fun SeekRow(p: PlayerState, modifier: Modifier) {
 
 @Composable
 private fun OverlayChip(text: String, onClick: () -> Unit) {
-    Box(Modifier.heightIn(min = 40.dp).clip(RoundedCornerShape(20.dp)).background(Color(0x24FFFFFF)).clickable(onClick = onClick).padding(horizontal = 14.dp),
-        contentAlignment = Alignment.Center) { Text(text, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold) }
+    val k = btnScale()
+    Box(Modifier.heightIn(min = (40 * k).dp).clip(RoundedCornerShape((20 * k).dp)).background(Color(0x24FFFFFF)).clickable(onClick = onClick).padding(horizontal = (14 * k).dp),
+        contentAlignment = Alignment.Center) { Text(text, color = Color.White, fontSize = (14 * k).sp, fontWeight = FontWeight.SemiBold) }
 }
 
 @Composable
 private fun RoundBtn(text: String, sizeDp: Int, onClick: () -> Unit) {
-    Box(Modifier.size(sizeDp.dp).clip(CircleShape).background(Color(0x24FFFFFF)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(text, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    val k = btnScale()
+    Box(Modifier.size((sizeDp * k).dp).clip(CircleShape).background(Color(0x24FFFFFF)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Text(text, color = Color.White, fontSize = (15 * k).sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -445,7 +448,7 @@ private fun SidePanel(landscape: Boolean, onClose: () -> Unit, content: @Composa
         Box(Modifier.fillMaxSize().background(Color(0x80000000)).clickable(onClick = onClose))
         Column(Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(if (landscape) 0.6f else 1f)
             .clip(RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)).background(C.panel).safeDrawingPadding().padding(8.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { IconButton(onClose) { Text("✕", color = C.text, fontSize = 18.sp) } }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { SymButton(onClose) { Text("✕", color = C.text, fontSize = 18.sp) } }
             content()
         }
     }

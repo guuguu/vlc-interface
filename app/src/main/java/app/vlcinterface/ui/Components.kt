@@ -214,3 +214,33 @@ fun ago(t: Long): String {
 
 @Composable
 fun Typo() = MaterialTheme.typography
+
+
+// ---------- button size (Settings → Look → Button size) ----------
+
+/** Scale for every symbol button and its tap area (0.75 = 25 % smaller than standard). */
+val LocalBtnScale = androidx.compose.runtime.staticCompositionLocalOf { 0.75f }
+
+@Composable
+fun btnScale(): Float = LocalBtnScale.current
+
+/** Symbol button (replaces IconButton): button, tap area and the symbol inside follow the Button size setting. */
+@Composable
+fun SymButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable () -> Unit) {
+    val k = btnScale()
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    Box(modifier.size((48 * k).dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
+        // Text symbols (✕ ▶ ❚❚ …) shrink with the button too.
+        androidx.compose.runtime.CompositionLocalProvider(
+            androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, d.fontScale * k),
+            androidx.compose.material3.LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified,
+        ) { content() }
+    }
+}
+
+/** Material symbol at the Button size setting. */
+@Composable
+fun SymIcon(imageVector: androidx.compose.ui.graphics.vector.ImageVector, contentDescription: String?, modifier: Modifier = Modifier,
+            tint: Color = androidx.compose.material3.LocalContentColor.current) {
+    androidx.compose.material3.Icon(imageVector, contentDescription, modifier.size((24 * btnScale()).dp), tint = tint)
+}

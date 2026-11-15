@@ -112,7 +112,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         // No page title: the song name is already shown in the middle of the player.
         BackHeader("", nav, afterHome = {
             // Shortcut to the sound settings (preamp, balance per device, ReplayGain, sound engine).
-            IconButton({ nav.go(Screen.SoundSettings) }) { Icon(Icons.Filled.Settings, "Sound settings", tint = C.text) }
+            SymButton({ nav.go(Screen.SoundSettings) }) { SymIcon(Icons.Filled.Settings, "Sound settings", tint = C.text) }
         }) { OutputPill(openOutput) }
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -137,16 +137,16 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Skip buttons say where they skip in: the playlist or the folder playback started from.
             val within = when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(62.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
                     CtlBtn("⏮", 52) { player.prev() }
                     Text("Prev in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
                 Box(Modifier.padding(top = 4.dp)) { CtlBtn("−${st.settings.doubleTapSeekSec}", 44) { player.seekBy(-st.settings.doubleTapSeekSec * 1000L) } }
-                Box(Modifier.size(76.dp).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
-                    Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                Box(Modifier.size((76 * btnScale()).dp).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
+                    Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (26 * btnScale()).sp, fontWeight = FontWeight.Bold)
                 }
                 Box(Modifier.padding(top = 4.dp)) { CtlBtn("+${st.settings.doubleTapSeekSec}", 44) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) } }
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(62.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
                     CtlBtn("⏭", 52) { player.next() }
                     Text("Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
@@ -233,8 +233,9 @@ fun StereoVu(modifier: Modifier) {
 
 @Composable
 private fun CtlBtn(t: String, size: Int, onClick: () -> Unit) {
-    Box(Modifier.size(size.dp).clip(CircleShape).background(C.card2).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(t, color = C.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+    val k = btnScale()
+    Box(Modifier.size((size * k).dp).clip(CircleShape).background(C.card2).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Text(t, color = C.text, fontSize = (16 * k).sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -263,7 +264,7 @@ fun QueueScreen(nav: Navigator) {
                         if (q.artist.isNotEmpty()) Text(q.artist, color = C.muted, fontSize = 12.sp, maxLines = 1)
                     }
                     if (q.durationMs > 0) Text(fmtTime(q.durationMs), color = C.muted, fontSize = 13.sp)
-                    if (i != p.index) IconButton({ player.removeFromQueue(i) }) { Text("✕", color = C.muted) }
+                    if (i != p.index) SymButton({ player.removeFromQueue(i) }) { Text("✕", color = C.muted) }
                 }
             }
         }
@@ -402,7 +403,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
         BackHeader(pl.name, nav, "${pl.items.size} items") {
             Pill("+ Add") { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)) }
             Box {
-                IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, "Playlist options", tint = C.text) }
+                SymButton({ menu = true }) { SymIcon(Icons.Filled.MoreVert, "Playlist options", tint = C.text) }
                 DropdownMenu(menu, { menu = false }) {
                     DropdownMenuItem({ Text("Add files or folders…") }, { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)); menu = false })
                     DropdownMenuItem({ Text("Add from .cue file…") }, { cueChoice = true; menu = false })
@@ -451,7 +452,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                     }
                     Text(if (e.durationMs > 0) fmtTime(e.durationMs) else "–:––", color = C.muted, fontSize = 13.sp)
                     Box {
-                        IconButton({ itemMenu = i }) { Icon(Icons.Filled.MoreVert, "Item options", tint = C.muted) }
+                        SymButton({ itemMenu = i }) { SymIcon(Icons.Filled.MoreVert, "Item options", tint = C.muted) }
                         DropdownMenu(itemMenu == i, { itemMenu = -1 }) {
                             if (i > 0) DropdownMenuItem({ Text("Move up") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) }; itemMenu = -1 })
                             if (i < pl.items.size - 1) DropdownMenuItem({ Text("Move down") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) }; itemMenu = -1 })

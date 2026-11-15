@@ -103,6 +103,20 @@ fun SettingsScreen(nav: Navigator) {
                 ToggleRow("Watch folders for changes", "Off: no background file watching", s.watchFolders) { set(s.copy(watchFolders = it)) }
             }
             SectionTitle("Look")
+            CardBox {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Button size", color = C.text, fontSize = 15.sp)
+                            Text("Every symbol button and its tap area, everywhere in the app", color = C.muted, fontSize = 13.sp)
+                        }
+                        Text("${s.buttonScale}%", color = accent(), fontWeight = FontWeight.SemiBold)
+                        TextButton({ set(s.copy(buttonScale = 75)) }) { Text("Reset") }
+                    }
+                    androidx.compose.material3.Slider(s.buttonScale.toFloat(), { v -> set(s.copy(buttonScale = (Math.round(v / 5f) * 5).coerceIn(50, 125))) }, valueRange = 50f..125f)
+                    Text("75 % = 25 % smaller than standard (default) · 100 % = standard Android size", color = C.muted, fontSize = 12.sp)
+                }
+            }
             Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf(0xFFFF8A3D, 0xFF4FB3FF, 0xFF7BD88F, 0xFFC792EA).forEach { c ->
                     Box(Modifier.size(40.dp).clip(CircleShape).background(Color(c))

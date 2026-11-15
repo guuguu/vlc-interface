@@ -64,7 +64,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
     val openOutput = { showOutput = true }
 
     MaterialTheme(colorScheme = scheme(accent)) {
-        CompositionLocalProvider(LocalAccent provides accent) {
+        CompositionLocalProvider(LocalAccent provides accent, LocalBtnScale provides st.settings.buttonScale / 100f) {
             val top = nav.top
             val isPlayer = top is Screen.Player
             Box(

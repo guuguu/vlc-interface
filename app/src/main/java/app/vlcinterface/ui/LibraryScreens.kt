@@ -91,13 +91,13 @@ fun LibraryHeader(title: String, openOutput: () -> Unit, actions: @Composable ()
 
 @Composable
 fun HomeButton(nav: Navigator, tint: Color = C.text) {
-    IconButton({ nav.home(); nav.replace(Screen.Library()) }) { Icon(Icons.Filled.Home, "Home", tint = tint) }
+    SymButton({ nav.home(); nav.replace(Screen.Library()) }) { SymIcon(Icons.Filled.Home, "Home", tint = tint) }
 }
 
 @Composable
 fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Composable () -> Unit = {}, actions: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = { nav.back() }) { Icon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
+        SymButton(onClick = { nav.back() }) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
         HomeButton(nav)
         afterHome()
         Column(Modifier.weight(1f).padding(start = 4.dp)) {
@@ -117,8 +117,8 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
                 else -> {}
             }
             when {
-                s.tab == 1 -> IconButton({ nav.go(Screen.EditSource(Zone.LAN)) }) { Icon(Icons.Filled.Add, "Add LAN source", tint = C.text) }
-                s.tab == 2 && s.sub == 0 -> IconButton({ nav.go(Screen.EditSource(Zone.INTERNET)) }) { Icon(Icons.Filled.Add, "Add internet storage", tint = C.text) }
+                s.tab == 1 -> SymButton({ nav.go(Screen.EditSource(Zone.LAN)) }) { SymIcon(Icons.Filled.Add, "Add LAN source", tint = C.text) }
+                s.tab == 2 && s.sub == 0 -> SymButton({ nav.go(Screen.EditSource(Zone.INTERNET)) }) { SymIcon(Icons.Filled.Add, "Add internet storage", tint = C.text) }
                 else -> {}
             }
         }
@@ -205,13 +205,13 @@ fun MiniPlayer(nav: Navigator) {
             }
             Text(sub, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (!item.isRadio) IconButton({ nav.go(if (item.isMusic) Screen.Music else Screen.Player) }) {
-            Icon(Icons.Filled.KeyboardArrowUp, "Open player", tint = C.text)
+        if (!item.isRadio) SymButton({ nav.go(if (item.isMusic) Screen.Music else Screen.Player) }) {
+            SymIcon(Icons.Filled.KeyboardArrowUp, "Open player", tint = C.text)
         }
-        IconButton({ App.instance.player.togglePause() }) {
+        SymButton({ App.instance.player.togglePause() }) {
             Text(if (p.isPlaying) "❚❚" else "▶", color = accent(), fontSize = 18.sp)
         }
-        IconButton({ App.instance.player.stop() }) { Text("✕", color = C.muted, fontSize = 16.sp) }
+        SymButton({ App.instance.player.stop() }) { Text("✕", color = C.muted, fontSize = 16.sp) }
     }
     // Progress along the bottom edge of the bar (not for live radio/streams).
     val len = if (item.endMs > 0) item.endMs - item.startMs else p.length
@@ -295,7 +295,7 @@ fun InternalTab(nav: Navigator) {
                             onRgScan = if (st.settings.libraryKind == "audio") ({ rgFolder = f }) else null,
                             onDelete = { scope.launch { deleteFolder = f to InternalSource.files(ctx, f, true).filter { if (st.settings.libraryKind == "video") it.isVideo else it.isAudio } } })
                     }
-                    IconButton({
+                    SymButton({
                         scope.launch {
                             busy = f.id
                             withTimeoutOrNull(20_000) { InternalSource.rescan(ctx, f.relativePath) }
@@ -304,7 +304,7 @@ fun InternalTab(nav: Navigator) {
                         }
                     }) {
                         if (busy == f.id) CircularProgressIndicator(Modifier.size(18.dp), color = accent(), strokeWidth = 2.dp)
-                        else Icon(Icons.Filled.Refresh, "Rescan ${f.name}", tint = C.muted)
+                        else SymIcon(Icons.Filled.Refresh, "Rescan ${f.name}", tint = C.muted)
                     }
                 }
                 Divider()
@@ -431,8 +431,8 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
             val (label, col) = when (online) { null -> "…" to C.muted; true -> "Online" to C.ok; false -> "Offline" to C.muted }
             Text(label, color = col, fontSize = 12.sp)
             if (s.zone == Zone.INTERNET) Text(if (s.wifiOnly) " Wi-Fi only" else " Any network", color = C.muted, fontSize = 11.sp)
-            IconButton({ nav.go(Screen.LogPage(ServerLog.keyOf(s.host))) }) { Icon(Icons.Filled.Info, "Log for ${s.name}", tint = C.muted) }
-            IconButton({ nav.go(Screen.EditSource(s.zone, s.id)) }) { Icon(Icons.Filled.MoreVert, "Edit ${s.name}", tint = C.muted) }
+            SymButton({ nav.go(Screen.LogPage(ServerLog.keyOf(s.host))) }) { SymIcon(Icons.Filled.Info, "Log for ${s.name}", tint = C.muted) }
+            SymButton({ nav.go(Screen.EditSource(s.zone, s.id)) }) { SymIcon(Icons.Filled.MoreVert, "Edit ${s.name}", tint = C.muted) }
         }
         FlowRow(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             s.pins.forEach { pin ->
@@ -480,13 +480,13 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
             if (src != null) {
                 val path = android.net.Uri.decode(b.uri.substringAfter("://").substringAfter('/', "")).let { "/" + it.trimEnd('/') }
                 val pinned = src.pins.contains(path)
-                IconButton({
+                SymButton({
                     App.instance.store.update { s -> s.copy(sources = s.sources.map { if (it.id == src.id) it.copy(pins = if (pinned) it.pins - path else it.pins + path) else it }) }
-                }) { Icon(Icons.Filled.Star, if (pinned) "Unpin folder" else "Pin folder", tint = if (pinned) accent() else C.muted) }
+                }) { SymIcon(Icons.Filled.Star, if (pinned) "Unpin folder" else "Pin folder", tint = if (pinned) accent() else C.muted) }
             }
-            IconButton({ reload++ }) {
+            SymButton({ reload++ }) {
                 if (scanning) CircularProgressIndicator(Modifier.size(18.dp), color = accent(), strokeWidth = 2.dp)
-                else Icon(Icons.Filled.Refresh, "Rescan", tint = C.text)
+                else SymIcon(Icons.Filled.Refresh, "Rescan", tint = C.text)
             }
         }
         Box(Modifier.weight(1f)) {
@@ -521,7 +521,7 @@ fun RadioTab(nav: Navigator) {
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(q, { q = it }, Modifier.weight(1f), placeholder = { Text("Search stations by name") }, singleLine = true)
-            IconButton({ run(name = q) }) { Icon(Icons.Filled.Search, "Search", tint = C.text) }
+            SymButton({ run(name = q) }) { SymIcon(Icons.Filled.Search, "Search", tint = C.text) }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("Jazz", "News", "Rock", "Classical", "Pop", "Chill").forEach { g -> Pill(g) { run(tag = g) } }
@@ -560,13 +560,13 @@ fun RadioTab(nav: Navigator) {
         SectionTitle("Add a station by URL")
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(addUrl, { addUrl = it }, Modifier.weight(1f), placeholder = { Text("https://…/stream or .pls / .m3u") }, singleLine = true)
-            IconButton({
+            SymButton({
                 if (addUrl.isNotBlank()) {
                     val u = addUrl.trim()
                     App.instance.store.update { x -> x.copy(stations = x.stations + Station(name = Urls.nameOf(u), url = u, meta = "added by URL")) }
                     addUrl = ""
                 }
-            }) { Icon(Icons.Filled.Add, "Add station", tint = C.text) }
+            }) { SymIcon(Icons.Filled.Add, "Add station", tint = C.text) }
         }
         Box(Modifier.height(16.dp))
     }
@@ -579,8 +579,8 @@ fun StationRow(name: String, meta: String, fav: Boolean, onFav: () -> Unit, onPl
             Text(name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (meta.isNotEmpty()) Text(meta, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        IconButton(onFav) { Icon(Icons.Filled.Star, if (fav) "Remove from favourites" else "Add to favourites", tint = if (fav) accent() else C.muted) }
-        IconButton(onPlay) { Icon(Icons.Filled.PlayArrow, "Play $name", tint = accent()) }
+        SymButton(onFav) { SymIcon(Icons.Filled.Star, if (fav) "Remove from favourites" else "Add to favourites", tint = if (fav) accent() else C.muted) }
+        SymButton(onPlay) { SymIcon(Icons.Filled.PlayArrow, "Play $name", tint = accent()) }
     }
 }
 
@@ -626,7 +626,7 @@ fun StreamsTab(nav: Navigator) {
                         Text(s.host, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text("Reload list", color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    IconButton({ App.instance.store.update { x -> x.copy(sources = x.sources.filterNot { it.id == s.id }) } }) { Text("✕", color = C.muted) }
+                    SymButton({ App.instance.store.update { x -> x.copy(sources = x.sources.filterNot { it.id == s.id }) } }) { Text("✕", color = C.muted) }
                 }
             }
         }
@@ -651,4 +651,4 @@ fun StreamsTab(nav: Navigator) {
 }
 
 @Composable
-fun SettingsIcon(nav: Navigator) = IconButton({ nav.go(Screen.Settings) }) { Icon(Icons.Filled.Settings, "Settings", tint = C.text) }
+fun SettingsIcon(nav: Navigator) = SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.text) }
