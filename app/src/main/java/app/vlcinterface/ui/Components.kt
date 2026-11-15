@@ -356,3 +356,22 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
 fun BackButton(nav: Navigator, tint: Color = C.text) {
     SymButton({ nav.back() }) { SymIcon(Icons.Filled.ArrowBack, "Back to the previous page", tint = tint) }
 }
+
+
+/** Exit: stops playback and any scan, removes the notifications and closes the app completely. */
+fun exitApp() {
+    val a = app.vlcinterface.App.instance
+    try { app.vlcinterface.sources.RgScanner.cancel() } catch (_: Exception) {}
+    try { a.player.stop() } catch (_: Exception) {}
+    try { a.getSystemService(android.app.NotificationManager::class.java).cancelAll() } catch (_: Exception) {}
+    try { a.stopService(android.content.Intent(a, app.vlcinterface.player.PlaybackService::class.java)) } catch (_: Exception) {}
+    try { a.stopService(android.content.Intent(a, app.vlcinterface.sources.RgScanService::class.java)) } catch (_: Exception) {}
+    app.vlcinterface.MainActivity.instance?.finishAndRemoveTask()
+    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()); kotlin.system.exitProcess(0) }, 300)
+}
+
+/** Power button: quits the app completely. */
+@Composable
+fun ExitButton(tint: Color = C.text) {
+    SymButton({ exitApp() }) { Text("⏻", color = tint, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+}

@@ -404,14 +404,15 @@ class PlayerController(private val context: Context, private val store: Store) {
     // ---------- audio focus + "headphones unplugged" ----------
 
     private var resumeOnGain = false
+    @Volatile private var ducked = false
     private val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
         .setOnAudioFocusChangeListener({ change ->
             when (change) {
                 AudioManager.AUDIOFOCUS_LOSS -> { resumeOnGain = false; pause() }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> { if (mp.isPlaying) { resumeOnGain = true; mp.pause() } }
-                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> mp.setVolume(30)
-                AudioManager.AUDIOFOCUS_GAIN -> { mp.setVolume(100); if (resumeOnGain) { resumeOnGain = false; mp.play() } }
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> { ducked = true; mp.setVolume(30) }
+                AudioManager.AUDIOFOCUS_GAIN -> { ducked = false; mp.setVolume(100); if (resumeOnGain) { resumeOnGain = false; mp.play() } }
             }
         }, main)
         .build()
@@ -835,6 +836,11 @@ class PlayerController(private val context: Context, private val store: Store) {
         when (ev.type) {
             MediaPlayer.Event.Playing -> {
                 _state.value = s.copy(isPlaying = true, error = "", ended = false, buffering = 100f)
+                // Every (re)start of playback — also resuming a paused video — re-applies the sound settings,
+                // so volume / preamp / balance always act at once, not only after some other action.
+                if (!ducked) mp.setVolume(100)
+                NativeAudio.appVolume(appVolume)
+                applySoundChain()
                 if (pendingSeek > 500) { mp.setTime(pendingSeek) }   // continue exactly where it was (RG button, engine restarts…)
                 pendingSeek = -1
                 if (!offsetsApplied) {

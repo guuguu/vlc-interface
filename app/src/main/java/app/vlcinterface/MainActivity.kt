@@ -27,6 +27,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         instance = this
+        // Volume buttons always control media volume in this app (not the ringer while playback is paused / resuming).
+        volumeControlStream = android.media.AudioManager.STREAM_MUSIC
         permissions.launch(arrayOf(
             Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO,
             Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.BLUETOOTH_CONNECT,
@@ -42,6 +44,16 @@ class MainActivity : ComponentActivity() {
      */
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         val k = event.keyCode
+        if ((k == android.view.KeyEvent.KEYCODE_VOLUME_UP || k == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) && !App.instance.output.overriding) {
+            // Media volume, every time: right after resuming, Android could think nothing plays and change another volume.
+            if (event.action == android.view.KeyEvent.ACTION_DOWN) {
+                val am = getSystemService(android.media.AudioManager::class.java)
+                am.adjustStreamVolume(android.media.AudioManager.STREAM_MUSIC,
+                    if (k == android.view.KeyEvent.KEYCODE_VOLUME_UP) android.media.AudioManager.ADJUST_RAISE else android.media.AudioManager.ADJUST_LOWER,
+                    android.media.AudioManager.FLAG_SHOW_UI)
+            }
+            return true
+        }
         if ((k == android.view.KeyEvent.KEYCODE_VOLUME_UP || k == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) && App.instance.output.overriding) {
             if (event.action == android.view.KeyEvent.ACTION_DOWN) {
                 val pct = App.instance.player.stepAppVolume(k == android.view.KeyEvent.KEYCODE_VOLUME_UP)

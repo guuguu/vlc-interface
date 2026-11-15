@@ -123,6 +123,7 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
                 s.tab == 2 && s.sub == 0 -> SymButton({ nav.go(Screen.EditSource(Zone.INTERNET)) }) { SymIcon(Icons.Filled.Add, "Add internet storage", tint = C.text) }
                 else -> {}
             }
+            ExitButton()
             // Library menu.
             var libMenu by remember { mutableStateOf(false) }
             var libRg by remember { mutableStateOf(false) }

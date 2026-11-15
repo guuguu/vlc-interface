@@ -412,6 +412,7 @@ private fun BoxScope.ControlsOverlayBody(
             player.setRate(rates[(i + 1) % rates.size]); onTouch()
         }
         SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
+        ExitButton(Color.White)
         }
     }
     AutoFitRow(Modifier.align(Alignment.Center).padding(horizontal = 8.dp), spacing = if (compact) 28.dp else 56.dp) {

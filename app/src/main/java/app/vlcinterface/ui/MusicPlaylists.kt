@@ -113,7 +113,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         BackHeader("", nav, afterHome = {
             // Shortcut to the sound settings (preamp, balance per device, ReplayGain, sound engine).
             SymButton({ nav.go(Screen.SoundSettings) }) { SymIcon(Icons.Filled.Settings, "Sound settings", tint = C.text) }
-        }) { OutputPill(openOutput) }
+        }) { OutputPill(openOutput); ExitButton() }
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             var coverNote by remember(item.uri) { mutableStateOf("") }
