@@ -58,6 +58,6 @@ class App : Application() {
     companion object {
         lateinit var instance: App
             private set
-        const val VERSION = "0.2.0"
+        const val VERSION = "0.3.0"
     }
 }

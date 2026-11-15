@@ -38,7 +38,7 @@ object CoverArt {
     private lateinit var miss: File        // "not found online" markers only (no pictures)
     private val lock = Mutex()
     private var lastCall = 0L
-    private const val UA = "vlc-interface/0.2.0 ( https://github.com/guuguu/vlc-interface )"
+    private const val UA = "vlc-interface/0.3.0 ( https://github.com/guuguu/vlc-interface )"
     private const val MAX = 800
     private val names = listOf("cover.jpg", "folder.jpg", "front.jpg", "cover.png", "folder.png", "artist.jpg")
     private val mem = LruCache<String, Bitmap>(24)
