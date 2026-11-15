@@ -128,6 +128,9 @@ fun SettingsScreen(nav: Navigator) {
             }
             SectionTitle("Look")
             CardBox {
+                ToggleRow("Auto-rotate", "On: the app turns with the phone · Off: stays upright (videos still turn with the rotate button)", s.autoRotate) { set(s.copy(autoRotate = it)) }
+            }
+            CardBox {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {

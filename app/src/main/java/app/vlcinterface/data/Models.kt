@@ -146,6 +146,8 @@ data class Settings(
     val songsScrollSpeed: Int = 100,
     /** The one-time "battery: Unrestricted" question was answered. */
     val batteryAsked: Boolean = false,
+    /** The app turns with the phone (on) or stays upright (off; the video player's rotate button still works). */
+    val autoRotate: Boolean = true,
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -161,7 +163,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("batteryAsked", batteryAsked)
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("batteryAsked", batteryAsked).put("autoRotate", autoRotate)
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -199,6 +201,7 @@ data class Settings(
                 o.optJSONObject("pictureByFile")?.let { j -> j.keys().asSequence().associateWith { j.getString(it) } } ?: emptyMap(),
                 o.optInt("songsScrollSpeed", 100).coerceIn(0, 300),
                 o.optBoolean("batteryAsked", false),
+                o.optBoolean("autoRotate", true),
             )
         }
     }

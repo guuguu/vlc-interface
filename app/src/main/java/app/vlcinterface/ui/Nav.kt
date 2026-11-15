@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -67,6 +68,9 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
         CompositionLocalProvider(LocalAccent provides accent, LocalBtnScale provides st.settings.buttonScale / 100f) {
             val top = nav.top
             val isPlayer = top is Screen.Player
+            // Auto-rotate setting: everywhere except the video player (which turns with its own button / the video).
+            val act = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
+            LaunchedEffect(st.settings.autoRotate, isPlayer) { if (!isPlayer) act?.requestedOrientation = defaultOrientation() }
             Box(
                 Modifier.fillMaxSize().background(if (isPlayer) Color.Black else C.bg)
                     .then(if (isPlayer) Modifier else Modifier.safeDrawingPadding())
@@ -104,3 +108,8 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
         }
     }
 }
+
+
+/** The app's orientation outside the video player: follows the phone, or stays upright when auto-rotate is off. */
+fun defaultOrientation(): Int = if (App.instance.store.current.settings.autoRotate)
+    android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT

@@ -153,7 +153,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         ctl?.hide(WindowInsetsCompat.Type.systemBars())
         onDispose {
             ctl?.show(WindowInsetsCompat.Type.systemBars())
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            activity?.requestedOrientation = defaultOrientation()
         }
     }
     LaunchedEffect(controls, touchTick, panel) {
