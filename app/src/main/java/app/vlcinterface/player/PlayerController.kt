@@ -170,7 +170,24 @@ class PlayerController(private val context: Context, private val store: Store) {
         rgJob?.cancel()
         val set = store.current.settings
         if (!item.isMusic || set.rgMode == "off") return
-        if (!NativeAudio.active) { _state.value = _state.value.copy(rgInfo = "RG ${rgModeFor(s)} (libVLC)"); return }
+        if (!NativeAudio.active) {
+            // libVLC's own output applies ReplayGain itself; the line still shows the song's value from its tags.
+            val m = rgModeFor(s)
+            _state.value = _state.value.copy(rgInfo = "RG $m (libVLC)")
+            rgJob = bg.launch {
+                val rg = app.vlcinterface.sources.ReplayGain.read(context, item.uri, item.user, item.password, item.domain, item.smbVersion)
+                if (_state.value.item !== item) return@launch
+                val album = m == "album"
+                val g = if (album) rg?.albumGain ?: rg?.trackGain else rg?.trackGain ?: rg?.albumGain
+                val used = if (g == null) "" else if (album && rg?.albumGain != null || !album && rg?.trackGain == null) "album" else "track"
+                _state.value = _state.value.copy(rgInfo = when {
+                    rg == null -> "RG: tags not readable here"
+                    g == null -> "RG: no tags"
+                    else -> "RG $used " + (if (g >= 0) "+" else "−") + "%.2f".format(java.util.Locale.US, kotlin.math.abs(g)) + " dB (libVLC)"
+                })
+            }
+            return
+        }
         val mode = rgModeFor(s)
         rgJob = bg.launch {
             val rg = app.vlcinterface.sources.ReplayGain.read(context, item.uri, item.user, item.password, item.domain, item.smbVersion)
@@ -301,12 +318,24 @@ class PlayerController(private val context: Context, private val store: Store) {
      * Watchdog for the app's own output: if no sound reaches the device within a few seconds of playing,
      * switch to libVLC's output for this run and restart the item at the same position.
      */
-    private fun watchSound() {
+    /**
+     * Checks that our own output really plays. Judged only once the song is actually moving (play position
+     * advancing, not buffering): with the bigger read-ahead a network song can take a few seconds before any sound
+     * arrives, and that wait was wrongly taken as a failure — the app then switched to libVLC's output for the rest
+     * of the run ("RG … (libVLC)"). Not ready yet → looked at again a little later (up to ~20 s).
+     */
+    private fun watchSound(tries: Int = 0) {
         if (!NativeAudio.active) return
+        val s0 = _state.value
+        val moving = s0.isPlaying && s0.buffering >= 100f && lastTick > 0 && s0.time > 500 &&
+            System.currentTimeMillis() - lastTick < 1_500
+        // Still not moving after ~20 s: checked anyway (a silent output can also stop the position from moving).
+        if (!moving && tries < 8) { main.postDelayed({ watchSound(tries + 1) }, 2_500); return }
         val before = NativeAudio.stats() ?: return
         main.postDelayed({
             val s = _state.value
-            if (!NativeAudio.active || !s.isPlaying || s.item == null) return@postDelayed
+            if (!NativeAudio.active || !s.isPlaying || s.item == null || s.item !== s0.item) return@postDelayed
+            if (tries < 8 && (s.buffering < 100f || System.currentTimeMillis() - lastTick > 1_500)) { watchSound(tries + 1); return@postDelayed }
             if (mp.audioTracksCount <= 0) return@postDelayed      // video without sound: nothing to check
             val now = NativeAudio.stats() ?: return@postDelayed
             val problem = when {
@@ -324,7 +353,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 recreateEngine(store.current.subStyle)
                 startItem(s.index, pos)
             }
-        }, 3000)
+        }, 4000)
     }
 
     // ---------- picture colour ----------
