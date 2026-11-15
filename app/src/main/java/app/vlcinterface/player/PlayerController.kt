@@ -722,7 +722,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             u.startsWith("content://") -> context.contentResolver.openFileDescriptor(Uri.parse(u), "r")?.use { true } ?: false
             u.startsWith("file://") -> java.io.File(Uri.parse(u).path ?: "").exists()
             u.startsWith("/") -> java.io.File(u).exists()
-            u.startsWith("smb://") -> jcifs.smb.SmbFile(u, app.vlcinterface.sources.SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain)).use { it.exists() }
+            u.startsWith("smb://") -> jcifs.smb.SmbFile(Uri.decode(u), app.vlcinterface.sources.SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain)).use { it.exists() }
             u.startsWith("http") -> {
                 val rq = okhttp3.Request.Builder().url(u).head().apply {
                     if (item.user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(item.user, item.password))

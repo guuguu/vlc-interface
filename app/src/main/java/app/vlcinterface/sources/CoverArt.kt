@@ -75,7 +75,8 @@ object CoverArt {
                     if (c.moveToFirst() && c.getString(0) != null) Phone(c.getString(1) ?: MediaStore.VOLUME_EXTERNAL_PRIMARY, c.getString(0)) else null
                 }
             } catch (_: Exception) { null }
-            u.startsWith("smb://") -> Smb(item.folderKey.takeIf { it.startsWith("smb://") }?.trimEnd('/')?.plus("/") ?: (u.substringBeforeLast('/') + "/"), item)
+            // jcifs needs the plain path (spaces etc. not %-encoded), like everywhere else in the app.
+            u.startsWith("smb://") -> Smb(android.net.Uri.decode(item.folderKey.takeIf { it.startsWith("smb://") }?.trimEnd('/')?.plus("/") ?: (u.substringBeforeLast('/') + "/")), item)
             u.startsWith("http") -> {
                 val src = App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }
                 Web(item.folderKey.takeIf { it.startsWith("http") }?.trimEnd('/')?.plus("/") ?: (u.substringBeforeLast('/') + "/"), item, src?.proto == "webdav")
