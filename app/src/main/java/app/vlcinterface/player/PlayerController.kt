@@ -709,6 +709,27 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     fun jumpTo(i: Int) { if (i in _state.value.queue.indices) startItem(i, -1) }
 
+    private var probeJob: kotlinx.coroutines.Job? = null
+
+    /** Is the file there (and its network place reachable)? Quick check, done in the background. */
+    private fun reachable(item: PlayItem): Boolean = try {
+        val u = item.uri
+        when {
+            u.startsWith("content://") -> context.contentResolver.openFileDescriptor(Uri.parse(u), "r")?.use { true } ?: false
+            u.startsWith("file://") -> java.io.File(Uri.parse(u).path ?: "").exists()
+            u.startsWith("/") -> java.io.File(u).exists()
+            u.startsWith("smb://") -> jcifs.smb.SmbFile(u, app.vlcinterface.sources.SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain)).use { it.exists() }
+            u.startsWith("http") -> {
+                val rq = okhttp3.Request.Builder().url(u).head().apply {
+                    if (item.user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(item.user, item.password))
+                }.build()
+                app.vlcinterface.sources.Net.http.newBuilder().connectTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(2, java.util.concurrent.TimeUnit.SECONDS).build().newCall(rq).execute().use { it.code < 400 || it.code == 405 }
+            }
+            else -> true
+        }
+    } catch (_: Exception) { false }
+
     /**
      * Player's "Play next" search: the song goes right after the playing one in the current queue (already in the
      * queue → moved there). The playlist itself isn't changed; nothing else moves.
@@ -816,6 +837,23 @@ class PlayerController(private val context: Context, private val store: Store) {
             if (failsInRow < 5) main.postDelayed({ if (_state.value.item === item && !endHandled) handleEnd(_state.value) }, 1_000)
                         else _state.value = _state.value.copy(userPaused = true)   // gave up: let the phone sleep again
             return
+        }
+        // In a list: a file that isn't there (moved, deleted) or whose network place can't be reached within 2 s
+        // is skipped, instead of the player waiting on it.
+        probeJob?.cancel()
+        if (s0.queue.size > 1 && !item.isRadio) probeJob = bg.launch {
+            val ok = kotlinx.coroutines.withTimeoutOrNull(2_000) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { reachable(item) }
+            }
+            if (ok == true) return@launch
+            if (_state.value.item !== item || endHandled || stopping) return@launch
+            if (lastTick > 0 && _state.value.isPlaying) return@launch          // it started meanwhile: keep it
+            ServerLog.log("player", "skip", item.uri.substringBefore("://"), "", false,
+                "Skipped ${item.title}: ${if (ok == null) "not reached within 2 s" else "not found"}", item.uri)
+            _state.value = _state.value.copy(error = "Skipped ${item.title}: ${if (ok == null) "not reachable" else "not found"}")
+            failsInRow++
+            if (failsInRow < 5) handleEnd(_state.value)
+            else { stop(); _state.value = _state.value.copy(userPaused = true) }
         }
         stopping = true                      // the "stopped" of the old media isn't the end of a song
         mp.setMedia(media)
