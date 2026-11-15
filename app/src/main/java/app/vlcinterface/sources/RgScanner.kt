@@ -565,6 +565,43 @@ object TagWriter {
 object MediaInfo {
     data class Info(val tags: List<Pair<String, String>>, val fileRg: Rg?, val appRg: Rg?, val error: String = "")
 
+    private val lines = android.util.LruCache<String, String>(200)
+
+    /**
+     * "Artist - Album - Year - Song" from the file's own tags (player's Up next). Parts the tags don't have are
+     * left out; remembered, so each file is read once. Null when the tags can't be read.
+     */
+    suspend fun upNextLine(ctx: Context, item: PlayItem): String? = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        lines.get(item.uri)?.let { return@withContext it }
+        val r = android.media.MediaMetadataRetriever()
+        var ds: MediaDataSource? = null
+        try {
+            val u = item.uri
+            when {
+                u.startsWith("content://") -> r.setDataSource(ctx, Uri.parse(u))
+                u.startsWith("file://") -> r.setDataSource(Uri.parse(u).path)
+                u.startsWith("/") -> r.setDataSource(u)
+                u.startsWith("smb://") -> { ds = RgScanner.SmbSource(SmbFile(u, SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); r.setDataSource(ds) }
+                u.startsWith("http") -> r.setDataSource(u, if (item.user.isNotEmpty()) mapOf("Authorization" to okhttp3.Credentials.basic(item.user, item.password)) else emptyMap())
+                else -> return@withContext null
+            }
+            fun t(k: Int) = r.extractMetadata(k)?.trim().orEmpty()
+            val year = t(android.media.MediaMetadataRetriever.METADATA_KEY_YEAR).ifEmpty { t(android.media.MediaMetadataRetriever.METADATA_KEY_DATE).take(4) }
+                .takeIf { it.length == 4 && it.all(Char::isDigit) }.orEmpty()
+            val line = listOf(
+                t(android.media.MediaMetadataRetriever.METADATA_KEY_ARTIST).ifEmpty { t(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST) }.ifEmpty { item.artist },
+                t(android.media.MediaMetadataRetriever.METADATA_KEY_ALBUM).ifEmpty { item.album },
+                year,
+                t(android.media.MediaMetadataRetriever.METADATA_KEY_TITLE).ifEmpty { item.title },
+            ).filter { it.isNotBlank() }.joinToString(" - ")
+            if (line.isNotEmpty()) lines.put(item.uri, line)
+            line.ifEmpty { null }
+        } catch (_: Exception) { null } finally {
+            try { r.release() } catch (_: Exception) {}
+            try { ds?.close() } catch (_: Exception) {}
+        }
+    }
+
     suspend fun read(ctx: Context, item: PlayItem): Info = kotlinx.coroutines.withContext(Dispatchers.IO) {
         val r = android.media.MediaMetadataRetriever()
         var ds: MediaDataSource? = null

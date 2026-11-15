@@ -231,10 +231,10 @@ fun SongsTab(nav: Navigator) {
  * own random timing, so they don't all move at once. Rows that fit stay still.
  */
 @Composable
-private fun DriftText(text: String, color: Color, modifier: Modifier) {
+internal fun DriftText(text: String, color: Color, modifier: Modifier, fontSize: androidx.compose.ui.unit.TextUnit = 13.sp) {
     val scroll = androidx.compose.foundation.rememberScrollState()
     Box(modifier.clipToBounds()) {
-        Text(text, color = color, fontSize = 13.sp, maxLines = 1, softWrap = false,
+        Text(text, color = color, fontSize = fontSize, maxLines = 1, softWrap = false,
             modifier = Modifier.horizontalScroll(scroll, enabled = false))
     }
     val max = scroll.maxValue
