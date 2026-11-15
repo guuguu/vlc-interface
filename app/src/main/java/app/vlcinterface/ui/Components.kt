@@ -383,7 +383,19 @@ fun exitApp(restart: Boolean = false) {
 @Composable
 fun ExitButton(tint: Color = C.text) {
     var ask by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    SymButton({ ask = true }) { Text("⏻", color = tint, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+    // Power symbol drawn by the app (the "⏻" character is missing from many phone fonts: it showed as a box).
+    SymButton({ ask = true }) {
+        androidx.compose.foundation.Canvas(Modifier.size(22.dp)) {
+            val w = 2.2.dp.toPx()
+            val st = androidx.compose.ui.graphics.drawscope.Stroke(width = w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+            val inset = w
+            drawArc(tint, startAngle = -60f, sweepAngle = 300f, useCenter = false,
+                topLeft = androidx.compose.ui.geometry.Offset(inset, inset + size.height * 0.06f),
+                size = androidx.compose.ui.geometry.Size(size.width - 2 * inset, size.height - 2 * inset - size.height * 0.06f), style = st)
+            drawLine(tint, androidx.compose.ui.geometry.Offset(size.width / 2, inset * 0.5f), androidx.compose.ui.geometry.Offset(size.width / 2, size.height * 0.5f),
+                strokeWidth = w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+        }
+    }
     if (ask && !LocalMeasureOnly.current) androidx.compose.material3.AlertDialog(onDismissRequest = { ask = false }, containerColor = C.panel,
         title = { Text("Exit or restart?", color = C.text) },
         text = {
