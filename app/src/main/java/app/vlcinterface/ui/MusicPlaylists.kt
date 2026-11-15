@@ -390,6 +390,9 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
     var sendNas by remember { mutableStateOf(false) }
     var cueChoice by remember { mutableStateOf(false) }
     var cueResult by remember { mutableStateOf<CueResult?>(null) }
+    // Multi-select (by position): long-press → Select…, then taps tick/untick.
+    var selected by remember(d.id) { mutableStateOf(setOf<Int>()) }
+    var rgItems by remember { mutableStateOf<List<PlayItem>?>(null) }
     var itemMenu by remember { mutableIntStateOf(-1) }
     fun update(f: (Playlist) -> Playlist) = store.update { s -> s.copy(playlists = s.playlists.map { if (it.id == pl.id) f(it) else it }) }
     val phoneCue = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -415,7 +418,14 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                 }
             }
         }
-        if (pl.items.isNotEmpty()) PlayListButtons(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) { random ->
+        if (selected.isNotEmpty()) Row(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(C.card2)
+            .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("${selected.size} selected", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Pill("All") { selected = pl.items.indices.toSet() }
+            Pill("RG scan", filled = true) { rgItems = selected.sorted().mapNotNull { pl.items.getOrNull(it) }.map { MusicLibrary.fromPlEntry(it) } }
+            Pill("Remove") { val drop = selected; update { p -> p.copy(items = p.items.filterIndexed { j, _ -> j !in drop }) }; selected = emptySet() }
+            Text("✕", color = C.muted, fontSize = 18.sp, modifier = Modifier.clickable { selected = emptySet() }.padding(6.dp))
+        } else if (pl.items.isNotEmpty()) PlayListButtons(Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) { random ->
             playPlaylist(nav, pl, if (random) pl.items.indices.random() else 0, random = random)
         }
         val state = rememberLazyListState()
@@ -429,10 +439,11 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
             itemsIndexed(pl.items) { i, e ->
                 val cur = playing.origin.playlistId == pl.id && playing.index == i
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
-                    .background(if (cur || e.uri == d.highlight) accent().copy(alpha = 0.12f) else Color.Transparent)
-                    .combinedClickable(onClick = { playPlaylist(nav, pl, i) }, onLongClick = { itemMenu = i }).padding(horizontal = 6.dp),
+                    .background(if (i in selected) accent().copy(alpha = 0.18f) else if (cur || e.uri == d.highlight) accent().copy(alpha = 0.12f) else Color.Transparent)
+                    .combinedClickable(onClick = { if (selected.isNotEmpty()) selected = if (i in selected) selected - i else selected + i else playPlaylist(nav, pl, i) },
+                        onLongClick = { if (selected.isNotEmpty()) selected = if (i in selected) selected - i else selected + i else itemMenu = i }).padding(horizontal = 6.dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("${i + 1}", color = if (cur) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
+                    Text(if (i in selected) "✓" else "${i + 1}", color = if (cur || i in selected) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
                     Column(Modifier.weight(1f)) {
                         Text(e.title, color = if (cur) accent() else C.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         val sub = listOfNotNull(e.artist.ifEmpty { null }, e.album.ifEmpty { null }).joinToString(" · ")
@@ -445,6 +456,8 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                             if (i > 0) DropdownMenuItem({ Text("Move up") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) }; itemMenu = -1 })
                             if (i < pl.items.size - 1) DropdownMenuItem({ Text("Move down") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) }; itemMenu = -1 })
                             DropdownMenuItem({ Text("Play next") }, { App.instance.player.playNext(listOf(MusicLibrary.fromPlEntry(e))); itemMenu = -1 })
+                            DropdownMenuItem({ Text("Select…") }, { selected = setOf(i); itemMenu = -1 })
+                            DropdownMenuItem({ Text("ReplayGain scan…") }, { rgItems = listOf(MusicLibrary.fromPlEntry(e)); itemMenu = -1 })
                             DropdownMenuItem({ Text("Remove from playlist", color = C.bad) }, { update { p -> p.copy(items = p.items.filterIndexed { j, _ -> j != i }) }; itemMenu = -1 })
                         }
                     }
@@ -454,6 +467,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
         BottomBar(nav, current = 1)
     }
 
+    rgItems?.let { its -> RgScanDialog(nav, { its }) { rgItems = null; selected = emptySet() } }
     rename?.let { n ->
         AlertDialog(onDismissRequest = { rename = null }, title = { Text("Rename playlist") },
             text = { OutlinedTextField(n, { rename = it }, singleLine = true) },

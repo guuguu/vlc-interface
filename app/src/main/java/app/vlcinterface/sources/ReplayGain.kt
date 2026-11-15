@@ -25,13 +25,18 @@ data class Rg(val trackGain: Float?, val trackPeak: Float?, val albumGain: Float
 object ReplayGain {
     private val cache = ConcurrentHashMap<String, Rg>()
     private const val HEAD = 512 * 1024
+
+    /** After a scan wrote new values. */
+    fun forget(uri: String) { cache.remove(uri) }
     private const val TAIL = 64 * 1024
 
     suspend fun read(ctx: Context, uri: String, user: String, pass: String, domain: String, smbVersion: String): Rg? =
         withContext(Dispatchers.IO) {
             cache[uri]?.let { return@withContext it }
-            val parts = try { fetch(ctx, uri, user, pass, domain, smbVersion) } catch (_: Exception) { null } ?: return@withContext null
-            val rg = parse(parts.first + parts.second)
+            val parts = try { fetch(ctx, uri, user, pass, domain, smbVersion) } catch (_: Exception) { null }
+            // Tags in the file first; values the scanner kept in the app for files it couldn't (or wasn't asked to) write.
+            val inFile = parts?.let { parse(it.first + it.second) }
+            val rg = if (inFile?.any == true) inFile else RgStore.get(uri) ?: inFile ?: return@withContext null
             cache[uri] = rg
             rg
         }

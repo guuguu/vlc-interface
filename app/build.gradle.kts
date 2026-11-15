@@ -98,4 +98,6 @@ dependencies {
     implementation("org.videolan.android:libvlc-all:3.6.0")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // Writing ReplayGain tags (ID3v2, Vorbis comments, MP4) into music files.
+    implementation("net.jthink:jaudiotagger:3.0.1")
 }

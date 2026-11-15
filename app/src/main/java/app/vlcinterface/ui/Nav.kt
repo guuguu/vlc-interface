@@ -33,6 +33,7 @@ sealed interface Screen {
     data object Player : Screen
     data object Settings : Screen
     data object SoundSettings : Screen
+    data object RgScan : Screen
     data object Backup : Screen
     data object Playlists : Screen
     data class PlaylistDetail(val id: String, val highlight: String = "") : Screen
@@ -80,6 +81,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.Player -> PlayerScreen(nav, openOutput)
                     is Screen.Settings -> SettingsScreen(nav)
                     is Screen.SoundSettings -> SoundSettingsScreen(nav)
+                    is Screen.RgScan -> RgScanScreen(nav)
                     is Screen.Backup -> BackupScreen(nav)
                     is Screen.Playlists -> PlaylistsScreen(nav, openOutput)
                     is Screen.PlaylistDetail -> PlaylistDetailScreen(nav, top)

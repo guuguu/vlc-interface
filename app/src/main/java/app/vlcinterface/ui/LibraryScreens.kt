@@ -235,6 +235,7 @@ fun InternalTab(nav: Navigator) {
     var reload by remember { mutableIntStateOf(0) }
     var menuFor by remember { mutableStateOf<LocalFolder?>(null) }
     var addFolder by remember { mutableStateOf<LocalFolder?>(null) }
+    var rgFolder by remember { mutableStateOf<LocalFolder?>(null) }
     var deleteFolder by remember { mutableStateOf<Pair<LocalFolder, List<Entry>>?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(reload) { folders = InternalSource.folders(ctx) }
@@ -291,6 +292,7 @@ fun InternalTab(nav: Navigator) {
                             onPlayNext = { scope.launch { App.instance.player.playNext(ofKind(MusicLibrary.collectLocal(ctx, f, true))) } },
                             onQueue = { scope.launch { App.instance.player.addToQueue(ofKind(MusicLibrary.collectLocal(ctx, f, true))) } },
                             onAddPlaylist = { addFolder = f },
+                            onRgScan = if (st.settings.libraryKind == "audio") ({ rgFolder = f }) else null,
                             onDelete = { scope.launch { deleteFolder = f to InternalSource.files(ctx, f, true).filter { if (st.settings.libraryKind == "video") it.isVideo else it.isAudio } } })
                     }
                     IconButton({
@@ -311,6 +313,7 @@ fun InternalTab(nav: Navigator) {
         Box(Modifier.height(16.dp))
     }
     addFolder?.let { f -> AddToPlaylistDialog({ ofKind(MusicLibrary.collectLocal(ctx, f, true)) }) { addFolder = null } }
+    rgFolder?.let { f -> RgScanDialog(nav, { MusicLibrary.collectLocal(ctx, f, true) }) { rgFolder = null } }
     deleteFolder?.let { (f, files) ->
         if (files.isEmpty()) deleteFolder = null
         else DeleteDialog(files.map { it.uri }, f.name, files.sumOf { it.size.coerceAtLeast(0) }, files.size) { deleteFolder = null; reload++ }

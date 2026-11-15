@@ -140,6 +140,10 @@ fun MediaList(
     var menuFor by remember { mutableStateOf<Entry?>(null) }
     var addTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
     var deleteTarget by remember { mutableStateOf<Entry?>(null) }
+    var rgTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
+    // Multi-select (songs and folders): long-press → Select…, then taps tick/untick.
+    var selected by remember(entries) { mutableStateOf(setOf<String>()) }
+    fun toggle(e: Entry) { selected = if (e.uri in selected) selected - e.uri else selected + e.uri }
     val playing by App.instance.player.state.collectAsState()
 
     fun play(e: Entry, random: Boolean? = null) {
@@ -162,21 +166,41 @@ fun MediaList(
         rows.isEmpty() -> Text(if (kind == "video") "No videos here — switch to Audio at the top of Libraries for music." else "No music here — switch to Video at the top of Libraries for videos.", color = C.muted, modifier = Modifier.padding(20.dp))
         else -> LazyColumn(Modifier.fillMaxSize().scrollbar(state).padding(horizontal = 16.dp), state = state) {
             // Play the whole folder (its audio + video files, album order) in order or at random.
-            if (order.size > 1) item {
+            if (selected.isNotEmpty()) item {
+                val chosen = list.filter { it.uri in selected }
+                fun collect(): suspend () -> List<PlayItem> = {
+                    chosen.flatMap { e -> if (e.isDir) itemsOfDir(e)() else listOf(MusicLibrary.toPlayItem(e, source, folderKey)) }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(12.dp)).background(C.card2).padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("${selected.size} selected", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Pill("All") { selected = list.filter { it.isDir || it.isAudio }.map { it.uri }.toSet() }
+                    Pill("RG scan", filled = true) { rgTarget = collect() }
+                    Pill("+ Playlist") { addTarget = collect() }
+                    Text("✕", color = C.muted, fontSize = 18.sp, modifier = Modifier.clickable { selected = emptySet() }.padding(6.dp))
+                }
+            }
+            if (order.size > 1 && selected.isEmpty()) item {
                 PlayListButtons(Modifier.padding(top = 8.dp, bottom = 4.dp)) { random ->
                     play(if (random) order.random() else order.first(), random)
                 }
             }
             items(rows) { r ->
                 when (r) {
-                    is Row0.Dir -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).combinedClickable(onClick = { onOpenDir(r.e) }, onLongClick = { menuFor = r.e }),
+                    is Row0.Dir -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(8.dp))
+                        .background(if (r.e.uri in selected) accent().copy(alpha = 0.18f) else Color.Transparent)
+                        .combinedClickable(onClick = { if (selected.isNotEmpty()) toggle(r.e) else onOpenDir(r.e) }, onLongClick = { if (selected.isNotEmpty()) toggle(r.e) else menuFor = r.e }),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) { Text("▤", color = accent()) }
+                        Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) {
+                            Text(if (r.e.uri in selected) "✓" else "▤", color = accent(), fontWeight = FontWeight.Bold)
+                        }
                         Text(r.e.name, color = C.text, fontSize = 15.sp, modifier = Modifier.padding(start = 14.dp).weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Box { if (menuFor == r.e) EntryMenu(r.e, true, source, onDismiss = { menuFor = null },
                             onPlayNext = { scope.launch { App.instance.player.playNext(itemsOfDir(r.e)()) } },
                             onQueue = { scope.launch { App.instance.player.addToQueue(itemsOfDir(r.e)()) } },
-                            onAddPlaylist = { addTarget = itemsOfDir(r.e) }, onDelete = null) }
+                            onAddPlaylist = { addTarget = itemsOfDir(r.e) }, onDelete = null,
+                            onSelect = { toggle(r.e) },
+                            onRgScan = if (App.instance.store.current.settings.libraryKind == "audio") ({ rgTarget = itemsOfDir(r.e) }) else null) }
                     }
                     is Row0.Header -> Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Cover(r.g.artwork, 56)
@@ -191,10 +215,12 @@ fun MediaList(
                         val e = r.e
                         val isCur = playing.item?.uri == e.uri
                         val hl = isCur || e.uri == highlightUri
+                        val sel = e.uri in selected
                         Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
-                            .background(if (hl) accent().copy(alpha = 0.12f) else Color.Transparent)
-                            .combinedClickable(onClick = { play(e) }, onLongClick = { menuFor = e }).padding(horizontal = 4.dp),
+                            .background(if (sel) accent().copy(alpha = 0.18f) else if (hl) accent().copy(alpha = 0.12f) else Color.Transparent)
+                            .combinedClickable(onClick = { if (selected.isNotEmpty()) toggle(e) else play(e) }, onLongClick = { if (selected.isNotEmpty()) toggle(e) else menuFor = e }).padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically) {
+                            if (sel) Text("✓", color = accent(), fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp)) else
                             Text(if (e.track > 0) (if (r.multiDisc && e.disc > 0) "${e.disc}-%02d".format(e.track) else e.track.toString()) else "·",
                                 color = if (isCur) accent() else C.muted, fontSize = 13.sp, modifier = Modifier.width(36.dp))
                             Column(Modifier.weight(1f)) {
@@ -206,7 +232,9 @@ fun MediaList(
                                 onPlayNext = { App.instance.player.playNext(listOf(MusicLibrary.toPlayItem(e, source, folderKey))) },
                                 onQueue = { App.instance.player.addToQueue(listOf(MusicLibrary.toPlayItem(e, source, folderKey))) },
                                 onAddPlaylist = { addTarget = { listOf(MusicLibrary.toPlayItem(e, source, folderKey)) } },
-                                onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null) }
+                                onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null,
+                                onSelect = { toggle(e) },
+                                onRgScan = { rgTarget = { listOf(MusicLibrary.toPlayItem(e, source, folderKey)) } }) }
                         }
                     }
                     is Row0.Video -> {
@@ -233,7 +261,8 @@ fun MediaList(
         }
     }
 
-    addTarget?.let { t -> AddToPlaylistDialog(t) { addTarget = null } }
+    addTarget?.let { t -> AddToPlaylistDialog(t) { addTarget = null; selected = emptySet() } }
+    rgTarget?.let { t -> RgScanDialog(nav, t) { rgTarget = null; selected = emptySet() } }
     deleteTarget?.let { e ->
         DeleteDialog(listOf(e.uri), e.name, if (e.size > 0) e.size else 0, 1, onDone = { deleted -> deleteTarget = null; if (deleted) onRefresh() })
     }
@@ -243,11 +272,14 @@ fun MediaList(
 fun EntryMenu(
     e: Entry, isDir: Boolean, source: Source?, onDismiss: () -> Unit,
     onPlayNext: () -> Unit, onQueue: () -> Unit, onAddPlaylist: () -> Unit, onDelete: (() -> Unit)?,
+    onSelect: (() -> Unit)? = null, onRgScan: (() -> Unit)? = null,
 ) {
     DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
+        if (onSelect != null) DropdownMenuItem(text = { Text("Select…") }, onClick = { onSelect(); onDismiss() })
         DropdownMenuItem(text = { Text(if (isDir) "Play all next" else "Play next") }, onClick = { onPlayNext(); onDismiss() })
         DropdownMenuItem(text = { Text(if (isDir) "Add all to queue" else "Add to queue") }, onClick = { onQueue(); onDismiss() })
         DropdownMenuItem(text = { Text(if (isDir) "Add all to playlist…" else "Add to playlist…") }, onClick = { onAddPlaylist(); onDismiss() })
+        if (onRgScan != null) DropdownMenuItem(text = { Text(if (isDir) "ReplayGain scan (with subfolders)…" else "ReplayGain scan…") }, onClick = { onRgScan(); onDismiss() })
         if (onDelete != null) DropdownMenuItem(text = { Text("Delete…", color = C.bad) }, onClick = { onDelete(); onDismiss() })
     }
 }
