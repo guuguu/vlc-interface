@@ -135,6 +135,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     DisposableEffect(Unit) { onDispose { player.detach(videoView); player.resetPicture() } }
     LaunchedEffect(landscape, p.videoW, p.videoH) { kotlinx.coroutines.delay(150); player.refreshSurface() }
     var toast by remember { mutableStateOf("") }
+    val volDrag = remember { VolumeDrag(ctx) }
     var touchTick by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
 
@@ -196,7 +197,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 onTap = { controls = !controls; touchTick++ },
                 onSeek = { fwd -> val s = st.settings.doubleTapSeekSec * 1000L; player.seekBy(if (fwd) s else -s); toast = if (fwd) "+${st.settings.doubleTapSeekSec} s" else "−${st.settings.doubleTapSeekSec} s" },
                 onHold = { on -> if (st.settings.holdForSpeed) { player.setRate(if (on) 2f else 1f); toast = if (on) "2× speed" else "" } },
-                onVolume = { d -> if (st.settings.volumeSwipe) toast = "Volume ${changeVolume(ctx, d)}%" },
+                onVolumeStart = { volDrag.start() },
+                onVolume = { total -> if (st.settings.volumeSwipe) toast = "Volume ${volDrag.update(total)}%" },
                 onBrightness = { d -> if (st.settings.brightnessSwipe) toast = "Brightness ${changeBrightness(activity, d)}%" },
                 locked = locked,
             )
@@ -267,13 +269,21 @@ private fun rotate(a: Activity?, landscape: Boolean) {
     a?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
 }
 
-private fun changeVolume(ctx: Context, delta: Float): Int {
-    val am = ctx.getSystemService(AudioManager::class.java)
-    val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-    val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC)
-    val nv = (cur + (delta * max).toInt()).coerceIn(0, max)
-    if (nv != cur) am.setStreamVolume(AudioManager.STREAM_MUSIC, nv, 0)
-    return nv * 100 / max.coerceAtLeast(1)
+/**
+ * Volume swipe: remembers the volume when the finger lands and follows the total distance moved,
+ * so slow drags count (each tiny move used to round down to nothing, then jump) and the level
+ * tracks the finger. A swipe over ~80 % of the video height goes from silent to full.
+ */
+private class VolumeDrag(ctx: Context) {
+    private val am = ctx.getSystemService(AudioManager::class.java)
+    private var base = 0f
+    fun start() { base = am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() }
+    fun update(total: Float): Int {
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val nv = kotlin.math.round(base + total * max * 1.25f).toInt().coerceIn(0, max)
+        if (nv != am.getStreamVolume(AudioManager.STREAM_MUSIC)) am.setStreamVolume(AudioManager.STREAM_MUSIC, nv, 0)
+        return nv * 100 / max
+    }
 }
 
 private fun changeBrightness(a: Activity?, delta: Float): Int {
@@ -288,9 +298,11 @@ private fun changeBrightness(a: Activity?, delta: Float): Int {
 @Composable
 private fun GestureLayer(
     onTap: () -> Unit, onSeek: (Boolean) -> Unit, onHold: (Boolean) -> Unit,
-    onVolume: (Float) -> Unit, onBrightness: (Float) -> Unit, locked: Boolean,
+    onVolumeStart: () -> Unit, onVolume: (Float) -> Unit, onBrightness: (Float) -> Unit, locked: Boolean,
 ) {
     val scope = rememberCoroutineScope()
+    // A slow volume/brightness swipe must not also count as "hold for 2× speed".
+    val dragging = remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()
         .pointerInput(locked) {
             detectTapGestures(
@@ -299,7 +311,7 @@ private fun GestureLayer(
                 onPress = {
                     if (locked) return@detectTapGestures
                     var held = false
-                    val job: Job = scope.launch { delay(600); held = true; onHold(true) }
+                    val job: Job = scope.launch { delay(600); if (!dragging.value) { held = true; onHold(true) } }
                     tryAwaitRelease()
                     job.cancel()
                     if (held) onHold(false)
@@ -309,11 +321,16 @@ private fun GestureLayer(
         .pointerInput(locked) {
             if (locked) return@pointerInput
             var right = false
+            var total = 0f
             detectVerticalDragGestures(
-                onDragStart = { o -> right = o.x > size.width / 2 },
-                onVerticalDrag = { _, dy ->
+                onDragStart = { o -> dragging.value = true; right = o.x > size.width / 2; total = 0f; if (right) onVolumeStart() },
+                onDragEnd = { dragging.value = false },
+                onDragCancel = { dragging.value = false },
+                onVerticalDrag = { change, dy ->
+                    change.consume()
                     val d = -dy / size.height
-                    if (right) onVolume(d) else onBrightness(d)
+                    total += d
+                    if (right) onVolume(total) else onBrightness(d)
                 },
             )
         })
