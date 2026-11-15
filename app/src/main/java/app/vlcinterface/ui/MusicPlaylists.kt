@@ -116,7 +116,6 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     LaunchedEffect(item.uri) { if (!item.isMusic && !item.isRadio) nav.replace(Screen.Player) }
     var sleepMenu by remember { mutableStateOf(false) }
     var jump by remember { mutableStateOf(false) }
-    var playNowPick by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
     val meters = NativeAudio.active
     val conf = androidx.compose.ui.platform.LocalConfiguration.current
@@ -142,7 +141,6 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
         }) { OutputPill(openOutput); ExitButton() }
         if (jump) JumpDialog { jump = false }
-        if (playNowPick) JumpDialog(playNow = true) { playNowPick = false }
         // Upright: one scrolling page. Sideways: the same page split in two under the track / ReplayGain line —
         // picture and titles on the left, controls and the rest on the right, each scrolling on its own.
         val partA: @Composable ColumnScope.() -> Unit = {
@@ -217,8 +215,6 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 else -> "Open song folder"
             }
             Pill("☰  $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { openOrigin(nav) }
-            // ♪ Play now: search all songs, play one at once; the playing list carries on after it, unchanged.
-            Pill("♪  Play a song now…", modifier = Modifier.fillMaxWidth()) { playNowPick = true }
             // Sleep: number input (up to 3 digits) for "After … songs" and "Custom minutes…".
             var sleepAsk by remember { mutableStateOf("") }
             var sleepNote by remember { mutableStateOf("") }
