@@ -59,7 +59,7 @@ fun OutputSheet(onDismiss: () -> Unit) {
                     }.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         val a = accent()
                         Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(if (d.active) a.copy(alpha = 0.16f) else C.card2), contentAlignment = Alignment.Center) {
-                            Text(when (d.kind) { OutputKind.SPEAKER -> "🔈"; OutputKind.BLUETOOTH -> "ᛒ"; else -> "🎧" }, color = if (d.active) a else C.text)
+                            Text(when (d.kind) { OutputKind.SPEAKER -> "🔈"; OutputKind.BLUETOOTH -> "BT"; else -> "🎧" }, color = if (d.active) a else C.text)
                         }
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
                             Text(d.name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)

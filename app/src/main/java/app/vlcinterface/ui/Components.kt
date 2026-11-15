@@ -185,7 +185,7 @@ private fun OutputPillBody(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Text(
-            when (active?.kind) { OutputKind.BLUETOOTH -> "ᛒ"; OutputKind.SPEAKER -> "🔈"; else -> "🎧" },
+            when (active?.kind) { OutputKind.BLUETOOTH -> "BT"; OutputKind.SPEAKER -> "🔈"; else -> "🎧" },
             color = accent(), fontSize = 14.sp
         )
         Text(name, color = C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,

@@ -439,7 +439,7 @@ private fun BoxScope.ControlsOverlayBody(
         Row(verticalAlignment = Alignment.CenterVertically) {
             AutoFitRow(spacing = 0.dp) {
                 OverlayChip(scaleLabel, onScale)
-                Text("  ⟳", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable(onClick = onRotate).padding((10 * ks).dp))
+                Text("  🔄", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable(onClick = onRotate).padding((10 * ks).dp))
             }
             Grow()
             AutoFitRow(spacing = 0.dp) {
@@ -450,7 +450,7 @@ private fun BoxScope.ControlsOverlayBody(
         }
     } else AutoFitRow(Modifier.align(Alignment.BottomEnd).padding(6.dp), spacing = 0.dp) {
         OverlayChip(scaleLabel, onScale)
-        Text("  ⟳ ", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable(onClick = onRotate).padding((8 * ks).dp))
+        Text("  🔄 ", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable(onClick = onRotate).padding((8 * ks).dp))
         Text("PiP", color = Color.White, fontSize = (14 * ks).sp, modifier = Modifier.clickable(onClick = onPip).padding((8 * ks).dp))
     }
 }

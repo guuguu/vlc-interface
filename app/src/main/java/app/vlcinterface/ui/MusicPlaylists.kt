@@ -140,7 +140,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     else if (p.sleepSongs == 1) "Sleep after this song" else if (p.sleepSongs > 1) "Sleep after ${p.sleepSongs} songs" else null)
                 // Tap the badges (or the title area) for the song's tags and ReplayGain values.
                 var showInfo by remember { mutableStateOf(false) }
-                Text(if (badges.isNotEmpty()) badges.joinToString(" · ") + "  ⓘ" else "Tags & ReplayGain ⓘ", color = accent(), fontSize = 12.sp,
+                Text(if (badges.isNotEmpty()) badges.joinToString(" · ") + "  ℹ️" else "Tags & ReplayGain ℹ️", color = accent(), fontSize = 12.sp,
                     modifier = Modifier.clickable { showInfo = true }.padding(4.dp))
                 if (showInfo) TagInfoDialog(item) { showInfo = false }
             }
@@ -455,7 +455,7 @@ fun OrderSwitch(random: Boolean, modifier: Modifier = Modifier, onChange: (Boole
 fun PlayListButtons(modifier: Modifier = Modifier, onPlay: (random: Boolean) -> Unit) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Pill("▶  Play in order", filled = true) { onPlay(false) }
-        Pill("⤮  Play random") { onPlay(true) }
+        Pill("🔀  Play random") { onPlay(true) }
     }
 }
 
