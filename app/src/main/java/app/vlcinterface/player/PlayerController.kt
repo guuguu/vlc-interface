@@ -826,6 +826,15 @@ class PlayerController(private val context: Context, private val store: Store) {
                 i = n
             }
         }
+        // The same song is on the phone too (same artist, album, title): the phone file is played instead.
+        // (The phone's song list is read once in the background the first time a network song plays.)
+        if (app.vlcinterface.ui.SongsCache.phone == null && _state.value.queue.getOrNull(i)?.let { !app.vlcinterface.sources.NetIndex.isLocal(it) } == true)
+            bg.launch(kotlinx.coroutines.Dispatchers.IO) { try { app.vlcinterface.ui.SongsCache.loadPhone(context) } catch (_: Exception) {} }
+        _state.value.queue.getOrNull(i)?.let { q ->
+            app.vlcinterface.ui.SongsCache.localTwin(q)?.let { local ->
+                _state.value = _state.value.copy(queue = _state.value.queue.toMutableList().also { it[i] = local })
+            }
+        }
         val s0 = _state.value
         val item = s0.queue.getOrNull(i) ?: return
         loadPictureForFile(item)

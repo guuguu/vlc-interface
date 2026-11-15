@@ -443,6 +443,7 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
             }
             Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable {
                 App.instance.store.update { st -> st.copy(sources = st.sources.map { if (it.id == s.id) it.copy(lastScan = System.currentTimeMillis()) else it }) }
+                app.vlcinterface.sources.NetIndex.rebuild(s)          // its pinned folders' index too
                 nav.go(Screen.Browse(s.id, Urls.forSource(s), s.name, highlight = "\u0000rescan"))
             }.padding(horizontal = 12.dp, vertical = 7.dp)) { Text("↻ Rescan", color = a, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
         }
@@ -483,6 +484,8 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
                 val pinned = src.pins.contains(path)
                 SymButton({
                     App.instance.store.update { s -> s.copy(sources = s.sources.map { if (it.id == src.id) it.copy(pins = if (pinned) it.pins - path else it.pins + path) else it }) }
+                    // Pinned folders are indexed (songs searchable from the Songs list / player); unpinned → index dropped.
+                    if (pinned) app.vlcinterface.sources.NetIndex.remove(src, path) else app.vlcinterface.sources.NetIndex.build(src, path)
                 }) { SymIcon(Icons.Filled.Star, if (pinned) "Unpin folder" else "Pin folder", tint = if (pinned) accent() else C.muted) }
             }
             SymButton({ reload++ }) {

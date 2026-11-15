@@ -54,14 +54,27 @@ import java.util.Locale
 
 /** All songs in memory for the Songs list (phone at once; LAN / Internet storage when added). */
 internal object SongsCache {
+    /** Songs on the phone (read once). Setting it also refreshes the "same song on the phone" lookup. */
     var phone: List<PlayItem>? = null
+        set(v) { field = v; byKey = v?.mapNotNull { p -> app.vlcinterface.sources.NetIndex.songKey(p)?.let { it to p } }?.toMap() ?: emptyMap() }
     var network: List<PlayItem> = emptyList()
+    private var byKey: Map<String, PlayItem> = emptyMap()
 
-    /** Phone songs (read once) + the LAN / Internet songs already read in the Songs list. */
-    suspend fun all(ctx: android.content.Context): List<PlayItem> {
+    /** The phone's copy of a network song (same artist, album and title), if there is one. */
+    fun localTwin(p: PlayItem): PlayItem? =
+        if (app.vlcinterface.sources.NetIndex.isLocal(p)) null else app.vlcinterface.sources.NetIndex.songKey(p)?.let { byKey[it] }
+
+    suspend fun loadPhone(ctx: android.content.Context): List<PlayItem> {
         if (phone == null) phone = InternalSource.folders(ctx).flatMap { f -> MusicLibrary.collectLocal(ctx, f, false) }.filter { it.isMusic }
-        return (phone!! + network).distinctBy { it.uri }
+        return phone!!
     }
+
+    /**
+     * Phone songs + indexed LAN folders (★, only from servers reachable now) + LAN / Internet songs read in the
+     * Songs list; a song on both the phone and the network = the phone file.
+     */
+    suspend fun all(ctx: android.content.Context): List<PlayItem> =
+        app.vlcinterface.sources.NetIndex.preferLocal(loadPhone(ctx) + app.vlcinterface.sources.NetIndex.songsReachable() + network)
 }
 
 private fun fmtLong(ms: Long): String {
@@ -79,6 +92,7 @@ fun SongsTab(nav: Navigator) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var songs by remember { mutableStateOf((SongsCache.phone ?: emptyList()) + SongsCache.network) }
+    val indexVer by app.vlcinterface.sources.NetIndex.version.collectAsState()
     var loading by remember { mutableStateOf(SongsCache.phone == null) }
     var netBusy by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf(setOf<String>()) }
@@ -86,12 +100,8 @@ fun SongsTab(nav: Navigator) {
     var addPl by remember { mutableStateOf<List<PlayItem>?>(null) }
     fun sorted(l: List<PlayItem>) = l.distinctBy { it.uri }.sortedWith(compareBy<PlayItem>(
         { it.artist.ifEmpty { "￿" }.lowercase() }, { it.album.ifEmpty { "￿" }.lowercase() }, { it.trackNo }))
-    LaunchedEffect(Unit) {
-        if (SongsCache.phone == null) {
-            SongsCache.phone = InternalSource.folders(ctx).flatMap { f -> MusicLibrary.collectLocal(ctx, f, false) }.filter { it.isMusic }
-        }
-        songs = sorted(SongsCache.phone!! + SongsCache.network); loading = false
-    }
+    // Phone songs + songs of the indexed ★ LAN folders (+ any read with "+ LAN / Internet"); a song on both = phone file.
+    LaunchedEffect(indexVer) { songs = sorted(SongsCache.all(ctx.applicationContext)); loading = false }
     val chosen = songs.filter { it.uri in selected }
     val total = chosen.sumOf { it.durationMs.coerceAtLeast(0) }
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
@@ -109,7 +119,7 @@ fun SongsTab(nav: Navigator) {
                         all += MusicLibrary.collectRecursive(s, Urls.forSource(s)).filter { it.isMusic }
                     }
                     SongsCache.network = all
-                    songs = sorted((SongsCache.phone ?: emptyList()) + all); netBusy = ""
+                    songs = sorted(SongsCache.all(ctx.applicationContext)); netBusy = ""
                 }
             }
         }
@@ -189,41 +199,7 @@ fun SongsTab(nav: Navigator) {
         }
     }
     addPl?.let { its -> AddToPlaylistDialog({ its }) { addPl = null } }
-    if (ask) {
-        val pick = songs.filter { it.uri in selected }
-        val ms = pick.sumOf { it.durationMs.coerceAtLeast(0) }
-        val albums = pick.map { it.album.lowercase() to it.folderKey }.distinct().size
-        fun create(random: Boolean) {
-            val ordered = if (random) pick.shuffled() else pick
-            // Name: day_mon_hh_mm_random|Nalbums_minutes, e.g. sun_nov_14_19_3albums_73min
-            val now = java.util.Calendar.getInstance()
-            val day = String.format(Locale.ENGLISH, "%ta", now).lowercase().take(3)
-            val mon = String.format(Locale.ENGLISH, "%tb", now).lowercase().take(3)
-            val name = "${day}_${mon}_%02d_%02d_".format(now.get(java.util.Calendar.HOUR_OF_DAY), now.get(java.util.Calendar.MINUTE)) +
-                (if (random) "random" else "${albums}album${if (albums == 1) "" else "s"}") + "_${(ms + 30_000) / 60_000}min"
-            val pl = Playlist(name = name, items = ordered.map { MusicLibrary.toPlEntry(it) })
-            App.instance.store.update { st -> st.copy(playlists = st.playlists + pl) }
-            ask = false; selected = emptySet()
-            playPlaylist(nav, pl, 0, random = false)
-        }
-        AlertDialog(onDismissRequest = { ask = false }, containerColor = C.panel,
-            title = { Text("${pick.size} songs · ${fmtLong(ms)}", color = C.text) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Total play time ${fmtLong(ms)} from $albums album${if (albums == 1) "" else "s"}.", color = C.text, fontSize = 14.sp)
-                    Text("A new playlist is created with these songs and starts playing. In order keeps the order shown; Random mixes them.",
-                        color = C.muted, fontSize = 12.sp)
-                }
-            },
-            confirmButton = {
-                Row {
-                    STextButton({ create(false) }) { Text("In order", color = accent()) }
-                    STextButton({ create(true) }) { Text("Random", color = accent()) }
-                }
-            },
-            dismissButton = { STextButton({ ask = false }) { Text("Cancel") } },
-        )
-    }
+    if (ask) QuickPlaylistDialog(nav, { songs.filter { it.uri in selected } }) { made -> ask = false; if (made) selected = emptySet() }
 }
 
 
@@ -273,4 +249,53 @@ internal fun MarqueeText(text: String, color: Color, modifier: Modifier, fontSiz
             modifier = if (speed <= 0) Modifier else Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = startDelay,
                 repeatDelayMillis = 0, spacing = androidx.compose.foundation.MarqueeSpacing(48.dp), velocity = (40f * speed / 100f).dp))
     }
+}
+
+
+/**
+ * Total play time of the chosen songs, then In order / Random: a playlist named day_mon_hh_mm_(random|Nalbums)_Nmin
+ * is made from them and starts playing. Used by the Songs list and by folder lists (phone and LAN).
+ */
+@Composable
+fun QuickPlaylistDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, onDone: (made: Boolean) -> Unit) {
+    var pick by remember { mutableStateOf<List<PlayItem>?>(null) }
+    LaunchedEffect(Unit) { pick = collect().filter { !it.isRadio }.distinctBy { "${it.uri}#${it.startMs}" } }
+    val p = pick
+    val ms = p?.sumOf { it.durationMs.coerceAtLeast(0) } ?: 0L
+    val albums = p?.map { it.album.lowercase() to it.folderKey }?.distinct()?.size ?: 0
+    fun create(random: Boolean) {
+        val l = p ?: return
+        if (l.isEmpty()) { onDone(false); return }
+        val ordered = if (random) l.shuffled() else l
+        // Name: day_mon_hh_mm_random|Nalbums_minutes, e.g. sun_nov_14_19_3albums_73min
+        val now = java.util.Calendar.getInstance()
+        val day = String.format(Locale.ENGLISH, "%ta", now).lowercase().take(3)
+        val mon = String.format(Locale.ENGLISH, "%tb", now).lowercase().take(3)
+        val name = "${day}_${mon}_%02d_%02d_".format(now.get(java.util.Calendar.HOUR_OF_DAY), now.get(java.util.Calendar.MINUTE)) +
+            (if (random) "random" else "${albums}album${if (albums == 1) "" else "s"}") + "_${(ms + 30_000) / 60_000}min"
+        val pl = Playlist(name = name, items = ordered.map { MusicLibrary.toPlEntry(it) })
+        App.instance.store.update { st -> st.copy(playlists = st.playlists + pl) }
+        onDone(true)
+        playPlaylist(nav, pl, 0, random = false)
+    }
+    AlertDialog(onDismissRequest = { onDone(false) }, containerColor = C.panel,
+        title = { Text(if (p == null) "Collecting songs…" else "${p.size} songs · ${fmtLong(ms)}", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (p == null) CircularProgressIndicator(color = accent())
+                else {
+                    Text("Total play time ${fmtLong(ms)} from $albums album${if (albums == 1) "" else "s"}.", color = C.text, fontSize = 14.sp)
+                    Text("A new playlist is created with these songs and starts playing. In order keeps the order shown; Random mixes them.",
+                        color = C.muted, fontSize = 12.sp)
+                }
+            }
+        },
+        confirmButton = {
+            if (p != null) Row {
+                STextButton({ create(false) }) { Text("In order", color = accent()) }
+                STextButton({ create(true) }) { Text("Random", color = accent()) }
+            }
+        },
+        dismissButton = { STextButton({ onDone(false) }) { Text("Cancel") } },
+    )
 }

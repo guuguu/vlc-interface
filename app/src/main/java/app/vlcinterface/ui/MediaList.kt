@@ -115,6 +115,7 @@ private sealed interface Row0 {
  * Library listing: folders, then music grouped by album (disc → track order, never alphabetical, with durations),
  * then videos. Long-press opens the file / folder menu.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun MediaList(
     nav: Navigator,
@@ -151,6 +152,7 @@ fun MediaList(
     }
     var menuFor by remember { mutableStateOf<Entry?>(null) }
     var addTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
+    var quickTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
     var deleteTarget by remember { mutableStateOf<Entry?>(null) }
     var rgTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
     var infoItem by remember { mutableStateOf<PlayItem?>(null) }
@@ -190,6 +192,12 @@ fun MediaList(
         ofKind(if (source != null) MusicLibrary.collectRecursive(source, e.uri) else emptyList())
     }
 
+    /** Long-press while selecting (like the Songs list): play time of the selection + new playlist. */
+    fun quickFromSelection() {
+        val chosen = list.filter { it.uri in selected }
+        quickTarget = { chosen.flatMap { e -> if (e.isDir) itemsOfDir(e)() else listOf(MusicLibrary.toPlayItem(e, source, folderKey)) } }
+    }
+
     when {
         error.isNotEmpty() -> Column(Modifier.fillMaxSize().padding(20.dp)) {
             Text(error, color = C.bad, fontSize = 14.sp)
@@ -204,13 +212,38 @@ fun MediaList(
                 fun collect(): suspend () -> List<PlayItem> = {
                     chosen.flatMap { e -> if (e.isDir) itemsOfDir(e)() else listOf(MusicLibrary.toPlayItem(e, source, folderKey)) }
                 }
-                Row(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(12.dp)).background(C.card2).padding(horizontal = 10.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("${selected.size} selected", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Pill("All") { selected = list.filter { it.isDir || it.isAudio }.map { it.uri }.toSet() }
-                    Pill("RG scan", filled = true) { rgTarget = collect() }
-                    Pill("+ Playlist") { addTarget = collect() }
-                    Text("✕", color = C.muted, fontSize = 18.sp, modifier = Modifier.clickable { selected = emptySet() }.padding(6.dp))
+                // Same choices as the Songs list (wraps onto more lines when needed, never overlapping);
+                // long-press a selected item = play time + new playlist (In order / Random).
+                androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(12.dp)).background(C.card2)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("${selected.size} selected", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.align(Alignment.CenterVertically).padding(end = 4.dp))
+                    val all = list.filter { it.isDir || it.isAudio || it.isVideo }.map { it.uri }.toSet()
+                    if (selected.size < all.size) Pill("Select all") { selected = all }
+                    Pill("Deselect all") { selected = emptySet() }
+                    Pill("▶  Play selected", filled = true) {
+                        val c = collect()
+                        scope.launch {
+                            val items = c()
+                            if (items.isNotEmpty()) {
+                                App.instance.player.playQueue(items, 0, origin)
+                                nav.go(if (items[0].isMusic) Screen.Music else Screen.Player)
+                            }
+                            selected = emptySet()
+                        }
+                    }
+                    Pill("+ Queue") {
+                        val c = collect()
+                        scope.launch {
+                            val its = c(); val n = App.instance.player.addToQueue(its)
+                            android.widget.Toast.makeText(ctx, "$n added to the queue" + if (its.size > n) " (${its.size - n} already in it)" else "",
+                                android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                    Pill("+ Playlist…") { addTarget = collect() }
+                    Pill("⏱ New playlist…") { quickTarget = collect() }
+                    Pill("RG scan") { rgTarget = collect() }
                 }
             }
             if (order.size > 1 && selected.isEmpty()) item {
@@ -222,7 +255,7 @@ fun MediaList(
                 when (r) {
                     is Row0.Dir -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(8.dp))
                         .background(if (r.e.uri in selected) accent().copy(alpha = 0.18f) else Color.Transparent)
-                        .combinedClickable(onClick = { if (selected.isNotEmpty()) toggle(r.e) else onOpenDir(r.e) }, onLongClick = { if (selected.isNotEmpty()) toggle(r.e) else menuFor = r.e }),
+                        .combinedClickable(onClick = { if (selected.isNotEmpty()) toggle(r.e) else onOpenDir(r.e) }, onLongClick = { if (selected.isNotEmpty()) quickFromSelection() else menuFor = r.e }),
                         verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) {
                             Text(if (r.e.uri in selected) "✓" else "▤", color = accent(), fontWeight = FontWeight.Bold)
@@ -232,6 +265,7 @@ fun MediaList(
                             onPlayNext = { scope.launch { App.instance.player.playNext(itemsOfDir(r.e)()) } },
                             onQueue = { scope.launch { App.instance.player.addToQueue(itemsOfDir(r.e)()) } },
                             onAddPlaylist = { addTarget = itemsOfDir(r.e) }, onDelete = null,
+                            onQuickPlaylist = { quickTarget = itemsOfDir(r.e) },
                             onSelect = { toggle(r.e) },
                             onRgScan = if (App.instance.store.current.settings.libraryKind == "audio") ({ rgTarget = itemsOfDir(r.e) }) else null) }
                     }
@@ -255,7 +289,7 @@ fun MediaList(
                         val sel = e.uri in selected
                         Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
                             .background(if (sel) accent().copy(alpha = 0.18f) else if (hl) accent().copy(alpha = 0.12f) else Color.Transparent)
-                            .combinedClickable(onClick = { if (selected.isNotEmpty()) toggle(e) else play(e) }, onLongClick = { if (selected.isNotEmpty()) toggle(e) else menuFor = e }).padding(horizontal = 4.dp),
+                            .combinedClickable(onClick = { if (selected.isNotEmpty()) toggle(e) else play(e) }, onLongClick = { if (selected.isNotEmpty()) quickFromSelection() else menuFor = e }).padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             if (sel) Text("✓", color = accent(), fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp)) else
                             Text(if (e.track > 0) (if (r.multiDisc && e.disc > 0) "${e.disc}-%02d".format(e.track) else e.track.toString()) else "·",
@@ -301,6 +335,7 @@ fun MediaList(
     }
 
     addTarget?.let { t -> AddToPlaylistDialog(t) { addTarget = null; selected = emptySet() } }
+    quickTarget?.let { t -> QuickPlaylistDialog(nav, t) { made -> quickTarget = null; if (made) selected = emptySet() } }
     rgTarget?.let { t -> RgScanDialog(nav, t) { rgTarget = null; selected = emptySet() } }
     infoItem?.let { it0 -> TagInfoDialog(it0) { infoItem = null } }
     rgAlbum?.let { (name, songs) -> RgScanDialog(nav, { songs }, RgModeSingle, "ReplayGain: $name") { rgAlbum = null } }
@@ -314,12 +349,14 @@ fun EntryMenu(
     e: Entry, isDir: Boolean, source: Source?, onDismiss: () -> Unit,
     onPlayNext: () -> Unit, onQueue: () -> Unit, onAddPlaylist: () -> Unit, onDelete: (() -> Unit)?,
     onSelect: (() -> Unit)? = null, onRgScan: (() -> Unit)? = null, onInfo: (() -> Unit)? = null,
+    onQuickPlaylist: (() -> Unit)? = null,
 ) {
     SDropdownMenu(expanded = true, onDismissRequest = onDismiss) {
         if (onSelect != null) SMenuItem(text = { Text("Select…") }, onClick = { onSelect(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Play all next" else "Play next") }, onClick = { onPlayNext(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Add all to queue" else "Add to queue") }, onClick = { onQueue(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Add all to playlist…" else "Add to playlist…") }, onClick = { onAddPlaylist(); onDismiss() })
+        if (onQuickPlaylist != null) SMenuItem(text = { Text("New playlist from this folder & play…") }, onClick = { onQuickPlaylist(); onDismiss() })
         if (onInfo != null) SMenuItem(text = { Text("Tags & ReplayGain…") }, onClick = { onInfo(); onDismiss() })
         if (onRgScan != null) SMenuItem(text = { Text(if (isDir) "ReplayGain scan (with subfolders)…" else "ReplayGain scan…") }, onClick = { onRgScan(); onDismiss() })
         if (onDelete != null) SMenuItem(text = { Text("Delete…", color = C.bad) }, onClick = { onDelete(); onDismiss() })
