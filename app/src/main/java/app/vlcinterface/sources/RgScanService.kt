@@ -51,7 +51,7 @@ class RgScanService : Service() {
     override fun onDestroy() { scope.coroutineContext[Job]?.cancel(); super.onDestroy() }
 
     private fun progress(text: String, pct: Int): Notification = Notification.Builder(this, CH_PROGRESS)
-        .setSmallIcon(android.R.drawable.stat_sys_download)
+        .setSmallIcon(app.vlcinterface.R.drawable.ic_stat_cone)
         .setContentTitle("ReplayGain scan $pct %")
         .setContentText(text)
         .setProgress(100, pct, false)
@@ -85,7 +85,7 @@ class RgScanService : Service() {
             channels(ctx)
             val text = "Saved ${s.saved} · skipped ${s.skipped}" + if (s.problems > 0) " · ${s.problems} problems — tap for the report" else " · no problems"
             ctx.getSystemService(NotificationManager::class.java).notify(ID_DONE, Notification.Builder(ctx, CH_DONE)
-                .setSmallIcon(android.R.drawable.stat_sys_download_done)
+                .setSmallIcon(app.vlcinterface.R.drawable.ic_stat_cone)
                 .setContentTitle(if (s.phase == "Cancelled") "ReplayGain scan stopped" else "ReplayGain scan finished")
                 .setContentText(text).setStyle(Notification.BigTextStyle().bigText(text))
                 .setAutoCancel(true).setContentIntent(open(ctx)).build())
