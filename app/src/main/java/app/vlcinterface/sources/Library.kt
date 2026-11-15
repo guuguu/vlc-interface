@@ -152,7 +152,8 @@ object MusicLibrary {
 
     suspend fun collectLocal(ctx: Context, folder: LocalFolder, recursive: Boolean): List<PlayItem> {
         val all = InternalSource.files(ctx, folder, recursive)
-        return all.groupBy { it.meta }.toSortedMap().flatMap { (rel, l) ->
+        // Folder by folder in the order the Library shows them (by name, not case-sensitive), each in its displayed order.
+        return all.groupBy { it.meta }.toSortedMap(compareBy<String> { it.lowercase() }.thenBy { it }).flatMap { (rel, l) ->
             playOrder(l, rel.trimEnd('/').substringAfterLast('/')).map { toPlayItem(it, null, "local:${folder.volume}:$rel") }
         }
     }

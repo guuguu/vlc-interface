@@ -161,8 +161,27 @@ fun MediaList(
     fun play(e: Entry, random: Boolean? = null) {
         val items = order.map { MusicLibrary.toPlayItem(it, source, folderKey) }
         val i = items.indexOfFirst { it.uri == e.uri }.coerceAtLeast(0)
-        App.instance.player.playQueue(items, i, origin, random = random)
+        val player = App.instance.player
+        player.playQueue(items, i, origin, random = random)
         if (!items[i].isMusic) nav.go(Screen.Player) else nav.go(Screen.Music)
+        // Playing from a folder plays the whole folder, subfolders included (user rule), in the order shown:
+        // this folder's files as listed (albums in track order, then videos) start at once; then each subfolder
+        // in the order listed, each with its files as shown and then its own subfolders.
+        scope.launch {
+            val have = items.map { it.uri }.toHashSet()
+            val extra = when {
+                source != null -> list.filter { it.isDir }.flatMap { d -> MusicLibrary.collectRecursive(source, d.uri) }
+                folderKey.startsWith("local:") -> {
+                    val vol = folderKey.removePrefix("local:").substringBefore(':')
+                    val rel = folderKey.removePrefix("local:").substringAfter(':')
+                    MusicLibrary.collectLocal(ctx, app.vlcinterface.sources.LocalFolder("$vol:$rel", folderName, rel, 0, vol), true)
+                }
+                else -> emptyList()
+            }.filter { it.uri !in have }.let { ofKind(it) }
+            // Only if that folder is still what's playing.
+            if (extra.isNotEmpty() && player.state.value.origin == origin)
+                player.addToQueue(if (App.instance.store.current.settings.shuffle) extra.shuffled() else extra)
+        }
     }
 
     fun itemsOfDir(e: Entry): suspend () -> List<PlayItem> = {
