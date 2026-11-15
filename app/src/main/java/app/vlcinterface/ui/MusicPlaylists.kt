@@ -196,7 +196,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             val fromLabel = when (p.origin.kind) {
                 "playlist" -> "Playlist: " + (st.playlists.firstOrNull { it.id == p.origin.playlistId }?.name ?: "")
                 "folder", "local" -> "Folder: " + p.origin.title
-                else -> "Open source"
+                else -> "Open song folder"
             }
             Pill("☰  $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { openOrigin(nav) }
             // Sleep: number input (up to 3 digits) for "After … songs" and "Custom minutes…".

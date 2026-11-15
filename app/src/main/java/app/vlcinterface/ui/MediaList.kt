@@ -417,7 +417,8 @@ fun openOrigin(nav: Navigator) {
             nav.home(); nav.go(Screen.Folder(f, item.uri))
         }
         o.kind == "folder" -> { nav.home(); nav.go(Screen.Browse(o.sourceId, o.uri, o.title, item.uri)) }
-        else -> nav.go(if (item.isMusic) Screen.Music else Screen.Player)
+        // Played from the queue / Songs list / a single file: the song's own folder in Libraries.
+        else -> openItemFolder(nav, item)
     }
 }
 
@@ -442,7 +443,7 @@ fun openItemFolder(nav: Navigator, item: PlayItem) {
         fk.contains("://") && item.sourceId.isNotEmpty() && store.current.sources.any { it.id == item.sourceId } -> {
             nav.home(); nav.go(Screen.Browse(item.sourceId, fk, Uri.decode(fk.trimEnd('/').substringAfterLast('/')), item.uri))
         }
-        else -> openOrigin(nav)
+        else -> nav.go(if (item.isMusic) Screen.Music else Screen.Player)
     }
 }
 
