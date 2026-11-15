@@ -436,7 +436,9 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
         FlowRow(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             s.pins.forEach { pin ->
                 Box(Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFF252A32)).clickable {
-                    nav.go(Screen.Browse(s.id, Urls.forSource(s, pin), pin.trim('/').substringAfterLast('/')))
+                    // A pin holds the folder's full path on the server (share included): built from the server
+                    // alone, so the share isn't put in twice (".../Transcend/Transcend/...").
+                    nav.go(Screen.Browse(s.id, Urls.forSource(s.copy(path = ""), pin), pin.trim('/').substringAfterLast('/')))
                 }.padding(horizontal = 12.dp, vertical = 7.dp)) { Text("▤ " + pin.trim('/').substringAfterLast('/'), color = C.text, fontSize = 13.sp) }
             }
             Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable {
