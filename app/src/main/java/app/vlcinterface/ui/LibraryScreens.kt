@@ -440,6 +440,18 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
                     // alone, so the share isn't put in twice (".../Transcend/Transcend/...").
                     nav.go(Screen.Browse(s.id, Urls.forSource(s.copy(path = ""), pin), pin.trim('/').substringAfterLast('/')))
                 }.padding(horizontal = 12.dp, vertical = 7.dp)) { Text("▤ " + pin.trim('/').substringAfterLast('/'), color = C.text, fontSize = 13.sp) }
+                // Right beside the bookmark: index it now for search (orange = indexed; spinner while indexing).
+                val idxBusy by app.vlcinterface.sources.NetIndex.busy.collectAsState()
+                val idxVer by app.vlcinterface.sources.NetIndex.version.collectAsState()
+                val indexed = remember(idxVer) { app.vlcinterface.sources.NetIndex.has(s, pin) }
+                val ctxIdx = androidx.compose.ui.platform.LocalContext.current
+                Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, if (indexed) a else C.line, RoundedCornerShape(8.dp)).clickable {
+                    app.vlcinterface.sources.NetIndex.build(s, pin)
+                    android.widget.Toast.makeText(ctxIdx, "Indexing ${pin.trim('/').substringAfterLast('/')} for search…", android.widget.Toast.LENGTH_SHORT).show()
+                }.padding(horizontal = 10.dp, vertical = 7.dp), contentAlignment = Alignment.Center) {
+                    if (idxBusy.contains(pin.trim('/').substringAfterLast('/'))) CircularProgressIndicator(color = a, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                    else Text(if (indexed) "🔍 Indexed" else "🔍 Index", color = if (indexed) a else C.muted, fontSize = 13.sp)
+                }
             }
             Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable {
                 App.instance.store.update { st -> st.copy(sources = st.sources.map { if (it.id == s.id) it.copy(lastScan = System.currentTimeMillis()) else it }) }
