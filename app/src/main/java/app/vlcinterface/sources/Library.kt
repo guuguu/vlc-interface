@@ -37,6 +37,24 @@ fun trackFromName(name: String): Int {
 }
 
 object MusicLibrary {
+    /** Every audio / video file in the same folder as [item] (no subfolders), in album order. Empty when unknown. */
+    suspend fun folderOf(ctx: Context, item: PlayItem): List<PlayItem> {
+        val fk = item.folderKey
+        val src = App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }
+        return try {
+            when {
+                fk.startsWith("local:") -> {
+                    val vol = fk.removePrefix("local:").substringBefore(':'); val rel = fk.removePrefix("local:").substringAfter(':')
+                    collectLocal(ctx, LocalFolder("$vol:$rel", rel, rel, 0, vol), false)
+                }
+                src != null && fk.isNotEmpty() -> Browse.list(src, fk).getOrNull()?.let { l ->
+                    playOrder(l, fk.trimEnd('/').substringAfterLast('/')).map { toPlayItem(it, src, fk) }
+                } ?: emptyList()
+                else -> emptyList()
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
     /** Applies cached tags (from earlier Rescans) to network entries. */
     fun withCachedTags(list: List<Entry>): List<Entry> = list.map { e ->
         if (!e.isAudio || e.title.isNotEmpty()) e else TagCache.get(e.uri)?.let { t -> e.applyTags(t) } ?: e

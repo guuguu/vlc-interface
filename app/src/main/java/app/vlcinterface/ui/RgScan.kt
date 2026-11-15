@@ -77,14 +77,39 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, initialM
     var mode by remember { mutableStateOf(initialMode) }
     var target by remember { mutableStateOf(RgTarget.FILES) }
     var rescan by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { items = collect().filter { it.isMusic } }
+    // One file picked: scan just it, or every song in its folder.
+    var single by remember { mutableStateOf<PlayItem?>(null) }
+    var folder by remember { mutableStateOf<List<PlayItem>?>(null) }
+    var wholeFolder by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val l = collect().filter { it.isMusic }
+        items = l
+        if (l.size == 1) {
+            single = l[0]
+            folder = app.vlcinterface.sources.MusicLibrary.folderOf(ctx.applicationContext, l[0]).filter { it.isMusic }.takeIf { it.size > 1 }
+        }
+    }
+    LaunchedEffect(wholeFolder, folder) { val f = folder; val one = single; if (one != null) items = if (wholeFolder && f != null) f else listOf(one) }
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
         title = { Text(title, color = C.text) },
         text = {
             val scroll = rememberScrollState()
             Column(Modifier.verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 val its = items
-                Text(if (its == null) "Collecting music files…" else "${its.size} music files", color = C.muted, fontSize = 13.sp)
+                Text(if (its == null) "Collecting music files…" else "${its.size} music file${if (its.size == 1) "" else "s"}", color = C.muted, fontSize = 13.sp)
+                if (single != null) {
+                    Text("Files", color = C.text, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth().clickable { wholeFolder = false }, verticalAlignment = Alignment.CenterVertically) {
+                        SRadioButton(!wholeFolder, { wholeFolder = false })
+                        Text("Just the selected file", color = C.text, fontSize = 14.sp)
+                    }
+                    val f = folder
+                    Row(Modifier.fillMaxWidth().clickable(enabled = f != null) { wholeFolder = true }, verticalAlignment = Alignment.CenterVertically) {
+                        SRadioButton(wholeFolder, { if (f != null) wholeFolder = true }, enabled = f != null)
+                        Text(if (f != null) "All files in its folder (${f.size})" else "All files in its folder (none other found)",
+                            color = if (f != null) C.text else C.muted, fontSize = 14.sp)
+                    }
+                }
                 Text("Scan", color = C.text, fontWeight = FontWeight.SemiBold)
                 RgMode.values().forEach { m ->
                     Row(Modifier.fillMaxWidth().clickable { mode = m }, verticalAlignment = Alignment.CenterVertically) {
