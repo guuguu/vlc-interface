@@ -54,6 +54,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -115,6 +118,13 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     // VU meters sideways: narrower in proportion to the shorter screen height.
     // Sideways: song name and artist · album smaller in the same proportion as the picture (190 / 280).
     val tk = if (landscape) 190f / 280f else 1f
+    // Sideways the halves are measured so the page fits the screen without scrolling where possible:
+    // the picture takes what the left half has left over (never below 110 dp), and "Up next" shows as many songs
+    // as fit under the controls (at least one; the full queue is one tap away). Scrolling stays as the fallback.
+    var leftHpx by remember { mutableIntStateOf(0) }
+    var rightHpx by remember { mutableIntStateOf(0) }
+    var upNextYpx by remember { mutableIntStateOf(-1) }
+    val dens = androidx.compose.ui.platform.LocalDensity.current
     val vuK = if (landscape) (conf.screenHeightDp.toFloat() / conf.screenWidthDp).coerceIn(0.35f, 1f) else 1f
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().padding(end = if (meters) (21 * vuK).dp else 0.dp)) {
@@ -136,7 +146,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Long-press: all fitting album pictures online; several → choose one from the list.
             var coverPick by remember(item.uri) { mutableStateOf(false) }
             val coverItem = item.copy(artist = p.metaArtist.ifEmpty { item.artist }, album = p.metaAlbum.ifEmpty { item.album })
-            Cover(item.artwork, if (landscape) 190 else 280, Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
+            Cover(item.artwork, if (!landscape) 280 else if (leftHpx <= 0) 190 else (with(dens) { leftHpx.toDp().value }.toInt() - 128).coerceIn(110, 240), Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
                 item = coverItem, download = true, refresh = coverRefresh,
                 onNote = { coverNote = it }, onFound = { player.useDownloadedArtwork(item, "mem:" + item.uri) })
             if (coverPick) CoverPicker(coverItem,
@@ -286,25 +296,29 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     }
                 }
             }
-            val next = p.upNext
-            if (next.isNotEmpty()) Column(Modifier.fillMaxWidth()) {
+            val next0 = p.upNext
+            val next = if (!landscape || upNextYpx < 0 || rightHpx <= 0) next0 else {
+                val free = with(dens) { (rightHpx - upNextYpx).toDp().value } - 34f      // minus the "Up next" heading
+                next0.take((free / 30f).toInt().coerceIn(1, maxOf(1, next0.size)))
+            }
+            if (next.isNotEmpty()) Column(Modifier.fillMaxWidth().onGloballyPositioned { upNextYpx = it.positionInParent().y.toInt() }) {
                 Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); Text("Queue ›", color = accent(), modifier = Modifier.clickable { nav.go(Screen.Queue) }.padding(8.dp)) }
                 next.forEachIndexed { i, n ->
-                    Row(Modifier.fillMaxWidth().clickable { player.jumpTo(p.index + 1 + i) }.padding(vertical = 8.dp)) {
+                    Row(Modifier.fillMaxWidth().clickable { player.jumpTo(p.index + 1 + i) }.padding(vertical = if (landscape) 5.dp else 8.dp)) {
                         Text("${i + 1}.", color = C.muted, modifier = Modifier.width(28.dp))
                         Text(n.title + if (n.artist.isNotEmpty()) " — ${n.artist}" else "", color = C.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
                     }
                 }
             }
-            Box(Modifier.height(16.dp))
+            Box(Modifier.height(if (landscape) 0.dp else 16.dp))
         }
         if (landscape) Row(Modifier.weight(1f).fillMaxWidth()) {
             val scrollA = rememberScrollState()
-            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scrollA).padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp)) { partA() }
-            Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(scroll).padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(12.dp)) { partB() }
+            Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { leftHpx = it.height }.verticalScroll(scrollA).padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) { partA() }
+            Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.verticalScroll(scroll).padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partB() }
         } else Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             partA(); partB()
