@@ -100,7 +100,7 @@ fun Modifier.scrollbar(state: LazyListState, color: Color = Color(0xFF6B717C)): 
 }
 
 @Composable
-fun SectionTitle(text: String, modifier: Modifier = Modifier) {
+fun SectionTitle(text: String, modifier: Modifier = Modifier) = Scaled {
     Text(text.uppercase(), modifier = modifier.padding(top = 6.dp, bottom = 4.dp), color = C.muted,
         fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
 }

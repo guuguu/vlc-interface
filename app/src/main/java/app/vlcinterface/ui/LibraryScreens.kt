@@ -81,7 +81,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 @Composable
-fun LibraryHeader(title: String, openOutput: () -> Unit, nav: Navigator? = null, actions: @Composable () -> Unit = {}) {
+fun LibraryHeader(title: String, openOutput: () -> Unit, nav: Navigator? = null, actions: @Composable () -> Unit = {}) = Scaled {
     val canBack = nav != null && nav.stack.size > 1
     Row(Modifier.fillMaxWidth().padding(start = if (canBack) 4.dp else 20.dp, end = 12.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         if (canBack) BackButton(nav!!)
@@ -97,7 +97,7 @@ fun HomeButton(nav: Navigator, tint: Color = C.text) {
 }
 
 @Composable
-fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Composable () -> Unit = {}, actions: @Composable () -> Unit = {}) {
+fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Composable () -> Unit = {}, actions: @Composable () -> Unit = {}) = Scaled {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         SymButton(onClick = { nav.back() }) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
         HomeButton(nav)

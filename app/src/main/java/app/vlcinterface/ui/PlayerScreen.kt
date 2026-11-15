@@ -263,7 +263,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                                     Row(Modifier.fillMaxWidth().padding(start = 0.dp), verticalAlignment = Alignment.CenterVertically) {
                                         SymButton({ panel = if (panel == Panel.TRACKS || panel == Panel.PICTURE) Panel.NONE else Panel.TRACKS }) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
                                         Text(when (panel) { Panel.DOWNLOAD -> "Download subtitles"; Panel.STYLE -> "Subtitle style"; Panel.PICTURE -> "Picture colour"; else -> "Audio & subtitles" },
-                                            color = C.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                                            color = C.text, fontSize = (17 * btnScale()).sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
                                         SymButton({ panel = Panel.NONE }) { Text("✕", color = C.text) }
                                     }
                                     PanelContent(panel, p, onPanel = { panel = it })
@@ -383,7 +383,7 @@ private fun BoxScope.ControlsOverlayBody(
         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         SymButton({ nav.back() }) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
         HomeButton(nav, Color.White)
-        Text(p.item?.title ?: "", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        Text(p.item?.title ?: "", color = Color.White, fontSize = (15 * ks).sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         AutoFitRow {
         if (!compact) OutputPill(openOutput)
         OverlayChip("Audio & subs") { onTouch(); onPanel() }
