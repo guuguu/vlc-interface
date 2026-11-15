@@ -402,7 +402,43 @@ class PlayerController(private val context: Context, private val store: Store) {
     var appVolume = 1f
         private set
 
-    fun setAppVolume(v: Float) { appVolume = v.coerceIn(0f, 2f); NativeAudio.appVolume(appVolume) }
+    fun setAppVolume(v: Float) { appVolume = v.coerceIn(0f, 2f); NativeAudio.appVolume(appVolume * fadeK) }
+
+    // ---------- sleep fade ----------
+
+    /** Sleep: the last 2 minutes before playback stops, the volume goes down by itself in 40 steps (one every 3 s). */
+    private var fadeK = 1f
+
+    private fun applyFade(k: Float) {
+        if (k == fadeK) return
+        fadeK = k
+        NativeAudio.appVolume(appVolume * k)
+        if (!ducked) mp.setVolume((100 * k).toInt())
+    }
+
+    /** Milliseconds until sleep stops playback, or -1 when no sleep is set (or the end isn't known yet). */
+    private fun msToSleep(s: PlayerState): Long = when {
+        s.sleepUntil > 0 -> s.sleepUntil - System.currentTimeMillis()
+        s.sleepEndOfTrack || s.sleepSongs == 1 -> {
+            val item = s.item
+            val len = if (item != null && item.endMs > 0) item.endMs - item.startMs else s.length
+            if (item == null || len <= 0) -1 else (len - (s.time - maxOf(item.startMs, 0L))).coerceAtLeast(0)
+        }
+        else -> -1
+    }
+
+    private val fadeTicker = object : Runnable {
+        override fun run() {
+            val s = _state.value
+            val left = if (s.item != null && s.isPlaying) msToSleep(s) else -1
+            // 40 steps over the last 120 s (one every 3 s); anything else (no sleep, sleep turned off, paused) = full volume.
+            val k = if (left in 0..120_000) ((left + 2_999) / 3_000).toInt().coerceIn(0, 40) / 40f else 1f
+            applyFade(k)
+            main.postDelayed(this, 500)
+        }
+    }
+
+    init { main.postDelayed(fadeTicker, 1_000) }
 
     /** Volume buttons / swipe step while the app plays on its own picked device. Returns the new percent (100 = as set). */
     fun stepAppVolume(up: Boolean): Int { setAppVolume(appVolume + if (up) 0.0667f else -0.0667f); return (appVolume * 100).toInt() }
@@ -476,7 +512,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 AudioManager.AUDIOFOCUS_LOSS -> { resumeOnGain = false; pause() }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> { if (mp.isPlaying) { resumeOnGain = true; mp.pause() } }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> { ducked = true; mp.setVolume(30) }
-                AudioManager.AUDIOFOCUS_GAIN -> { ducked = false; mp.setVolume(100); if (resumeOnGain) { resumeOnGain = false; mp.play() } }
+                AudioManager.AUDIOFOCUS_GAIN -> { ducked = false; mp.setVolume((100 * fadeK).toInt()); if (resumeOnGain) { resumeOnGain = false; mp.play() } }
             }
         }, main)
         .build()
@@ -808,6 +844,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun pause() { if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() } }
     fun stop() {
         stopping = true; endHandled = true
+        main.postDelayed({ applyFade(1f) }, 300)   // a sleep fade ends with the stop: next playback at full volume
         saveProgress()
         resetPicture()
         mp.stop()
@@ -997,8 +1034,8 @@ class PlayerController(private val context: Context, private val store: Store) {
                 failsInRow = 0
                 // Every (re)start of playback — also resuming a paused video — re-applies the sound settings,
                 // so volume / preamp / balance always act at once, not only after some other action.
-                if (!ducked) mp.setVolume(100)
-                NativeAudio.appVolume(appVolume)
+                if (!ducked) mp.setVolume((100 * fadeK).toInt())
+                NativeAudio.appVolume(appVolume * fadeK)
                 applySoundChain()
                 if (pendingSeek > 500) { mp.setTime(pendingSeek) }   // continue exactly where it was (RG button, engine restarts…)
                 pendingSeek = -1
