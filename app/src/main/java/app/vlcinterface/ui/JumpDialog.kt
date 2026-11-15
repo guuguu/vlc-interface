@@ -37,7 +37,7 @@ import app.vlcinterface.player.PlayItem
  * after the current song (and into the playing playlist) — nothing is removed, no duplicates.
  */
 @Composable
-fun JumpDialog(onDone: () -> Unit) {
+fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
     val ctx = LocalContext.current
     val player = App.instance.player
     var library by remember { mutableStateOf<List<PlayItem>?>(null) }
@@ -50,18 +50,20 @@ fun JumpDialog(onDone: () -> Unit) {
         if (q.length < 2) emptyList() else {
             val words = q.split(Regex("\\s+"))
             fun ok(p: PlayItem) = "${p.artist} ${p.album} ${p.title}".lowercase().let { t -> words.all { t.contains(it) } }
-            (queue.filter(::ok) + (library ?: emptyList()).filter(::ok)).distinctBy { "${it.uri}#${it.startMs}" }.take(60)
+            // Play next searches the whole Songs list; Jump to also looks in the queue first.
+            ((if (playNext) emptyList() else queue.filter(::ok)) + (library ?: emptyList()).filter(::ok)).distinctBy { "${it.uri}#${it.startMs}" }.take(60)
         }
     }
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text("Jump to song", color = C.text) },
+        title = { Text(if (playNext) "Play next" else "Jump to song", color = C.text) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Artist, album or song", fontSize = 13.sp) }, textStyle = TextStyle(fontSize = 14.sp, color = C.text))
                 Text(when {
                     library == null -> "Reading the Library…"
-                    query.trim().length < 2 -> "Type at least 2 letters · queue and Library are searched"
+                    query.trim().length < 2 -> if (playNext) "Type at least 2 letters · the song you pick plays after the current one"
+                        else "Type at least 2 letters · queue and Library are searched"
                     else -> "${hits.size}${if (hits.size == 60) "+" else ""} found"
                 }, color = C.muted, fontSize = 12.sp)
                 val st = rememberLazyListState()
@@ -69,7 +71,7 @@ fun JumpDialog(onDone: () -> Unit) {
                     items(hits) { h ->
                         val queued = "${h.uri}#${h.startMs}" in inQueue
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(C.card2)
-                            .clickable { player.jumpToSong(h); onDone() }.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                            .clickable { if (playNext) player.queueNext(h) else player.jumpToSong(h); onDone() }.padding(horizontal = 8.dp, vertical = 6.dp)) {
                             Text(h.title, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}" + if (queued) "  · in the queue" else "",
                                 color = if (queued) accent() else C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

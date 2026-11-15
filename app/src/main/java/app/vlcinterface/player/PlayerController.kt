@@ -710,6 +710,23 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun jumpTo(i: Int) { if (i in _state.value.queue.indices) startItem(i, -1) }
 
     /**
+     * Player's "Play next" search: the song goes right after the playing one in the current queue (already in the
+     * queue → moved there). The playlist itself isn't changed; nothing else moves.
+     */
+    fun queueNext(item: PlayItem) {
+        val s = _state.value
+        if (s.item == null) { playQueue(listOf(item), 0, Origin("single")); return }
+        val q = s.queue.toMutableList()
+        var idx = s.index
+        val at = q.indexOfFirst { qKey(it) == qKey(item) }
+        if (at == s.index) return                                    // it's the one playing now
+        val song = if (at >= 0) q.removeAt(at).also { if (at < idx) idx-- } else item
+        q.add((idx + 1).coerceIn(0, q.size), song)
+        if (at < 0) orderedQueue = orderedQueue?.plus(song)
+        _state.value = s.copy(queue = q, index = idx)
+    }
+
+    /**
      * Player's "Jump to": the song is already in the queue → it plays from there. Otherwise it goes right after the
      * playing song (nothing removed) and plays; when a playlist is playing it's also put into that playlist
      * after the current song (unless already in it).
