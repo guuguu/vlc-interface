@@ -842,6 +842,11 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
     fun resume() { if (!mp.isPlaying && _state.value.item != null) { _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() } }
     fun pause() { if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() } }
+    /** Set when the sleep timer closed the player (shown as a pop-up, cleared when seen). */
+    val sleptAt = kotlinx.coroutines.flow.MutableStateFlow(0L)
+
+    private fun sleepStop() { sleptAt.value = System.currentTimeMillis(); stop() }
+
     fun stop() {
         stopping = true; endHandled = true
         main.postDelayed({ applyFade(1f) }, 300)   // a sleep fade ends with the stop: next playback at full volume
@@ -980,13 +985,13 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun handleEnd(s: PlayerState) {
         if (endHandled) return
         endHandled = true
-        if (s.sleepEndOfTrack) { main.post { stop() }; return }
+        if (s.sleepEndOfTrack) { main.post { sleepStop() }; return }
         s.item?.let { item -> store.update { st -> st.copy(recent = st.recent.filterNot { it.uri == item.uri }) } }
         // Sleep after a number of songs: count down; when the queue / playlist runs out first, go on from its beginning.
         var wrap = false
         if (s.sleepSongs > 0) {
             val left = s.sleepSongs - 1
-            if (left <= 0) { _state.value = _state.value.copy(sleepSongs = 0); main.post { stop() }; return }
+            if (left <= 0) { _state.value = _state.value.copy(sleepSongs = 0); main.post { sleepStop() }; return }
             _state.value = _state.value.copy(sleepSongs = left)
             wrap = true
         }
@@ -1133,7 +1138,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         override fun run() {
             try {
                 val s = _state.value
-                if (s.sleepUntil > 0 && System.currentTimeMillis() >= s.sleepUntil) stop()
+                if (s.sleepUntil > 0 && System.currentTimeMillis() >= s.sleepUntil) sleepStop()
                 val item = s.item
                 if (item != null && item.isRadio) {
                     val m = mp.media

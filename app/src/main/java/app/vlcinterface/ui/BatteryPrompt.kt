@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import app.vlcinterface.App
 
 /** Battery "Unrestricted" for this app, so Android doesn't stop playback while the app is in the background. */
 object Battery {
@@ -52,5 +53,19 @@ fun BatteryPromptHost() {
         },
         confirmButton = { STextButton({ done(); Battery.ask(ctx) }) { Text("Allow", color = accent()) } },
         dismissButton = { STextButton({ done() }) { Text("Not now") } },
+    )
+}
+
+
+/** "Player closed by sleep timer" — shown when the sleep timer stopped playback (also on coming back to the app). */
+@Composable
+fun SleepClosedHost() {
+    val at by App.instance.player.sleptAt.collectAsState()
+    if (at <= 0L) return
+    val time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(at))
+    AlertDialog(onDismissRequest = { App.instance.player.sleptAt.value = 0L }, containerColor = C.panel,
+        title = { Text("Sleep", color = C.text) },
+        text = { Text("Player closed by sleep timer at $time.", color = C.text) },
+        confirmButton = { STextButton({ App.instance.player.sleptAt.value = 0L }) { Text("OK", color = accent()) } },
     )
 }
