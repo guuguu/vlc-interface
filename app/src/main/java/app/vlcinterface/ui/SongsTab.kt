@@ -102,6 +102,10 @@ fun SongsTab(nav: Navigator) {
         { it.artist.ifEmpty { "￿" }.lowercase() }, { it.album.ifEmpty { "￿" }.lowercase() }, { it.trackNo }))
     // Phone songs + songs of the indexed ★ LAN folders (+ any read with "+ LAN / Internet"); a song on both = phone file.
     LaunchedEffect(indexVer) { songs = sorted(SongsCache.all(ctx.applicationContext)); loading = false }
+    // Folders pinned before indexing existed (or never indexed yet): indexed now, in the background.
+    LaunchedEffect(Unit) {
+        App.instance.store.current.sources.forEach { s0 -> s0.pins.filterNot { app.vlcinterface.sources.NetIndex.has(s0, it) }.forEach { app.vlcinterface.sources.NetIndex.build(s0, it) } }
+    }
     val chosen = songs.filter { it.uri in selected }
     val total = chosen.sumOf { it.durationMs.coerceAtLeast(0) }
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
