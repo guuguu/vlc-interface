@@ -140,7 +140,7 @@ fun SettingsScreen(nav: Navigator) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text("Songs list scrolling", color = C.text, fontSize = 15.sp)
+                            Text("Songs list horizontal autoscroll", color = C.text, fontSize = 15.sp)
                             Text("Speed of long rows gliding to their end and back (Library → Songs)", color = C.muted, fontSize = 13.sp)
                         }
                         Text(if (s.songsScrollSpeed == 0) "Off" else "${s.songsScrollSpeed}%", color = accent(), fontWeight = FontWeight.SemiBold)
