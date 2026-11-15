@@ -47,6 +47,9 @@ object CoverArt {
         miss = File(ctx.filesDir, "covers").apply { mkdirs() }
         // Pictures are no longer kept in the app (user rule): remove any stored by an earlier version.
         miss.listFiles { f -> f.name.endsWith(".jpg") }?.forEach { it.delete() }
+        // The search got better: forget every "not found online" from earlier versions once, so those albums are tried again.
+        val v2 = File(miss, ".search-v2")
+        if (!v2.exists()) { miss.listFiles { f -> f.name.endsWith(".none") }?.forEach { it.delete() }; v2.writeText("") }
     }
 
     /** In-memory picture for the notification / lock screen ("mem:" + key). */
@@ -151,13 +154,14 @@ object CoverArt {
     }
 
     /** For the music player: folder picture, else internet (album, then artist), saved into the album folder. */
-    suspend fun forPlayer(ctx: Context, item: PlayItem, artist: String, album: String, online: Boolean): Result = withContext(Dispatchers.IO) {
+    suspend fun forPlayer(ctx: Context, item: PlayItem, artist: String, album: String, online: Boolean, force: Boolean = false): Result = withContext(Dispatchers.IO) {
         val pl = place(ctx, item)
         val memKey = pl?.key ?: item.uri
-        mem.get(memKey)?.let { mem.put(item.uri, it); return@withContext Result(it, "") }
+        if (!force) mem.get(memKey)?.let { mem.put(item.uri, it); return@withContext Result(it, "") }
         pl?.let { readFolder(ctx, it) }?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.let { mem.put(memKey, it); mem.put(item.uri, it); return@withContext Result(it, "") }
         if (!online) return@withContext Result(null, "")
-        val (bytes, name) = albumPicture(artist, album)?.let { it to "cover.jpg" } ?: artistPicture(artist)?.let { it to "artist.jpg" } ?: return@withContext Result(null, "")
+        val (bytes, name) = albumPicture(artist, album, force)?.let { it to "cover.jpg" } ?: artistPicture(artist, force)?.let { it to "artist.jpg" }
+            ?: return@withContext Result(null, if (force) "No picture found online for \"$album\"" + if (artist.isNotBlank()) " by $artist" else "" else "")
         val (bmp, jpeg) = resize(bytes) ?: return@withContext Result(null, "")
         mem.put(memKey, bmp); mem.put(item.uri, bmp)
         val why = if (pl == null) "not saved — no album folder for this source" else saveFolder(ctx, pl, name, jpeg)
@@ -165,7 +169,8 @@ object CoverArt {
     }
 
     private fun key(s: String) = s.trim().lowercase().hashCode().toUInt().toString(16)
-    private fun missed(k: String) = File(miss, "$k.none").let { it.exists() && System.currentTimeMillis() - it.lastModified() < 30L * 24 * 3600 * 1000 }
+    // "Not found online": asked again after 7 days (or at once with "Find picture again").
+    private fun missed(k: String) = File(miss, "$k.none").let { it.exists() && System.currentTimeMillis() - it.lastModified() < 7L * 24 * 3600 * 1000 }
     private fun markMissed(k: String) { try { File(miss, "$k.none").writeText("") } catch (_: Exception) {} }
 
     private suspend fun mb(url: String): JSONObject? {
@@ -177,25 +182,69 @@ object CoverArt {
     private fun get(url: String): ByteArray? =
         Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }?.takeIf { it.size > 1000 }
 
-    private suspend fun albumPicture(artist: String, album: String): ByteArray? {
+    /** Album title variants: as tagged, without "(Remastered)" / "[Deluxe]" / "CD 1", roman ↔ arabic numbers (ELO 2 ↔ ELO II). */
+    private fun albumVariants(album: String): List<String> {
+        val out = LinkedHashSet<String>()
+        val a = album.trim(); out += a
+        val clean = a.replace(Regex("""\s*[\(\[][^)\]]*(remaster|deluxe|edition|bonus|expanded|anniversary|mono|stereo|disc|cd)[^)\]]*[\)\]]""", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("""\s*[-–:]?\s*(disc|cd)\s*\d+\s*$""", RegexOption.IGNORE_CASE), "").trim()
+        if (clean.isNotEmpty()) out += clean
+        val roman = mapOf("2" to "II", "3" to "III", "4" to "IV", "5" to "V", "6" to "VI", "7" to "VII", "8" to "VIII", "9" to "IX", "10" to "X")
+        for (v in out.toList()) {
+            roman.forEach { (d, r) ->
+                if (Regex("""\b$d\b""").containsMatchIn(v)) out += v.replace(Regex("""\b$d\b"""), r)
+                if (Regex("""\b$r\b""").containsMatchIn(v)) out += v.replace(Regex("""\b$r\b"""), d)
+            }
+        }
+        return out.toList().take(4)
+    }
+
+    /** Does a MusicBrainz artist credit fit the tag? Same name, one inside the other, or initials (ELO = Electric Light Orchestra). */
+    private fun artistFits(tag: String, credit: String): Boolean {
+        if (tag.isBlank()) return true
+        val t = tag.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim(); val c = credit.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
+        if (t.isEmpty() || c.isEmpty()) return true
+        if (t == c || c.contains(t) || t.contains(c)) return true
+        val initials = c.split(' ').filter { it.isNotEmpty() && it !in setOf("the", "and", "of") }.joinToString("") { it.take(1) }
+        return t.replace(" ", "") == initials
+    }
+
+    /**
+     * Album picture: several MusicBrainz searches until one fits — title variants, with the artist and then
+     * without it (checking the artist afterwards, so "ELO" finds "Electric Light Orchestra"), release groups and
+     * single releases. [force]: also when this album was marked "not found" before.
+     */
+    private suspend fun albumPicture(artist: String, album: String, force: Boolean = false): ByteArray? {
         if (album.isBlank()) return null
-        val k = "al" + key("$artist|$album"); if (missed(k)) return null
+        val k = "al" + key("$artist|$album"); if (!force && missed(k)) return null
         return lock.withLock {
             try {
                 fun q(s: String) = s.replace("\"", "")
-                val query = "releasegroup:\"${q(album)}\"" + if (artist.isNotBlank()) " AND artist:\"${q(artist)}\"" else ""
-                val arr = mb("https://musicbrainz.org/ws/2/release-group/?fmt=json&limit=5&query=" + URLEncoder.encode(query, "UTF-8"))?.optJSONArray("release-groups")
-                val ids = arr?.let { a -> (0 until a.length()).map { a.getJSONObject(it) } }?.filter { it.optInt("score") >= 90 }?.map { it.getString("id") } ?: emptyList()
-                ids.firstNotNullOfOrNull { id -> get("https://coverartarchive.org/release-group/$id/front-500") } ?: null.also { markMissed(k) }
+                fun credit(o: JSONObject) = o.optJSONArray("artist-credit")?.let { c -> (0 until c.length()).joinToString(" ") { c.getJSONObject(it).optString("name") } } ?: ""
+                val tried = HashSet<String>()
+                for (title in albumVariants(album)) for (withArtist in listOf(true, false)) {
+                    if (withArtist && artist.isBlank()) continue
+                    for (kind in listOf("release-group", "release")) {
+                        val field = if (kind == "release-group") "releasegroup" else "release"
+                        val query = "$field:\"${q(title)}\"" + if (withArtist) " AND artist:\"${q(artist)}\"" else ""
+                        if (!tried.add(query)) continue
+                        val arr = mb("https://musicbrainz.org/ws/2/$kind/?fmt=json&limit=10&query=" + URLEncoder.encode(query, "UTF-8"))
+                            ?.optJSONArray(if (kind == "release-group") "release-groups" else "releases") ?: continue
+                        val ids = (0 until arr.length()).map { arr.getJSONObject(it) }
+                            .filter { it.optInt("score") >= 85 && artistFits(artist, credit(it)) }.map { it.getString("id") }.take(4)
+                        ids.firstNotNullOfOrNull { id -> get("https://coverartarchive.org/$kind/$id/front-500") }?.let { return@withLock it }
+                    }
+                }
+                markMissed(k); null
             } catch (_: Exception) { null }
         }
     }
 
     private fun usableArtist(a: String) = a.isNotBlank() && a.trim().lowercase() !in setOf("various artists", "various", "va", "unknown", "<unknown>")
 
-    private suspend fun artistPicture(artist: String): ByteArray? {
+    private suspend fun artistPicture(artist: String, force: Boolean = false): ByteArray? {
         if (!usableArtist(artist)) return null
-        val k = "ar" + key(artist); if (missed(k)) return null
+        val k = "ar" + key(artist); if (!force && missed(k)) return null
         return lock.withLock {
             try {
                 val found = mb("https://musicbrainz.org/ws/2/artist/?fmt=json&limit=3&query=" + URLEncoder.encode("artist:\"${artist.replace("\"", "")}\"", "UTF-8"))

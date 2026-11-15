@@ -117,7 +117,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             var coverNote by remember(item.uri) { mutableStateOf("") }
-            Cover(item.artwork, 280, Modifier.padding(top = 8.dp),
+            // Long-press the picture: look for it online again (also when it wasn't found before).
+            var coverRetry by remember(item.uri) { mutableIntStateOf(0) }
+            Cover(item.artwork, 280, Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = "Looking for the picture online…"; coverRetry++ }), retry = coverRetry,
                 item = item.copy(artist = p.metaArtist.ifEmpty { item.artist }, album = p.metaAlbum.ifEmpty { item.album }), download = true,
                 onNote = { coverNote = it }, onFound = { player.useDownloadedArtwork(item, "mem:" + item.uri) })
             if (coverNote.isNotEmpty()) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)

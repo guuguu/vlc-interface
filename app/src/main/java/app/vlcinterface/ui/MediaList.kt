@@ -73,10 +73,10 @@ import kotlinx.coroutines.withContext
 /** Album cover / thumbnail from a content:// uri (phone) or a file:// / path (libVLC cache). */
 @Composable
 fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayItem? = null,
-          download: Boolean = false, onNote: (String) -> Unit = {}, onFound: () -> Unit = {}) {
+          download: Boolean = false, onNote: (String) -> Unit = {}, onFound: () -> Unit = {}, retry: Int = 0) {
     val ctx = LocalContext.current
     val online = download && App.instance.store.current.settings.coverDownload
-    val bmp by produceState<Bitmap?>(null, url, item?.uri, online) {
+    val bmp by produceState<Bitmap?>(null, url, item?.uri, online, retry) {
         value = withContext(Dispatchers.IO) {
             val own = try {
                 when {
@@ -90,7 +90,7 @@ fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayIte
             // in the player also from the internet (album, then artist / band), saved into that folder.
             own ?: item?.let { it0 ->
                 if (download) {
-                    val r = app.vlcinterface.sources.CoverArt.forPlayer(ctx, it0, it0.artist, it0.album, online)
+                    val r = app.vlcinterface.sources.CoverArt.forPlayer(ctx, it0, it0.artist, it0.album, online || retry > 0, force = retry > 0)
                     withContext(Dispatchers.Main) { if (r.note.isNotEmpty()) onNote(r.note); if (r.bitmap != null) onFound() }
                     r.bitmap
                 } else app.vlcinterface.sources.CoverArt.folderOnly(ctx, it0)
