@@ -86,9 +86,12 @@ fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, artist: Strin
                 }
             } catch (_: Exception) { null }
             // No picture in the files: the album picture stored from the internet (looked up only where asked).
-            own ?: (if (album.isBlank()) null else
-                (if (online) app.vlcinterface.sources.CoverArt.get(artist, album) else app.vlcinterface.sources.CoverArt.cached(artist, album))
-                    ?.let { f -> BitmapFactory.decodeFile(f.path)?.also { withContext(Dispatchers.Main) { onDownloaded(f.path) } } })
+            // No album picture either: a picture of the artist / band.
+            val ca = app.vlcinterface.sources.CoverArt
+            val file = if (album.isBlank() && artist.isBlank()) null
+                else if (online) ca.get(artist, album) ?: ca.getArtist(artist)
+                else ca.cached(artist, album) ?: ca.cachedArtist(artist)
+            own ?: file?.let { f -> BitmapFactory.decodeFile(f.path)?.also { withContext(Dispatchers.Main) { onDownloaded(f.path) } } }
         }
     }
     Box(modifier.size(sizeDp.dp).clip(RoundedCornerShape(8.dp)).background(C.card2), contentAlignment = Alignment.Center) {

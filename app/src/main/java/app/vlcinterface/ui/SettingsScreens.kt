@@ -102,7 +102,7 @@ fun SettingsScreen(nav: Navigator) {
             CardBox {
                 ToggleRow("Automatic scanning", "Off: only scans when you tap Rescan", s.autoScan) { set(s.copy(autoScan = it)) }; Divider()
                 ToggleRow("Watch folders for changes", "Off: no background file watching", s.watchFolders) { set(s.copy(watchFolders = it)) }; Divider()
-                ToggleRow("Album pictures from the internet", "For albums with no picture in their files (MusicBrainz / Cover Art Archive), kept in the app", s.coverDownload) { set(s.copy(coverDownload = it)) }
+                ToggleRow("Album pictures from the internet", "For albums with no picture in their files (MusicBrainz / Cover Art Archive); artist or band photo when the album has none (Wikimedia). Kept in the app", s.coverDownload) { set(s.copy(coverDownload = it)) }
                 var covers by remember { mutableIntStateOf(app.vlcinterface.sources.CoverArt.count()) }
                 if (covers > 0) { Divider(); ValueRow("Stored album pictures", "Tap to delete them all", "$covers") { app.vlcinterface.sources.CoverArt.clear(); covers = 0 } }
             }

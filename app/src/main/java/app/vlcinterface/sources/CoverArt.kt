@@ -34,6 +34,69 @@ object CoverArt {
         return File(dir, key(artist, album) + ".jpg").takeIf { it.length() > 0 }
     }
 
+    // ---------- artist / band picture (when the album has none) ----------
+
+    /** Stored picture of the artist or band, if any (no network). */
+    fun cachedArtist(artist: String): File? {
+        if (!::dir.isInitialized || !usableArtist(artist)) return null
+        return File(dir, "a" + key(artist, "") + ".jpg").takeIf { it.length() > 0 }
+    }
+
+    private fun usableArtist(a: String) = a.isNotBlank() && a.trim().lowercase() !in setOf("various artists", "various", "va", "unknown", "<unknown>")
+
+    /**
+     * Picture of the artist or band: MusicBrainz finds the artist, its links point to the photo on
+     * Wikimedia Commons (directly or through Wikidata). Free, no account; stored in the app like album pictures.
+     */
+    suspend fun getArtist(artist: String): File? = withContext(Dispatchers.IO) {
+        cachedArtist(artist)?.let { return@withContext it }
+        if (!::dir.isInitialized || !usableArtist(artist)) return@withContext null
+        val miss = File(dir, "a" + key(artist, "") + ".none")
+        if (miss.exists() && System.currentTimeMillis() - miss.lastModified() < 30L * 24 * 3600 * 1000) return@withContext null
+        lock.withLock {
+            try {
+                suspend fun mb(url: String): JSONObject? {
+                    val wait = 1100 - (System.currentTimeMillis() - lastCall); if (wait > 0) delay(wait)
+                    lastCall = System.currentTimeMillis()
+                    return Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r ->
+                        if (r.isSuccessful) JSONObject(r.body!!.string()) else null
+                    }
+                }
+                val found = mb("https://musicbrainz.org/ws/2/artist/?fmt=json&limit=3&query=" +
+                    URLEncoder.encode("artist:\"${artist.replace("\"", "")}\"", "UTF-8"))
+                val id = found?.optJSONArray("artists")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
+                    ?.firstOrNull { it.optInt("score") >= 95 }?.getString("id")
+                var commonsFile: String? = null
+                if (id != null) {
+                    val rels = mb("https://musicbrainz.org/ws/2/artist/$id?fmt=json&inc=url-rels")?.optJSONArray("relations")
+                    val list = rels?.let { r -> (0 until r.length()).map { r.getJSONObject(it) } } ?: emptyList()
+                    fun target(type: String) = list.firstOrNull { it.optString("type") == type }?.optJSONObject("url")?.optString("resource")
+                    // 1) direct "image" link to Wikimedia Commons
+                    target("image")?.takeIf { "commons.wikimedia.org" in it }?.let { commonsFile = it.substringAfterLast("File:", "").ifEmpty { null } }
+                    // 2) Wikidata item → its image (P18)
+                    if (commonsFile == null) target("wikidata")?.substringAfterLast('/')?.let { q ->
+                        val wd = Net.http.newCall(Request.Builder().url("https://www.wikidata.org/wiki/Special:EntityData/$q.json").header("User-Agent", UA).build())
+                            .execute().use { r -> if (r.isSuccessful) JSONObject(r.body!!.string()) else null }
+                        commonsFile = wd?.optJSONObject("entities")?.optJSONObject(q)?.optJSONObject("claims")?.optJSONArray("P18")
+                            ?.optJSONObject(0)?.optJSONObject("mainsnak")?.optJSONObject("datavalue")?.optString("value")?.ifEmpty { null }
+                    }
+                }
+                val file = commonsFile
+                if (file != null) {
+                    val name = java.net.URLDecoder.decode(file, "UTF-8").replace(' ', '_')
+                    val img = Net.http.newCall(Request.Builder().url("https://commons.wikimedia.org/wiki/Special:FilePath/" +
+                        URLEncoder.encode(name, "UTF-8").replace("+", "%20") + "?width=500").header("User-Agent", UA).build())
+                        .execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }
+                    if (img != null && img.size > 1000) {
+                        val f = File(dir, "a" + key(artist, "") + ".jpg"); f.writeBytes(img); miss.delete(); return@withLock f
+                    }
+                }
+                miss.writeText(""); miss.setLastModified(System.currentTimeMillis())
+                null
+            } catch (_: Exception) { null }
+        }
+    }
+
     fun count(): Int = if (::dir.isInitialized) dir.listFiles { f -> f.name.endsWith(".jpg") }?.size ?: 0 else 0
     fun clear() { if (::dir.isInitialized) dir.listFiles()?.forEach { it.delete() } }
 
