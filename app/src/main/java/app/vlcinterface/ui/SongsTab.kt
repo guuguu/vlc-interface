@@ -243,14 +243,16 @@ private fun DriftText(text: String, color: Color, modifier: Modifier) {
         if (speed <= 0) { scroll.scrollTo(0); return@LaunchedEffect }
         if (max <= 0 || max == Int.MAX_VALUE) return@LaunchedEffect
         val rnd = kotlin.random.Random(text.hashCode() xor System.nanoTime().toInt())
-        delay(rnd.nextLong(1_500, 9_000))                       // random first start
-        // Normal (100 %): about 45 px per second; the Settings slider scales it.
-        val ms = (max * 22L * 100 / speed).coerceIn(400L, 40_000L)
+        delay(rnd.nextLong(300, 4_000))                         // rows don't all start together
+        // Normal (100 %): about 65 px per second; the Settings slider scales it. Goes back and forth without
+        // stopping, easing in and out at both ends (smooth turn, only a short rest there).
+        val ms = (max * 15L * 100 / speed).coerceIn(400L, 40_000L).toInt()
+        val ease = androidx.compose.animation.core.CubicBezierEasing(0.45f, 0f, 0.55f, 1f)
         while (true) {
-            scroll.animateScrollTo(max, androidx.compose.animation.core.tween(ms.toInt(), easing = androidx.compose.animation.core.LinearEasing))
-            delay(1_800)
-            scroll.animateScrollTo(0, androidx.compose.animation.core.tween(ms.toInt(), easing = androidx.compose.animation.core.LinearEasing))
-            delay(rnd.nextLong(4_000, 14_000))                  // random pause before the next glide
+            scroll.animateScrollTo(max, androidx.compose.animation.core.tween(ms, easing = ease))
+            delay(700)
+            scroll.animateScrollTo(0, androidx.compose.animation.core.tween(ms, easing = ease))
+            delay(700)
         }
     }
 }
