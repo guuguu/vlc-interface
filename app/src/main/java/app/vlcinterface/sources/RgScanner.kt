@@ -191,7 +191,9 @@ object RgScanner {
             // Skip rule: a track is skipped when tagged; an album only when every file in it is tagged.
             if (!rescan) {
                 _state.value = _state.value.copy(phase = "Checking existing tags", current = g.first().title)
-                val tagged = g.map { it to (ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r -> if (albumMode) r.trackGain != null && r.albumGain != null else r.trackGain != null } ?: false) }
+                // Values of exactly 0.00 dB come from the earlier failed scans (16-bit read as float): scan those again.
+                fun real(v: Float?) = v != null && v != 0f
+                val tagged = g.map { it to (ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r -> if (albumMode) real(r.trackGain) && real(r.albumGain) else real(r.trackGain) } ?: false) }
                 if (tagged.all { it.second }) {
                     g.forEach { results += RgResult(it.title, "skipped — already tagged", true) }
                     done += g.size; update { s -> s.copy(done = done, skipped = s.skipped + g.size, results = results.toList()) }; continue
@@ -208,6 +210,12 @@ object RgScanner {
                 if (m != null) measured += Triple(it, m, "")
                 fileFrac = 0f
                 done++; update { s -> s.copy(done = done, measured = s.measured + 1, problems = s.problems + if (m == null) 1 else 0, results = results.toList()) }
+            }
+            // A measurement that came out silent / invalid is a failure, never written as 0.00 dB.
+            measured.removeAll { (it0, m, _) ->
+                val bad = m.integrated.let { it.isNaN() || it.isInfinite() } || m.peak.isNaN() || m.peak > 4f
+                if (bad) { results += RgResult(it0.title, "measurement failed (no usable sound decoded) — nothing written", false); update { s -> s.copy(problems = s.problems + 1) } }
+                bad
             }
             if (measured.isEmpty()) continue
             val albumLufs = if (albumMode) Loudness.album(measured.map { it.second.blocks() }) else Double.NaN
@@ -290,12 +298,13 @@ object RgScanner {
             val mime = fmt.getString(MediaFormat.KEY_MIME)!!
             var rate = fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             var ch = fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            fmt.setInteger(MediaFormat.KEY_PCM_ENCODING, AudioFormat.ENCODING_PCM_FLOAT)
+            // No output format is requested: some decoders (FLAC) say "float" because it was asked for, but still
+            // deliver 16-bit samples — read as floats they are garbage, every measurement failed and 0.00 dB was written.
             val codec = MediaCodec.createDecoderByType(mime)
             codec.configure(fmt, null, null, 0)
             codec.start()
             var meter: Loudness? = null
-            var floatOut = false
+            var enc = AudioFormat.ENCODING_PCM_16BIT
             var buf = FloatArray(0)
             val info = MediaCodec.BufferInfo()
             var inDone = false
@@ -328,7 +337,7 @@ object RgScanner {
                         oi == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
                             val of = codec.outputFormat
                             rate = of.getInteger(MediaFormat.KEY_SAMPLE_RATE); ch = of.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-                            floatOut = of.containsKey(MediaFormat.KEY_PCM_ENCODING) && of.getInteger(MediaFormat.KEY_PCM_ENCODING) == AudioFormat.ENCODING_PCM_FLOAT
+                            enc = if (of.containsKey(MediaFormat.KEY_PCM_ENCODING)) of.getInteger(MediaFormat.KEY_PCM_ENCODING) else AudioFormat.ENCODING_PCM_16BIT
                             meter = Loudness(rate, ch)
                         }
                         oi >= 0 -> {
@@ -337,10 +346,21 @@ object RgScanner {
                             if (meter == null) meter = Loudness(rate, ch)
                             if (info.size > 0) {
                                 ob.position(info.offset); ob.limit(info.offset + info.size); ob.order(ByteOrder.nativeOrder())
-                                val samples = if (floatOut) info.size / 4 else info.size / 2
+                                val bytes = when (enc) { AudioFormat.ENCODING_PCM_FLOAT, AudioFormat.ENCODING_PCM_32BIT -> 4; AudioFormat.ENCODING_PCM_24BIT_PACKED -> 3; AudioFormat.ENCODING_PCM_8BIT -> 1; else -> 2 }
+                                val samples = info.size / bytes
                                 if (buf.size < samples) buf = FloatArray(samples)
-                                if (floatOut) ob.asFloatBuffer().get(buf, 0, samples)
-                                else { val sb = ob.asShortBuffer(); for (k in 0 until samples) buf[k] = sb.get(k) / 32768f }
+                                when (enc) {
+                                    AudioFormat.ENCODING_PCM_FLOAT -> ob.asFloatBuffer().get(buf, 0, samples)
+                                    AudioFormat.ENCODING_PCM_32BIT -> { val ib2 = ob.asIntBuffer(); for (k in 0 until samples) buf[k] = ib2.get(k) / 2147483648f }
+                                    AudioFormat.ENCODING_PCM_24BIT_PACKED -> { val base = ob.position(); for (k in 0 until samples) {
+                                        val o = base + k * 3
+                                        val v = (ob.get(o).toInt() and 0xFF) or ((ob.get(o + 1).toInt() and 0xFF) shl 8) or (ob.get(o + 2).toInt() shl 16)
+                                        buf[k] = v / 8388608f } }
+                                    AudioFormat.ENCODING_PCM_8BIT -> { for (k in 0 until samples) buf[k] = ((ob.get(ob.position() + k).toInt() and 0xFF) - 128) / 128f }
+                                    else -> { val sb = ob.asShortBuffer(); for (k in 0 until samples) buf[k] = sb.get(k) / 32768f }
+                                }
+                                // Never let a bad sample (NaN / infinite) spoil the measurement.
+                                for (k in 0 until samples) { val x = buf[k]; if (x.isNaN() || x.isInfinite()) buf[k] = 0f else if (x > 4f) buf[k] = 4f else if (x < -4f) buf[k] = -4f }
                                 meter.add(buf, samples / ch)
                             }
                             codec.releaseOutputBuffer(oi, false)
