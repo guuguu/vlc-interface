@@ -167,12 +167,14 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 else -> "Open source"
             }
             Pill("☰  $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { openOrigin(nav) }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            AutoFitRow(spacing = 8.dp) {
                 Pill(if (st.settings.shuffle) "Random" else "In order", selected = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
                 Pill("Repeat: " + st.settings.repeat.replaceFirstChar { it.uppercase() }, selected = st.settings.repeat != "off") {
                     val next = when (st.settings.repeat) { "off" -> "all"; "all" -> "one"; else -> "off" }
                     App.instance.store.update { it.copy(settings = it.settings.copy(repeat = next)) }
                 }
+                // ReplayGain on / off, applied at once (the song continues from where it is).
+                Pill(if (st.settings.rgMode == "off") "RG: Off" else "RG: On", selected = st.settings.rgMode != "off") { player.toggleReplayGain() }
                 Box {
                     Pill("Sleep", selected = p.sleepUntil > 0 || p.sleepEndOfTrack) { sleepMenu = true }
                     SDropdownMenu(sleepMenu, { sleepMenu = false }) {

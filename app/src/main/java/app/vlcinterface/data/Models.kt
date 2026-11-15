@@ -134,6 +134,8 @@ data class Settings(
     val buttonScale: Int = 75,
     /** Download album pictures (MusicBrainz / Cover Art Archive) for albums without one; stored in the app. */
     val coverDownload: Boolean = true,
+    /** ReplayGain mode to go back to when the player's RG button turns it on again. */
+    val rgLastMode: String = "auto",
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -149,7 +151,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload)
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode)
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -181,6 +183,7 @@ data class Settings(
                 o.optString("libraryKind", "audio").let { if (it == "video") "video" else "audio" },
                 o.optInt("buttonScale", 75).coerceIn(50, 125),
                 o.optBoolean("coverDownload", true),
+                o.optString("rgLastMode", "auto").let { if (it in setOf("track", "album", "auto")) it else "auto" },
             )
         }
     }

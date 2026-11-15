@@ -356,6 +356,22 @@ class PlayerController(private val context: Context, private val store: Store) {
         applySoundChain()
     }
 
+    /**
+     * Player's RG button: ReplayGain on (the mode chosen in Settings) / off. Applied at once: the song is reloaded
+     * and goes on from where it is now (paused stays paused).
+     */
+    fun toggleReplayGain() {
+        val st = store.current.settings
+        val on = st.rgMode != "off"
+        store.update { it.copy(settings = if (on) it.settings.copy(rgMode = "off", rgLastMode = st.rgMode) else it.settings.copy(rgMode = st.rgLastMode)) }
+        val s = _state.value
+        if (s.item == null) return
+        val pos = mp.time
+        val playing = mp.isPlaying
+        startItem(s.index, pos.coerceAtLeast(0))
+        if (!playing) main.postDelayed({ mp.pause() }, 400)
+    }
+
     /** Closing the video player: hue/saturation go back to the original colours (user rule). */
     fun resetPicture() {
         val ps = store.current.settings
