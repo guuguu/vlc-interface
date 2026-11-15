@@ -104,6 +104,17 @@ object RgScanner {
             (TagCache.get(it.uri)?.let { t -> "${t.albumArtist.ifEmpty { t.artist }}|${t.year}|" } ?: "${it.artist}||") + it.album
     }
 
+    /** The physical folder a file is in. */
+    private fun physicalFolder(ctx: Context, item: PlayItem): String {
+        val u = item.uri
+        if (u.startsWith("content://")) try {
+            ctx.contentResolver.query(Uri.parse(u), arrayOf(android.provider.MediaStore.MediaColumns.VOLUME_NAME, android.provider.MediaStore.MediaColumns.RELATIVE_PATH), null, null, null)?.use { c ->
+                if (c.moveToFirst() && c.getString(1) != null) return "phone:${c.getString(0)}:${c.getString(1)}"
+            }
+        } catch (_: Exception) {}
+        return if (u.startsWith("content://")) item.folderKey.ifEmpty { u } else Uri.decode(u).substringBefore('?').substringBeforeLast('/')
+    }
+
     /** Album tags read from the file itself (album artist / artist, year, album title). */
     private data class FileTags(val albumArtist: String, val year: String, val album: String)
 
@@ -135,8 +146,10 @@ object RgScanner {
             coroutineContext.ensureActive()
             _state.value = _state.value.copy(phase = "Reading album tags (${i + 1}/${items.size})", current = it.title)
             val t = fileTags(ctx, it)
-            tagKey[it.uri] = if (t != null && t.album.isNotBlank()) "${t.albumArtist.lowercase()}|${t.year}|${t.album.lowercase()}" else groupKey(it, mode)
+            tagKey[it.uri] = if (t != null && t.album.isNotBlank()) "${t.albumArtist.lowercase()}|${t.year}|${t.album.lowercase()}" else "folder:" + physicalFolder(ctx, it)
         }
+        // Albums by folders: the real folder each file is in (phone: its storage path; network: its parent folder).
+        if (mode == RgMode.ALBUMS_BY_FOLDERS) items.forEach { tagKey[it.uri] = "folder:" + physicalFolder(ctx, it) }
         val groups = items.groupBy { tagKey[it.uri] ?: groupKey(it, mode) }.values.toList()
         val albumMode = mode != RgMode.TRACK
         var done = 0
