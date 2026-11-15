@@ -15,6 +15,8 @@ import app.vlcinterface.player.PlayItem
 import jcifs.smb.SmbFile
 import jcifs.smb.SmbRandomAccessFile
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -154,97 +156,114 @@ object RgScanner {
 
     // Overall progress: reading tags 10 % (albums by tags only), measuring 70 %, saving 20 %.
     @Volatile private var tagWeight = 0f
-    @Volatile private var fileFrac = 0f
-    private fun update(f: (RgScanState) -> RgScanState) {
+    /** Progress inside the files being measured right now (several at once). */
+    private val fracs = java.util.concurrent.ConcurrentHashMap<String, Float>()
+    @Synchronized private fun update(f: (RgScanState) -> RgScanState) {
         val s = f(_state.value)
         val n = s.total.coerceAtLeast(1).toFloat()
         val mw = 0.7f + (0.1f - tagWeight)
-        val p = tagWeight * (s.tagsRead / n) + mw * ((s.measured + s.skipped + fileFrac) / n) + 0.2f * ((s.saved + s.skipped) / n)
+        val inFile = fracs.values.sum()
+        val p = tagWeight * (s.tagsRead / n) + mw * ((s.measured + s.skipped + inFile) / n) + 0.2f * ((s.saved + s.skipped) / n)
         _state.value = s.copy(progress = p.coerceIn(0f, 1f))
     }
 
+    /** 4 files at once when there are 4 or more to process, else one by one. */
+    private suspend fun <T> parallel(list: List<T>, workers: Int, block: suspend (T) -> Unit) {
+        val sem = kotlinx.coroutines.sync.Semaphore(workers)
+        kotlinx.coroutines.coroutineScope {
+            list.map { x -> async(Dispatchers.IO) { sem.withPermit { coroutineContext.ensureActive(); block(x) } } }.forEach { it.await() }
+        }
+    }
+
     private suspend fun run(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescan: Boolean, results: ArrayList<RgResult>) {
-        tagWeight = if (mode == RgMode.ALBUMS_BY_TAGS) 0.1f else 0f; fileFrac = 0f
+        tagWeight = if (mode == RgMode.ALBUMS_BY_TAGS) 0.1f else 0f; fracs.clear()
+        val workers = if (items.size >= 4) 4 else 1
+        fun addResult(r: RgResult) = synchronized(results) { results += r }
+        fun snapshot() = synchronized(results) { results.toList() }
         // Albums by tags: grouped by the tags inside each file (album artist | year | album title), read now,
         // so every album in a mixed selection gets its own album gain. No album title in the file → its folder.
-        val tagKey = HashMap<String, String>()
-        if (mode == RgMode.ALBUMS_BY_TAGS) items.forEachIndexed { i, it ->
-            coroutineContext.ensureActive()
-            update { s -> s.copy(phase = "Reading album tags (${i + 1}/${items.size})", current = it.title) }
-            val t = fileTags(ctx, it)
-            update { s -> s.copy(tagsRead = i + 1) }
-            tagKey[it.uri] = if (t != null && t.album.isNotBlank()) "${t.albumArtist.lowercase()}|${t.year}|${t.album.lowercase()}" else "folder:" + physicalFolder(ctx, it)
+        val tagKey = java.util.concurrent.ConcurrentHashMap<String, String>()
+        if (mode == RgMode.ALBUMS_BY_TAGS) {
+            val read = java.util.concurrent.atomic.AtomicInteger()
+            parallel(items, workers) { it ->
+                update { s -> s.copy(phase = "Reading album tags" + if (workers > 1) " ($workers at a time)" else "", current = it.title) }
+                val t = fileTags(ctx, it)
+                tagKey[it.uri] = if (t != null && t.album.isNotBlank()) "${t.albumArtist.lowercase()}|${t.year}|${t.album.lowercase()}" else "folder:" + physicalFolder(ctx, it)
+                val n = read.incrementAndGet(); update { s -> s.copy(tagsRead = n) }
+            }
         }
         // Albums by folders: the real folder each file is in (phone: its storage path; network: its parent folder).
         if (mode == RgMode.ALBUMS_BY_FOLDERS) items.forEach { tagKey[it.uri] = "folder:" + physicalFolder(ctx, it) }
         val groups = items.groupBy { tagKey[it.uri] ?: groupKey(it, mode) }.values.toList()
         val albumMode = mode != RgMode.TRACK
-        var done = 0
         // Phone files: one Android confirmation for all of them, before anything is written.
         if (target == RgTarget.FILES) {
             val phone = items.filter { it.uri.startsWith("content://") }.map { it.uri }
             if (phone.isNotEmpty()) {
                 val d = kotlinx.coroutines.CompletableDeferred<Boolean>(); phoneGrant = d
-                _state.value = _state.value.copy(phase = "Waiting for Android's permission to change ${phone.size} phone files", needsPhonePermission = phone)
+                update { s -> s.copy(phase = "Waiting for Android's permission to change ${phone.size} phone files", needsPhonePermission = phone) }
                 val ok = d.await()
-                _state.value = _state.value.copy(needsPhonePermission = emptyList())
-                if (!ok) { results += RgResult("Phone files", "not allowed — values kept in the app instead", false) }
+                update { s -> s.copy(needsPhonePermission = emptyList()) }
+                if (!ok) addResult(RgResult("Phone files", "not allowed — values kept in the app instead", false))
                 phoneAllowed = ok
             }
         }
-        for (g in groups) {
-            coroutineContext.ensureActive()
-            // Skip rule: a track is skipped when tagged; an album only when every file in it is tagged.
-            if (!rescan) {
-                _state.value = _state.value.copy(phase = "Checking existing tags", current = g.first().title)
+        // Skip rule: a track is skipped when tagged; an album only when every file in it is tagged.
+        val todo = java.util.Collections.synchronizedList(ArrayList<List<PlayItem>>())
+        if (rescan) todo += groups else {
+            update { s -> s.copy(phase = "Checking existing tags") }
+            parallel(groups, if (groups.size >= 4) 4 else 1) { g ->
                 // Values of exactly 0.00 dB come from the earlier failed scans (16-bit read as float): scan those again.
                 fun real(v: Float?) = v != null && v != 0f
-                val tagged = g.map { it to (ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r -> if (albumMode) real(r.trackGain) && real(r.albumGain) else real(r.trackGain) } ?: false) }
-                if (tagged.all { it.second }) {
-                    g.forEach { results += RgResult(it.title, "skipped — already tagged", true) }
-                    done += g.size; update { s -> s.copy(done = done, skipped = s.skipped + g.size, results = results.toList()) }; continue
-                }
+                val tagged = g.all { ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r -> if (albumMode) real(r.trackGain) && real(r.albumGain) else real(r.trackGain) } ?: false }
+                if (tagged) {
+                    g.forEach { addResult(RgResult(it.title, "skipped — already tagged", true)) }
+                    update { s -> s.copy(done = s.done + g.size, skipped = s.skipped + g.size, results = snapshot()) }
+                } else todo += g
             }
-            val measured = ArrayList<Triple<PlayItem, Loudness, String>>()   // item, meter, error
-            for (it in g) {
-                coroutineContext.ensureActive()
-                fileFrac = 0f
-                update { s -> s.copy(current = it.title, phase = "Measuring") }
-                val m: Loudness? = try { measure(ctx, it) } catch (e: Exception) {
-                    results += RgResult(it.title, "can't decode: ${e.message ?: e.javaClass.simpleName}", false); null
-                }
-                if (m != null) measured += Triple(it, m, "")
-                fileFrac = 0f
-                done++; update { s -> s.copy(done = done, measured = s.measured + 1, problems = s.problems + if (m == null) 1 else 0, results = results.toList()) }
+        }
+        // Measuring: the expensive part, $workers files at a time.
+        val meters = java.util.concurrent.ConcurrentHashMap<String, Loudness>()
+        val toMeasure = synchronized(todo) { todo.toList() }.flatten()
+        parallel(toMeasure, workers) { it ->
+            fracs[it.uri] = 0f
+            update { s -> s.copy(current = it.title, phase = "Measuring" + if (workers > 1) " ($workers at a time)" else "") }
+            val m: Loudness? = try { measure(ctx, it) { f -> fracs[it.uri] = f; update { s -> s } } } catch (e: Exception) {
+                addResult(RgResult(it.title, "can't decode: ${e.message ?: e.javaClass.simpleName}", false)); null
             }
             // A measurement that came out silent / invalid is a failure, never written as 0.00 dB.
-            measured.removeAll { (it0, m, _) ->
-                val bad = m.integrated.let { it.isNaN() || it.isInfinite() } || m.peak.isNaN() || m.peak > 4f
-                if (bad) { results += RgResult(it0.title, "measurement failed (no usable sound decoded) — nothing written", false); update { s -> s.copy(problems = s.problems + 1) } }
-                bad
-            }
+            val bad = m != null && (m.integrated.let { v -> v.isNaN() || v.isInfinite() } || m.peak.isNaN() || m.peak > 4f)
+            if (bad) addResult(RgResult(it.title, "measurement failed (no usable sound decoded) — nothing written", false))
+            if (m != null && !bad) meters[it.uri] = m
+            fracs.remove(it.uri)
+            update { s -> s.copy(done = s.done + 1, measured = s.measured + 1, problems = s.problems + if (m == null || bad) 1 else 0, results = snapshot()) }
+        }
+        // Values per album, then saving — also several files at once.
+        val writes = ArrayList<Pair<PlayItem, Map<String, String>>>()
+        for (g in synchronized(todo) { todo.toList() }) {
+            val measured = g.mapNotNull { it0 -> meters[it0.uri]?.let { it0 to it } }
             if (measured.isEmpty()) continue
             val albumLufs = if (albumMode) Loudness.album(measured.map { it.second.blocks() }) else Double.NaN
             val albumPeak = measured.maxOf { it.second.peak }
-            for ((it, m, _) in measured) {
-                coroutineContext.ensureActive()
-                val tl = m.integrated
+            for ((it, m) in measured) {
                 val values = LinkedHashMap<String, String>()
-                values["REPLAYGAIN_TRACK_GAIN"] = "%.2f dB".format(java.util.Locale.US, Loudness.gainDb(tl))
+                values["REPLAYGAIN_TRACK_GAIN"] = "%.2f dB".format(java.util.Locale.US, Loudness.gainDb(m.integrated))
                 values["REPLAYGAIN_TRACK_PEAK"] = "%.6f".format(java.util.Locale.US, m.peak)
                 if (albumMode) {
                     values["REPLAYGAIN_ALBUM_GAIN"] = "%.2f dB".format(java.util.Locale.US, Loudness.gainDb(albumLufs))
                     values["REPLAYGAIN_ALBUM_PEAK"] = "%.6f".format(java.util.Locale.US, albumPeak)
                 }
-                val summary = "track ${values["REPLAYGAIN_TRACK_GAIN"]}" + if (albumMode) " · album ${values["REPLAYGAIN_ALBUM_GAIN"]}" else ""
-                update { s -> s.copy(current = it.title, phase = "Writing") }
-                val where = save(ctx, it, values, target)
-                results += RgResult(it.title, "$summary — $where", !where.startsWith("not"))
-                update { s -> s.copy(saved = s.saved + 1, problems = s.problems + if (where.startsWith("not")) 1 else 0) }
-                ReplayGain.forget(it.uri)
-                if (it.uri.contains("://") && !it.uri.startsWith("content://")) ServerLog.log(it.uri, "replaygain", it.uri.substringBefore("://").uppercase(), it.user, true, "${it.title}: $summary — $where")
-                _state.value = _state.value.copy(results = results.toList())
+                writes += it to values
             }
+        }
+        parallel(writes, if (writes.size >= 4) 4 else 1) { (it, values) ->
+            val summary = "track ${values["REPLAYGAIN_TRACK_GAIN"]}" + if (albumMode) " · album ${values["REPLAYGAIN_ALBUM_GAIN"]}" else ""
+            update { s -> s.copy(current = it.title, phase = "Writing") }
+            val where = save(ctx, it, values, target)
+            addResult(RgResult(it.title, "$summary — $where", !where.startsWith("not")))
+            ReplayGain.forget(it.uri)
+            if (it.uri.contains("://") && !it.uri.startsWith("content://")) ServerLog.log(it.uri, "replaygain", it.uri.substringBefore("://").uppercase(), it.user, true, "${it.title}: $summary — $where")
+            update { s -> s.copy(saved = s.saved + 1, problems = s.problems + if (where.startsWith("not")) 1 else 0, results = snapshot()) }
         }
     }
 
@@ -281,7 +300,7 @@ object RgScanner {
         override fun close() { try { raf.close() } catch (_: Exception) {} }
     }
 
-    private fun measure(ctx: Context, item: PlayItem): Loudness {
+    private fun measure(ctx: Context, item: PlayItem, onProgress: (Float) -> Unit = {}): Loudness {
         val ex = MediaExtractor()
         var ds: MediaDataSource? = null
         try {
@@ -332,8 +351,7 @@ object RgScanner {
                                 val now = System.currentTimeMillis()
                                 if (durUs > 0 && now - lastReport > 500) {
                                     lastReport = now
-                                    fileFrac = (t.toFloat() / durUs).coerceIn(0f, 1f)
-                                    update { s -> s.copy(phase = "Measuring ${(t * 100 / durUs).coerceIn(0, 100)}%") }
+                                    onProgress((t.toFloat() / durUs).coerceIn(0f, 1f))
                                 }
                             }
                         }
@@ -390,7 +408,7 @@ object RgScanner {
         }
         val src = App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }
         val ext = item.ext.lowercase()
-        val tmp = File(ctx.cacheDir, "rgscan.${ext.ifEmpty { "bin" }}")
+        val tmp = File(ctx.cacheDir, "rgscan-${java.util.UUID.randomUUID()}.${ext.ifEmpty { "bin" }}")
         return try {
             download(ctx, item, tmp)
             TagWriter.write(tmp, values)
