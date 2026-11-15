@@ -645,6 +645,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             q = listOf(items[i]) + items.filterIndexed { j, _ -> j != i }.shuffled()
             i = 0
         } else orderedQueue = null
+        interlude = null
         _state.value = PlayerState(queue = q, index = i, origin = origin)
         // A playlist / folder / queue: ask about the battery setting again if it would stop playback in the background.
         if (items.size > 1) app.vlcinterface.ui.Battery.request()
@@ -709,6 +710,26 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     fun jumpTo(i: Int) { if (i in _state.value.queue.indices) startItem(i, -1) }
 
+    /** The song playing "now" from the player's ♪ Play now (not part of the playlist / queue). */
+    private var interlude: PlayItem? = null
+
+    /**
+     * ♪ Play now: plays this song at once, without changing the playing playlist / folder / queue. When it ends,
+     * the list goes on with the song that was interrupted (from its start), in the same order; the playlist stays
+     * the active one and isn't changed.
+     */
+    fun playNow(item: PlayItem) {
+        val s = _state.value
+        if (s.item == null) { playQueue(listOf(item), 0, Origin("single")); return }
+        // Already the "play now" song: just start it again.
+        interlude?.let { il -> if (s.item === il) { startItem(s.index, -1); return } }
+        val song = item.copy()                                   // its own object: told apart from a queued copy
+        val at = s.index.coerceIn(0, s.queue.size)
+        _state.value = s.copy(queue = s.queue.toMutableList().also { it.add(at, song) }, index = at)
+        interlude = song
+        startItem(at, -1)
+    }
+
     /**
      * Player's "Jump to": the song is already in the queue → it plays from there. Otherwise it goes right after the
      * playing song (nothing removed) and plays; when a playlist is playing it's also put into that playlist
@@ -757,6 +778,8 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     private fun nextIndex(s: PlayerState, manual: Boolean): Int? {
         val repeat = store.current.settings.repeat
+        // After a "play now" song: back to the interrupted one (right after it in the list).
+        if (interlude != null && s.item === interlude) return (s.index + 1).takeIf { it < s.queue.size }
         if (!manual && repeat == "one") return s.index
         return when {
             s.index + 1 < s.queue.size -> s.index + 1
@@ -775,8 +798,22 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     // ---------- playback ----------
 
-    private fun startItem(i: Int, startAt: Long) {
+    private fun startItem(i0: Int, startAt: Long) {
         saveProgress()
+        var i = i0
+        // Leaving a "play now" song: it's taken out of the queue again, the list is as it was.
+        interlude?.let { il ->
+            val cur = _state.value
+            if (cur.queue.getOrNull(i) !== il) {
+                val at = cur.queue.indexOfFirst { it === il }
+                if (at >= 0) {
+                    val q = cur.queue.toMutableList().also { it.removeAt(at) }
+                    if (i > at) i--
+                    _state.value = cur.copy(queue = q, index = if (cur.index > at) cur.index - 1 else cur.index)
+                }
+                interlude = null
+            }
+        }
         val s0 = _state.value
         val item = s0.queue.getOrNull(i) ?: return
         loadPictureForFile(item)
