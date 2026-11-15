@@ -81,7 +81,12 @@ fun SettingsScreen(nav: Navigator) {
             SectionTitle("Playback")
             CardBox {
                 ToggleRow("Resume where I left off", "Videos only, per file — songs always start from the beginning", s.resume) { set(s.copy(resume = it)) }; Divider()
-                ToggleRow("Keep audio in background", "Notification controls", s.backgroundAudio) { set(s.copy(backgroundAudio = it)) }
+                ToggleRow("Keep audio in background", "Notification controls", s.backgroundAudio) { set(s.copy(backgroundAudio = it)) }; Divider()
+                // Re-checked each time the page is shown (the answer is given in Android's own window).
+                val bctx = androidx.compose.ui.platform.LocalContext.current
+                val free = Battery.unrestricted(bctx)
+                ValueRow("Background playback", if (free) "Battery: Unrestricted — playlists go on while you use other apps"
+                    else "Battery saver may stop playback between songs in the background", if (free) "Unrestricted ✓" else "Allow") { Battery.ask(bctx) }
             }
             SoundSettings(s, ::set)
             SectionTitle("Network")
