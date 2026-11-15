@@ -645,6 +645,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             q = listOf(items[i]) + items.filterIndexed { j, _ -> j != i }.shuffled()
             i = 0
         } else orderedQueue = null
+        skippedPlaces.clear()                                       // a new list: every place is tried again
         _state.value = PlayerState(queue = q, index = i, origin = origin)
         // A playlist / folder / queue: ask about the battery setting again if it would stop playback in the background.
         if (items.size > 1) app.vlcinterface.ui.Battery.request()
@@ -813,8 +814,18 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     // ---------- playback ----------
 
-    private fun startItem(i: Int, startAt: Long) {
+    private fun startItem(i0: Int, startAt: Long) {
         saveProgress()
+        var i = i0
+        // Songs from a place the user chose to skip: passed over without trying.
+        if (skippedPlaces.isNotEmpty()) {
+            val q = _state.value.queue
+            if (q.getOrNull(i)?.let { placeOf(it) in skippedPlaces } == true) {
+                val n = (i + 1 until q.size).firstOrNull { placeOf(q[it]) !in skippedPlaces }
+                if (n == null) { stop(); return }
+                i = n
+            }
+        }
         val s0 = _state.value
         val item = s0.queue.getOrNull(i) ?: return
         loadPictureForFile(item)
@@ -1130,18 +1141,38 @@ class PlayerController(private val context: Context, private val store: Store) {
         endHandled = true
         stopping = true; try { mp.stop() } catch (_: Exception) {}; main.postDelayed({ stopping = false }, 500)
         _state.value = _state.value.copy(userPaused = true, isPlaying = false)
-        val u = item.uri
-        failAsk.value = when {
-            u.contains("://") && !u.startsWith("content://") && !u.startsWith("file://") ->
-                u.substringAfter("://").substringAfter('@').substringBeforeLast('/').let { Uri.decode(it) }
-            else -> "this phone"
-        }
+        failAsk.value = placeOf(item)
     }
 
-    /** Answer to the pop-up: keep trying the next songs (counted from zero again), or stop playback. */
-    fun failAnswer(keepTrying: Boolean) {
+    /** Where a song comes from, as shown in the pop-up: server/share/folder, or the phone folder. */
+    private fun placeOf(item: PlayItem): String {
+        val u = item.uri
+        return if (u.contains("://") && !u.startsWith("content://") && !u.startsWith("file://"))
+            Uri.decode(u.substringAfter("://").substringAfter('@').substringBeforeLast('/'))
+        else "this phone · " + item.folderKey.removePrefix("local:").substringAfter(':').ifEmpty { "/" }
+    }
+
+    /** Places the user chose to skip for this playback: their songs are passed over without trying. */
+    private val skippedPlaces = HashSet<String>()
+
+    /**
+     * Answer to the pop-up: "keep" = try the next songs (counted from zero again); "skip" = pass over every song
+     * from that place (now and later in this list) and go on with the rest; "stop" = stop playback.
+     */
+    fun failAnswer(answer: String) {
+        val place = failAsk.value
         failAsk.value = ""
-        if (keepTrying) { failsInRow = 0; endHandled = false; handleEnd(_state.value) } else stop()
+        when (answer) {
+            "keep" -> { failsInRow = 0; endHandled = false; handleEnd(_state.value) }
+            "skip" -> {
+                skippedPlaces += place
+                failsInRow = 0
+                val s = _state.value
+                val n = (s.index + 1 until s.queue.size).firstOrNull { placeOf(s.queue[it]) !in skippedPlaces }
+                if (n != null) startItem(n, -1) else stop()
+            }
+            else -> stop()
+        }
     }
     private var lastTick = 0L
 

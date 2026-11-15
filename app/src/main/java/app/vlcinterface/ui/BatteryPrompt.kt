@@ -78,8 +78,14 @@ fun FailAskHost() {
     if (place.isEmpty()) return
     AlertDialog(onDismissRequest = {}, containerColor = C.panel,
         title = { Text("Songs can't be played", color = C.text) },
-        text = { Text("The last 5 songs couldn't be played (not found or not reachable) from:\n\n$place\n\nKeep trying the next songs?", color = C.text) },
-        confirmButton = { STextButton({ App.instance.player.failAnswer(true) }) { Text("Keep trying", color = accent()) } },
-        dismissButton = { STextButton({ App.instance.player.failAnswer(false) }) { Text("Stop") } },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                Text("The last 5 songs couldn't be played (not found or not reachable) from:\n\n$place", color = C.text)
+                STextButton({ App.instance.player.failAnswer("keep") }) { Text("Keep trying the next songs", color = accent()) }
+                STextButton({ App.instance.player.failAnswer("skip") }) { Text("Skip everything from there", color = accent()) }
+                STextButton({ App.instance.player.failAnswer("stop") }) { Text("Stop") }
+            }
+        },
+        confirmButton = {},
     )
 }
