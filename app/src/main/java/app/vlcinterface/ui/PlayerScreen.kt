@@ -222,7 +222,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         if (fullscreen) {
             // Picture fills the screen; controls and panels sit on top of it.
             if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second,
-                onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS },
+                onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS }, onPicture = { panel = Panel.PICTURE },
                 onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first); toast = scales[scaleIdx].second },
                 onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ })
             when (panel) {
@@ -237,7 +237,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Box(Modifier.fillMaxWidth().aspectRatio(ratio)) {
                     if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second,
-                        onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS },
+                        onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS }, onPicture = { panel = Panel.PICTURE },
                         onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first) },
                         onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ }, compact = true)
                 }
@@ -339,7 +339,7 @@ private fun GestureLayer(
 @Composable
 private fun BoxScope.ControlsOverlay(
     p: PlayerState, nav: Navigator, openOutput: () -> Unit, locked: Boolean, scaleLabel: String,
-    onLock: () -> Unit, onPanel: () -> Unit, onScale: () -> Unit, onRotate: () -> Unit, onPip: () -> Unit,
+    onLock: () -> Unit, onPanel: () -> Unit, onPicture: () -> Unit, onScale: () -> Unit, onRotate: () -> Unit, onPip: () -> Unit,
     onTouch: () -> Unit, compact: Boolean = false,
 ) {
     val player = App.instance.player
@@ -355,6 +355,8 @@ private fun BoxScope.ControlsOverlay(
         Text(p.item?.title ?: "", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         if (!compact) OutputPill(openOutput)
         OverlayChip("Audio & subs") { onTouch(); onPanel() }
+        // Dedicated button: hue & saturation, straight to the sliders.
+        OverlayChip(if (compact) "Colour" else "Hue & sat") { onTouch(); onPicture() }
         if (!compact) OverlayChip("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
             val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
             val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
@@ -496,12 +498,7 @@ private fun TracksPanel(p: PlayerState, onPanel: (Panel) -> Unit) {
             Text("Audio offset  ", color = C.muted, fontSize = 13.sp)
             Text("${p.audioDelayMs} ms", color = C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             Pill("Sync sound") { onPanel(Panel.SYNC_AUDIO) }
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 10.dp).clip(RoundedCornerShape(10.dp)).background(C.card2).padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            val ps = App.instance.store.current.settings
-            Text("Picture  ", color = C.muted, fontSize = 13.sp)
-            Text("hue ${ps.pictureHue.toInt()}° · saturation ${(ps.pictureSat * 100).toInt()} %", color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
-            Pill("Hue & saturation") { onPanel(Panel.PICTURE) }
+            Pill("Hue & sat", modifier = Modifier.padding(start = 6.dp)) { onPanel(Panel.PICTURE) }
         }
         Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             SectionTitle("Subtitles", Modifier.weight(1f))
