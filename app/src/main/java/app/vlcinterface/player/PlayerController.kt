@@ -433,10 +433,23 @@ class PlayerController(private val context: Context, private val store: Store) {
     /** Milliseconds until sleep stops playback, or -1 when no sleep is set (or the end isn't known yet). */
     private fun msToSleep(s: PlayerState): Long = when {
         s.sleepUntil > 0 -> s.sleepUntil - System.currentTimeMillis()
-        s.sleepEndOfTrack || s.sleepSongs == 1 -> {
+        // Songs (after 1 song / this album / N songs): rest of this song + the songs still to come before it stops,
+        // so the fade runs across them exactly as for a timed sleep.
+        s.sleepEndOfTrack || s.sleepSongs >= 1 -> {
             val item = s.item
             val len = if (item != null && item.endMs > 0) item.endMs - item.startMs else s.length
-            if (item == null || len <= 0) -1 else (len - (s.time - maxOf(item.startMs, 0L))).coerceAtLeast(0)
+            if (item == null || len <= 0) -1 else {
+                var total = (len - (s.time - maxOf(item.startMs, 0L))).coerceAtLeast(0)
+                var n = if (s.sleepEndOfTrack) 0 else s.sleepSongs - 1
+                var i = s.index + 1
+                while (n > 0 && s.queue.isNotEmpty()) {
+                    if (i >= s.queue.size) i = 0                      // fewer left: it goes on from the beginning
+                    val q = s.queue[i]
+                    total += (if (q.endMs > 0) q.endMs - q.startMs else q.durationMs).coerceAtLeast(0)
+                    i++; n--
+                }
+                total
+            }
         }
         else -> -1
     }
@@ -1228,6 +1241,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     /** minutes > 0: stop after that time; minutes == -1: stop at the end of the current item; 0: off. */
     fun setSleep(minutes: Int) {
         fadeWindowMs = if (minutes >= 30) 420_000L else 120_000L
+        if (minutes == -1) main.post { songFadeWindow() }
         val s = _state.value
         _state.value = when {
             minutes > 0 -> s.copy(sleepUntil = System.currentTimeMillis() + minutes * 60_000L, sleepEndOfTrack = false, sleepSongs = 0)
@@ -1237,9 +1251,12 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     /** Sleep after [n] songs, the playing one included (fewer left in the queue / playlist → it goes on from its beginning). */
+    /** Fade length for a sleep after songs: like a timed sleep, from the total time still to play. */
+    private fun songFadeWindow() { val t = msToSleep(_state.value); fadeWindowMs = if (t >= 30 * 60_000L) 420_000L else 120_000L }
+
     fun setSleepSongs(n: Int) {
-        fadeWindowMs = 120_000L
         _state.value = _state.value.copy(sleepUntil = 0, sleepEndOfTrack = false, sleepSongs = n.coerceIn(1, 999))
+        songFadeWindow()
     }
 
     /**
@@ -1271,6 +1288,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             // Album not found in the Library: stop after the album's songs that follow in the queue.
             val rest = cur.queue.drop(cur.index + 1).takeWhile { it.album.equals(item.album, true) && it.album.isNotBlank() }
             _state.value = cur.copy(sleepUntil = 0, sleepEndOfTrack = false, sleepSongs = 1 + rest.size)
+            songFadeWindow()
             return 1 + rest.size
         }
         // The album folder takes over (user rule): the queue / playlist is set aside and the album plays in its own
@@ -1280,6 +1298,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         orderedQueue = null
         val q = album.toMutableList().also { it[at] = cur.item ?: it[at] }   // keep the playing item object
         _state.value = cur.copy(queue = q, index = at, origin = origin, sleepUntil = 0, sleepEndOfTrack = false, sleepSongs = album.size - at)
+        songFadeWindow()
         return album.size - at
     }
 
