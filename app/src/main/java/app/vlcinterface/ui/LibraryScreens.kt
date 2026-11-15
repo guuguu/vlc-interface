@@ -259,26 +259,7 @@ fun InternalTab(nav: Navigator) {
     LaunchedEffect(reload) { folders = InternalSource.folders(ctx) }
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp)) {
-        val recent = st.recent.firstOrNull()
-        if (recent != null) {
-            SectionTitle("Continue watching")
-            CardBox(Modifier.clickable {
-                val src = st.sources.firstOrNull { it.id == recent.sourceId }
-                val it0 = PlayItem(recent.uri, recent.title, sourceId = recent.sourceId, user = src?.user ?: "",
-                    password = src?.password ?: "", smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "",
-                    fileName = app.vlcinterface.sources.fileNameOf(ctx, recent.uri))
-                App.instance.player.play(it0)
-                nav.go(if (it0.isMusic) Screen.Music else Screen.Player)
-            }) {
-                Column(Modifier.padding(14.dp)) {
-                    Text(recent.title, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("Resume at ${fmtTime(recent.position)}" + if (recent.length > 0) " · ${fmtTime(recent.length - recent.position)} left" else "",
-                        color = C.muted, fontSize = 13.sp)
-                }
-                if (recent.length > 0) LinearProgressIndicator(progress = { (recent.position.toFloat() / recent.length).coerceIn(0f, 1f) },
-                    modifier = Modifier.fillMaxWidth().height(4.dp), color = accent(), trackColor = C.line)
-            }
-        }
+        // "Continue watching" card removed (user request); videos still resume where they were left.
         Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             SectionTitle("On this phone", Modifier.weight(1f))
             Pill(if (busy == "*") "Rescanning…" else "Rescan all") {
