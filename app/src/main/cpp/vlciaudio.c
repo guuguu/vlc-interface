@@ -47,6 +47,7 @@ static void *g_mp;                 /* libvlc_media_player_t* we are attached to 
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static AAudioStream *g_stream;
 static unsigned g_rate = 48000;
+static atomic_int g_device;        /* output device chosen in the app (0 = Android's default routing) */
 static atomic_bool g_disconnected;
 static bool g_started;
 
@@ -107,7 +108,14 @@ static bool open_stream(void) {
     AAudioStreamBuilder_setPerformanceMode(b, AAUDIO_PERFORMANCE_MODE_NONE);
     AAudioStreamBuilder_setSharingMode(b, AAUDIO_SHARING_MODE_SHARED);
     AAudioStreamBuilder_setErrorCallback(b, on_error, NULL);
+    int dev = atomic_load(&g_device);
+    if (dev > 0) AAudioStreamBuilder_setDeviceId(b, dev);
     aaudio_result_t r = AAudioStreamBuilder_openStream(b, &g_stream);
+    if (r != AAUDIO_OK && dev > 0) {
+        /* The chosen device is gone: fall back to Android's default output. */
+        AAudioStreamBuilder_setDeviceId(b, AAUDIO_UNSPECIFIED);
+        r = AAudioStreamBuilder_openStream(b, &g_stream);
+    }
     AAudioStreamBuilder_delete(b);
     atomic_store(&st_open, r);
     if (r != AAUDIO_OK) { g_stream = NULL; LOGW("open failed %d", r); return false; }
@@ -399,5 +407,13 @@ Java_app_vlcinterface_player_NativeAudio_adjust(JNIEnv *env, jobject thiz, jlong
 JNIEXPORT void JNICALL
 Java_app_vlcinterface_player_NativeAudio_reroute(JNIEnv *env, jobject thiz) {
     (void)env; (void)thiz;
+    atomic_store(&g_disconnected, true);
+}
+
+/* Plays on this output device (AudioDeviceInfo id), or Android's default routing with 0. Takes effect at once. */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_setDevice(JNIEnv *env, jobject thiz, jint id) {
+    (void)env; (void)thiz;
+    atomic_store(&g_device, id);
     atomic_store(&g_disconnected, true);
 }

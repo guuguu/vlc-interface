@@ -21,6 +21,8 @@ enum class OutputKind { SPEAKER, WIRED, USB, BLUETOOTH, OTHER }
 
 data class OutputDevice(
     val key: String,
+    /** AudioDeviceInfo id (0 when not connected). */
+    val id: Int = 0,
     val name: String,
     val kind: OutputKind,
     val connected: Boolean,
@@ -39,8 +41,16 @@ class OutputRouter(private val context: Context) {
     val devices: StateFlow<List<OutputDevice>> = _devices
     var onActiveChanged: ((OutputDevice?, OutputDevice?) -> Unit)? = null
 
+    /** Device picked in the app's Sound output sheet (null = follow Android). */
+    @Volatile private var chosen: String? = null
+    private var lastRouted: String? = null
+
     private val callback = object : AudioDeviceCallback() {
-        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) = refresh()
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
+            // A device just connected (Bluetooth, headphones): follow Android's choice again, like other players.
+            if (chosen != null && addedDevices?.any { it.isSink } == true) { chosen = null; NativeAudio.device(0) }
+            refresh()
+        }
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = refresh()
     }
 
@@ -94,8 +104,16 @@ class OutputRouter(private val context: Context) {
                 OutputKind.USB -> "USB-C · connected"
                 else -> "Bluetooth · connected"
             }
-            list += OutputDevice(key, name, kind, true, d.id in routed, detail)
+            list += OutputDevice(key, d.id, name, kind, true, d.id in routed, detail)
         }
+        // Android's own routing changed (output switcher, quick settings): its choice wins over the app's.
+        val routedKey = list.firstOrNull { it.active }?.key
+        if (chosen != null && lastRouted != null && routedKey != lastRouted) { chosen = null; NativeAudio.device(0) }
+        lastRouted = routedKey
+        // Output chosen in the app (our own sound output plays straight to it): that's where the sound is.
+        val chosenDev = chosen?.let { k -> list.firstOrNull { it.key == k && it.connected } }
+        if (chosen != null && chosenDev == null) chosen = null          // chosen device went away: Android's default again
+        if (chosenDev != null) for (i in list.indices) list[i] = list[i].copy(active = list[i].key == chosenDev.key)
         if (list.none { it.active }) {
             // Fallback: Bluetooth > wired > speaker, which is Android's usual media priority.
             val guess = list.firstOrNull { it.kind == OutputKind.BLUETOOTH } ?: list.firstOrNull { it.kind == OutputKind.WIRED || it.kind == OutputKind.USB } ?: list.firstOrNull()
@@ -108,7 +126,7 @@ class OutputRouter(private val context: Context) {
                 for (b in bonded) {
                     val n = b.name ?: continue
                     if (list.any { it.kind == OutputKind.BLUETOOTH && it.name == n }) continue
-                    list += OutputDevice("BLUETOOTH:$n", n, OutputKind.BLUETOOTH, false, false, "Bluetooth · paired, not connected")
+                    list += OutputDevice("BLUETOOTH:$n", 0, n, OutputKind.BLUETOOTH, false, false, "Bluetooth · paired, not connected")
                 }
             } catch (_: SecurityException) {
             }
@@ -117,6 +135,20 @@ class OutputRouter(private val context: Context) {
         if (list != _devices.value) _devices.value = list
         val after = active
         if (before?.key != after?.key) onActiveChanged?.invoke(before, after)
+    }
+
+    /**
+     * Plays on [d]. With the app's own sound output the app routes the sound itself, straight to that device
+     * (speaker ↔ Bluetooth ↔ headphones, both ways, and even the speaker while headphones are connected).
+     * With libVLC's output, Android's output switcher is opened as before.
+     */
+    fun select(d: OutputDevice) {
+        if (!d.connected) { openBluetoothSettings(); return }
+        if (NativeAudio.active && d.id > 0) {
+            chosen = d.key
+            NativeAudio.device(d.id)
+            refresh()
+        } else openSwitcher()
     }
 
     /** Opens Android's media output switcher for this app, or Bluetooth settings on older systems. */

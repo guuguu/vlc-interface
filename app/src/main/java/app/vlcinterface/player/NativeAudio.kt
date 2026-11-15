@@ -24,6 +24,10 @@ object NativeAudio {
     private external fun readPeaks(out: FloatArray)
     private external fun stats(out: LongArray)
     private external fun reroute()
+    private external fun setDevice(id: Int)
+
+    /** Plays on this device (AudioDeviceInfo id; 0 = Android's default). */
+    fun device(id: Int) { if (active) try { setDevice(id) } catch (_: Throwable) {} }
 
     /** Output device changed: reopen the sound stream on the new device. */
     fun outputChanged() { if (active) try { reroute() } catch (_: Throwable) {} }

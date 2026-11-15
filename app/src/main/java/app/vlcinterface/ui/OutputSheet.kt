@@ -55,7 +55,7 @@ fun OutputSheet(onDismiss: () -> Unit) {
             CardBox {
                 devices.forEach { d ->
                     Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable {
-                        if (!d.active) router.openSwitcher()
+                        if (!d.active) router.select(d)
                     }.padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         val a = accent()
                         Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(if (d.active) a.copy(alpha = 0.16f) else C.card2), contentAlignment = Alignment.Center) {
