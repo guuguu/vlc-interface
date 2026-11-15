@@ -134,6 +134,9 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     }
     DisposableEffect(Unit) { onDispose { player.detach(videoView); player.resetPicture() } }
     LaunchedEffect(landscape, p.videoW, p.videoH) { kotlinx.coroutines.delay(150); player.refreshSurface() }
+    // Entering/leaving picture-in-picture: Android swaps the window surface, so hand libVLC a fresh one
+    // (the picture stayed black on the first minimise until going back and forth).
+    LaunchedEffect(inPip) { kotlinx.coroutines.delay(250); player.reattach(videoView) }
     var toast by remember { mutableStateOf("") }
     val volDrag = remember { VolumeDrag(ctx) }
     var touchTick by remember { mutableIntStateOf(0) }
@@ -218,7 +221,13 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     // phone rotates or PiP starts (moving it made the picture disappear): only its size and position change.
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         video(if (fullscreen) Modifier.fillMaxSize() else Modifier.safeDrawingPadding().fillMaxWidth().aspectRatio(ratio))
-        if (inPip) return@Box
+        if (inPip) {
+            // Minimised (picture-in-picture): thin progress bar along the bottom (not for live radio/streams).
+            if (p.length > 0) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x55FFFFFF))) {
+                Box(Modifier.fillMaxWidth((p.time.toFloat() / p.length).coerceIn(0f, 1f)).fillMaxHeight().background(accent()))
+            }
+            return@Box
+        }
         if (fullscreen) {
             // Picture fills the screen; controls and panels sit on top of it.
             if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second,

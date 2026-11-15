@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -176,8 +177,9 @@ fun BottomBar(nav: Navigator, current: Int) {
 fun MiniPlayer(nav: Navigator) {
     val p by App.instance.player.state.collectAsState()
     val item = p.item ?: return
+    Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.card2)) {
     Row(
-        Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.card2)
+        Modifier.fillMaxWidth()
             .clickable { openOrigin(nav) }.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -199,6 +201,15 @@ fun MiniPlayer(nav: Navigator) {
             Text(if (p.isPlaying) "❚❚" else "▶", color = accent(), fontSize = 18.sp)
         }
         IconButton({ App.instance.player.stop() }) { Text("✕", color = C.muted, fontSize = 16.sp) }
+    }
+    // Progress along the bottom edge of the bar (not for live radio/streams).
+    val len = if (item.endMs > 0) item.endMs - item.startMs else p.length
+    if (len > 0) {
+        val pos = (p.time - (if (item.startMs > 0) item.startMs else 0)).coerceAtLeast(0)
+        Box(Modifier.fillMaxWidth().height(3.dp).background(C.line)) {
+            Box(Modifier.fillMaxWidth((pos.toFloat() / len).coerceIn(0f, 1f)).fillMaxHeight().background(accent()))
+        }
+    }
     }
 }
 
