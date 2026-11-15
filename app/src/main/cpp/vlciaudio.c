@@ -415,5 +415,12 @@ JNIEXPORT void JNICALL
 Java_app_vlcinterface_player_NativeAudio_setDevice(JNIEnv *env, jobject thiz, jint id) {
     (void)env; (void)thiz;
     atomic_store(&g_device, id);
-    atomic_store(&g_disconnected, true);
+    /* Switch right now, also in the middle of a song: reopen the stream on the new device and keep playing.
+       (The next block of sound then goes to the new device; nothing is paused or restarted.) */
+    pthread_mutex_lock(&g_lock);
+    if (g_stream) {
+        bool wasPlaying = g_started;
+        if (open_stream() && wasPlaying) ensure_started();
+    } else atomic_store(&g_disconnected, true);
+    pthread_mutex_unlock(&g_lock);
 }
