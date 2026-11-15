@@ -52,9 +52,15 @@ import kotlinx.coroutines.launch
 import java.util.Locale
 
 /** All songs in memory for the Songs list (phone at once; LAN / Internet storage when added). */
-private object SongsCache {
+internal object SongsCache {
     var phone: List<PlayItem>? = null
     var network: List<PlayItem> = emptyList()
+
+    /** Phone songs (read once) + the LAN / Internet songs already read in the Songs list. */
+    suspend fun all(ctx: android.content.Context): List<PlayItem> {
+        if (phone == null) phone = InternalSource.folders(ctx).flatMap { f -> MusicLibrary.collectLocal(ctx, f, false) }.filter { it.isMusic }
+        return (phone!! + network).distinctBy { it.uri }
+    }
 }
 
 private fun fmtLong(ms: Long): String {

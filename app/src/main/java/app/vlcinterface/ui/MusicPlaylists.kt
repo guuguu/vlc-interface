@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
@@ -105,6 +106,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     if (item == null) { LaunchedEffect(Unit) { nav.back() }; return }
     LaunchedEffect(item.uri) { if (!item.isMusic && !item.isRadio) nav.replace(Screen.Player) }
     var sleepMenu by remember { mutableStateOf(false) }
+    var jump by remember { mutableStateOf(false) }
     val scroll = rememberScrollState()
     val meters = NativeAudio.active
     Box(Modifier.fillMaxSize()) {
@@ -113,7 +115,10 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         BackHeader("", nav, afterHome = {
             // Shortcut to the sound settings (preamp, balance per device, ReplayGain, sound engine).
             SymButton({ nav.go(Screen.SoundSettings) }) { SymIcon(Icons.Filled.Settings, "Sound settings", tint = C.text) }
+            // Jump to a song: search the queue and the Library; plays it (added after the current song if new).
+            SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
         }) { OutputPill(openOutput); ExitButton() }
+        if (jump) JumpDialog { jump = false }
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             var coverNote by remember(item.uri) { mutableStateOf("") }

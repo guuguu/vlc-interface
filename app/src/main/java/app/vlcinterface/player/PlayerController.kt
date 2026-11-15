@@ -606,6 +606,39 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     fun jumpTo(i: Int) { if (i in _state.value.queue.indices) startItem(i, -1) }
 
+    /**
+     * Player's "Jump to": the song is already in the queue → it plays from there. Otherwise it goes right after the
+     * playing song (nothing removed) and plays; when a playlist is playing it's also put into that playlist
+     * after the current song (unless already in it).
+     */
+    fun jumpToSong(item: PlayItem) {
+        val s = _state.value
+        val at = s.queue.indexOfFirst { qKey(it) == qKey(item) }
+        if (at >= 0) { startItem(at, -1); return }
+        if (s.item == null) { playQueue(listOf(item), 0, Origin("single")); return }
+        val pos = (s.index + 1).coerceIn(0, s.queue.size)
+        val q = s.queue.toMutableList().also { it.add(pos, item) }
+        orderedQueue?.let { o ->
+            val cur = s.queue.getOrNull(s.index)
+            val oi = o.indexOfFirst { it === cur }
+            orderedQueue = o.toMutableList().also { it.add(if (oi >= 0) oi + 1 else it.size, item) }
+        }
+        _state.value = s.copy(queue = q)
+        if (s.origin.kind == "playlist" && s.origin.playlistId.isNotEmpty()) {
+            val cur = s.item
+            store.update { st -> st.copy(playlists = st.playlists.map { pl ->
+                if (pl.id != s.origin.playlistId) pl else {
+                    val e = app.vlcinterface.sources.MusicLibrary.toPlEntry(item)
+                    if (pl.items.any { it.key == e.key }) pl else {
+                        val ci = pl.items.indexOfFirst { it.uri == cur.uri && it.startMs == cur.startMs }
+                        pl.copy(items = pl.items.toMutableList().also { it.add(if (ci >= 0) ci + 1 else it.size, e) })
+                    }
+                }
+            }) }
+        }
+        startItem(pos, -1)
+    }
+
     fun next(): Boolean {
         val s = _state.value
         val n = nextIndex(s, manual = true) ?: return false
