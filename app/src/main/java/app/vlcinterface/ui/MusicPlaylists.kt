@@ -304,11 +304,12 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 next.forEachIndexed { i, n ->
                     Row(Modifier.fillMaxWidth().clickable { player.jumpTo(p.index + 1 + i) }.padding(vertical = if (landscape) 5.dp else 8.dp)) {
                         Text("${i + 1}.", color = C.muted, modifier = Modifier.width(28.dp))
-                        // Artist - Album - Year - Song from the file's tags, gliding like the Songs list (same speed setting).
+                        // Artist - Album - Year - Song from the file's tags, gliding continuously in one direction
+                        // (speed from the Songs list autoscroll setting).
                         val ctxN = LocalContext.current
                         var line by remember(n.uri) { mutableStateOf(listOf(n.artist, n.album, n.title).filter { it.isNotBlank() }.joinToString(" - ")) }
                         LaunchedEffect(n.uri) { app.vlcinterface.sources.MediaInfo.upNextLine(ctxN.applicationContext, n)?.let { line = it } }
-                        DriftText(line, C.text, Modifier.weight(1f).padding(end = 8.dp), fontSize = 15.sp)
+                        MarqueeText(line, C.text, Modifier.weight(1f).padding(end = 8.dp), fontSize = 15.sp)
                         if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
                     }
                 }

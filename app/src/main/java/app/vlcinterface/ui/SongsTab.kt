@@ -2,6 +2,7 @@ package app.vlcinterface.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -254,5 +255,22 @@ internal fun DriftText(text: String, color: Color, modifier: Modifier, fontSize:
             scroll.animateScrollTo(0, androidx.compose.animation.core.tween(ms, easing = ease))
             delay(700)
         }
+    }
+}
+
+
+/**
+ * One line that, when too long, glides continuously in one direction (right to left, starting over seamlessly).
+ * Speed follows Settings → Songs list horizontal autoscroll (0 = still).
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun MarqueeText(text: String, color: Color, modifier: Modifier, fontSize: androidx.compose.ui.unit.TextUnit = 13.sp) {
+    val speed = App.instance.store.state.collectAsState().value.settings.songsScrollSpeed
+    val startDelay = remember(text) { kotlin.random.Random.nextInt(300, 3_000) }
+    Box(modifier.clipToBounds()) {
+        Text(text, color = color, fontSize = fontSize, maxLines = 1, softWrap = false,
+            modifier = if (speed <= 0) Modifier else Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = startDelay,
+                repeatDelayMillis = 0, spacing = androidx.compose.foundation.MarqueeSpacing(48.dp), velocity = (40f * speed / 100f).dp))
     }
 }
