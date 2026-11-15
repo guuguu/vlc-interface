@@ -116,7 +116,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         }) { OutputPill(openOutput) }
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Cover(p.artworkUrl.ifEmpty { item.artwork }, 280, Modifier.padding(top = 8.dp))
+            Cover(p.artworkUrl.ifEmpty { item.artwork }, 280, Modifier.padding(top = 8.dp),
+                artist = p.metaArtist.ifEmpty { item.artist }, album = p.metaAlbum.ifEmpty { item.album }, download = true,
+                onDownloaded = { path -> player.useDownloadedArtwork(item, path) })
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(item.title, color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(listOfNotNull(p.metaArtist.ifEmpty { null }, p.metaAlbum.ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = 15.sp, textAlign = TextAlign.Center)

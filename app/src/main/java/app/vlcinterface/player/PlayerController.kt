@@ -337,6 +337,12 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
+    /** Album picture found online for a song with none in its files: also shown in the notification and on the lock screen. */
+    fun useDownloadedArtwork(item: PlayItem, path: String) {
+        val s = _state.value
+        if (s.item === item && s.artworkUrl != path) _state.value = s.copy(artworkUrl = path)
+    }
+
     /** Closing the video player: hue/saturation go back to the original colours (user rule). */
     fun resetPicture() {
         val ps = store.current.settings

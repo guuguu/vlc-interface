@@ -132,6 +132,8 @@ data class Settings(
     val libraryKind: String = "audio",
     /** Size of every symbol button and its tap area, in % of standard (default 75 % = 25 % smaller). */
     val buttonScale: Int = 75,
+    /** Download album pictures (MusicBrainz / Cover Art Archive) for albums without one; stored in the app. */
+    val coverDownload: Boolean = true,
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -147,7 +149,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale)
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload)
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -178,6 +180,7 @@ data class Settings(
                 o.optDouble("pictureSat", 1.0).toFloat().coerceIn(0f, 3f),
                 o.optString("libraryKind", "audio").let { if (it == "video") "video" else "audio" },
                 o.optInt("buttonScale", 75).coerceIn(50, 125),
+                o.optBoolean("coverDownload", true),
             )
         }
     }

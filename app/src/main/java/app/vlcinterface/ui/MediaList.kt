@@ -71,18 +71,24 @@ import kotlinx.coroutines.withContext
 
 /** Album cover / thumbnail from a content:// uri (phone) or a file:// / path (libVLC cache). */
 @Composable
-fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier) {
+fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, artist: String = "", album: String = "",
+          download: Boolean = false, onDownloaded: (String) -> Unit = {}) {
     val ctx = LocalContext.current
-    val bmp by produceState<Bitmap?>(null, url) {
+    val online = download && App.instance.store.current.settings.coverDownload
+    val bmp by produceState<Bitmap?>(null, url, artist, album, online) {
         value = withContext(Dispatchers.IO) {
-            try {
+            val own = try {
                 when {
-                    url.startsWith("content://") -> ctx.contentResolver.loadThumbnail(Uri.parse(url), Size(256, 256), null)
+                    url.startsWith("content://") -> ctx.contentResolver.loadThumbnail(Uri.parse(url), Size(512, 512), null)
                     url.startsWith("file://") -> BitmapFactory.decodeFile(Uri.parse(url).path)
                     url.startsWith("/") -> BitmapFactory.decodeFile(url)
                     else -> null
                 }
             } catch (_: Exception) { null }
+            // No picture in the files: the album picture stored from the internet (looked up only where asked).
+            own ?: (if (album.isBlank()) null else
+                (if (online) app.vlcinterface.sources.CoverArt.get(artist, album) else app.vlcinterface.sources.CoverArt.cached(artist, album))
+                    ?.let { f -> BitmapFactory.decodeFile(f.path)?.also { withContext(Dispatchers.Main) { onDownloaded(f.path) } } })
         }
     }
     Box(modifier.size(sizeDp.dp).clip(RoundedCornerShape(8.dp)).background(C.card2), contentAlignment = Alignment.Center) {
@@ -203,7 +209,7 @@ fun MediaList(
                             onRgScan = if (App.instance.store.current.settings.libraryKind == "audio") ({ rgTarget = itemsOfDir(r.e) }) else null) }
                     }
                     is Row0.Header -> Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Cover(r.g.artwork, 56)
+                        Cover(r.g.artwork, 56, artist = r.g.artist, album = r.g.album)
                         Column(Modifier.padding(start = 12.dp).weight(1f)) {
                             Text(r.g.album, color = C.text, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             val sub = listOfNotNull(r.g.artist.ifEmpty { null }, if (r.g.year > 0) r.g.year.toString() else null,

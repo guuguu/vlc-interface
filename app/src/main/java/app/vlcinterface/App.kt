@@ -27,6 +27,7 @@ class App : Application() {
         ServerLog.init(this)
         TagCache.init(this)
         app.vlcinterface.sources.RgStore.init(this)
+        app.vlcinterface.sources.CoverArt.init(this)
         applyStartVolume()
         player = PlayerController(this, store)
         output = OutputRouter(this)
