@@ -114,7 +114,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Shortcut to the sound settings (preamp, balance per device, ReplayGain, sound engine).
             SymButton({ nav.go(Screen.SoundSettings) }) { SymIcon(Icons.Filled.Settings, "Sound settings", tint = C.text) }
         }) { OutputPill(openOutput); ExitButton() }
-        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             var coverNote by remember(item.uri) { mutableStateOf("") }
             // Long-press the picture: look for it online again (also when it wasn't found before).
