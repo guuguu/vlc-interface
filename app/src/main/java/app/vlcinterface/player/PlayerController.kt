@@ -335,7 +335,7 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** Bright-areas setting from the player (live while dragging when possible; saved on release). */
     fun setHighlights(k: Float, commit: Boolean) {
-        if (commit) store.update { it.copy(settings = it.settings.copy(pictureHighlights = k.coerceIn(0f, 1f))) }
+        if (commit) { store.update { it.copy(settings = it.settings.copy(pictureHighlights = k.coerceIn(0f, 1f))) }; savePictureForFile() }
         val st = store.current.settings
         applyPicture(st.pictureHue, st.pictureSat, k, commit)
     }
@@ -357,7 +357,7 @@ class PlayerController(private val context: Context, private val store: Store) {
      * because hardware decoding must switch to a mode the colour filter can work on.
      */
     fun setPicture(hue: Float, sat: Float, commit: Boolean) {
-        if (commit) store.update { it.copy(settings = it.settings.copy(pictureHue = hue, pictureSat = sat)) }
+        if (commit) { store.update { it.copy(settings = it.settings.copy(pictureHue = hue, pictureSat = sat)) }; savePictureForFile() }
         applyPicture(hue, sat, store.current.settings.pictureHighlights, commit)
     }
 
@@ -418,13 +418,40 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (!playing) main.postDelayed({ mp.pause() }, 400)
     }
 
-    /** Closing the video player: hue/saturation go back to the original colours (user rule). */
+    /**
+     * Video picture settings (hue, saturation, bright areas) are kept per file: saved when changed in the player,
+     * loaded again when that file is played. Back to default values (all three) = the file's entry is removed.
+     */
+    private fun savePictureForFile() {
+        val item = _state.value.item ?: return
+        if (item.isMusic || item.isRadio) return
+        val ps = store.current.settings
+        val neutral = pictureNeutral(ps.pictureHue, ps.pictureSat) && ps.pictureHighlights <= 0.01f
+        store.update { st ->
+            val m = st.settings.pictureByFile.toMutableMap()
+            if (neutral) m.remove(item.uri) else m[item.uri] = "${ps.pictureHue},${ps.pictureSat},${ps.pictureHighlights}"
+            st.copy(settings = st.settings.copy(pictureByFile = m))
+        }
+    }
+
+    /** The file's own saved picture settings become the current ones (defaults when it has none). */
+    private fun loadPictureForFile(item: PlayItem) {
+        if (item.isMusic || item.isRadio) return
+        val v = store.current.settings.pictureByFile[item.uri]?.split(",")?.mapNotNull { it.toFloatOrNull() }
+        val hue = v?.getOrNull(0)?.coerceIn(-20f, 20f) ?: 0f
+        val sat = v?.getOrNull(1)?.coerceIn(0f, 3f) ?: 1f
+        val hl = v?.getOrNull(2)?.coerceIn(0f, 1f) ?: 0f
+        val ps = store.current.settings
+        if (ps.pictureHue != hue || ps.pictureSat != sat || ps.pictureHighlights != hl)
+            store.update { it.copy(settings = it.settings.copy(pictureHue = hue, pictureSat = sat, pictureHighlights = hl)) }
+    }
+
+    /** Closing the video player: the sliders go back to default (the file keeps its own saved settings for next time). */
     fun resetPicture() {
         val ps = store.current.settings
-        if (pictureNeutral(ps.pictureHue, ps.pictureSat)) return
-        store.update { it.copy(settings = it.settings.copy(pictureHue = 0f, pictureSat = 1f)) }
-        if (pictureFilterOn) { val (c, b, g) = highlightTone(store.current.settings.pictureHighlights)
-            NativeAudio.picture(libVlc, mp, store.current.settings.pictureHighlights > 0.01f, 0f, 1f, c, b, g) }
+        if (pictureNeutral(ps.pictureHue, ps.pictureSat) && ps.pictureHighlights <= 0.01f) return
+        store.update { it.copy(settings = it.settings.copy(pictureHue = 0f, pictureSat = 1f, pictureHighlights = 0f)) }
+        if (pictureFilterOn) NativeAudio.picture(libVlc, mp, false, 0f, 1f, 1f, 1f, 1f)
     }
 
     /** Settings → Sound engine changed: rebuild the engine and continue where it was. */
@@ -595,6 +622,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         saveProgress()
         val s0 = _state.value
         val item = s0.queue.getOrNull(i) ?: return
+        loadPictureForFile(item)
         val wanted = store.current.subStyle
         if (wanted != styleInUse || rgSignature() != rgInUse) recreateEngine(wanted)
         setCredentials(item.user, item.password)

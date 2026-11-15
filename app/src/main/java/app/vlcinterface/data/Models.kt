@@ -128,7 +128,7 @@ data class Settings(
     /** Picture colour: hue −180…180°, saturation 0…3 (1 = unchanged). */
     val pictureHue: Float = 0f,
     val pictureSat: Float = 1f,
-    /** Tone down burnt-out white areas on video: 0 = off … 1 = strongest (kept, not reset on close). */
+    /** Tone down burnt-out white areas on video: 0 = off … 1 = strongest (saved per file, see pictureByFile). */
     val pictureHighlights: Float = 0f,
     /** Libraries show "audio" or "video" files (switch at the top of Libraries). */
     val libraryKind: String = "audio",
@@ -140,6 +140,8 @@ data class Settings(
     val rgLastMode: String = "auto",
     /** Per album (album | folder): "album" or "track" gain, picked with the player's RG button. Wins over the mode above. */
     val rgChoices: Map<String, String> = emptyMap(),
+    /** Video picture settings saved per file (uri → "hue,saturation,brightAreas"). */
+    val pictureByFile: Map<String, String> = emptyMap(),
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -155,7 +157,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices))
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile))
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -190,6 +192,7 @@ data class Settings(
                 o.optBoolean("coverDownload", true),
                 o.optString("rgLastMode", "auto").let { if (it in setOf("track", "album", "auto")) it else "auto" },
                 o.optJSONObject("rgChoices")?.let { j -> j.keys().asSequence().associateWith { j.getString(it) } } ?: emptyMap(),
+                o.optJSONObject("pictureByFile")?.let { j -> j.keys().asSequence().associateWith { j.getString(it) } } ?: emptyMap(),
             )
         }
     }

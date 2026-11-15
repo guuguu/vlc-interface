@@ -229,13 +229,13 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 )
             }
             AutoFitRow(spacing = 8.dp) {
-                Pill(if (st.settings.shuffle) "Random" else "In order", selected = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
+                Pill(if (st.settings.shuffle) "Random" else "Sequential", selected = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
                 Pill("Repeat: " + st.settings.repeat.replaceFirstChar { it.uppercase() }, selected = st.settings.repeat != "off") {
                     val next = when (st.settings.repeat) { "off" -> "all"; "all" -> "one"; else -> "off" }
                     App.instance.store.update { it.copy(settings = it.settings.copy(repeat = next)) }
                 }
                 // ReplayGain on / off, applied at once (the song continues from where it is).
-                Pill(if (st.settings.rgMode == "off") "RG: Off" else "RG: On" + (player.albumRgChoice(item)?.let { if (it == "album") " · album" else " · song" } ?: ""),
+                Pill(if (st.settings.rgMode == "off") "RGain: Off" else "RGain: On" + (player.albumRgChoice(item)?.let { if (it == "album") " · album" else " · song" } ?: ""),
                     selected = st.settings.rgMode != "off") {
                     if (st.settings.rgMode != "off") player.toggleReplayGain()
                     else rgScope.launch {
@@ -477,6 +477,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
     // Multi-select (by position): long-press → Select…, then taps tick/untick.
     var selected by remember(d.id) { mutableStateOf(setOf<Int>()) }
     var rgItems by remember { mutableStateOf<List<PlayItem>?>(null) }
+    var rgAll by remember { mutableStateOf<List<PlayItem>?>(null) }
     var infoPl by remember { mutableStateOf<PlayItem?>(null) }
     var itemMenu by remember { mutableIntStateOf(-1) }
     fun update(f: (Playlist) -> Playlist) = store.update { s -> s.copy(playlists = s.playlists.map { if (it.id == pl.id) f(it) else it }) }
@@ -491,6 +492,8 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                 SDropdownMenu(menu, { menu = false }) {
                     SMenuItem({ Text("Add files or folders…") }, { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)); menu = false })
                     SMenuItem({ Text("Add from .cue file…") }, { cueChoice = true; menu = false })
+                    SMenuItem({ Text("ReplayGain scan — whole playlist (per song)…") }, {
+                        rgAll = pl.items.map { MusicLibrary.fromPlEntry(it) }.filter { it.isMusic }.distinctBy { it.uri }; menu = false })
                     SMenuItem({ Text("Send to NAS…") }, { sendNas = true; menu = false })
                     SMenuItem({ Text("Share") }, {
                         val text = PlaylistFiles.toM3u8(pl.items, "")
@@ -554,6 +557,8 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
     }
 
     rgItems?.let { its -> RgScanDialog(nav, { its }) { rgItems = null; selected = emptySet() } }
+    // Whole playlist: every song gets its own (track) gain.
+    rgAll?.let { its -> RgScanDialog(nav, { its }, app.vlcinterface.sources.RgMode.TRACK, "ReplayGain — ${pl.name} (per song)") { rgAll = null } }
     infoPl?.let { it0 -> TagInfoDialog(it0) { infoPl = null } }
     rename?.let { n ->
         AlertDialog(onDismissRequest = { rename = null }, title = { Text("Rename playlist") },

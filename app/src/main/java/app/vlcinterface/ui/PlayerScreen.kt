@@ -531,8 +531,8 @@ private fun PanelContent(panel: Panel, p: PlayerState, onPanel: (Panel) -> Unit)
 private fun PicturePanel(onBack: () -> Unit) {
     val player = App.instance.player
     val st by App.instance.store.state.collectAsState()
-    var hue by remember { mutableStateOf(st.settings.pictureHue) }
-    var sat by remember { mutableStateOf(st.settings.pictureSat) }
+    var hue by remember(st.settings.pictureHue) { mutableStateOf(st.settings.pictureHue) }
+    var sat by remember(st.settings.pictureSat) { mutableStateOf(st.settings.pictureSat) }
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -550,7 +550,7 @@ private fun PicturePanel(onBack: () -> Unit) {
         Slider(sat, { sat = (if (kotlin.math.abs(it - 1f) < 0.03f) 1f else it); player.setPicture(hue, sat, false) },
             onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = 0f..3f,
             colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
-        var hl by remember { mutableStateOf(st.settings.pictureHighlights) }
+        var hl by remember(st.settings.pictureHighlights) { mutableStateOf(st.settings.pictureHighlights) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Bright areas", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
             Text(if (hl < 0.01f) "Off" else "toned down ${(hl * 100).toInt()} %", color = accent(), fontWeight = FontWeight.SemiBold)
@@ -575,8 +575,8 @@ private fun PicturePanel(onBack: () -> Unit) {
 private fun BoxScope.PictureBar(onClose: () -> Unit) {
     val player = App.instance.player
     val st by App.instance.store.state.collectAsState()
-    var hue by remember { mutableStateOf(st.settings.pictureHue) }
-    var sat by remember { mutableStateOf(st.settings.pictureSat) }
+    var hue by remember(st.settings.pictureHue) { mutableStateOf(st.settings.pictureHue) }
+    var sat by remember(st.settings.pictureSat) { mutableStateOf(st.settings.pictureSat) }
     val colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = Color(0x66FFFFFF))
     Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xB30F1115)).safeDrawingPadding()
         .padding(horizontal = 12.dp, vertical = 4.dp)) {
@@ -595,7 +595,7 @@ private fun BoxScope.PictureBar(onClose: () -> Unit) {
             SymButton(onClose) { Text("✕", color = Color.White, fontSize = 18.sp) }
         }
         // Burnt-out white areas: pulls the whites down so they glare less (kept for all videos).
-        var hl by remember { mutableStateOf(st.settings.pictureHighlights) }
+        var hl by remember(st.settings.pictureHighlights) { mutableStateOf(st.settings.pictureHighlights) }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Bright areas", color = Color.White, fontSize = 13.sp, modifier = Modifier.width(78.dp))
             Slider(hl, { hl = (Math.round(it * 20f) / 20f); player.setHighlights(hl, false) },
