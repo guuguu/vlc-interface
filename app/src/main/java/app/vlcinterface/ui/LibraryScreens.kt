@@ -423,9 +423,8 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
         entries = null; error = ""
         if (src == null) { error = "Source not found"; return@LaunchedEffect }
         val started = System.currentTimeMillis()
-        val r = Browse.list(src, b.uri)
+        val r = Browse.list(src, b.uri, if (reload > 0) "rescan" else "browse")
         r.onSuccess { l ->
-            ServerLog.log(src.host, if (reload > 0) "rescan" else "browse", src.proto.uppercase(), src.user, true, "Listed ${Urls.nameOf(b.uri)}: ${l.size} items", startedAt = started)
             entries = MusicLibrary.withCachedTags(l)
             // Tags are read only on a manual Rescan (no automatic scanning).
             if (reload > 0 && l.any { it.isAudio }) {
@@ -436,7 +435,6 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
             }
         }.onFailure { e ->
             val why = SmbErrors.explain(e, src.user.isEmpty(), b.uri.substringAfter("://").split('/').getOrElse(1) { "" })
-            ServerLog.log(src.host, "browse", src.proto.uppercase(), src.user, false, why, SmbErrors.ntStatus(e), started)
             error = "Could not open: $why"
         }
     }

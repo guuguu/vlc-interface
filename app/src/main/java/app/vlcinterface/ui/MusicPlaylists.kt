@@ -615,7 +615,8 @@ fun SaveToNasDialog(title: String, defaultName: String, what: String, content: (
 @Composable
 fun LogsScreen(nav: Navigator) {
     val v by ServerLog.version.collectAsState()
-    val servers = remember(v) { ServerLog.servers() }
+    val saved by App.instance.store.state.collectAsState()
+    val servers = remember(v, saved.sources) { ServerLog.servers(saved.sources.filter { it.proto != "upnp" }.map { it.host to it.proto }) }
     val fmt = remember { SimpleDateFormat("dd MMM HH:mm", Locale.getDefault()) }
     Column(Modifier.fillMaxSize()) {
         BackHeader("Network logs", nav, "One page per server")
@@ -625,12 +626,12 @@ fun LogsScreen(nav: Navigator) {
             servers.forEach { s ->
                 CardBox(Modifier.clickable { nav.go(Screen.LogPage(s.key)) }) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Badge(if (s.last?.ok == true) "✓" else "✕", s.last?.ok == true)
+                        Badge(when (s.last?.ok) { true -> "✓"; false -> "✕"; null -> "–" }, s.last?.ok == true)
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
                             Text(s.host, color = C.text, fontWeight = FontWeight.SemiBold)
                             Text(listOfNotNull(s.protocols.joinToString("/").ifEmpty { null }, "${s.count} entries",
                                 s.last?.let { fmt.format(Date(it.at)) }).joinToString(" · "), color = C.muted, fontSize = 12.sp)
-                            s.last?.let { Text(it.message, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                            Text(s.last?.message ?: "Saved server — nothing logged yet", color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }

@@ -4,6 +4,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import app.vlcinterface.App
+import app.vlcinterface.data.ServerLog
 import app.vlcinterface.data.Source
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -131,6 +132,9 @@ object VlcBrowse {
     }
 
     /** Servers announced on the LAN (SMB, UPnP/DLNA, ...). Collects for a few seconds. */
+    /** Servers already logged as found during this app run (logged once, not on every LAN tab visit). */
+    private val announced = java.util.Collections.synchronizedSet(HashSet<String>())
+
     suspend fun discover(seconds: Long = 6): List<Entry> {
         val out = ArrayList<Entry>()
         val browser = withContext(Dispatchers.Main) {
@@ -139,6 +143,8 @@ object VlcBrowse {
                     val u = media.uri?.toString() ?: return
                     val title = media.getMeta(IMedia.Meta.Title)?.takeIf { it.isNotBlank() } ?: Urls.nameOf(u)
                     synchronized(out) { out += Entry(title, u, true, meta = u.substringBefore("://").uppercase()) }
+                    // Servers that only announce themselves still get a log page.
+                    if (announced.add(u)) ServerLog.log(u, "discover", u.substringBefore("://").uppercase(), "", true, "Announced itself on the LAN as '$title' ($u)")
                 }
                 override fun onMediaRemoved(index: Int, media: IMedia) {}
                 override fun onBrowseEnd() {}
@@ -153,19 +159,33 @@ object VlcBrowse {
 /** Browses any saved source with the right backend. */
 object Browse {
     /** Raw listing (all files); used for subtitles, covers, .cue lookups. */
-    suspend fun listAll(s: Source, uri: String): Result<List<Entry>> {
-        val r = when (s.proto) {
+    /** Every listing of every saved server is written to that server's log page ([action] says why it was listed). */
+    suspend fun listAll(s: Source, uri: String, action: String = "browse"): Result<List<Entry>> {
+        val started = System.currentTimeMillis()
+        val proto = s.proto.uppercase() + if (s.proto == "smb" && s.smbVersion.isNotEmpty()) " ${s.smbVersion}" else ""
+        val what = android.net.Uri.decode(uri.substringAfter("://").substringAfter('/', "")).ifEmpty { "/" }
+        val share = what.substringBefore('/')
+        val first = when (s.proto) {
             "webdav" -> WebDav.list(uri, s.user, s.password)
             "http" -> HttpIndex.list(uri, s.user, s.password)
             else -> VlcBrowse.browse(uri, s.user, s.password)
         }
-        if (r.isSuccess || s.proto != "smb") return r
-        // libVLC couldn't open it (e.g. SMB1-only): list through jcifs-ng instead.
-        val folder = android.net.Uri.decode(uri.substringAfter("smb://").substringAfter('/', ""))
-        return SmbProbe.list(Urls.hostOnly(s.host), folder, s.smbVersion, s.user, s.password, s.domain)
+        val r = if (first.isSuccess || s.proto != "smb") first else {
+            // libVLC couldn't open it (e.g. SMB1-only): list through jcifs-ng instead.
+            val e = first.exceptionOrNull()!!
+            ServerLog.log(s.host, action, "$proto (libVLC)", s.user, false,
+                "libVLC could not list $what (${e.message ?: "no reason given"}) — trying the app's SMB client", SmbErrors.ntStatus(e), started)
+            SmbProbe.list(Urls.hostOnly(s.host), what.takeIf { it != "/" } ?: "", s.smbVersion, s.user, s.password, s.domain)
+        }
+        r.onSuccess { l ->
+            ServerLog.log(s.host, action, proto, s.user, true, "Listed $what: ${l.size} entries", startedAt = started)
+        }.onFailure { e ->
+            ServerLog.log(s.host, action, proto, s.user, false, SmbErrors.explain(e, s.user.isEmpty(), share), SmbErrors.ntStatus(e), started)
+        }
+        return r
     }
 
     /** Library listing: folders plus audio and video files only. */
-    suspend fun list(s: Source, uri: String): Result<List<Entry>> =
-        listAll(s, uri).map { l -> l.filter { it.isDir || isPlayable(it.name) } }
+    suspend fun list(s: Source, uri: String, action: String = "browse"): Result<List<Entry>> =
+        listAll(s, uri, action).map { l -> l.filter { it.isDir || isPlayable(it.name) } }
 }

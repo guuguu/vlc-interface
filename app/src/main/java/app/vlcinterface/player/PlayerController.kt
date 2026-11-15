@@ -556,7 +556,14 @@ class PlayerController(private val context: Context, private val store: Store) {
                 _state.value = s.copy(isPlaying = true, error = "", ended = false, buffering = 100f)
                 if (pendingSeek > 5_000) { mp.setTime(pendingSeek) }
                 pendingSeek = -1
-                if (!offsetsApplied) { offsetsApplied = true; applyStoredOffsets() }
+                if (!offsetsApplied) {
+                    offsetsApplied = true; applyStoredOffsets()
+                    // Successful opens are logged too, so each server page shows what worked, not only failures.
+                    s.item?.takeIf { !it.isRadio && it.uri.contains("://") && !it.uri.startsWith("content://") && !it.uri.startsWith("file://") }?.let { item ->
+                        ServerLog.log(item.uri, "play", item.uri.substringBefore("://").uppercase(), item.user, true,
+                            "Playing ${item.title}" + if (triedBridge) " (through the app's SMB bridge)" else "")
+                    }
+                }
                 refreshTracks()
                 readMeta()
             }

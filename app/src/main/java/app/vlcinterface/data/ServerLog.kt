@@ -34,8 +34,10 @@ object ServerLog {
         dir = File(ctx.filesDir, "logs").apply { mkdirs() }
     }
 
-    fun keyOf(host: String): String = host.lowercase().removePrefix("smb://").removePrefix("https://").removePrefix("http://")
-        .substringBefore('/').substringBefore('@').ifEmpty { "unknown" }.replace(Regex("[^a-z0-9._:-]"), "_")
+    /** One page per server: "smb://user@nas:445/share/x", "nas/share" and "NAS" all give "nas". */
+    fun keyOf(host: String): String = host.lowercase().replace(Regex("^[a-z0-9+.-]+://"), "")
+        .substringBefore('/').substringAfterLast('@').let { a -> if (a.count { it == ':' } == 1) a.substringBefore(':') else a }
+        .ifEmpty { "unknown" }.replace(Regex("[^a-z0-9._:-]"), "_")
 
     private fun file(key: String) = File(dir, "$key.jsonl")
 
@@ -67,13 +69,18 @@ object ServerLog {
         }.reversed()
     }
 
-    fun servers(): List<ServerInfo> {
+    /** Every server with a log, plus every [saved] server (host to protocol) even before anything was logged. */
+    fun servers(saved: List<Pair<String, String>> = emptyList()): List<ServerInfo> {
         if (!::dir.isInitialized) return emptyList()
-        return (dir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".jsonl") }.map { f ->
+        val logged = (dir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".jsonl") }.map { f ->
             val key = f.name.removeSuffix(".jsonl")
             val es = entries(key)
-            ServerInfo(key, key, es.map { it.protocol }.filter { it.isNotEmpty() }.toSet(), es.size, es.firstOrNull())
-        }.sortedByDescending { it.last?.at ?: 0 }
+            ServerInfo(key, key, es.map { it.protocol.substringBefore(' ') }.filter { it.isNotEmpty() }.toSet(), es.size, es.firstOrNull())
+        }
+        val known = logged.map { it.key }.toSet()
+        val empty = saved.filter { (h, _) -> h.isNotBlank() && keyOf(h) !in known }.distinctBy { keyOf(it.first) }
+            .map { (h, p) -> ServerInfo(keyOf(h), keyOf(h), setOf(p.uppercase()), 0, null) }
+        return logged.sortedByDescending { it.last?.at ?: 0 } + empty
     }
 
     fun clear(key: String) {
