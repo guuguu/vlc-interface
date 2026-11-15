@@ -66,6 +66,8 @@ data class RgScanState(
     val progress: Float = 0f,
     /** A failure report waits to be shown as a pop-up (cleared when seen). */
     val reportPending: Boolean = false,
+    /** Quick scan (playlist): a "done" confirmation waits to be shown, with this title. */
+    val confirmTitle: String = "",
 )
 
 /**
@@ -82,11 +84,16 @@ object RgScanner {
     @Volatile private var phoneGrant: kotlinx.coroutines.CompletableDeferred<Boolean>? = null
     fun phonePermissionResult(ok: Boolean) { phoneGrant?.complete(ok) }
 
-    fun reportSeen() { _state.value = _state.value.copy(reportPending = false) }
+    fun reportSeen() { _state.value = _state.value.copy(reportPending = false, confirmTitle = "") }
 
     fun cancel() { job?.cancel(); _state.value = _state.value.copy(running = false, finished = true, phase = "Cancelled") }
 
-    fun start(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescanTagged: Boolean) {
+    /**
+     * [onlyWithoutRg]: only files with no ReplayGain record of any kind (file or app) are scanned; the rest are skipped.
+     * [confirmTitle]: when not empty, a confirmation pop-up says what was done when the scan ends.
+     */
+    fun start(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescanTagged: Boolean,
+              onlyWithoutRg: Boolean = false, confirmTitle: String = "") {
         if (_state.value.running) return
         val music = items.filter { it.isMusic && it.startMs < 0 }.distinctBy { it.uri }
         val cueSkipped = items.count { it.isMusic && it.startMs >= 0 }
@@ -96,14 +103,14 @@ object RgScanner {
             val results = ArrayList<RgResult>()
             if (cueSkipped > 0) results += RgResult("$cueSkipped .cue tracks", "skipped — part of one big file, scan that file instead", false)
             try {
-                run(ctx, music, mode, target, rescanTagged, results)
+                run(ctx, music, mode, target, rescanTagged, results, onlyWithoutRg)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
                 results += RgResult("Scan", "stopped: ${e.message}", false)
             }
             _state.value = _state.value.copy(running = false, finished = true, current = "", phase = "Done", results = results.toList(),
-                reportPending = results.any { !it.ok })
+                reportPending = results.any { !it.ok } || confirmTitle.isNotEmpty(), confirmTitle = confirmTitle)
         }
     }
 
@@ -175,7 +182,8 @@ object RgScanner {
         }
     }
 
-    private suspend fun run(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescan: Boolean, results: ArrayList<RgResult>) {
+    private suspend fun run(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescan: Boolean, results: ArrayList<RgResult>,
+                            onlyWithoutRg: Boolean = false) {
         tagWeight = if (mode == RgMode.ALBUMS_BY_TAGS) 0.1f else 0f; fracs.clear()
         val workers = items.size.coerceIn(1, 4)   // one thread per file, at most 4 at once
         fun addResult(r: RgResult) = synchronized(results) { results += r }
@@ -215,9 +223,11 @@ object RgScanner {
             parallel(groups, groups.size.coerceIn(1, 4)) { g ->
                 // Values of exactly 0.00 dB come from the earlier failed scans (16-bit read as float): scan those again.
                 fun real(v: Float?) = v != null && v != 0f
-                val tagged = g.all { ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r -> if (albumMode) real(r.trackGain) && real(r.albumGain) else real(r.trackGain) } ?: false }
+                val tagged = g.all { ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r ->
+                    if (onlyWithoutRg) r.trackGain != null || r.albumGain != null   // any record at all → leave it alone
+                    else if (albumMode) real(r.trackGain) && real(r.albumGain) else real(r.trackGain) } ?: false }
                 if (tagged) {
-                    g.forEach { addResult(RgResult(it.title, "skipped — already tagged", true)) }
+                    g.forEach { addResult(RgResult(it.title, if (onlyWithoutRg) "skipped — already has ReplayGain" else "skipped — already tagged", true)) }
                     update { s -> s.copy(done = s.done + g.size, skipped = s.skipped + g.size, results = snapshot()) }
                 } else todo += g
             }

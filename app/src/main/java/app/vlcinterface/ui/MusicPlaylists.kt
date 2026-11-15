@@ -477,7 +477,6 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
     // Multi-select (by position): long-press → Select…, then taps tick/untick.
     var selected by remember(d.id) { mutableStateOf(setOf<Int>()) }
     var rgItems by remember { mutableStateOf<List<PlayItem>?>(null) }
-    var rgAll by remember { mutableStateOf<List<PlayItem>?>(null) }
     var infoPl by remember { mutableStateOf<PlayItem?>(null) }
     var itemMenu by remember { mutableIntStateOf(-1) }
     fun update(f: (Playlist) -> Playlist) = store.update { s -> s.copy(playlists = s.playlists.map { if (it.id == pl.id) f(it) else it }) }
@@ -492,8 +491,22 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                 SDropdownMenu(menu, { menu = false }) {
                     SMenuItem({ Text("Add files or folders…") }, { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)); menu = false })
                     SMenuItem({ Text("Add from .cue file…") }, { cueChoice = true; menu = false })
-                    SMenuItem({ Text("ReplayGain scan — whole playlist (per song)…") }, {
-                        rgAll = pl.items.map { MusicLibrary.fromPlEntry(it) }.filter { it.isMusic }.distinctBy { it.uri }; menu = false })
+                    // No questions: per-song gain, written into the files, only for songs with no ReplayGain record at all.
+                    // Runs in the background; a pop-up confirms what was done when it ends.
+                    SMenuItem({ Text("ReplayGain scan — songs without RG") }, {
+                        menu = false
+                        val its = pl.items.map { MusicLibrary.fromPlEntry(it) }.filter { it.isMusic }.distinctBy { it.uri }
+                        if (app.vlcinterface.sources.RgScanner.state.value.running)
+                            android.widget.Toast.makeText(ctx, "A ReplayGain scan is already running", android.widget.Toast.LENGTH_SHORT).show()
+                        else if (its.isEmpty())
+                            android.widget.Toast.makeText(ctx, "No songs in this playlist", android.widget.Toast.LENGTH_SHORT).show()
+                        else {
+                            app.vlcinterface.sources.RgScanner.start(ctx.applicationContext, its, app.vlcinterface.sources.RgMode.TRACK,
+                                app.vlcinterface.sources.RgTarget.FILES, rescanTagged = false, onlyWithoutRg = true, confirmTitle = pl.name)
+                            android.widget.Toast.makeText(ctx, "ReplayGain scan started: ${its.size} songs, those without RG get per-song gain",
+                                android.widget.Toast.LENGTH_LONG).show()
+                        }
+                    })
                     SMenuItem({ Text("Send to NAS…") }, { sendNas = true; menu = false })
                     SMenuItem({ Text("Share") }, {
                         val text = PlaylistFiles.toM3u8(pl.items, "")
@@ -557,8 +570,6 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
     }
 
     rgItems?.let { its -> RgScanDialog(nav, { its }) { rgItems = null; selected = emptySet() } }
-    // Whole playlist: every song gets its own (track) gain.
-    rgAll?.let { its -> RgScanDialog(nav, { its }, app.vlcinterface.sources.RgMode.TRACK, "ReplayGain — ${pl.name} (per song)") { rgAll = null } }
     infoPl?.let { it0 -> TagInfoDialog(it0) { infoPl = null } }
     rename?.let { n ->
         AlertDialog(onDismissRequest = { rename = null }, title = { Text("Rename playlist") },

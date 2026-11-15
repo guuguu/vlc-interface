@@ -138,15 +138,6 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, initialM
 fun RgScanScreen(nav: Navigator) {
     val ctx = LocalContext.current
     val s by RgScanner.state.collectAsState()
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
-        RgScanner.phonePermissionResult(r.resultCode == android.app.Activity.RESULT_OK)
-    }
-    LaunchedEffect(s.needsPhonePermission) {
-        if (s.needsPhonePermission.isNotEmpty()) try {
-            val pi = MediaStore.createWriteRequest(ctx.contentResolver, s.needsPhonePermission.map { Uri.parse(it) })
-            launcher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
-        } catch (_: Exception) { RgScanner.phonePermissionResult(false) }
-    }
     val state = rememberLazyListState()
     Column(Modifier.fillMaxSize()) {
         BackHeader("ReplayGain scan", nav, if (s.running) "${(s.progress * 100).toInt()} % · ${s.total} files" else s.phase)
@@ -277,8 +268,42 @@ fun LibraryRgDialog(nav: Navigator, onDone: () -> Unit) {
 @Composable
 fun RgFailureReport(nav: Navigator) {
     val s by RgScanner.state.collectAsState()
+    // Android's permission to change phone files: asked from the app root, so a scan started without
+    // its page open (playlist quick scan) never waits for it.
+    val ctx = LocalContext.current
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { r ->
+        RgScanner.phonePermissionResult(r.resultCode == android.app.Activity.RESULT_OK)
+    }
+    LaunchedEffect(s.needsPhonePermission) {
+        if (s.needsPhonePermission.isNotEmpty()) try {
+            val pi = MediaStore.createWriteRequest(ctx.contentResolver, s.needsPhonePermission.map { Uri.parse(it) })
+            launcher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
+        } catch (_: Exception) { RgScanner.phonePermissionResult(false) }
+    }
     if (!s.reportPending || !s.finished) return
     val fails = s.results.filter { !it.ok }
+    // Quick scan (playlist): confirmation of what was done, failures listed under it.
+    if (s.confirmTitle.isNotEmpty()) {
+        AlertDialog(onDismissRequest = { RgScanner.reportSeen() }, containerColor = C.panel,
+            title = { Text("ReplayGain done — ${s.confirmTitle}", color = C.text) },
+            text = {
+                val scroll = rememberScrollState()
+                Column(Modifier.verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("✓ Scanned and saved per song: ${s.saved}", color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Already had ReplayGain, left as they were: ${s.skipped}", color = C.text, fontSize = 13.sp)
+                    if (fails.isNotEmpty()) Text("Problems: ${fails.size}", color = C.bad, fontSize = 13.sp)
+                    fails.forEach { r ->
+                        Column {
+                            Text(r.name, color = C.text, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(r.status, color = C.bad, fontSize = 12.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = { STextButton({ RgScanner.reportSeen() }) { Text("OK", color = accent()) } },
+        )
+        return
+    }
     AlertDialog(onDismissRequest = { RgScanner.reportSeen() }, containerColor = C.panel,
         title = { Text("ReplayGain scan: ${fails.size} problem${if (fails.size == 1) "" else "s"}", color = C.text) },
         text = {
