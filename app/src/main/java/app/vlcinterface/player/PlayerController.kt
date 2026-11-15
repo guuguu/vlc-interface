@@ -338,6 +338,9 @@ class PlayerController(private val context: Context, private val store: Store) {
             if (tries < 8 && (s.buffering < 100f || System.currentTimeMillis() - lastTick > 1_500)) { watchSound(tries + 1); return@postDelayed }
             if (mp.audioTracksCount <= 0) return@postDelayed      // video without sound: nothing to check
             val now = NativeAudio.stats() ?: return@postDelayed
+            // Still starting (state 3): Bluetooth in particular can take several seconds to begin taking sound —
+            // not a failure yet, look again shortly (your log: "state 3, heard 0" was exactly this).
+            if (now.state == 3L && tries < 8) { main.postDelayed({ watchSound(tries + 1) }, 2_500); return@postDelayed }
             val problem = when {
                 now.setupResult != 0L -> "the phone refused the audio stream (open ${now.openResult})"
                 now.plays == before.plays -> "libVLC delivered no sound to the app"
