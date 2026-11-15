@@ -538,6 +538,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val oldPfd = currentPfd
         currentPfd = null
         val media = makeMedia(item, s0, useBridge = item.smbVersion == "SMB1")
+        stopping = true                      // the "stopped" of the old media isn't the end of a song
         mp.setMedia(media)
         media.release()
         try { oldPfd?.close() } catch (_: Exception) {}
@@ -551,7 +552,9 @@ class PlayerController(private val context: Context, private val store: Store) {
             rgInfo = "")
         loadReplayGain(item, _state.value)
         am.requestAudioFocus(focusRequest)
+        endHandled = false; lastTick = 0L
         mp.play()
+        main.postDelayed({ stopping = false }, 500)
         applySoundChain()
         startService()
     }
@@ -618,6 +621,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun resume() { if (!mp.isPlaying && _state.value.item != null) { am.requestAudioFocus(focusRequest); mp.play() } }
     fun pause() { if (mp.isPlaying) mp.pause() }
     fun stop() {
+        stopping = true; endHandled = true
         saveProgress()
         resetPicture()
         mp.stop()
@@ -736,6 +740,44 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
+    // ---------- end of a song → the next one ----------
+
+    /** Set once per item, so the end is never handled twice (end reached + stopped + watchdog). */
+    private var endHandled = false
+    /** Set while the app itself stops / changes the media (that "stopped" is not the end of a song). */
+    private var stopping = false
+    private var lastTick = 0L
+
+    /**
+     * The song ended: play the next item of the folder / playlist / queue, or stop when nothing follows.
+     * (Playback stopped at the end of a song in a folder instead of going on with the next one.)
+     */
+    private fun handleEnd(s: PlayerState) {
+        if (endHandled) return
+        endHandled = true
+        if (s.sleepEndOfTrack) { main.post { stop() }; return }
+        s.item?.let { item -> store.update { st -> st.copy(recent = st.recent.filterNot { it.uri == item.uri }) } }
+        val n = nextIndex(_state.value, manual = false)
+        if (n != null) main.post { startItem(n, -1) }
+        else {
+            _state.value = _state.value.copy(isPlaying = false, ended = true)
+            // Nothing follows: stop and remove the notification.
+            main.postDelayed({ if (_state.value.ended) stop() }, 300)
+        }
+    }
+
+    /** Watchdog: the time stopped moving right at the end of the song and no end came → treat it as the end. */
+    private val endWatch = object : Runnable {
+        override fun run() {
+            val s = _state.value
+            if (!endHandled && !stopping && s.isPlaying && s.item != null && !s.item.isRadio && s.length > 0 &&
+                s.time >= s.length - 1_500 && lastTick > 0 && System.currentTimeMillis() - lastTick > 2_500) handleEnd(s)
+            main.postDelayed(this, 1_000)
+        }
+    }
+
+    init { main.postDelayed(endWatch, 1_000) }
+
     // ---------- events ----------
 
     private fun onEvent(ev: MediaPlayer.Event) {
@@ -758,19 +800,13 @@ class PlayerController(private val context: Context, private val store: Store) {
                 readMeta()
             }
             MediaPlayer.Event.Paused -> { _state.value = s.copy(isPlaying = false); saveProgress() }
-            MediaPlayer.Event.Stopped -> _state.value = s.copy(isPlaying = false)
-            MediaPlayer.Event.EndReached -> {
-                if (s.sleepEndOfTrack) { main.post { stop() }; return }
-                s.item?.let { item -> store.update { st -> st.copy(recent = st.recent.filterNot { it.uri == item.uri }) } }
-                val n = nextIndex(s, manual = false)
-                if (n != null) main.post { startItem(n, -1) }
-                else {
-                    _state.value = s.copy(isPlaying = false, ended = true)
-                    // Nothing follows: stop and remove the notification.
-                    main.postDelayed({ if (_state.value.ended) stop() }, 300)
-                }
+            MediaPlayer.Event.Stopped -> {
+                _state.value = s.copy(isPlaying = false)
+                // Some files end with "stopped" instead of "end reached": near the end, that's the end of the song too.
+                if (!endHandled && !stopping && s.item != null && s.length > 0 && s.time >= s.length - 2_000) handleEnd(s)
             }
-            MediaPlayer.Event.TimeChanged -> _state.value = s.copy(time = ev.timeChanged)
+            MediaPlayer.Event.EndReached -> handleEnd(s)
+            MediaPlayer.Event.TimeChanged -> { lastTick = System.currentTimeMillis(); _state.value = s.copy(time = ev.timeChanged) }
             MediaPlayer.Event.LengthChanged -> _state.value = s.copy(length = ev.lengthChanged)
             MediaPlayer.Event.Buffering -> _state.value = s.copy(buffering = ev.buffering)
             MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESSelected -> refreshTracks()
