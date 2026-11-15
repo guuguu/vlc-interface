@@ -76,6 +76,8 @@ data class PlayerState(
     val index: Int = -1,
     val origin: Origin = Origin(),
     val isPlaying: Boolean = false,
+    /** Paused on purpose (pause button, another app took the sound). Between songs / loading is NOT a pause. */
+    val userPaused: Boolean = false,
     val time: Long = 0,
     val length: Long = 0,
     val videoW: Int = 0,
@@ -391,7 +393,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val pos = mp.time
         val playing = mp.isPlaying
         startItem(s.index, pos.coerceAtLeast(0))
-        if (!playing) main.postDelayed({ mp.pause() }, 400)
+        if (!playing) main.postDelayed({ pause() }, 400)
     }
 
     // ---------- volume on a device the app picked itself ----------
@@ -415,7 +417,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (item.isMusic || item.isRadio) return
         val pos = mp.time; val playing = mp.isPlaying
         startItem(s.index, pos.coerceAtLeast(0))
-        if (!playing) main.postDelayed({ mp.pause() }, 400)
+        if (!playing) main.postDelayed({ pause() }, 400)
     }
 
     /**
@@ -640,6 +642,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             endHandled = false
             failsInRow++
             if (failsInRow < 5) main.postDelayed({ if (_state.value.item === item && !endHandled) handleEnd(_state.value) }, 1_000)
+                        else _state.value = _state.value.copy(userPaused = true)   // gave up: let the phone sleep again
             return
         }
         stopping = true                      // the "stopped" of the old media isn't the end of a song
@@ -655,7 +658,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, videoW = 0, videoH = 0,
             audioTracks = emptyList(), spuTracks = emptyList(), audioDelayMs = 0, spuDelayMs = 0, rate = 1f, nowPlaying = "",
             metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, buffering = 0f, error = "", ended = false,
-            rgInfo = "")
+            rgInfo = "", userPaused = false)
         loadReplayGain(item, _state.value)
         am.requestAudioFocus(focusRequest)
         endHandled = false; lastTick = 0L
@@ -735,12 +738,15 @@ class PlayerController(private val context: Context, private val store: Store) {
         val pos = mp.time
         val playing = mp.isPlaying
         startItem(s.index, pos)
-        if (!playing) main.postDelayed({ mp.pause() }, 400)
+        if (!playing) main.postDelayed({ pause() }, 400)
     }
 
-    fun togglePause() { if (mp.isPlaying) mp.pause() else { am.requestAudioFocus(focusRequest); mp.play() } }
-    fun resume() { if (!mp.isPlaying && _state.value.item != null) { am.requestAudioFocus(focusRequest); mp.play() } }
-    fun pause() { if (mp.isPlaying) mp.pause() }
+    fun togglePause() {
+        if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() }
+        else { _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() }
+    }
+    fun resume() { if (!mp.isPlaying && _state.value.item != null) { _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() } }
+    fun pause() { if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() } }
     fun stop() {
         stopping = true; endHandled = true
         saveProgress()
@@ -928,7 +934,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val s = _state.value
         when (ev.type) {
             MediaPlayer.Event.Playing -> {
-                _state.value = s.copy(isPlaying = true, error = "", ended = false, buffering = 100f)
+                _state.value = s.copy(isPlaying = true, error = "", ended = false, buffering = 100f, userPaused = false)
                 failsInRow = 0
                 // Every (re)start of playback — also resuming a paused video — re-applies the sound settings,
                 // so volume / preamp / balance always act at once, not only after some other action.
@@ -983,6 +989,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                     if (item != null && !item.isRadio && !endHandled && !stopping) {
                         failsInRow++
                         if (failsInRow < 5) main.postDelayed({ if (_state.value.item === item && !endHandled) handleEnd(_state.value) }, 1_000)
+                        else _state.value = _state.value.copy(userPaused = true)   // gave up: let the phone sleep again
                     }
                 }
             }

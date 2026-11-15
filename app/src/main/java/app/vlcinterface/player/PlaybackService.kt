@@ -37,11 +37,14 @@ class PlaybackService : Service() {
         if (job == null) {
             // Only react to "has item" / "is playing" changes; MediaCenter updates the notification content.
             job = scope.launch {
-                player.state.map { (it.item != null) to it.isPlaying }.distinctUntilChanged().collect { (hasItem, playing) ->
+                // Stays in the foreground (and keeps the phone awake) through the gap between two songs: losing it there
+                // let Android freeze the app right after a song ended, so the next one never started and the
+                // notification vanished. Only a real pause (or the end) lets it go.
+                player.state.map { (it.item != null) to (it.isPlaying || !it.userPaused) }.distinctUntilChanged().collect { (hasItem, active) ->
                     when {
                         !hasItem -> finish()
-                        playing -> startForeground(MediaCenter.ID, app.media.build(player.state.value), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-                        else -> stopForeground(STOP_FOREGROUND_DETACH)
+                        active -> { startForeground(MediaCenter.ID, app.media.build(player.state.value), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK); hold(true) }
+                        else -> { stopForeground(STOP_FOREGROUND_DETACH); hold(false) }
                     }
                 }
             }
@@ -49,13 +52,35 @@ class PlaybackService : Service() {
         return START_NOT_STICKY
     }
 
+    // CPU (and Wi-Fi for network music) kept awake while a queue is playing, so the next song starts with the screen off.
+    private var wake: android.os.PowerManager.WakeLock? = null
+    private var wifi: android.net.wifi.WifiManager.WifiLock? = null
+
+    private fun hold(on: Boolean) {
+        try {
+            if (on) {
+                if (wake == null) wake = (getSystemService(POWER_SERVICE) as android.os.PowerManager)
+                    .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "vlcinterface:playback").apply { setReferenceCounted(false) }
+                wake?.acquire(4 * 60 * 60 * 1000L)
+                if (wifi == null) wifi = (applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager)
+                    .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY, "vlcinterface:playback").apply { setReferenceCounted(false) }
+                wifi?.acquire()
+            } else {
+                wake?.takeIf { it.isHeld }?.release()
+                wifi?.takeIf { it.isHeld }?.release()
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun finish() {
+        hold(false)
         App.instance.media.cancelAll()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
     override fun onDestroy() {
+        hold(false)
         job?.cancel()
         super.onDestroy()
     }
