@@ -95,6 +95,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 if (showOutput) OutputSheet(onDismiss = { showOutput = false })
                 // Failures of a finished ReplayGain scan pop up on whatever page is open.
                 RgFailureReport(nav)
+                ExitDialogHost()
             }
             BackHandler(enabled = true) {
                 if (showOutput) showOutput = false else if (!nav.back()) onFinish()

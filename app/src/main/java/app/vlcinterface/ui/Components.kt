@@ -382,9 +382,9 @@ fun exitApp(restart: Boolean = false) {
 /** Power button: quits the app completely. */
 @Composable
 fun ExitButton(tint: Color = C.text) {
-    var ask by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    // Power symbol drawn by the app (the "⏻" character is missing from many phone fonts: it showed as a box).
-    SymButton({ ask = true }) {
+    // The question is shown by the app's root (ExitDialogHost), not by this button: on the video player the
+    // controls hide after a few seconds and took the question away with them.
+    SymButton({ ExitPrompt.visible = true }) {
         androidx.compose.foundation.Canvas(Modifier.size(22.dp)) {
             val w = 2.2.dp.toPx()
             val st = androidx.compose.ui.graphics.drawscope.Stroke(width = w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
@@ -396,7 +396,14 @@ fun ExitButton(tint: Color = C.text) {
                 strokeWidth = w, cap = androidx.compose.ui.graphics.StrokeCap.Round)
         }
     }
-    if (ask && !LocalMeasureOnly.current) androidx.compose.material3.AlertDialog(onDismissRequest = { ask = false }, containerColor = C.panel,
+}
+
+/** Exit / Restart question, kept open even when the page underneath changes (e.g. video controls hiding). */
+object ExitPrompt { var visible by androidx.compose.runtime.mutableStateOf(false) }
+
+@Composable
+fun ExitDialogHost() {
+    if (ExitPrompt.visible) androidx.compose.material3.AlertDialog(onDismissRequest = { ExitPrompt.visible = false }, containerColor = C.panel,
         title = { Text("Exit or restart?", color = C.text) },
         text = {
             Text("Exit closes the app completely (playback stops, notifications go away).\n" +
@@ -405,10 +412,10 @@ fun ExitButton(tint: Color = C.text) {
         },
         confirmButton = {
             androidx.compose.foundation.layout.Row {
-                STextButton({ ask = false; exitApp(restart = true) }) { Text("Restart", color = accent()) }
-                STextButton({ ask = false; exitApp() }) { Text("Exit", color = C.bad) }
+                STextButton({ ExitPrompt.visible = false; exitApp(restart = true) }) { Text("Restart", color = accent()) }
+                STextButton({ ExitPrompt.visible = false; exitApp() }) { Text("Exit", color = C.bad) }
             }
         },
-        dismissButton = { STextButton({ ask = false }) { Text("Cancel") } },
+        dismissButton = { STextButton({ ExitPrompt.visible = false }) { Text("Cancel") } },
     )
 }
