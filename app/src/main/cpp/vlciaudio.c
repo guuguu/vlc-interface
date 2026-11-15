@@ -390,7 +390,8 @@ Java_app_vlcinterface_player_NativeAudio_stats(JNIEnv *env, jobject thiz, jlongA
 typedef void (*f_adj_int)(void *, unsigned, int);
 typedef void (*f_adj_float)(void *, unsigned, float);
 JNIEXPORT jint JNICALL
-Java_app_vlcinterface_player_NativeAudio_adjust(JNIEnv *env, jobject thiz, jlong libObj, jlong mpObj, jboolean enable, jfloat hue, jfloat sat) {
+Java_app_vlcinterface_player_NativeAudio_adjust(JNIEnv *env, jobject thiz, jlong libObj, jlong mpObj, jboolean enable, jfloat hue, jfloat sat,
+                                                jfloat contrast, jfloat brightness, jfloat gamma) {
     (void)env; (void)thiz;
     static f_adj_int p_int; static f_adj_float p_float;
     if (!p_int) p_int = (f_adj_int)find("libvlc_video_set_adjust_int");
@@ -399,8 +400,11 @@ Java_app_vlcinterface_player_NativeAudio_adjust(JNIEnv *env, jobject thiz, jlong
     void *mp = resolve_player(libObj, mpObj);
     if (!mp) return -2;
     /* libvlc_adjust_Enable 0, Contrast 1, Brightness 2, Hue 3, Saturation 4, Gamma 5 */
+    p_float(mp, 1, contrast);
+    p_float(mp, 2, brightness);
     p_float(mp, 3, hue);
     p_float(mp, 4, sat);
+    p_float(mp, 5, gamma);
     p_int(mp, 0, enable ? 1 : 0);
     return 0;
 }

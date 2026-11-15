@@ -358,20 +358,44 @@ fun BackButton(nav: Navigator, tint: Color = C.text) {
 }
 
 
-/** Exit: stops playback and any scan, removes the notifications and closes the app completely. */
-fun exitApp() {
+/** Exit: stops playback and any scan, removes the notifications and closes the app completely ([restart]: then starts it again fresh). */
+fun exitApp(restart: Boolean = false) {
     val a = app.vlcinterface.App.instance
     try { app.vlcinterface.sources.RgScanner.cancel() } catch (_: Exception) {}
     try { a.player.stop() } catch (_: Exception) {}
     try { a.getSystemService(android.app.NotificationManager::class.java).cancelAll() } catch (_: Exception) {}
     try { a.stopService(android.content.Intent(a, app.vlcinterface.player.PlaybackService::class.java)) } catch (_: Exception) {}
     try { a.stopService(android.content.Intent(a, app.vlcinterface.sources.RgScanService::class.java)) } catch (_: Exception) {}
-    app.vlcinterface.MainActivity.instance?.finishAndRemoveTask()
+    val act = app.vlcinterface.MainActivity.instance
+    if (restart && act != null) {
+        // A helper in its own process ends this one and opens the app again: everything is loaded fresh.
+        act.startActivity(android.content.Intent(act, app.vlcinterface.RestartActivity::class.java)
+            .putExtra(app.vlcinterface.RestartActivity.EXTRA_PID, android.os.Process.myPid())
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        return
+    }
+    act?.finishAndRemoveTask()
     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()); kotlin.system.exitProcess(0) }, 300)
 }
 
 /** Power button: quits the app completely. */
 @Composable
 fun ExitButton(tint: Color = C.text) {
-    SymButton({ exitApp() }) { Text("⏻", color = tint, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+    var ask by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    SymButton({ ask = true }) { Text("⏻", color = tint, fontSize = 20.sp, fontWeight = FontWeight.Bold) }
+    if (ask && !LocalMeasureOnly.current) androidx.compose.material3.AlertDialog(onDismissRequest = { ask = false }, containerColor = C.panel,
+        title = { Text("Exit or restart?", color = C.text) },
+        text = {
+            Text("Exit closes the app completely (playback stops, notifications go away).\n" +
+                "Restart closes it and opens it again fresh: the player, sound engine, connections and all settings are loaded anew.",
+                color = C.muted, fontSize = 13.sp)
+        },
+        confirmButton = {
+            androidx.compose.foundation.layout.Row {
+                STextButton({ ask = false; exitApp(restart = true) }) { Text("Restart", color = accent()) }
+                STextButton({ ask = false; exitApp() }) { Text("Exit", color = C.bad) }
+            }
+        },
+        dismissButton = { STextButton({ ask = false }) { Text("Cancel") } },
+    )
 }

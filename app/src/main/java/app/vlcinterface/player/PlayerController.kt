@@ -321,7 +321,37 @@ class PlayerController(private val context: Context, private val store: Store) {
     /** True when the playing item was opened with the colour filter (live changes possible). */
     private var pictureFilterOn = false
 
-    private fun pictureNeutral(h: Float, s: Float) = kotlin.math.abs(h) < 0.5f && kotlin.math.abs(s - 1f) < 0.01f
+    private fun pictureNeutral(h: Float, s: Float) = kotlin.math.abs(h) < 0.05f && kotlin.math.abs(s - 1f) < 0.01f
+
+    /**
+     * "Bright areas" (0…1) → contrast, brightness, gamma for libVLC's adjust filter: whites are pulled down
+     * (lower contrast and brightness) so burnt-out areas glare less and show what detail they still have,
+     * while gamma lifts the darker parts back so the rest of the picture keeps its look.
+     */
+    private fun highlightTone(k: Float): Triple<Float, Float, Float> {
+        val x = k.coerceIn(0f, 1f)
+        return Triple(1f - 0.30f * x, 1f - 0.12f * x, 1f + 0.30f * x)
+    }
+
+    /** Bright-areas setting from the player (live while dragging when possible; saved on release). */
+    fun setHighlights(k: Float, commit: Boolean) {
+        if (commit) store.update { it.copy(settings = it.settings.copy(pictureHighlights = k.coerceIn(0f, 1f))) }
+        val st = store.current.settings
+        applyPicture(st.pictureHue, st.pictureSat, k, commit)
+    }
+
+    private fun applyPicture(hue: Float, sat: Float, hl: Float, commit: Boolean) {
+        val s = _state.value
+        val item = s.item ?: return
+        if (item.isMusic || item.isRadio) return
+        val (c, b, g) = highlightTone(hl)
+        if (pictureFilterOn && NativeAudio.picture(libVlc, mp, true, hue, sat, c, b, g)) return
+        if (commit && (pictureFilterOn || !pictureNeutral(hue, sat) || hl > 0.01f)) {
+            val pos = mp.time; val playing = mp.isPlaying
+            startItem(s.index, pos)
+            if (!playing) main.postDelayed({ mp.pause() }, 400)
+        }
+    }
 
     /**
      * Hue/saturation from the player. While dragging ([commit] false) changes are applied live when possible;
@@ -330,15 +360,7 @@ class PlayerController(private val context: Context, private val store: Store) {
      */
     fun setPicture(hue: Float, sat: Float, commit: Boolean) {
         if (commit) store.update { it.copy(settings = it.settings.copy(pictureHue = hue, pictureSat = sat)) }
-        val s = _state.value
-        val item = s.item ?: return
-        if (item.isMusic || item.isRadio) return
-        if (pictureFilterOn && NativeAudio.picture(libVlc, mp, true, hue, sat)) return
-        if (commit && (pictureFilterOn || !pictureNeutral(hue, sat))) {
-            val pos = mp.time; val playing = mp.isPlaying
-            startItem(s.index, pos)
-            if (!playing) main.postDelayed({ mp.pause() }, 400)
-        }
+        applyPicture(hue, sat, store.current.settings.pictureHighlights, commit)
     }
 
     /** Album picture found online for a song with none in its files: also shown in the notification and on the lock screen. */
@@ -390,7 +412,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         val ps = store.current.settings
         if (pictureNeutral(ps.pictureHue, ps.pictureSat)) return
         store.update { it.copy(settings = it.settings.copy(pictureHue = 0f, pictureSat = 1f)) }
-        if (pictureFilterOn) NativeAudio.picture(libVlc, mp, false, 0f, 1f)
+        if (pictureFilterOn) { val (c, b, g) = highlightTone(store.current.settings.pictureHighlights)
+            NativeAudio.picture(libVlc, mp, store.current.settings.pictureHighlights > 0.01f, 0f, 1f, c, b, g) }
     }
 
     /** Settings → Sound engine changed: rebuild the engine and continue where it was. */
@@ -621,12 +644,16 @@ class PlayerController(private val context: Context, private val store: Store) {
         media.setHWDecoderEnabled(true, false)
         // Hue/saturation need decoded frames the filter can touch: hardware decoding without direct rendering.
         val ps = store.current.settings
-        pictureFilterOn = !item.isMusic && !item.isRadio && !pictureNeutral(ps.pictureHue, ps.pictureSat)
+        pictureFilterOn = !item.isMusic && !item.isRadio && (!pictureNeutral(ps.pictureHue, ps.pictureSat) || ps.pictureHighlights > 0.01f)
         if (pictureFilterOn) {
+            val (c, b, g) = highlightTone(ps.pictureHighlights)
             media.addOption(":no-mediacodec-dr")
             media.addOption(":video-filter=adjust")
             media.addOption(":hue=${ps.pictureHue}")
             media.addOption(":saturation=${ps.pictureSat}")
+            media.addOption(":contrast=$c")
+            media.addOption(":brightness=$b")
+            media.addOption(":gamma=$g")
         }
         if (item.isRadio) media.addOption(":network-caching=3000")
         if (item.startMs >= 0) media.addOption(":start-time=${item.startMs / 1000.0}")

@@ -35,11 +35,11 @@ object NativeAudio {
 
     /** Output device changed: reopen the sound stream on the new device. */
     fun outputChanged() { if (active) try { reroute() } catch (_: Throwable) {} }
-    private external fun adjust(libObj: Long, mpObj: Long, enable: Boolean, hue: Float, sat: Float): Int
+    private external fun adjust(libObj: Long, mpObj: Long, enable: Boolean, hue: Float, sat: Float, contrast: Float, brightness: Float, gamma: Float): Int
 
     /** Live picture hue (−180…180°) / saturation (0…3); false if this libVLC build can't do it live. */
-    fun picture(lib: LibVLC, mp: MediaPlayer, enable: Boolean, hue: Float, sat: Float): Boolean =
-        loaded && try { adjust(handle(lib), handle(mp), enable, hue, sat) == 0 } catch (_: Throwable) { false }
+    fun picture(lib: LibVLC, mp: MediaPlayer, enable: Boolean, hue: Float, sat: Float, contrast: Float = 1f, brightness: Float = 1f, gamma: Float = 1f): Boolean =
+        loaded && try { adjust(handle(lib), handle(mp), enable, hue, sat, contrast, brightness, gamma) == 0 } catch (_: Throwable) { false }
 
     /** Turned off for this app run after the watchdog saw no sound come out. */
     @Volatile var failed: Boolean = false

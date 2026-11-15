@@ -295,10 +295,12 @@ private class VolumeDrag(ctx: Context) {
     private val am = ctx.getSystemService(AudioManager::class.java)
     private var base = 0f
     private var own = false
+    private var warned = false
     private var ownBase = 1f
     fun start() {
         // Speaker picked in the app while Android routes media to Bluetooth: Android's volume would change the
         // Bluetooth device, so the swipe changes the app's volume on the device that is playing.
+        warned = false
         own = app.vlcinterface.App.instance.output.overriding
         if (own) ownBase = app.vlcinterface.App.instance.player.appVolume
         base = am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
@@ -311,8 +313,17 @@ private class VolumeDrag(ctx: Context) {
         }
         val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
         val nv = kotlin.math.round(base + total * max * 1.25f).toInt().coerceIn(0, max)
-        if (nv != am.getStreamVolume(AudioManager.STREAM_MUSIC)) am.setStreamVolume(AudioManager.STREAM_MUSIC, nv, 0)
-        return nv * 100 / max
+        val cur = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+        if (nv != cur) {
+            am.setStreamVolume(AudioManager.STREAM_MUSIC, nv, 0)
+            // Android's hearing protection ("safe media volume", headphones / Bluetooth) silently refuses raising
+            // the volume until you confirm its warning: then ask through Android, which shows that warning.
+            if (nv > cur && am.getStreamVolume(AudioManager.STREAM_MUSIC) == cur && !warned) {
+                warned = true
+                am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+            }
+        }
+        return am.getStreamVolume(AudioManager.STREAM_MUSIC) * 100 / max
     }
 }
 
@@ -539,8 +550,18 @@ private fun PicturePanel(onBack: () -> Unit) {
         Slider(sat, { sat = (if (kotlin.math.abs(it - 1f) < 0.03f) 1f else it); player.setPicture(hue, sat, false) },
             onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = 0f..3f,
             colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
+        var hl by remember { mutableStateOf(st.settings.pictureHighlights) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Bright areas", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text(if (hl < 0.01f) "Off" else "toned down ${(hl * 100).toInt()} %", color = accent(), fontWeight = FontWeight.SemiBold)
+        }
+        Slider(hl, { hl = (Math.round(it * 20f) / 20f); player.setHighlights(hl, false) },
+            onValueChangeFinished = { player.setHighlights(hl, true) }, valueRange = 0f..1f,
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
+        Text("Burnt-out white areas glare less and show what detail is left (it can't bring back detail that isn't in the video). Kept for all videos.",
+            color = C.muted, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill("Reset") { hue = 0f; sat = 1f; player.setPicture(0f, 1f, true) }
+            Pill("Reset") { hue = 0f; sat = 1f; hl = 0f; player.setPicture(0f, 1f, true); player.setHighlights(0f, true) }
             Pill("Back") { onBack() }
         }
         Text("0° and 100 % = original colours. The first change reopens the video at the same spot for a moment. " +
@@ -572,6 +593,15 @@ private fun BoxScope.PictureBar(onClose: () -> Unit) {
                 onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = 0f..3f, colors = colors, modifier = Modifier.weight(1f).height(32.dp))
             Text("${(sat * 100).toInt()} %", color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(56.dp).padding(start = 8.dp))
             SymButton(onClose) { Text("✕", color = Color.White, fontSize = 18.sp) }
+        }
+        // Burnt-out white areas: pulls the whites down so they glare less (kept for all videos).
+        var hl by remember { mutableStateOf(st.settings.pictureHighlights) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Bright areas", color = Color.White, fontSize = 13.sp, modifier = Modifier.width(78.dp))
+            Slider(hl, { hl = (Math.round(it * 20f) / 20f); player.setHighlights(hl, false) },
+                onValueChangeFinished = { player.setHighlights(hl, true) }, valueRange = 0f..1f, colors = colors, modifier = Modifier.weight(1f).height(32.dp))
+            Text(if (hl < 0.01f) "Off" else "−${(hl * 100).toInt()} %", color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.width(56.dp).padding(start = 8.dp))
+            Box(Modifier.width(48.dp))
         }
     }
 }

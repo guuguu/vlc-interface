@@ -128,6 +128,8 @@ data class Settings(
     /** Picture colour: hue −180…180°, saturation 0…3 (1 = unchanged). */
     val pictureHue: Float = 0f,
     val pictureSat: Float = 1f,
+    /** Tone down burnt-out white areas on video: 0 = off … 1 = strongest (kept, not reset on close). */
+    val pictureHighlights: Float = 0f,
     /** Libraries show "audio" or "video" files (switch at the top of Libraries). */
     val libraryKind: String = "audio",
     /** Size of every symbol button and its tap area, in % of standard (default 75 % = 25 % smaller). */
@@ -153,7 +155,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices))
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices))
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -182,6 +184,7 @@ data class Settings(
                 o.optString("soundEngine", "app"),
                 o.optDouble("pictureHue", 0.0).toFloat().coerceIn(-20f, 20f),
                 o.optDouble("pictureSat", 1.0).toFloat().coerceIn(0f, 3f),
+                o.optDouble("pictureHighlights", 0.0).toFloat().coerceIn(0f, 1f),
                 o.optString("libraryKind", "audio").let { if (it == "video") "video" else "audio" },
                 o.optInt("buttonScale", 75).coerceIn(50, 125),
                 o.optBoolean("coverDownload", true),
