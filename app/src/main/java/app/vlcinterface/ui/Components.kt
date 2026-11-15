@@ -244,3 +244,35 @@ fun SymIcon(imageVector: androidx.compose.ui.graphics.vector.ImageVector, conten
             tint: Color = androidx.compose.material3.LocalContentColor.current) {
     androidx.compose.material3.Icon(imageVector, contentDescription, modifier.size((24 * btnScale()).dp), tint = tint)
 }
+
+
+/**
+ * A row of buttons that never overlaps or runs off screen: measured at the chosen Button size first;
+ * if it doesn't fit the space it gets, the buttons inside are drawn smaller until it does.
+ */
+@Composable
+fun AutoFitRow(modifier: Modifier = Modifier, spacing: androidx.compose.ui.unit.Dp = 6.dp, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    val k = btnScale()
+    androidx.compose.ui.layout.SubcomposeLayout(modifier) { c ->
+        fun row(f: Float, slot: Any) = subcompose(slot) {
+            androidx.compose.runtime.CompositionLocalProvider(LocalBtnScale provides f) {
+                androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(spacing),
+                    verticalAlignment = Alignment.CenterVertically, content = content)
+            }
+        }
+        var f = k
+        var placeables = row(f, 0).map { it.measure(androidx.compose.ui.unit.Constraints()) }
+        if (c.hasBoundedWidth) {
+            // Shrink in up to 4 steps (text that doesn't scale makes it not exactly proportional).
+            for (step in 1..4) {
+                val w = placeables.maxOf { it.width }
+                if (w <= c.maxWidth) break
+                f = (f * c.maxWidth / w * 0.97f).coerceAtLeast(0.3f)
+                placeables = row(f, step).map { it.measure(androidx.compose.ui.unit.Constraints()) }
+            }
+        }
+        val w = placeables.maxOf { it.width }.coerceAtMost(if (c.hasBoundedWidth) c.maxWidth else Int.MAX_VALUE)
+        val h = placeables.maxOf { it.height }
+        layout(w, h) { placeables.forEach { it.placeRelative(0, (h - it.height) / 2) } }
+    }
+}

@@ -16,6 +16,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -351,7 +353,25 @@ private fun BoxScope.ControlsOverlay(
     onLock: () -> Unit, onPanel: () -> Unit, onPicture: () -> Unit, onScale: () -> Unit, onRotate: () -> Unit, onPip: () -> Unit,
     onTouch: () -> Unit, compact: Boolean = false,
 ) {
+    // Never overlapping: on a short video area (wide films with the phone upright) the controls get smaller
+    // so the top bar, the centre buttons and the bottom row always have room.
+    BoxWithConstraints(Modifier.matchParentSize()) {
+        val k = btnScale()
+        val fit = if (compact) (maxHeight.value - 40f) / 164f else (maxHeight.value - 110f) / 200f
+        CompositionLocalProvider(LocalBtnScale provides minOf(k, fit).coerceAtLeast(0.4f)) {
+            ControlsOverlayBody(p, nav, openOutput, locked, scaleLabel, onLock, onPanel, onPicture, onScale, onRotate, onPip, onTouch, compact)
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.ControlsOverlayBody(
+    p: PlayerState, nav: Navigator, openOutput: () -> Unit, locked: Boolean, scaleLabel: String,
+    onLock: () -> Unit, onPanel: () -> Unit, onPicture: () -> Unit, onScale: () -> Unit, onRotate: () -> Unit, onPip: () -> Unit,
+    onTouch: () -> Unit, compact: Boolean,
+) {
     val player = App.instance.player
+    val ks = btnScale()
     Box(Modifier.matchParentSize().background(Color(0x66000000)))
     if (locked) {
         SymButton(onLock, Modifier.align(Alignment.TopEnd).padding(12.dp)) { SymIcon(Icons.Filled.Lock, "Unlock controls", tint = Color.White) }
@@ -362,6 +382,7 @@ private fun BoxScope.ControlsOverlay(
         SymButton({ nav.back() }) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
         HomeButton(nav, Color.White)
         Text(p.item?.title ?: "", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        AutoFitRow {
         if (!compact) OutputPill(openOutput)
         OverlayChip("Audio & subs") { onTouch(); onPanel() }
         // Dedicated button: hue & saturation, straight to the sliders.
@@ -372,8 +393,9 @@ private fun BoxScope.ControlsOverlay(
             player.setRate(rates[(i + 1) % rates.size]); onTouch()
         }
         SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
+        }
     }
-    Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(if (compact) 28.dp else 56.dp), verticalAlignment = Alignment.CenterVertically) {
+    AutoFitRow(Modifier.align(Alignment.Center).padding(horizontal = 8.dp), spacing = if (compact) 28.dp else 56.dp) {
         RoundBtn("−10", 52) { player.seekBy(-10_000); onTouch() }
         val k = btnScale()
         Box(Modifier.size(((if (compact) 60 else 76) * k).dp).clip(CircleShape).background(accent()).clickable { player.togglePause(); onTouch() }, contentAlignment = Alignment.Center) {
@@ -384,17 +406,21 @@ private fun BoxScope.ControlsOverlay(
     if (!compact) Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
         SeekRow(p, Modifier)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OverlayChip(scaleLabel, onScale)
-            Text("  ⟳", color = Color.White, fontSize = 20.sp, modifier = Modifier.clickable(onClick = onRotate).padding(10.dp))
+            AutoFitRow(spacing = 0.dp) {
+                OverlayChip(scaleLabel, onScale)
+                Text("  ⟳", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable(onClick = onRotate).padding((10 * ks).dp))
+            }
             Grow()
-            Text("⏮", color = Color.White, fontSize = 20.sp, modifier = Modifier.clickable { player.prev() }.padding(10.dp))
-            Text("⏭", color = Color.White, fontSize = 20.sp, modifier = Modifier.clickable { player.next() }.padding(10.dp))
-            Text("PiP", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable(onClick = onPip).padding(10.dp))
+            AutoFitRow(spacing = 0.dp) {
+                Text("⏮", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable { player.prev() }.padding((10 * ks).dp))
+                Text("⏭", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable { player.next() }.padding((10 * ks).dp))
+                Text("PiP", color = Color.White, fontSize = (14 * ks).sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable(onClick = onPip).padding((10 * ks).dp))
+            }
         }
-    } else Row(Modifier.align(Alignment.BottomEnd).padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    } else AutoFitRow(Modifier.align(Alignment.BottomEnd).padding(6.dp), spacing = 0.dp) {
         OverlayChip(scaleLabel, onScale)
-        Text("  ⟳ ", color = Color.White, fontSize = 20.sp, modifier = Modifier.clickable(onClick = onRotate).padding(8.dp))
-        Text("PiP", color = Color.White, fontSize = 14.sp, modifier = Modifier.clickable(onClick = onPip).padding(8.dp))
+        Text("  ⟳ ", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable(onClick = onRotate).padding((8 * ks).dp))
+        Text("PiP", color = Color.White, fontSize = (14 * ks).sp, modifier = Modifier.clickable(onClick = onPip).padding((8 * ks).dp))
     }
 }
 

@@ -136,7 +136,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             // Skip buttons say where they skip in: the playlist or the folder playback started from.
             val within = when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
-            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Never overlapping: shrinks the controls if they don't fit the width (large Button size, narrow phone).
+            AutoFitRow(spacing = 12.dp) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
                     CtlBtn("⏮", 52) { player.prev() }
                     Text("Prev in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
