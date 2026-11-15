@@ -1,7 +1,7 @@
 /*
  * vlc interface — app-owned audio output.
  *
- * libVLC hands us decoded stereo float PCM (libvlc_audio_set_callbacks). We apply
+ * libVLC hands us decoded stereo 16-bit PCM (the only format its amem output accepts) (libvlc_audio_set_callbacks). We apply
  * balance + preamp + volume ourselves, measure the left/right peaks for the VU meters,
  * and play it through AAudio, timed to libVLC's clock so video stays in sync.
  *
@@ -189,13 +189,14 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     bool lim = atomic_load(&g_limit) || gl > 1.f || gr > 1.f;
 
     static float buf[4096 * 2];
-    const float *in = (const float *)samples;
+    const int16_t *in = (const int16_t *)samples;
+    const float k16 = 1.f / 32768.f;
     unsigned done = 0;
     float pl = 0.f, pr = 0.f;
     while (done < count) {
         unsigned n = count - done; if (n > 4096) n = 4096;
         for (unsigned i = 0; i < n; i++) {
-            float l = in[(done + i) * 2] * gl, r = in[(done + i) * 2 + 1] * gr;
+            float l = in[(done + i) * 2] * k16 * gl, r = in[(done + i) * 2 + 1] * k16 * gr;
             if (lim) { l = limit(l); r = limit(r); }
             buf[i * 2] = l; buf[i * 2 + 1] = r;
             float al = fabsf(l), ar = fabsf(r);
@@ -263,7 +264,8 @@ static void cb_volume(void *d, float vol, bool mute) {
 static int cb_setup(void **opaque, char *format, unsigned *rate, unsigned *channels) {
     (void)opaque;
     atomic_fetch_add(&st_setup, 1);
-    memcpy(format, "FL32", 4);
+    /* libVLC 3's amem output only accepts S16N (any other format is refused after setup, then retried forever). */
+    memcpy(format, "S16N", 4);
     *channels = 2;
     if (*rate < 8000 || *rate > 192000) *rate = 48000;
     pthread_mutex_lock(&g_lock);
