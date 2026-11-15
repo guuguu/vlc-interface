@@ -345,12 +345,10 @@ class PlayerController(private val context: Context, private val store: Store) {
         val item = s.item ?: return
         if (item.isMusic || item.isRadio) return
         val (c, b, g) = highlightTone(hl)
-        if (pictureFilterOn && NativeAudio.picture(libVlc, mp, true, hue, sat, c, b, g)) return
-        if (commit && (pictureFilterOn || !pictureNeutral(hue, sat) || hl > 0.01f)) {
-            val pos = mp.time; val playing = mp.isPlaying
-            startItem(s.index, pos)
-            if (!playing) main.postDelayed({ mp.pause() }, 400)
-        }
+        // While dragging: live preview when possible.
+        if (!commit) { if (pictureFilterOn) NativeAudio.picture(libVlc, mp, true, hue, sat, c, b, g); return }
+        // Slider released / Reset: the video is reloaded at the same spot so the setting is applied fully (user rule).
+        reloadVideo()
     }
 
     /**
@@ -406,6 +404,19 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** Volume buttons / swipe step while the app plays on its own picked device. Returns the new percent (100 = as set). */
     fun stepAppVolume(up: Boolean): Int { setAppVolume(appVolume + if (up) 0.0667f else -0.0667f); return (appVolume * 100).toInt() }
+
+    /**
+     * Reloads the playing video with the current video settings and goes on from the same spot (paused stays paused).
+     * Used whenever a video setting is changed in the player.
+     */
+    fun reloadVideo() {
+        val s = _state.value
+        val item = s.item ?: return
+        if (item.isMusic || item.isRadio) return
+        val pos = mp.time; val playing = mp.isPlaying
+        startItem(s.index, pos.coerceAtLeast(0))
+        if (!playing) main.postDelayed({ mp.pause() }, 400)
+    }
 
     /** Closing the video player: hue/saturation go back to the original colours (user rule). */
     fun resetPicture() {
@@ -736,7 +747,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     var scale: MediaPlayer.ScaleType = MediaPlayer.ScaleType.SURFACE_BEST_FIT
         private set
 
-    fun setScale(s: MediaPlayer.ScaleType) { scale = s; mp.setVideoScale(s); refreshSurface() }
+    fun setScale(s: MediaPlayer.ScaleType) { scale = s; mp.setVideoScale(s); refreshSurface(); main.postDelayed({ reloadVideo() }, 150) }
 
     /** Re-fits the picture to the current size of the video area (rotation, split screen, PiP, new video size). */
     fun refreshSurface() {
