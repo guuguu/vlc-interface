@@ -119,9 +119,20 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             var coverNote by remember(item.uri) { mutableStateOf("") }
             // Long-press the picture: look for it online again (also when it wasn't found before).
             var coverRetry by remember(item.uri) { mutableIntStateOf(0) }
-            Cover(item.artwork, 280, Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = "Looking for the picture online…"; coverRetry++ }), retry = coverRetry,
-                item = item.copy(artist = p.metaArtist.ifEmpty { item.artist }, album = p.metaAlbum.ifEmpty { item.album }), download = true,
+            var coverRefresh by remember(item.uri) { mutableIntStateOf(0) }
+            // Long-press: all fitting album pictures online; several → choose one from the list.
+            var coverPick by remember(item.uri) { mutableStateOf(false) }
+            val coverItem = item.copy(artist = p.metaArtist.ifEmpty { item.artist }, album = p.metaAlbum.ifEmpty { item.album })
+            Cover(item.artwork, 280, Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
+                item = coverItem, download = true, refresh = coverRefresh,
                 onNote = { coverNote = it }, onFound = { player.useDownloadedArtwork(item, "mem:" + item.uri) })
+            if (coverPick) CoverPicker(coverItem,
+                onNone = { coverPick = false; coverNote = "Looking for the picture online…"; coverRetry++ },
+                onDone = { note, changed ->
+                    coverPick = false
+                    if (note.isNotEmpty()) coverNote = note
+                    if (changed) { coverRefresh++; player.useDownloadedArtwork(item, "mem:" + item.uri + "#v" + System.currentTimeMillis()) }
+                })
             if (coverNote.isNotEmpty()) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(item.title, color = C.text, fontSize = 22.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)

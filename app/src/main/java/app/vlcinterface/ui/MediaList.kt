@@ -73,10 +73,10 @@ import kotlinx.coroutines.withContext
 /** Album cover / thumbnail from a content:// uri (phone) or a file:// / path (libVLC cache). */
 @Composable
 fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayItem? = null,
-          download: Boolean = false, onNote: (String) -> Unit = {}, onFound: () -> Unit = {}, retry: Int = 0) {
+          download: Boolean = false, onNote: (String) -> Unit = {}, onFound: () -> Unit = {}, retry: Int = 0, refresh: Int = 0) {
     val ctx = LocalContext.current
     val online = download && App.instance.store.current.settings.coverDownload
-    val bmp by produceState<Bitmap?>(null, url, item?.uri, online, retry) {
+    val bmp by produceState<Bitmap?>(null, url, item?.uri, online, retry, refresh) {
         value = withContext(Dispatchers.IO) {
             val own = try {
                 when {

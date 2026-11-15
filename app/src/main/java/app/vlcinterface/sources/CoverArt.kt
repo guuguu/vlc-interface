@@ -123,6 +123,8 @@ object CoverArt {
             is Phone -> {
                 val (tree, folderId) = phoneDoc(ctx, pl) ?: return "not saved — allow phone folders in Settings → Library scanning"
                 val folderUri = DocumentsContract.buildDocumentUriUsingTree(tree, folderId)
+                // Replacing a picture (chosen from the candidates): remove the old one first, or Android names the new one "cover (1).jpg".
+                try { DocumentsContract.deleteDocument(ctx.contentResolver, DocumentsContract.buildDocumentUriUsingTree(tree, "$folderId/$name")) } catch (_: Exception) {}
                 val out = DocumentsContract.createDocument(ctx.contentResolver, folderUri, "image/jpeg", name) ?: return "not saved — folder refused"
                 ctx.contentResolver.openOutputStream(out, "wt")!!.use { it.write(jpeg) }; ""
             }
@@ -256,6 +258,74 @@ object CoverArt {
                 markMissed(k); null
             } catch (_: Exception) { null }
         }
+    }
+
+    // ---------- choosing among several pictures ----------
+
+    /** One album picture found online, to choose from (long-press on the player's picture). */
+    data class Candidate(val kind: String, val id: String, val title: String, val credit: String, val info: String, val thumb: Bitmap)
+
+    private fun creditOf(o: JSONObject) = o.optJSONArray("artist-credit")?.let { c -> (0 until c.length()).joinToString(" ") { c.getJSONObject(it).optString("name") } } ?: ""
+
+    private fun infoOf(kind: String, o: JSONObject): String = if (kind == "release-group")
+        listOf(o.optString("first-release-date").take(4), o.optString("primary-type"), "original cover").filter { it.isNotBlank() }.joinToString(" · ")
+    else listOfNotNull(o.optString("date").take(4).ifBlank { null }, o.optString("country").ifBlank { null },
+        o.optJSONArray("media")?.optJSONObject(0)?.optString("format")?.ifBlank { null },
+        o.optJSONArray("label-info")?.optJSONObject(0)?.optJSONObject("label")?.optString("name")?.ifBlank { null }).joinToString(" · ")
+
+    /**
+     * Every album picture that fits this album and artist (different editions often have different covers),
+     * with a small preview each. Same searches as the automatic one, but all fitting results are kept.
+     */
+    suspend fun candidates(artist: String, album: String): List<Candidate> = withContext(Dispatchers.IO) {
+        if (album.isBlank()) return@withContext emptyList()
+        val hits = LinkedHashMap<String, Triple<String, String, JSONObject>>()   // id → (kind, id, json)
+        lock.withLock {
+            try {
+                fun q(t: String) = t.replace("\"", "")
+                suspend fun search(query: String, kind: String, wantTitle: String?) {
+                    val arr = mb("https://musicbrainz.org/ws/2/$kind/?fmt=json&limit=15&query=" + URLEncoder.encode(query, "UTF-8"))
+                        ?.optJSONArray(if (kind == "release-group") "release-groups" else "releases") ?: return
+                    (0 until arr.length()).map { arr.getJSONObject(it) }
+                        .filter { it.optInt("score") >= 80 && artistFits(artist, creditOf(it)) && (wantTitle == null || norm(it.optString("title")) == wantTitle) }
+                        .forEach { o -> hits.putIfAbsent(o.getString("id"), Triple(kind, o.getString("id"), o)) }
+                }
+                val base = album.trim().replace(Regex("[´`’‘ʼ′]"), "'").replace(Regex("""\s*[\(\[\{][^)\]\}]*[\)\]\}]"""), "").trim()
+                for (withArtist in listOf(true, false)) {
+                    if (withArtist && artist.isBlank()) continue
+                    if (!withArtist && hits.isNotEmpty()) break
+                    for (title in albumVariants(album)) {
+                        for (kind in listOf("release-group", "release"))
+                            search("${if (kind == "release-group") "releasegroup" else "release"}:\"${q(title)}\"" + if (withArtist) " AND artist:\"${q(artist)}\"" else "", kind, null)
+                        if (hits.size >= 12) break
+                    }
+                }
+                if (hits.isEmpty() && artist.isNotBlank()) {
+                    val words = base.replace(Regex("[^\\p{L}\\p{N}' ]"), " ").trim().split(Regex("\\s+")).filter { it.isNotBlank() }.joinToString(" ") { it.replace("'", "") }
+                    if (words.isNotEmpty()) for (kind in listOf("release-group", "release"))
+                        search("${if (kind == "release-group") "releasegroup" else "release"}:($words) AND artist:\"${q(artist)}\"", kind, norm(base))
+                }
+            } catch (_: Exception) {}
+        }
+        // Previews (Cover Art Archive, small size); entries without a picture drop out, identical pictures shown once.
+        val seen = HashSet<Int>()
+        hits.values.take(16).mapNotNull { (kind, id, o) ->
+            val b = try { get("https://coverartarchive.org/$kind/$id/front-250") } catch (_: Exception) { null } ?: return@mapNotNull null
+            if (!seen.add(b.contentHashCode())) return@mapNotNull null
+            val bmp = BitmapFactory.decodeByteArray(b, 0, b.size) ?: return@mapNotNull null
+            Candidate(kind, id, o.optString("title"), creditOf(o), infoOf(kind, o), bmp)
+        }
+    }
+
+    /** The chosen picture: downloaded at full size, resized for the phone and saved as cover.jpg in the album folder. */
+    suspend fun useCandidate(ctx: Context, item: PlayItem, c: Candidate): Result = withContext(Dispatchers.IO) {
+        val bytes = try { get("https://coverartarchive.org/${c.kind}/${c.id}/front-1200") ?: get("https://coverartarchive.org/${c.kind}/${c.id}/front-500") } catch (_: Exception) { null }
+            ?: return@withContext Result(null, "Couldn't download that picture")
+        val (bmp, jpeg) = resize(bytes) ?: return@withContext Result(null, "Couldn't read that picture")
+        val pl = place(ctx, item)
+        mem.put(pl?.key ?: item.uri, bmp); mem.put(item.uri, bmp)
+        val why = if (pl == null) "not saved — no album folder for this source" else saveFolder(ctx, pl, "cover.jpg", jpeg)
+        Result(bmp, if (why.isEmpty()) "Album picture saved in the album folder (cover.jpg)" else why)
     }
 
     /** Title compared without case, accents-as-apostrophes and punctuation: "You´ve Got It," = "you've got it". */
