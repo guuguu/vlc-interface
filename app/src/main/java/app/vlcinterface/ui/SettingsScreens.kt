@@ -74,7 +74,7 @@ fun SettingsScreen(nav: Navigator) {
             }
             SectionTitle("Playback")
             CardBox {
-                ToggleRow("Resume where I left off", "Per file", s.resume) { set(s.copy(resume = it)) }; Divider()
+                ToggleRow("Resume where I left off", "Videos only, per file — songs always start from the beginning", s.resume) { set(s.copy(resume = it)) }; Divider()
                 ToggleRow("Keep audio in background", "Notification controls", s.backgroundAudio) { set(s.copy(backgroundAudio = it)) }
             }
             SoundSettings(s, ::set)

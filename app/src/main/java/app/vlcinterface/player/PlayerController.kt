@@ -543,7 +543,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         media.release()
         try { oldPfd?.close() } catch (_: Exception) {}
         offsetsApplied = false
-        val resume = if (startAt >= 0) startAt else if (!item.isRadio && store.current.settings.resume && item.startMs < 0)
+        // Resume where you left off: videos only. Songs always start from the beginning (user rule),
+        // also when they come round again in the queue.
+        val resume = if (startAt >= 0) startAt else if (!item.isRadio && !item.isMusic && store.current.settings.resume && item.startMs < 0)
             store.current.recent.firstOrNull { it.uri == item.uri }?.position ?: -1 else -1
         pendingSeek = resume
         _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, videoW = 0, videoH = 0,
@@ -892,7 +894,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun saveProgress() {
         val s = _state.value
         val item = s.item ?: return
-        if (item.isRadio || item.startMs >= 0) return
+        if (item.isRadio || item.isMusic || item.startMs >= 0) return   // songs: no resume point kept
         val pos = mp.time
         val len = if (mp.length > 0) mp.length else s.length
         if (pos < 5_000) return
