@@ -39,6 +39,8 @@ sealed interface Screen {
     data class LogPage(val key: String) : Screen
     /** Browse a saved source to pick a .cue file for a playlist. */
     data class PickCue(val playlistId: String, val sourceId: String, val uri: String) : Screen
+    /** Choose files and folders (folders are added recursively) for a playlist. sourceId "" = start, "phone" = phone folders. */
+    data class PickMedia(val playlistId: String, val sourceId: String = "", val uri: String = "", val title: String = "") : Screen
 }
 
 class Navigator {
@@ -81,6 +83,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.Logs -> LogsScreen(nav)
                     is Screen.LogPage -> LogPageScreen(nav, top.key)
                     is Screen.PickCue -> PickCueScreen(nav, top)
+                    is Screen.PickMedia -> PickMediaScreen(nav, top)
                 }
                 if (showOutput) OutputSheet(onDismiss = { showOutput = false })
             }

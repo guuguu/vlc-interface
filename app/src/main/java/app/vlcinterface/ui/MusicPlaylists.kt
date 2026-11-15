@@ -310,10 +310,12 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
     }
     Column(Modifier.fillMaxSize()) {
         BackHeader(pl.name, nav, "${pl.items.size} items") {
-            Pill("Play", filled = true) { playPlaylist(nav, pl, 0) }
+            Pill("+ Add") { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)) }
+            Pill("Play", filled = true, modifier = Modifier.padding(start = 6.dp)) { playPlaylist(nav, pl, 0) }
             Box {
                 IconButton({ menu = true }) { Icon(Icons.Filled.MoreVert, "Playlist options", tint = C.text) }
                 DropdownMenu(menu, { menu = false }) {
+                    DropdownMenuItem({ Text("Add files or folders…") }, { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)); menu = false })
                     DropdownMenuItem({ Text("Add from .cue file…") }, { cueChoice = true; menu = false })
                     DropdownMenuItem({ Text("Send to NAS…") }, { sendNas = true; menu = false })
                     DropdownMenuItem({ Text("Share") }, {
@@ -598,4 +600,129 @@ fun LogPageScreen(nav: Navigator, key: String) {
         val (name, text) = remember { ServerLog.exportText(key, App.VERSION) }
         SaveToNasDialog("Save log to NAS", name, "log", { text.toByteArray() }) { saveNas = false }
     }
+}
+
+
+// ---------------- Pick files / folders for a playlist ----------------
+
+/** What's ticked while browsing (kept across folder pages). Folders are added with all their subfolders. */
+object PickBasket {
+    data class Pick(val key: String, val label: String, val isDir: Boolean, val sourceId: String, val uri: String,
+                    val local: app.vlcinterface.sources.LocalFolder? = null, val entry: Entry? = null)
+    var playlistId = ""
+    val picks = androidx.compose.runtime.mutableStateListOf<Pick>()
+    fun reset(id: String) { playlistId = id; picks.clear() }
+    fun toggle(p: Pick) { val i = picks.indexOfFirst { it.key == p.key }; if (i >= 0) picks.removeAt(i) else picks.add(p) }
+    fun has(key: String) = picks.any { it.key == key }
+}
+
+@Composable
+fun PickMediaScreen(nav: Navigator, p: Screen.PickMedia) {
+    val ctx = LocalContext.current
+    val st by App.instance.store.state.collectAsState()
+    val pl = st.playlists.firstOrNull { it.id == p.playlistId }
+    val scope = rememberCoroutineScope()
+    var localFolders by remember { mutableStateOf<List<app.vlcinterface.sources.LocalFolder>?>(null) }
+    var entries by remember(p.uri) { mutableStateOf<List<Entry>?>(null) }
+    var error by remember(p.uri) { mutableStateOf("") }
+    var adding by remember { mutableStateOf("") }
+    var done by remember { mutableStateOf("") }
+    val src = st.sources.firstOrNull { it.id == p.sourceId }
+    LaunchedEffect(p.sourceId, p.uri) {
+        when {
+            p.sourceId == "phone" && p.uri.isEmpty() -> localFolders = app.vlcinterface.sources.InternalSource.folders(ctx)
+            p.sourceId == "phone" -> {
+                val f = localFolders?.firstOrNull { it.id == p.uri } ?: app.vlcinterface.sources.InternalSource.folders(ctx).firstOrNull { it.id == p.uri }
+                entries = if (f != null) MusicLibrary.playOrder(app.vlcinterface.sources.InternalSource.files(ctx, f), f.name) else emptyList()
+            }
+            src != null -> Browse.list(src, p.uri).onSuccess { l ->
+                val tagged = MusicLibrary.withCachedTags(l)
+                entries = tagged.filter { it.isDir } + MusicLibrary.playOrder(tagged, Urls.nameOf(p.uri))
+            }.onFailure { error = app.vlcinterface.sources.SmbErrors.explain(it, src.user.isEmpty()) }
+        }
+    }
+    fun addAll() {
+        val target = pl ?: return
+        scope.launch {
+            adding = "Collecting files…"
+            val items = ArrayList<PlayItem>()
+            for (k in PickBasket.picks.toList()) {
+                val s = st.sources.firstOrNull { it.id == k.sourceId }
+                when {
+                    k.local != null -> items += MusicLibrary.collectLocal(ctx, k.local, true)
+                    k.isDir && s != null -> items += MusicLibrary.collectRecursive(s, k.uri) { n -> adding = "Collecting files… ${items.size + n}" }
+                    k.entry != null -> items += MusicLibrary.toPlayItem(k.entry, s, Urls.parent(k.uri))
+                }
+            }
+            var added = 0
+            App.instance.store.update { s ->
+                s.copy(playlists = s.playlists.map { pp ->
+                    if (pp.id != target.id) pp else {
+                        val have = pp.items.map { it.key }.toHashSet()
+                        val add = items.map { MusicLibrary.toPlEntry(it) }.filter { have.add(it.key) }
+                        added = add.size
+                        pp.copy(items = pp.items + add)
+                    }
+                })
+            }
+            adding = ""
+            done = "Added $added of ${items.size} files to ${target.name}" + if (items.size > added) " (${items.size - added} were already in it)" else ""
+            PickBasket.picks.clear()
+        }
+    }
+    Column(Modifier.fillMaxSize()) {
+        BackHeader(if (p.sourceId.isEmpty()) "Add to ${pl?.name ?: "playlist"}" else p.title.ifEmpty { "Choose" }, nav,
+            "Tick files and folders · folders include their subfolders")
+        val scroll = rememberScrollState()
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp)) {
+            if (error.isNotEmpty()) Text(error, color = C.bad)
+            when {
+                p.sourceId.isEmpty() -> {
+                    SectionTitle("Where from")
+                    PickRow("▤", "On this phone", null, false) { nav.go(Screen.PickMedia(p.playlistId, "phone", "", "On this phone")) }
+                    st.sources.filter { it.proto != "m3u" }.forEach { s ->
+                        PickRow("▤", s.name.ifEmpty { s.host }, null, false) { nav.go(Screen.PickMedia(p.playlistId, s.id, Urls.forSource(s), s.name)) }
+                    }
+                }
+                p.sourceId == "phone" && p.uri.isEmpty() -> localFolders?.forEach { f ->
+                    val key = "phone:${f.id}"
+                    PickRow("▤", f.name, PickBasket.has(key), true,
+                        onCheck = { PickBasket.toggle(PickBasket.Pick(key, f.name, true, "phone", f.relativePath, local = f)) }) {
+                        nav.go(Screen.PickMedia(p.playlistId, "phone", f.id, f.name))
+                    }
+                } ?: CircularProgressIndicator(color = accent())
+                else -> entries?.forEach { e ->
+                    val key = "${p.sourceId}:${e.uri}"
+                    if (e.isDir) PickRow("▤", e.name, PickBasket.has(key), true,
+                        onCheck = { PickBasket.toggle(PickBasket.Pick(key, e.name, true, p.sourceId, e.uri)) }) {
+                        nav.go(Screen.PickMedia(p.playlistId, p.sourceId, e.uri, e.name))
+                    } else PickRow(if (e.isAudio) "♪" else "▶", (if (e.track > 0) "${e.track}. " else "") + e.display +
+                        (if (e.durationMs > 0) "  ·  ${fmtTime(e.durationMs)}" else ""), PickBasket.has(key), true,
+                        onCheck = { PickBasket.toggle(PickBasket.Pick(key, e.display, false, p.sourceId, e.uri, entry = e)) }) {
+                        PickBasket.toggle(PickBasket.Pick(key, e.display, false, p.sourceId, e.uri, entry = e))
+                    }
+                } ?: if (error.isEmpty()) CircularProgressIndicator(color = accent()) else Unit
+            }
+            Box(Modifier.height(16.dp))
+        }
+        Row(Modifier.fillMaxWidth().background(C.panel).padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(if (adding.isNotEmpty()) adding else if (done.isNotEmpty()) done else "${PickBasket.picks.size} selected",
+                color = C.text, modifier = Modifier.weight(1f), fontSize = 14.sp)
+            if (done.isNotEmpty()) Pill("Back to playlist", filled = true) {
+                while (nav.top is Screen.PickMedia) nav.back()
+            } else Pill("Add selected", filled = true) { if (PickBasket.picks.isNotEmpty() && adding.isEmpty()) addAll() }
+        }
+    }
+}
+
+@Composable
+private fun PickRow(icon: String, label: String, checked: Boolean?, checkable: Boolean, onCheck: () -> Unit = {}, onOpen: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
+        if (checkable && checked != null) androidx.compose.material3.Checkbox(checked, { onCheck() },
+            colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = accent()))
+        Text(icon, color = accent(), modifier = Modifier.padding(start = 4.dp, end = 12.dp))
+        Text(label, color = C.text, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+        if (icon == "▤") Text("›", color = C.muted, fontSize = 20.sp, modifier = Modifier.padding(horizontal = 8.dp))
+    }
+    Divider()
 }
