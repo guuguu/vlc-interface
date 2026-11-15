@@ -180,12 +180,21 @@ class PlayerController(private val context: Context, private val store: Store) {
             val peak = if (album) rg?.albumPeak ?: rg?.trackPeak else rg?.trackPeak ?: rg?.albumPeak
             val used = if (gain == null) "" else if (album && rg?.albumGain != null || !album && rg?.trackGain == null) "album" else "track"
             var db = if (gain == null) 0f else gain + set.rgPreampDb
-            if (gain != null && set.rgClipProtect && peak != null && peak > 0f) db = minOf(db, -20f * log10(peak))
+            var limited = false
+            if (gain != null && set.rgClipProtect && peak != null && peak > 0f) { val cap = -20f * log10(peak); if (cap < db) { db = cap; limited = true } }
             rgDb = db
+            fun f(v: Float) = (if (v >= 0) "+" else "−") + "%.2f".format(java.util.Locale.US, kotlin.math.abs(v)) + " dB"
+            // Shows the song's own value (exactly as in its tags / the scan: track or album). When what is played
+            // differs — preamp added, or lowered so the loudest peak can't clip — that is said separately.
             val info = when {
                 rg == null -> "RG: tags not readable here"
                 gain == null -> "RG: no tags"
-                else -> "RG $used ${if (db >= 0) "+" else "−"}${"%.1f".format(kotlin.math.abs(db))} dB"
+                kotlin.math.abs(db - gain) < 0.005f -> "RG $used ${f(gain)}"
+                else -> "RG $used ${f(gain)} · plays ${f(db)}" + when {
+                    limited && set.rgPreampDb != 0f -> " (preamp, peak limit)"
+                    limited -> " (peak limit)"
+                    else -> " (preamp)"
+                }
             }
             _state.value = _state.value.copy(rgInfo = info)
             applySoundChain()
