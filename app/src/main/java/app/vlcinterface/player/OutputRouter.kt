@@ -39,7 +39,9 @@ class OutputRouter(private val context: Context) {
     private val am = context.getSystemService(AudioManager::class.java)
     private val _devices = MutableStateFlow<List<OutputDevice>>(emptyList())
     val devices: StateFlow<List<OutputDevice>> = _devices
-    var onActiveChanged: ((OutputDevice?, OutputDevice?) -> Unit)? = null
+    /** (before, after, picked by the user in the app) */
+    var onActiveChanged: ((OutputDevice?, OutputDevice?, Boolean) -> Unit)? = null
+    @Volatile private var userPick = false
 
     /** Device picked in the app's Sound output sheet (null = follow Android). */
     @Volatile private var chosen: String? = null
@@ -48,7 +50,12 @@ class OutputRouter(private val context: Context) {
     private val callback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
             // A device just connected (Bluetooth, headphones): follow Android's choice again, like other players.
-            if (chosen != null && addedDevices?.any { it.isSink } == true) { chosen = null; NativeAudio.device(0) }
+            // Only a real new output (Bluetooth, headphones, USB) that wasn't there before counts.
+            val known = _devices.value.filter { it.connected }.map { it.id }.toSet()
+            val real = addedDevices?.any { it.isSink && it.id !in known && it.type in setOf(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
+                AudioDeviceInfo.TYPE_BLE_HEADSET, AudioDeviceInfo.TYPE_BLE_SPEAKER, AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
+                AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE) } == true
+            if (chosen != null && real) { chosen = null; NativeAudio.device(0) }
             refresh()
         }
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = refresh()
@@ -108,11 +115,12 @@ class OutputRouter(private val context: Context) {
         }
         // Android's own routing changed (output switcher, quick settings): its choice wins over the app's.
         val routedKey = list.firstOrNull { it.active }?.key
-        if (chosen != null && lastRouted != null && routedKey != lastRouted) { chosen = null; NativeAudio.device(0) }
+        // (When our own sound plays on the chosen device, Android reports that device: that's not a change by Android.)
+        if (chosen != null && lastRouted != null && routedKey != lastRouted && routedKey != chosen) { chosen = null; NativeAudio.device(0) }
         lastRouted = routedKey
         // Output chosen in the app (our own sound output plays straight to it): that's where the sound is.
         val chosenDev = chosen?.let { k -> list.firstOrNull { it.key == k && it.connected } }
-        if (chosen != null && chosenDev == null) chosen = null          // chosen device went away: Android's default again
+        if (chosen != null && chosenDev == null) { chosen = null; NativeAudio.device(0) }   // chosen device went away: Android default again
         if (chosenDev != null) for (i in list.indices) list[i] = list[i].copy(active = list[i].key == chosenDev.key)
         if (list.none { it.active }) {
             // Fallback: Bluetooth > wired > speaker, which is Android's usual media priority.
@@ -134,7 +142,8 @@ class OutputRouter(private val context: Context) {
         list.sortBy { when (it.kind) { OutputKind.SPEAKER -> 0; OutputKind.WIRED, OutputKind.USB -> 1; OutputKind.BLUETOOTH -> if (it.connected) 2 else 3; else -> 4 } }
         if (list != _devices.value) _devices.value = list
         val after = active
-        if (before?.key != after?.key) onActiveChanged?.invoke(before, after)
+        if (before?.key != after?.key) onActiveChanged?.invoke(before, after, userPick)
+        userPick = false
     }
 
     /**
@@ -147,6 +156,7 @@ class OutputRouter(private val context: Context) {
         if (NativeAudio.active && d.id > 0) {
             chosen = d.key
             NativeAudio.device(d.id)
+            userPick = true
             refresh()
         } else openSwitcher()
     }

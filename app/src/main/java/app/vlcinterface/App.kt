@@ -33,14 +33,16 @@ class App : Application() {
         output = OutputRouter(this)
         media = MediaCenter(this, player)
         player.currentOutputName = output.active?.name ?: ""
-        output.onActiveChanged = { before, after ->
+        output.onActiveChanged = { before, after, picked ->
             player.currentOutputName = after?.name ?: ""
-            if (before?.name != after?.name) player.outputChanged()
+            // Picked in the app: the sound was already moved to it (outputChanged would send it back to Android's default).
+            if (before?.name != after?.name && !picked) player.outputChanged()
             if (after != null) store.update { it.copy(lastOutput = after.name) }
             // Headphones unplugged / Bluetooth lost: fall back to the speaker paused, never blasting audio.
             val lostPersonal = before != null && before.kind != OutputKind.SPEAKER &&
                 (after == null || after.kind == OutputKind.SPEAKER)
-            if (lostPersonal && store.current.settings.pauseOnDisconnect) player.pause()
+            // Not when you picked the speaker yourself in Sound output: then it just keeps playing there.
+            if (lostPersonal && !picked && store.current.settings.pauseOnDisconnect) player.pause()
         }
     }
 
