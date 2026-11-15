@@ -90,7 +90,8 @@ fun SongsTab(nav: Navigator) {
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(if (selected.isEmpty()) "${songs.size} songs" else "${selected.size} selected · ${fmtLong(total)}",
                 color = if (selected.isEmpty()) C.muted else accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-            if (selected.isNotEmpty()) Pill("Clear") { selected = emptySet() } else Pill("All") { selected = songs.map { it.uri }.toSet() }
+            if (selected.size < songs.size) Pill("Select all") { selected = songs.map { it.uri }.toSet() }
+            if (selected.isNotEmpty()) Pill("Deselect all") { selected = emptySet() }
             Pill(if (netBusy.isNotEmpty()) netBusy else "+ LAN / Internet") {
                 if (netBusy.isNotEmpty()) return@Pill
                 netBusy = "Reading…"
