@@ -29,6 +29,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -41,6 +43,7 @@ import app.vlcinterface.player.PlayItem
 import app.vlcinterface.sources.InternalSource
 import app.vlcinterface.sources.MusicLibrary
 import app.vlcinterface.sources.Urls
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -110,8 +113,8 @@ fun SongsTab(nav: Navigator) {
                     .combinedClickable(onClick = { selected = if (on) selected - s.uri else selected + s.uri },
                         onLongClick = { if (selected.isEmpty()) selected = setOf(s.uri); ask = true })
                     .padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(listOf(s.artist.ifEmpty { "Unknown artist" }, s.album.ifEmpty { "—" }, s.title).joinToString("  –  "),
-                        color = if (on) accent() else C.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    DriftText(listOf(s.artist.ifEmpty { "Unknown artist" }, s.album.ifEmpty { "—" }, s.title).joinToString("  –  "),
+                        if (on) accent() else C.text, Modifier.weight(1f))
                     Text(if (s.durationMs > 0) fmtLong(s.durationMs) else "–:––", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
                 }
             }
@@ -151,5 +154,32 @@ fun SongsTab(nav: Navigator) {
             },
             dismissButton = { STextButton({ ask = false }) { Text("Cancel") } },
         )
+    }
+}
+
+
+/**
+ * A row too long for the screen glides slowly to its end and back, so all of it can be read — each row on its
+ * own random timing, so they don't all move at once. Rows that fit stay still.
+ */
+@Composable
+private fun DriftText(text: String, color: Color, modifier: Modifier) {
+    val scroll = androidx.compose.foundation.rememberScrollState()
+    Box(modifier.clipToBounds()) {
+        Text(text, color = color, fontSize = 13.sp, maxLines = 1, softWrap = false,
+            modifier = Modifier.horizontalScroll(scroll, enabled = false))
+    }
+    val max = scroll.maxValue
+    LaunchedEffect(text, max) {
+        if (max <= 0 || max == Int.MAX_VALUE) return@LaunchedEffect
+        val rnd = kotlin.random.Random(text.hashCode() xor System.nanoTime().toInt())
+        delay(rnd.nextLong(1_500, 9_000))                       // random first start
+        val ms = (max * 22L).coerceIn(1_500L, 12_000L)           // slow: about 45 px per second
+        while (true) {
+            scroll.animateScrollTo(max, androidx.compose.animation.core.tween(ms.toInt(), easing = androidx.compose.animation.core.LinearEasing))
+            delay(1_800)
+            scroll.animateScrollTo(0, androidx.compose.animation.core.tween(ms.toInt(), easing = androidx.compose.animation.core.LinearEasing))
+            delay(rnd.nextLong(4_000, 14_000))                  // random pause before the next glide
+        }
     }
 }
