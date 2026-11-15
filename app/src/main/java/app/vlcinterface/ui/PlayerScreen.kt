@@ -578,7 +578,12 @@ private fun BoxScope.PictureBar(onClose: () -> Unit) {
     var hue by remember(st.settings.pictureHue) { mutableStateOf(st.settings.pictureHue) }
     var sat by remember(st.settings.pictureSat) { mutableStateOf(st.settings.pictureSat) }
     val colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = Color(0x66FFFFFF))
-    Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xB30F1115)).safeDrawingPadding()
+    // A tap anywhere on the picture (outside the bar) closes the bar.
+    Box(Modifier.matchParentSize().clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+        indication = null, onClick = onClose))
+    Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xB30F1115))
+        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+        .safeDrawingPadding()
         .padding(horizontal = 12.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             SymButton(onClose) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
