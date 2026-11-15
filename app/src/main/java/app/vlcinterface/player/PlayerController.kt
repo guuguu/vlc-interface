@@ -842,14 +842,36 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
     fun resume() { if (!mp.isPlaying && _state.value.item != null) { _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() } }
     fun pause() { if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() } }
-    /** Set when the sleep timer closed the player (shown as a pop-up, cleared when seen). */
-    val sleptAt = kotlinx.coroutines.flow.MutableStateFlow(0L)
+    /**
+     * Set when the sleep timer closed the player. Kept across the app being closed, so the pop-up shows when the app
+     * is opened next; cleared when seen.
+     */
+    private val sleepPrefs get() = context.getSharedPreferences("sleep", Context.MODE_PRIVATE)
+    val sleptAt = kotlinx.coroutines.flow.MutableStateFlow(try { sleepPrefs.getLong("at", 0L) } catch (_: Exception) { 0L })
+    fun sleepSeen() { sleptAt.value = 0L; try { sleepPrefs.edit().remove("at").apply() } catch (_: Exception) {} }
 
-    private fun sleepStop() { sleptAt.value = System.currentTimeMillis(); stop() }
+    /**
+     * Sleep time is up: silence first (so nothing still queued in the sound buffers is heard at full volume), then
+     * the whole app is closed like the Exit button does. A notification and the pop-up at the next start say so.
+     */
+    private fun sleepStop() {
+        val now = System.currentTimeMillis()
+        sleptAt.value = now
+        try { sleepPrefs.edit().putLong("at", now).commit() } catch (_: Exception) {}
+        fadeK = 0f; NativeAudio.appVolume(0f); try { mp.setVolume(0) } catch (_: Exception) {}
+        try { mp.pause() } catch (_: Exception) {}
+        try {
+            val nm = context.getSystemService(android.app.NotificationManager::class.java)
+            nm.createNotificationChannel(android.app.NotificationChannel("sleep", "Sleep timer", android.app.NotificationManager.IMPORTANCE_DEFAULT))
+            val t = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(now))
+            nm.notify(7301, android.app.Notification.Builder(context, "sleep").setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+                .setContentTitle("Sleep").setContentText("Player closed by sleep timer at $t").setAutoCancel(true).build())
+        } catch (_: Exception) {}
+        main.postDelayed({ app.vlcinterface.ui.exitApp(keepNotice = true) }, 250)
+    }
 
     fun stop() {
         stopping = true; endHandled = true
-        main.postDelayed({ applyFade(1f) }, 300)   // a sleep fade ends with the stop: next playback at full volume
         saveProgress()
         resetPicture()
         mp.stop()

@@ -63,9 +63,9 @@ fun SleepClosedHost() {
     val at by App.instance.player.sleptAt.collectAsState()
     if (at <= 0L) return
     val time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(at))
-    AlertDialog(onDismissRequest = { App.instance.player.sleptAt.value = 0L }, containerColor = C.panel,
+    AlertDialog(onDismissRequest = { App.instance.player.sleepSeen() }, containerColor = C.panel,
         title = { Text("Sleep", color = C.text) },
         text = { Text("Player closed by sleep timer at $time.", color = C.text) },
-        confirmButton = { STextButton({ App.instance.player.sleptAt.value = 0L }) { Text("OK", color = accent()) } },
+        confirmButton = { STextButton({ App.instance.player.sleepSeen() }) { Text("OK", color = accent()) } },
     )
 }
