@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -109,7 +110,10 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     Box(Modifier.fillMaxSize()) {
     Column(Modifier.fillMaxSize().padding(end = if (meters) 21.dp else 0.dp)) {
         // No page title: the song name is already shown in the middle of the player.
-        BackHeader("", nav) { OutputPill(openOutput) }
+        BackHeader("", nav, afterHome = {
+            // Shortcut to the sound settings (preamp, balance per device, ReplayGain, sound engine).
+            IconButton({ nav.go(Screen.SoundSettings) }) { Icon(Icons.Filled.Settings, "Sound settings", tint = C.text) }
+        }) { OutputPill(openOutput) }
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Cover(p.artworkUrl.ifEmpty { item.artwork }, 280, Modifier.padding(top = 8.dp))

@@ -76,47 +76,7 @@ fun SettingsScreen(nav: Navigator) {
                 ToggleRow("Resume where I left off", "Per file", s.resume) { set(s.copy(resume = it)) }; Divider()
                 ToggleRow("Keep audio in background", "Notification controls", s.backgroundAudio) { set(s.copy(backgroundAudio = it)) }
             }
-            SectionTitle("Sound")
-            CardBox {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Start volume", color = C.text, fontSize = 15.sp)
-                            Text("Set every time the app starts, before any sound", color = C.muted, fontSize = 13.sp)
-                        }
-                        Text("${s.startVolume}%", color = accent(), fontWeight = FontWeight.SemiBold)
-                    }
-                    androidx.compose.material3.Slider(s.startVolume.toFloat(), { set(s.copy(startVolume = it.toInt())) }, valueRange = 0f..100f)
-                    Divider()
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Preamp (everything)", color = C.text, fontSize = 15.sp)
-                            Text(if (s.preampDb > 0f) "Above 0 dB loud tracks may distort" else "Music, video and radio", color = C.muted, fontSize = 13.sp)
-                        }
-                        Text("%+.1f dB".format(s.preampDb), color = accent(), fontWeight = FontWeight.SemiBold)
-                        TextButton({ set(s.copy(preampDb = 0f)); App.instance.player.applySoundChain() }) { Text("Reset") }
-                    }
-                    androidx.compose.material3.Slider(s.preampDb, { v -> set(s.copy(preampDb = Math.round(v * 2) / 2f)); App.instance.player.applySoundChain() }, valueRange = -12f..12f)
-                }
-                Divider()
-                DeviceSoundList()
-                Divider()
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("ReplayGain (tagged music only)", color = C.text, fontSize = 15.sp)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("off" to "Off", "track" to "Track", "album" to "Album", "auto" to "Auto").forEach { (k, l) ->
-                            Pill(l, selected = s.rgMode == k) { set(s.copy(rgMode = k)) }
-                        }
-                    }
-                    Text("Auto: album gain when playing an album in order, track gain for shuffle and playlists. Videos are never adjusted.", color = C.muted, fontSize = 12.sp)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("ReplayGain pre-amp", color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        Text("%+.1f dB".format(s.rgPreampDb), color = accent(), fontSize = 13.sp)
-                    }
-                    androidx.compose.material3.Slider(s.rgPreampDb, { v -> set(s.copy(rgPreampDb = Math.round(v * 2) / 2f)) }, valueRange = -6f..6f)
-                }
-                ToggleRow("Prevent clipping", "Uses the peak values in the tags", s.rgClipProtect) { set(s.copy(rgClipProtect = it)) }
-            }
+            SoundSettings(s, ::set)
             SectionTitle("Network")
             CardBox {
                 ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }; Divider()
@@ -301,6 +261,67 @@ fun DeviceSoundControls(name: String) {
                 modifier = Modifier.width(64.dp).padding(start = 6.dp).clickable {
                     store.update { it.copy(deviceBalance = it.deviceBalance + (name to 0)) }; App.instance.player.applySoundChain()
                 })
+        }
+    }
+}
+
+/** Sound section: used in Settings and on its own page (gear button in the music player). */
+@Composable
+fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
+    SectionTitle("Sound")
+    CardBox {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Start volume", color = C.text, fontSize = 15.sp)
+                    Text("Set every time the app starts, before any sound", color = C.muted, fontSize = 13.sp)
+                }
+                Text("${s.startVolume}%", color = accent(), fontWeight = FontWeight.SemiBold)
+            }
+            androidx.compose.material3.Slider(s.startVolume.toFloat(), { set(s.copy(startVolume = it.toInt())) }, valueRange = 0f..100f)
+            Divider()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Preamp (everything)", color = C.text, fontSize = 15.sp)
+                    Text(if (s.preampDb > 0f) "Above 0 dB loud tracks may distort" else "Music, video and radio", color = C.muted, fontSize = 13.sp)
+                }
+                Text("%+.1f dB".format(s.preampDb), color = accent(), fontWeight = FontWeight.SemiBold)
+                TextButton({ set(s.copy(preampDb = 0f)); App.instance.player.applySoundChain() }) { Text("Reset") }
+            }
+            androidx.compose.material3.Slider(s.preampDb, { v -> set(s.copy(preampDb = Math.round(v * 2) / 2f)); App.instance.player.applySoundChain() }, valueRange = -12f..12f)
+        }
+        Divider()
+        DeviceSoundList()
+        Divider()
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("ReplayGain (tagged music only)", color = C.text, fontSize = 15.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("off" to "Off", "track" to "Track", "album" to "Album", "auto" to "Auto").forEach { (k, l) ->
+                    Pill(l, selected = s.rgMode == k) { set(s.copy(rgMode = k)) }
+                }
+            }
+            Text("Auto: album gain when playing an album in order, track gain for shuffle and playlists. Videos are never adjusted.", color = C.muted, fontSize = 12.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("ReplayGain pre-amp", color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text("%+.1f dB".format(s.rgPreampDb), color = accent(), fontSize = 13.sp)
+            }
+            androidx.compose.material3.Slider(s.rgPreampDb, { v -> set(s.copy(rgPreampDb = Math.round(v * 2) / 2f)) }, valueRange = -6f..6f)
+        }
+        ToggleRow("Prevent clipping", "Uses the peak values in the tags", s.rgClipProtect) { set(s.copy(rgClipProtect = it)) }
+    }
+}
+
+/** Sound settings on their own page, opened from the music player's gear button. */
+@Composable
+fun SoundSettingsScreen(nav: Navigator) {
+    val store = App.instance.store
+    val st by store.state.collectAsState()
+    val scroll = rememberScrollState()
+    Column(Modifier.fillMaxSize()) {
+        BackHeader("Sound settings", nav)
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SoundSettings(st.settings) { n -> store.update { it.copy(settings = n) } }
+            Box(Modifier.height(16.dp))
         }
     }
 }

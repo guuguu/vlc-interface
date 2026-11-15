@@ -95,10 +95,11 @@ fun HomeButton(nav: Navigator, tint: Color = C.text) {
 }
 
 @Composable
-fun BackHeader(title: String, nav: Navigator, sub: String = "", actions: @Composable () -> Unit = {}) {
+fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Composable () -> Unit = {}, actions: @Composable () -> Unit = {}) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { nav.back() }) { Icon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
         HomeButton(nav)
+        afterHome()
         Column(Modifier.weight(1f).padding(start = 4.dp)) {
             Text(title, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
