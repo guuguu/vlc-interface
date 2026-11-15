@@ -19,6 +19,7 @@ import app.vlcinterface.sources.AUDIO_EXT
 import app.vlcinterface.sources.SmbBridge
 import app.vlcinterface.sources.ext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import org.videolan.libvlc.Dialog
 import org.videolan.libvlc.LibVLC
@@ -139,10 +140,52 @@ class PlayerController(private val context: Context, private val store: Store) {
         rgInUse = rgSignature()
         mp = MediaPlayer(libVlc)
         // Our own audio output: real balance/preamp and stereo levels. Falls back to libVLC's output.
-        NativeAudio.attachTo(libVlc, mp, store.current.settings.soundEngine != "libvlc")
+        if (!NativeAudio.attachTo(libVlc, mp, appOutputWanted()) && appOutputWanted()) {
+            // Could not attach: build the engine again with libVLC doing ReplayGain itself.
+            NativeAudio.markFailed(NativeAudio.reason.ifEmpty { "could not attach" })
+            mp.release(); libVlc.release()
+            libVlc = LibVLC(context, buildOptions(style))
+            mp = MediaPlayer(libVlc)
+        }
         mp.setEventListener { ev -> onEvent(ev) }
         installDialogs()
         setupSoundChain()
+    }
+
+    private fun appOutputWanted() = store.current.settings.soundEngine != "libvlc" && !NativeAudio.failed
+
+    // ---------- ReplayGain (app output) ----------
+
+    /** Gain in dB for the playing music item (ReplayGain + its pre-amp, clip-limited); 0 if untagged. */
+    private var rgDb = 0f
+    private val bg = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
+    private var rgJob: kotlinx.coroutines.Job? = null
+
+    private fun loadReplayGain(item: PlayItem, s: PlayerState) {
+        rgDb = 0f
+        rgJob?.cancel()
+        val set = store.current.settings
+        if (!item.isMusic || set.rgMode == "off") return
+        if (!NativeAudio.active) { _state.value = _state.value.copy(rgInfo = "RG ${rgModeFor(s)} (libVLC)"); return }
+        val mode = rgModeFor(s)
+        rgJob = bg.launch {
+            val rg = app.vlcinterface.sources.ReplayGain.read(context, item.uri, item.user, item.password, item.domain, item.smbVersion)
+            if (_state.value.item !== item) return@launch
+            val album = mode == "album"
+            val gain = if (album) rg?.albumGain ?: rg?.trackGain else rg?.trackGain ?: rg?.albumGain
+            val peak = if (album) rg?.albumPeak ?: rg?.trackPeak else rg?.trackPeak ?: rg?.albumPeak
+            val used = if (gain == null) "" else if (album && rg?.albumGain != null || !album && rg?.trackGain == null) "album" else "track"
+            var db = if (gain == null) 0f else gain + set.rgPreampDb
+            if (gain != null && set.rgClipProtect && peak != null && peak > 0f) db = minOf(db, -20f * log10(peak))
+            rgDb = db
+            val info = when {
+                rg == null -> "RG: tags not readable here"
+                gain == null -> "RG: no tags"
+                else -> "RG $used ${if (db >= 0) "+" else "−"}${"%.1f".format(kotlin.math.abs(db))} dB"
+            }
+            _state.value = _state.value.copy(rgInfo = info)
+            applySoundChain()
+        }
     }
 
     private fun rgSignature(): String {
@@ -163,7 +206,9 @@ class PlayerController(private val context: Context, private val store: Store) {
             "--aout=audiotrack",
         )
         // ReplayGain: only tagged files change; untagged ones get 0 dB.
-        val mode = when (s.rgMode) { "track" -> "track"; "album", "auto" -> "album"; else -> "none" }
+        // With the app's own output the app reads the tags and applies the gain itself (libVLC's RG is off then,
+        // so it's never applied twice); libVLC does it only when its own output is used.
+        val mode = if (appOutputWanted()) "none" else when (s.rgMode) { "track" -> "track"; "album", "auto" -> "album"; else -> "none" }
         o += "--audio-replay-gain-mode=$mode"
         o += "--audio-replay-gain-preamp=${s.rgPreampDb}"
         o += "--audio-replay-gain-default=0"
@@ -207,7 +252,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun applySoundChain() {
         val st = store.current
         val dev = currentOutputName
-        val total = (st.settings.preampDb + (st.devicePreamp[dev] ?: 0f)).coerceIn(-24f, 12f)
+        val rg = if (NativeAudio.active && _state.value.item?.isMusic == true) rgDb else 0f
+        val total = (st.settings.preampDb + (st.devicePreamp[dev] ?: 0f) + rg).coerceIn(-36f, 12f)
         val bal = (st.deviceBalance[dev] ?: 0).coerceIn(-100, 100)
         fun att(f: Float): Float = if (f <= 0.001f) -60f else (20f * log10(f)).coerceAtLeast(-60f)
         val left = total + if (bal > 0) att(1f - bal / 100f) else 0f
@@ -483,7 +529,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, videoW = 0, videoH = 0,
             audioTracks = emptyList(), spuTracks = emptyList(), audioDelayMs = 0, spuDelayMs = 0, rate = 1f, nowPlaying = "",
             metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, buffering = 0f, error = "", ended = false,
-            rgInfo = if (item.isMusic && store.current.settings.rgMode != "off") "RG ${rgModeFor(s0)}" else "")
+            rgInfo = "")
+        loadReplayGain(item, _state.value)
         am.requestAudioFocus(focusRequest)
         mp.play()
         applySoundChain()
