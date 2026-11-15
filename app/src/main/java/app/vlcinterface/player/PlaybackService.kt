@@ -59,6 +59,7 @@ class PlaybackService : Service() {
     private var wake: android.os.PowerManager.WakeLock? = null
     private var wifi: android.net.wifi.WifiManager.WifiLock? = null
 
+    @Suppress("DEPRECATION")   // WIFI_MODE_FULL_HIGH_PERF, see below
     private fun hold(on: Boolean, net: Boolean = false) {
         try {
             if (on) {
@@ -66,6 +67,8 @@ class PlaybackService : Service() {
                     .newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "vlcinterface:playback").apply { setReferenceCounted(false) }
                 wake?.acquire(4 * 60 * 60 * 1000L)
                 if (net) {
+                    // HIGH_PERF is marked deprecated but still keeps Wi-Fi awake for streaming; LOW_LATENCY (its
+                    // replacement) disturbs Bluetooth audio on some phones, so it is kept on purpose.
                     if (wifi == null) wifi = (applicationContext.getSystemService(WIFI_SERVICE) as android.net.wifi.WifiManager)
                         .createWifiLock(android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "vlcinterface:playback").apply { setReferenceCounted(false) }
                     wifi?.acquire()

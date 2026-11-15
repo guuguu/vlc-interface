@@ -526,8 +526,6 @@ class PlayerController(private val context: Context, private val store: Store) {
      * default while the video went on, so reopening it showed defaults, and the next touch saved defaults over the
      * file's values. Now closing / reopening just reloads that video's saved values.
      */
-    fun resetPicture() = syncPicture()
-
     fun syncPicture() { _state.value.item?.let { loadPictureForFile(it) } }
 
     /** Settings → Sound engine changed: rebuild the engine and continue where it was. */
@@ -911,7 +909,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun stop() {
         stopping = true; endHandled = true
         saveProgress()
-        resetPicture()
+        syncPicture()
         mp.stop()
         currentPfd?.close(); currentPfd = null
         am.abandonAudioFocusRequest(focusRequest)
@@ -1269,18 +1267,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val item = s.item ?: return 0
         val fk = item.folderKey
         val src = store.current.sources.firstOrNull { it.id == item.sourceId }
-        val songs: List<PlayItem> = try {
-            when {
-                fk.startsWith("local:") -> {
-                    val vol = fk.removePrefix("local:").substringBefore(':'); val rel = fk.removePrefix("local:").substringAfter(':')
-                    app.vlcinterface.sources.MusicLibrary.collectLocal(context, app.vlcinterface.sources.LocalFolder("$vol:$rel", rel, rel, 0, vol), false)
-                }
-                src != null && fk.isNotEmpty() -> app.vlcinterface.sources.Browse.list(src, fk).getOrNull()?.let { l ->
-                    app.vlcinterface.sources.MusicLibrary.playOrder(l, fk.trimEnd('/').substringAfterLast('/')).map { app.vlcinterface.sources.MusicLibrary.toPlayItem(it, src, fk) }
-                } ?: emptyList()
-                else -> emptyList()
-            }
-        } catch (_: Exception) { emptyList() }
+        val songs: List<PlayItem> = app.vlcinterface.sources.MusicLibrary.folderOf(context, item)   // same folder reading as everywhere
         val album = songs.filter { it.isMusic && (item.album.isBlank() || it.album.equals(item.album, true)) }
         val at = album.indexOfFirst { it.uri == item.uri }
         val cur = _state.value

@@ -38,7 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -265,7 +265,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                                 syncPanelOpen && syncBelowVideo -> PortraitSync(if (panel == Panel.SYNC_SUB) 0 else 1, p, onSwitch = { panel = if (it == 0) Panel.SYNC_SUB else Panel.SYNC_AUDIO }) { panel = Panel.TRACKS }
                                 panel != Panel.NONE -> Column(Modifier.fillMaxSize().padding(12.dp).clip(RoundedCornerShape(18.dp)).background(C.panel)) {
                                     Row(Modifier.fillMaxWidth().padding(start = 0.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        SymButton({ panel = if (panel == Panel.TRACKS || panel == Panel.PICTURE) Panel.NONE else Panel.TRACKS }) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
+                                        SymButton({ panel = if (panel == Panel.TRACKS || panel == Panel.PICTURE) Panel.NONE else Panel.TRACKS }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
                                         Text(when (panel) { Panel.DOWNLOAD -> "Download subtitles"; Panel.STYLE -> "Subtitle style"; Panel.PICTURE -> "Picture colour"; else -> "Audio & subtitles" },
                                             color = C.text, fontSize = (17 * btnScale()).sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
                                         SymButton({ panel = Panel.NONE }) { Text("✕", color = C.text) }
@@ -409,7 +409,7 @@ private fun BoxScope.ControlsOverlayBody(
     }
     Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        SymButton({ nav.back() }) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
+        SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
         HomeButton(nav, Color.White)
         Text(p.item?.title ?: "", color = Color.White, fontSize = (15 * ks).sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
         AutoFitRow {
@@ -507,7 +507,7 @@ private fun SidePanel(landscape: Boolean, onClose: () -> Unit, onBack: (() -> Un
             .clip(RoundedCornerShape(topStart = 20.dp, bottomStart = 20.dp)).background(C.panel).safeDrawingPadding().padding(8.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 // Back: one step up (sub-panel → Audio & subtitles → video); ✕ closes.
-                SymButton(onBack ?: onClose) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
+                SymButton(onBack ?: onClose) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
                 Grow()
                 SymButton(onClose) { Text("✕", color = C.text, fontSize = 18.sp) }
             }
@@ -586,7 +586,7 @@ private fun BoxScope.PictureBar(onClose: () -> Unit) {
         .safeDrawingPadding()
         .padding(horizontal = 12.dp, vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            SymButton(onClose) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
+            SymButton(onClose) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
             Text("Hue", color = Color.White, fontSize = 13.sp, modifier = Modifier.width(78.dp))
             Slider(hue.coerceIn(-20f, 20f), { hue = (if (kotlin.math.abs(it) < 0.3f) 0f else Math.round(it * 10f) / 10f); player.setPicture(hue, sat, false) },
                 onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = -20f..20f, colors = colors, modifier = Modifier.weight(1f).height(32.dp))
@@ -884,7 +884,7 @@ private fun BoxScope.OverlaySync(subs: Boolean, p: PlayerState, opacity: Int, on
         .clip(RoundedCornerShape(16.dp)).background(Color(0xFF101216).copy(alpha = opacity / 100f)).border(1.dp, Color(0x2EFFFFFF), RoundedCornerShape(16.dp))
         .padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SymButton(onDone) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = Color.White) }
+            SymButton(onDone) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
             Text(if (subs) "Subtitle sync" else "Sound sync", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
             Text("Panel $opacity%", color = Color(0xFFE2E4E8), fontSize = 12.sp)
             Slider(opacity.toFloat(), { v -> store.update { it.copy(settings = it.settings.copy(syncPanelOpacity = v.toInt())) } }, valueRange = 20f..80f,
@@ -902,7 +902,7 @@ private fun PortraitSync(which: Int, p: PlayerState, onSwitch: (Int) -> Unit, on
     Column(Modifier.fillMaxSize().padding(12.dp).clip(RoundedCornerShape(18.dp)).background(C.panel).scrollbar(scroll).verticalScroll(scroll).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-        SymButton(onDone) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
+        SymButton(onDone) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
         Row(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(C.bg).padding(3.dp)) {
             listOf("Subtitle sync", "Sound sync").forEachIndexed { i, l ->
                 Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(8.dp)).background(if (which == i) Color(0xFF2A2F38) else Color.Transparent).clickable { onSwitch(i) },

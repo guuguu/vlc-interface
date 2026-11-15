@@ -17,7 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -54,7 +54,7 @@ fun OutputSheet(onDismiss: () -> Unit) {
         val scroll = rememberScrollState()
         Column(Modifier.scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SymButton(onDismiss) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
+                SymButton(onDismiss) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
                 Text("Sound output", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             }
             CardBox {

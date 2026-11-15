@@ -158,17 +158,6 @@ object SmbProbe {
         ProbeResult(steps, best, bestGuest, ip, videos, summary)
     }
 
-    private fun shortReason(e: Exception): String {
-        val m = (e.message ?: e.javaClass.simpleName).lowercase()
-        return when {
-            "logon failure" in m || "access denied" in m || "access_denied" in m -> "access denied"
-            "dialect" in m || "negotiat" in m || "not supported" in m -> "not offered by server"
-            "bad network name" in m -> "share not found"
-            "timed out" in m || "timeout" in m -> "timed out"
-            else -> m.take(40)
-        }
-    }
-
     /** Lists a folder with jcifs-ng when libVLC's own SMB browsing is not enough (e.g. SMB1-only servers). */
     suspend fun list(host: String, folder: String, version: String, user: String, pass: String, domain: String): Result<List<Entry>> =
         withContext(Dispatchers.IO) {

@@ -48,7 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.vlcinterface.App
 import app.vlcinterface.player.OutputKind
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 
 object C {
     val bg = Color(0xFF0F1115)
@@ -222,8 +222,6 @@ fun ago(t: Long): String {
     }
 }
 
-@Composable
-fun Typo() = MaterialTheme.typography
 
 
 // ---------- button size (Settings → Look → Button size) ----------
@@ -355,7 +353,7 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
 /** Back to the previous page (shown on every page that has one). */
 @Composable
 fun BackButton(nav: Navigator, tint: Color = C.text) {
-    SymButton({ nav.back() }) { SymIcon(Icons.Filled.ArrowBack, "Back to the previous page", tint = tint) }
+    SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back to the previous page", tint = tint) }
 }
 
 

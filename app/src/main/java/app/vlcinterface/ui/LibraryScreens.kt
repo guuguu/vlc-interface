@@ -21,7 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -99,7 +99,7 @@ fun HomeButton(nav: Navigator, tint: Color = C.text) {
 @Composable
 fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Composable () -> Unit = {}, actions: @Composable () -> Unit = {}) = Scaled {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        SymButton(onClick = { nav.back() }) { SymIcon(Icons.Filled.ArrowBack, "Back", tint = C.text) }
+        SymButton(onClick = { nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
         HomeButton(nav)
         afterHome()
         Column(Modifier.weight(1f).padding(start = 4.dp)) {
@@ -649,5 +649,3 @@ fun StreamsTab(nav: Navigator) {
     }
 }
 
-@Composable
-fun SettingsIcon(nav: Navigator) = SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.text) }
