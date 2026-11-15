@@ -448,13 +448,14 @@ class PlayerController(private val context: Context, private val store: Store) {
             store.update { it.copy(settings = it.settings.copy(pictureHue = hue, pictureSat = sat, pictureHighlights = hl)) }
     }
 
-    /** Closing the video player: the sliders go back to default (the file keeps its own saved settings for next time). */
-    fun resetPicture() {
-        val ps = store.current.settings
-        if (pictureNeutral(ps.pictureHue, ps.pictureSat) && ps.pictureHighlights <= 0.01f) return
-        store.update { it.copy(settings = it.settings.copy(pictureHue = 0f, pictureSat = 1f, pictureHighlights = 0f)) }
-        if (pictureFilterOn) NativeAudio.picture(libVlc, mp, false, 0f, 1f, 1f, 1f, 1f)
-    }
+    /**
+     * The sliders always show the playing video's own saved values. Closing the player used to set them back to
+     * default while the video went on, so reopening it showed defaults, and the next touch saved defaults over the
+     * file's values. Now closing / reopening just reloads that video's saved values.
+     */
+    fun resetPicture() = syncPicture()
+
+    fun syncPicture() { _state.value.item?.let { loadPictureForFile(it) } }
 
     /** Settings → Sound engine changed: rebuild the engine and continue where it was. */
     fun applySoundEngine() {
