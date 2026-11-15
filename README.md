@@ -13,6 +13,17 @@ git tag v0.1.0 && git push origin v0.1.0
 
 Download the `.apk` from the Release on your phone and open it (allow installing from your browser/files app once).
 
+## What's new in 0.2
+
+- Proper media notification + lock-screen controls (seek bar, play/pause, ±10 s, previous/next); tapping it opens the folder of the playing file, never while locked; silent "Up next" notification with the next two items
+- Plays on to the next file in the folder / playlist with the screen off; stops cleanly at the end; pauses for calls and when headphones are unplugged
+- Playlists (bottom bar): queue, saved playlists, repeat / shuffle, add songs or whole folders recursively (audio and video only), import M3U / PLS, add from .cue (missing files are ignored and listed), Send to NAS as .m3u8, Share
+- Music screen (cover, album, track, ReplayGain badge, shortcut to the playlist / folder it plays from, up next, sleep timer); video player unchanged
+- Library: only audio and video files; music grouped by album in track order with durations (tags read on Rescan for NAS); long-press menus (play next, queue, add to playlist, delete phone files with confirmation); Home button everywhere; playing bar opens the file's folder
+- Sound: start volume, general preamp, per-device preamp and balance, ReplayGain (off / track / album / auto)
+- SMB: clear reasons for every failure (guest refused, wrong password, no share access…), SMB1 allowed and played through an in-app bridge, one log page per server with Empty log / Share / Save to NAS
+- Subtitles saved next to the video with the video's name (asks before overwriting); subtitle sync can be written into the subtitle file, with undo
+
 ## What's in 0.1
 
 - Library: **Internal** (phone + SD card, manual rescan), **LAN** (SMB/NAS, NFS, SFTP, FTP, DLNA presets; servers found on the LAN; SMB auto-detect from any pasted path), **Internet** (remote storage over SFTP / WebDAV / FTP(S) / HTTP index, internet radio with search + favourites, open-a-link and M3U/IPTV lists)
