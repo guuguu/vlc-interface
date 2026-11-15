@@ -185,7 +185,8 @@ object CoverArt {
     /** Album title variants: as tagged, without "(Remastered)" / "[Deluxe]" / "CD 1", without any bracketed extra, roman ↔ arabic numbers (ELO 2 ↔ ELO II). */
     private fun albumVariants(album: String): List<String> {
         val out = LinkedHashSet<String>()
-        val a = album.trim(); out += a
+        // Typographic apostrophes / accents used as apostrophes (´ ` ’ ‘ ʼ) never match MusicBrainz's plain ' .
+        val a = album.trim().replace(Regex("[´`’‘ʼ′]"), "'"); out += a
         val clean = a.replace(Regex("""\s*[\(\[][^)\]]*(remaster|deluxe|edition|bonus|expanded|anniversary|mono|stereo|disc|cd)[^)\]]*[\)\]]""", RegexOption.IGNORE_CASE), "")
             .replace(Regex("""\s*[-–:]?\s*(disc|cd)\s*\d+\s*$""", RegexOption.IGNORE_CASE), "").trim()
         if (clean.isNotEmpty()) out += clean
@@ -238,10 +239,27 @@ object CoverArt {
                         ids.firstNotNullOfOrNull { id -> get("https://coverartarchive.org/$kind/$id/front-500") }?.let { return@withLock it }
                     }
                 }
+                // Last try: loose word search (no exact phrase), punctuation dropped — "If You Want Blood, You've Got It"
+                // still finds "If You Want Blood You've Got It". The artist must fit, and the score must be high.
+                val base = album.trim().replace(Regex("[´`’‘ʼ′]"), "'").replace(Regex("""\s*[\(\[\{][^)\]\}]*[\)\]\}]"""), "").trim()
+                val words = base.replace(Regex("[^\\p{L}\\p{N}' ]"), " ").trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+                if (words.isNotEmpty() && artist.isNotBlank()) for (kind in listOf("release-group", "release")) {
+                    val field = if (kind == "release-group") "releasegroup" else "release"
+                    val query = "$field:(${words.joinToString(" ") { w -> w.replace("'", "") }}) AND artist:\"${q(artist)}\""
+                    val arr = mb("https://musicbrainz.org/ws/2/$kind/?fmt=json&limit=10&query=" + URLEncoder.encode(query, "UTF-8"))
+                        ?.optJSONArray(if (kind == "release-group") "release-groups" else "releases") ?: continue
+                    val want = norm(base)
+                    val ids = (0 until arr.length()).map { arr.getJSONObject(it) }
+                        .filter { it.optInt("score") >= 80 && artistFits(artist, credit(it)) && norm(it.optString("title")) == want }.map { it.getString("id") }.take(4)
+                    ids.firstNotNullOfOrNull { id -> get("https://coverartarchive.org/$kind/$id/front-500") }?.let { return@withLock it }
+                }
                 markMissed(k); null
             } catch (_: Exception) { null }
         }
     }
+
+    /** Title compared without case, accents-as-apostrophes and punctuation: "You´ve Got It," = "you've got it". */
+    private fun norm(t: String) = t.lowercase().replace(Regex("[´`’‘ʼ′']"), "").replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
 
     private fun usableArtist(a: String) = a.isNotBlank() && a.trim().lowercase() !in setOf("various artists", "various", "va", "unknown", "<unknown>")
 
