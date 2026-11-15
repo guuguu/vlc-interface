@@ -46,6 +46,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -104,7 +105,11 @@ import kotlin.math.log10
 @Composable
 fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     val player = App.instance.player
-    val p by player.state.collectAsState()
+    // The play position changes several times a second. The page itself only follows it every 15 s (enough for the
+    // sleep badge); the progress bar and the time left read the exact position in their own small parts, so the
+    // whole page isn't rebuilt on every tick (less work for the phone while music plays).
+    val full = player.state.collectAsState()
+    val p by remember { derivedStateOf { full.value.copy(time = full.value.time / 15_000 * 15_000) } }
     val st by App.instance.store.state.collectAsState()
     val item = p.item
     if (item == null) { LaunchedEffect(Unit) { nav.back() }; return }
@@ -184,16 +189,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
         }
         val partB: @Composable ColumnScope.() -> Unit = {
-            Column(Modifier.fillMaxWidth()) {
-                var drag by remember { mutableStateOf<Float?>(null) }
-                val len = if (item.endMs > 0) item.endMs - item.startMs else p.length
-                val base = if (item.startMs > 0) item.startMs else 0
-                val pos = (p.time - base).coerceAtLeast(0)
-                Slider(drag ?: if (len > 0) (pos.toFloat() / len).coerceIn(0f, 1f) else 0f, { drag = it },
-                    onValueChangeFinished = { drag?.let { player.seekFraction(it) }; drag = null }, enabled = len > 0 || p.item != null,
-                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
-                Row { Text(fmtTime(pos), color = C.muted, fontSize = 13.sp); Grow(); Text("-" + fmtTime((len - pos).coerceAtLeast(0)), color = C.muted, fontSize = 13.sp) }
-            }
+            SeekBlock(item)
             // Skip buttons say where they skip in: the playlist or the folder playback started from.
             val within = when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
             // Never overlapping: shrinks the controls if they don't fit the width (large Button size, narrow phone).
@@ -303,18 +299,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             if (next.isNotEmpty()) Column(Modifier.fillMaxWidth().onGloballyPositioned { upNextYpx = it.positionInParent().y.toInt() }) {
                 Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); 
-                    // Time still to play in what's playing now (playlist, folder or queue): rest of this song + all after it.
-                    val curLen = if (item.endMs > 0) item.endMs - item.startMs else p.length
-                    val curLeft = (curLen - (p.time - maxOf(item.startMs, 0L))).coerceAtLeast(0)
-                    val left = curLeft + p.queue.drop(p.index + 1).sumOf { q -> (if (q.endMs > 0) q.endMs - q.startMs else q.durationMs).coerceAtLeast(0) }
-                    val tl = left / 1000
-                    // e.g. 1h 23m 45s · 23m 05s · 45s
-                    val leftTxt = when {
-                        tl >= 3600 -> "%dh %02dm %02ds".format(tl / 3600, tl / 60 % 60, tl % 60)
-                        tl >= 60 -> "%dm %02ds".format(tl / 60, tl % 60)
-                        else -> "${tl}s"
-                    }
-                    Text("Queue ›  $leftTxt", color = accent(), fontSize = 13.sp, modifier = Modifier.clickable { nav.go(Screen.Queue) }.padding(8.dp)) }
+
+                    QueueTimeLeft(item) { nav.go(Screen.Queue) } }
                 next.forEachIndexed { i, n ->
                     Row(Modifier.fillMaxWidth().clickable { player.jumpTo(p.index + 1 + i) }.padding(vertical = if (landscape) 5.dp else 8.dp)) {
                         Text("${i + 1}.", color = C.muted, modifier = Modifier.width(28.dp))
@@ -345,6 +331,41 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
  * Two vertical meters (left, right): 6 dp wide, 3 dp apart. Fast rise, slow fall;
  * each has a square peak marker that holds ~1 s, then falls slowly.
  */
+/** Progress bar + elapsed / remaining time: follows the exact play position on its own. */
+@Composable
+private fun SeekBlock(item: PlayItem) {
+    val player = App.instance.player
+    val p by player.state.collectAsState()
+    Column(Modifier.fillMaxWidth()) {
+        var drag by remember { mutableStateOf<Float?>(null) }
+        val len = if (item.endMs > 0) item.endMs - item.startMs else p.length
+        val base = if (item.startMs > 0) item.startMs else 0
+        val pos = (p.time - base).coerceAtLeast(0)
+        Slider(drag ?: if (len > 0) (pos.toFloat() / len).coerceIn(0f, 1f) else 0f, { drag = it },
+            onValueChangeFinished = { drag?.let { player.seekFraction(it) }; drag = null }, enabled = len > 0 || p.item != null,
+            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
+        Row { Text(fmtTime(pos), color = C.muted, fontSize = 13.sp); Grow(); Text("-" + fmtTime((len - pos).coerceAtLeast(0)), color = C.muted, fontSize = 13.sp) }
+    }
+}
+
+/** "Queue › 1h 23m 45s": time still to play in what's playing now (rest of this song + all after it), every second. */
+@Composable
+private fun QueueTimeLeft(item: PlayItem, onClick: () -> Unit) {
+    val full = App.instance.player.state.collectAsState()
+    val p by remember { derivedStateOf { full.value } }
+    val after = remember(p.queue, p.index) { p.queue.drop(p.index + 1).sumOf { q -> (if (q.endMs > 0) q.endMs - q.startMs else q.durationMs).coerceAtLeast(0) } }
+    val curLen = if (item.endMs > 0) item.endMs - item.startMs else p.length
+    val curLeft = (curLen - (p.time - maxOf(item.startMs, 0L))).coerceAtLeast(0)
+    val tl = (curLeft + after) / 1000
+    // e.g. 1h 23m 45s · 23m 05s · 45s
+    val leftTxt = when {
+        tl >= 3600 -> "%dh %02dm %02ds".format(tl / 3600, tl / 60 % 60, tl % 60)
+        tl >= 60 -> "%dm %02ds".format(tl / 60, tl % 60)
+        else -> "${tl}s"
+    }
+    Text("Queue ›  $leftTxt", color = accent(), fontSize = 13.sp, modifier = Modifier.clickable(onClick = onClick).padding(8.dp))
+}
+
 @Composable
 fun StereoVu(modifier: Modifier) {
     var lvL by remember { mutableFloatStateOf(0f) }
@@ -355,7 +376,10 @@ fun StereoVu(modifier: Modifier) {
         val buf = FloatArray(2)
         var last = 0L; var holdL = 0L; var holdR = 0L
         fun meter(p: Float): Float = if (p <= 0.00001f) 0f else ((20f * log10(p) + 48f) / 48f).coerceIn(0f, 1f) // −48…0 dBFS
-        while (true) withFrameNanos { t ->
+        while (true) {
+            // Paused / silent and the bars have fallen: check 4 times a second instead of every screen frame.
+            if (!App.instance.player.state.value.isPlaying && lvL == 0f && lvR == 0f && pkL == 0f && pkR == 0f) { kotlinx.coroutines.delay(250); last = 0L; continue }
+            withFrameNanos { t ->
             val dt = if (last == 0L) 0f else ((t - last) / 1e9f).coerceAtMost(0.1f); last = t
             NativeAudio.peaks(buf)
             val nl = meter(buf[0]); val nr = meter(buf[1])
@@ -363,6 +387,7 @@ fun StereoVu(modifier: Modifier) {
             lvR = if (nr > lvR) nr else maxOf(nr, lvR - dt * 1.2f)
             if (lvL >= pkL) { pkL = lvL; holdL = t } else if (t - holdL > 1_000_000_000L) pkL = maxOf(lvL, pkL - dt * 0.35f)
             if (lvR >= pkR) { pkR = lvR; holdR = t } else if (t - holdR > 1_000_000_000L) pkR = maxOf(lvR, pkR - dt * 0.35f)
+            }
         }
     }
     Canvas(modifier) {

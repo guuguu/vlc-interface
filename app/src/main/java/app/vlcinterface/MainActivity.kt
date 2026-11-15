@@ -122,6 +122,8 @@ class MainActivity : ComponentActivity() {
         val st = p.state.value
         // Video without background audio pauses when the app leaves the screen (except in PiP).
         if (!isInPictureInPictureMode && st.item != null && st.item.isRadio.not() && !App.instance.store.current.settings.backgroundAudio) p.pause()
+        // Leaving the screen: write any change still waiting, in the background.
+        kotlin.concurrent.thread { App.instance.store.flush() }
     }
 
     companion object {

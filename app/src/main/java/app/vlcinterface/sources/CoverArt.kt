@@ -41,7 +41,10 @@ object CoverArt {
     private const val UA = "vlc-interface/0.3.0 ( https://github.com/guuguu/vlc-interface )"
     private const val MAX = 800
     private val names = listOf("cover.jpg", "folder.jpg", "front.jpg", "cover.png", "folder.png", "artist.jpg")
-    private val mem = LruCache<String, Bitmap>(24)
+    // Pictures in memory, limited by size (not count): 24 MB at most — 24 pictures of 800 px could take ~60 MB.
+    private val mem = object : LruCache<String, Bitmap>(24 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
+    }
 
     fun init(ctx: Context) {
         miss = File(ctx.filesDir, "covers").apply { mkdirs() }

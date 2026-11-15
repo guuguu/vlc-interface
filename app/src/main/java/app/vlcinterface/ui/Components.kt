@@ -362,6 +362,7 @@ fun BackButton(nav: Navigator, tint: Color = C.text) {
 /** Exit: stops playback and any scan, removes the notifications and closes the app completely ([restart]: then starts it again fresh). */
 fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
     val a = app.vlcinterface.App.instance
+    try { a.store.flush() } catch (_: Exception) {}
     try { app.vlcinterface.sources.RgScanner.cancel() } catch (_: Exception) {}
     try { a.player.stop() } catch (_: Exception) {}
     // Sleep closing the app keeps its "Player closed by sleep timer" notification; everything else is removed.

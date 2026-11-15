@@ -24,11 +24,23 @@ class Store(private val context: Context) {
 
     val current: AppState get() = _state.value
 
+    private var pendingSave: kotlinx.coroutines.Job? = null
+
+    /**
+     * Changes apply at once; the file is written a moment later, once for a burst of changes (dragging a slider,
+     * a scan saving many values…) instead of the whole state file being rewritten for each one.
+     */
     @Synchronized
     fun update(block: (AppState) -> AppState) {
         _state.value = block(_state.value)
-        val snapshot = _state.value
-        scope.launch { save(snapshot) }
+        pendingSave?.cancel()
+        pendingSave = scope.launch { kotlinx.coroutines.delay(400); save(_state.value) }
+    }
+
+    /** Writes now (closing the app, going to the background). */
+    fun flush() {
+        synchronized(this) { pendingSave?.cancel(); pendingSave = null }
+        try { save(_state.value) } catch (_: Exception) {}
     }
 
     private fun load(): AppState = try {
