@@ -803,7 +803,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         when (ev.type) {
             MediaPlayer.Event.Playing -> {
                 _state.value = s.copy(isPlaying = true, error = "", ended = false, buffering = 100f)
-                if (pendingSeek > 5_000) { mp.setTime(pendingSeek) }
+                if (pendingSeek > 500) { mp.setTime(pendingSeek) }   // continue exactly where it was (RG button, engine restarts…)
                 pendingSeek = -1
                 if (!offsetsApplied) {
                     offsetsApplied = true; applyStoredOffsets()
