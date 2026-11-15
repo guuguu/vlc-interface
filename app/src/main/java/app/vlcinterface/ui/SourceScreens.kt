@@ -80,7 +80,7 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
                         Text("Paste any path — \\\\host\\share, smb://, //host/share", color = C.muted, fontSize = 13.sp)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             OutlinedTextField(paste, { paste = it }, Modifier.weight(1f), singleLine = true, placeholder = { Text("\\\\nas\\media\\Movies") })
-                            Button({
+                            SButton({
                                 val p = SmbProbe.parse(paste)
                                 if (p != null) nav.go(Screen.SmbDetect(paste, s))
                             }, Modifier.padding(start = 8.dp), colors = ButtonDefaults.buttonColors(containerColor = accent())) { Text("Detect") }
@@ -94,7 +94,7 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
                 Box(Modifier.weight(2f)) {
                     Field(if (s.proto in listOf("webdav", "http")) "Address (https://host)" else if (s.proto == "upnp") "Server address (upnp://…)" else "Host or IP", s.host) { s = s.copy(host = it) }
                 }
-                if (s.proto != "upnp") OutlinedButton({ nav.go(Screen.ServerCheck(s.host, s)) }, Modifier.padding(top = 8.dp), enabled = s.host.isNotBlank()) { Text("Check") }
+                if (s.proto != "upnp") SOutlinedButton({ nav.go(Screen.ServerCheck(s.host, s)) }, Modifier.padding(top = 8.dp), enabled = s.host.isNotBlank()) { Text("Check") }
                 if (s.proto != "upnp") Box(Modifier.weight(1f)) {
                     Field("Port", if (s.port > 0) s.port.toString() else s.defaultPort.toString(), KeyboardType.Number) { s = s.copy(port = it.toIntOrNull() ?: 0) }
                 }
@@ -113,10 +113,10 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
             Box(Modifier.height(8.dp))
         }
         Row(Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (existing != null) TextButton({
+            if (existing != null) STextButton({
                 store.update { st -> st.copy(sources = st.sources.filterNot { it.id == existing.id }) }; nav.back()
             }) { Text("Delete", color = C.bad) }
-            OutlinedButton({
+            SOutlinedButton({
                 testing = true; test = ""
                 scope.launch {
                     val started = System.currentTimeMillis()
@@ -125,7 +125,7 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
                     app.vlcinterface.data.ServerLog.log(s.host, "test", s.proto.uppercase(), s.user, r.isSuccess, test.drop(2), r.exceptionOrNull()?.let { app.vlcinterface.sources.SmbErrors.ntStatus(it) } ?: "", started)
                 }
             }, Modifier.weight(1f)) { if (testing) CircularProgressIndicator(Modifier.height(18.dp), color = accent()) else Text("Test connection") }
-            Button({
+            SButton({
                 val final = s.copy(name = s.name.ifBlank { Urls.hostOnly(s.host).ifEmpty { s.host } })
                 store.update { st -> st.copy(sources = st.sources.filterNot { it.id == final.id } + final) }
                 nav.back()
@@ -182,8 +182,8 @@ fun SmbDetectScreen(nav: Navigator, d: Screen.SmbDetect) {
         }
         val r = result
         Row(Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton({ nav.back() }, Modifier.weight(1f)) { Text("Back to fields") }
-            Button({
+            SOutlinedButton({ nav.back() }, Modifier.weight(1f)) { Text("Back to fields") }
+            SButton({
                 if (path != null && r != null) {
                     val src = d.draft.copy(
                         proto = "smb", host = path.host, path = path.folder, smbVersion = r.bestVersion,
@@ -224,7 +224,7 @@ fun ServerCheckScreen(nav: Navigator, c: Screen.ServerCheck) {
                 Box(Modifier.weight(1f)) { Field("Password", pass, password = true) { pass = it } }
             }
             Field("Domain / workgroup (optional)", domain) { domain = it }
-            Button({ check() }, Modifier.fillMaxWidth(), enabled = host.isNotBlank() && !running, colors = ButtonDefaults.buttonColors(containerColor = accent())) {
+            SButton({ check() }, Modifier.fillMaxWidth(), enabled = host.isNotBlank() && !running, colors = ButtonDefaults.buttonColors(containerColor = accent())) {
                 if (running) CircularProgressIndicator(Modifier.height(18.dp), color = C.text) else Text(if (result == null) "Check" else "Check again")
             }
             if (running) Text("Looking up the name, the open ports and each service… (up to ~30 s)", color = C.muted, fontSize = 13.sp)

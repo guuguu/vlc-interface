@@ -88,7 +88,7 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, onDone: 
                 Text("Scan", color = C.text, fontWeight = FontWeight.SemiBold)
                 RgMode.values().forEach { m ->
                     Row(Modifier.fillMaxWidth().clickable { mode = m }, verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(mode == m, { mode = m })
+                        SRadioButton(mode == m, { mode = m })
                         Text(m.label, color = C.text, fontSize = 14.sp)
                     }
                 }
@@ -108,7 +108,7 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, onDone: 
                 Text("Save", color = C.text, fontWeight = FontWeight.SemiBold)
                 listOf(RgTarget.FILES to "Write into the files", RgTarget.APP to "Keep in the app only").forEach { (t, l) ->
                     Row(Modifier.fillMaxWidth().clickable { target = t }, verticalAlignment = Alignment.CenterVertically) {
-                        RadioButton(target == t, { target = t })
+                        SRadioButton(target == t, { target = t })
                         Text(l, color = C.text, fontSize = 14.sp)
                     }
                 }
@@ -118,19 +118,19 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, onDone: 
                         "read-only sources and formats that can't be tagged keep the values in the app."
                 else "Nothing in the files changes; only this app uses the values.", color = C.muted, fontSize = 12.sp)
                 Row(Modifier.fillMaxWidth().clickable { rescan = !rescan }, verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(rescan, { rescan = it })
+                    SCheckbox(rescan, { rescan = it })
                     Text("Re-scan files that already have tags", color = C.text, fontSize = 14.sp)
                 }
             }
         },
         confirmButton = {
-            TextButton({
+            STextButton({
                 val its = items ?: return@TextButton
                 RgScanner.start(ctx.applicationContext, its, mode, target, rescan)
                 onDone(); nav.go(Screen.RgScan)
             }, enabled = !items.isNullOrEmpty() && !RgScanner.state.value.running) { Text("Scan", color = accent()) }
         },
-        dismissButton = { TextButton(onDone) { Text("Cancel") } },
+        dismissButton = { STextButton(onDone) { Text("Cancel") } },
     )
 }
 

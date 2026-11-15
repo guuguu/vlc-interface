@@ -345,6 +345,17 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (s.item === item && s.artworkUrl != path) _state.value = s.copy(artworkUrl = path)
     }
 
+    /**
+     * The phone's sound output changed (Android's output switcher, Bluetooth connected, headphones…).
+     * Switching back from the speaker to Bluetooth didn't move the sound: the open stream stayed where it was.
+     * Now the stream is reopened on the device in use: our own output reopens its stream; libVLC's output is restarted.
+     */
+    fun outputChanged() {
+        if (NativeAudio.active) NativeAudio.outputChanged()
+        else main.post { try { mp.setAudioOutput("audiotrack") } catch (_: Throwable) {} }
+        applySoundChain()
+    }
+
     /** Closing the video player: hue/saturation go back to the original colours (user rule). */
     fun resetPicture() {
         val ps = store.current.settings

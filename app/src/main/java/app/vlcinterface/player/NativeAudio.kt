@@ -23,6 +23,10 @@ object NativeAudio {
     private external fun setGains(left: Float, right: Float, limiter: Boolean)
     private external fun readPeaks(out: FloatArray)
     private external fun stats(out: LongArray)
+    private external fun reroute()
+
+    /** Output device changed: reopen the sound stream on the new device. */
+    fun outputChanged() { if (active) try { reroute() } catch (_: Throwable) {} }
     private external fun adjust(libObj: Long, mpObj: Long, enable: Boolean, hue: Float, sat: Float): Int
 
     /** Live picture hue (−180…180°) / saturation (0…3); false if this libVLC build can't do it live. */

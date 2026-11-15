@@ -306,12 +306,12 @@ fun EntryMenu(
     onSelect: (() -> Unit)? = null, onRgScan: (() -> Unit)? = null,
 ) {
     DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
-        if (onSelect != null) DropdownMenuItem(text = { Text("Select…") }, onClick = { onSelect(); onDismiss() })
-        DropdownMenuItem(text = { Text(if (isDir) "Play all next" else "Play next") }, onClick = { onPlayNext(); onDismiss() })
-        DropdownMenuItem(text = { Text(if (isDir) "Add all to queue" else "Add to queue") }, onClick = { onQueue(); onDismiss() })
-        DropdownMenuItem(text = { Text(if (isDir) "Add all to playlist…" else "Add to playlist…") }, onClick = { onAddPlaylist(); onDismiss() })
-        if (onRgScan != null) DropdownMenuItem(text = { Text(if (isDir) "ReplayGain scan (with subfolders)…" else "ReplayGain scan…") }, onClick = { onRgScan(); onDismiss() })
-        if (onDelete != null) DropdownMenuItem(text = { Text("Delete…", color = C.bad) }, onClick = { onDelete(); onDismiss() })
+        if (onSelect != null) SMenuItem(text = { Text("Select…") }, onClick = { onSelect(); onDismiss() })
+        SMenuItem(text = { Text(if (isDir) "Play all next" else "Play next") }, onClick = { onPlayNext(); onDismiss() })
+        SMenuItem(text = { Text(if (isDir) "Add all to queue" else "Add to queue") }, onClick = { onQueue(); onDismiss() })
+        SMenuItem(text = { Text(if (isDir) "Add all to playlist…" else "Add to playlist…") }, onClick = { onAddPlaylist(); onDismiss() })
+        if (onRgScan != null) SMenuItem(text = { Text(if (isDir) "ReplayGain scan (with subfolders)…" else "ReplayGain scan…") }, onClick = { onRgScan(); onDismiss() })
+        if (onDelete != null) SMenuItem(text = { Text("Delete…", color = C.bad) }, onClick = { onDelete(); onDismiss() })
     }
 }
 
@@ -351,13 +351,13 @@ fun AddToPlaylistDialog(collect: suspend () -> List<PlayItem>, onDone: () -> Uni
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         OutlinedTextField(newName, { newName = it }, Modifier.weight(1f), singleLine = true, placeholder = { Text("New playlist name") })
-                        TextButton({ addTo(null) }, enabled = its.isNotEmpty()) { Text("Create") }
+                        STextButton({ addTo(null) }, enabled = its.isNotEmpty()) { Text("Create") }
                     }
                 }
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onDone) { Text("Cancel") } },
+        dismissButton = { STextButton(onDone) { Text("Cancel") } },
     )
 }
 
@@ -382,14 +382,14 @@ fun DeleteDialog(uris: List<String>, name: String, totalBytes: Long, count: Int,
         title = { Text("Delete from the phone?") },
         text = { Text(if (count == 1) "$name\n${"%.1f".format(totalBytes / 1e6)} MB" else "$name\n$count files · ${"%.1f".format(totalBytes / 1e6)} MB") },
         confirmButton = {
-            TextButton({
+            STextButton({
                 try {
                     val pi = MediaStore.createDeleteRequest(ctx.contentResolver, uris.map { Uri.parse(it) })
                     launcher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
                 } catch (e: Exception) { onDone(false) }
             }) { Text("Delete", color = C.bad) }
         },
-        dismissButton = { TextButton({ onDone(false) }) { Text("Cancel") } },
+        dismissButton = { STextButton({ onDone(false) }) { Text("Cancel") } },
     )
 }
 

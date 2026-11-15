@@ -172,9 +172,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 Box {
                     Pill("Sleep", selected = p.sleepUntil > 0 || p.sleepEndOfTrack) { sleepMenu = true }
                     DropdownMenu(sleepMenu, { sleepMenu = false }) {
-                        listOf(15, 30, 45, 60, 90).forEach { m -> DropdownMenuItem({ Text("$m minutes") }, { player.setSleep(m); sleepMenu = false }) }
-                        DropdownMenuItem({ Text("After this song") }, { player.setSleep(-1); sleepMenu = false })
-                        DropdownMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
+                        listOf(15, 30, 45, 60, 90).forEach { m -> SMenuItem({ Text("$m minutes") }, { player.setSleep(m); sleepMenu = false }) }
+                        SMenuItem({ Text("After this song") }, { player.setSleep(-1); sleepMenu = false })
+                        SMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
                     }
                 }
             }
@@ -253,7 +253,7 @@ fun QueueScreen(nav: Navigator) {
     var saveName by remember { mutableStateOf<String?>(null) }
     Column(Modifier.fillMaxSize()) {
         BackHeader("Queue", nav, "${p.queue.size} items") {
-            if (p.queue.isNotEmpty()) TextButton({ saveName = "" }) { Text("Save as playlist", color = accent()) }
+            if (p.queue.isNotEmpty()) STextButton({ saveName = "" }) { Text("Save as playlist", color = accent()) }
         }
         val st by App.instance.store.state.collectAsState()
         OrderSwitch(st.settings.shuffle, Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) { player.setShuffle(it) }
@@ -278,12 +278,12 @@ fun QueueScreen(nav: Navigator) {
     saveName?.let { name ->
         AlertDialog(onDismissRequest = { saveName = null }, title = { Text("Save queue as playlist") },
             text = { OutlinedTextField(name, { saveName = it }, singleLine = true, placeholder = { Text("Playlist name") }) },
-            confirmButton = { TextButton({
+            confirmButton = { STextButton({
                 val items = p.queue.map { MusicLibrary.toPlEntry(it) }
                 App.instance.store.update { s -> s.copy(playlists = s.playlists + Playlist(name = name.ifBlank { "Queue" }, items = items)) }
                 saveName = null
             }) { Text("Save") } },
-            dismissButton = { TextButton({ saveName = null }) { Text("Cancel") } })
+            dismissButton = { STextButton({ saveName = null }) { Text("Cancel") } })
     }
 }
 
@@ -350,8 +350,8 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
     newName?.let { name ->
         AlertDialog(onDismissRequest = { newName = null }, title = { Text("New playlist") },
             text = { OutlinedTextField(name, { newName = it }, singleLine = true, placeholder = { Text("Name") }) },
-            confirmButton = { TextButton({ store.update { s -> s.copy(playlists = s.playlists + Playlist(name = name.ifBlank { "Playlist" })) }; newName = null }) { Text("Create") } },
-            dismissButton = { TextButton({ newName = null }) { Text("Cancel") } })
+            confirmButton = { STextButton({ store.update { s -> s.copy(playlists = s.playlists + Playlist(name = name.ifBlank { "Playlist" })) }; newName = null }) { Text("Create") } },
+            dismissButton = { STextButton({ newName = null }) { Text("Cancel") } })
     }
 }
 
@@ -410,17 +410,17 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
             Box {
                 SymButton({ menu = true }) { SymIcon(Icons.Filled.MoreVert, "Playlist options", tint = C.text) }
                 DropdownMenu(menu, { menu = false }) {
-                    DropdownMenuItem({ Text("Add files or folders…") }, { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)); menu = false })
-                    DropdownMenuItem({ Text("Add from .cue file…") }, { cueChoice = true; menu = false })
-                    DropdownMenuItem({ Text("Send to NAS…") }, { sendNas = true; menu = false })
-                    DropdownMenuItem({ Text("Share") }, {
+                    SMenuItem({ Text("Add files or folders…") }, { PickBasket.reset(pl.id); nav.go(Screen.PickMedia(pl.id)); menu = false })
+                    SMenuItem({ Text("Add from .cue file…") }, { cueChoice = true; menu = false })
+                    SMenuItem({ Text("Send to NAS…") }, { sendNas = true; menu = false })
+                    SMenuItem({ Text("Share") }, {
                         val text = PlaylistFiles.toM3u8(pl.items, "")
                         ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("audio/x-mpegurl")
                             .putExtra(Intent.EXTRA_SUBJECT, "${pl.name}.m3u8").putExtra(Intent.EXTRA_TEXT, text), "Share playlist"))
                         menu = false
                     })
-                    DropdownMenuItem({ Text("Rename") }, { rename = pl.name; menu = false })
-                    DropdownMenuItem({ Text("Delete playlist", color = C.bad) }, { confirmDelete = true; menu = false })
+                    SMenuItem({ Text("Rename") }, { rename = pl.name; menu = false })
+                    SMenuItem({ Text("Delete playlist", color = C.bad) }, { confirmDelete = true; menu = false })
                 }
             }
         }
@@ -459,12 +459,12 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                     Box {
                         SymButton({ itemMenu = i }) { SymIcon(Icons.Filled.MoreVert, "Item options", tint = C.muted) }
                         DropdownMenu(itemMenu == i, { itemMenu = -1 }) {
-                            if (i > 0) DropdownMenuItem({ Text("Move up") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) }; itemMenu = -1 })
-                            if (i < pl.items.size - 1) DropdownMenuItem({ Text("Move down") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) }; itemMenu = -1 })
-                            DropdownMenuItem({ Text("Play next") }, { App.instance.player.playNext(listOf(MusicLibrary.fromPlEntry(e))); itemMenu = -1 })
-                            DropdownMenuItem({ Text("Select…") }, { selected = setOf(i); itemMenu = -1 })
-                            DropdownMenuItem({ Text("ReplayGain scan…") }, { rgItems = listOf(MusicLibrary.fromPlEntry(e)); itemMenu = -1 })
-                            DropdownMenuItem({ Text("Remove from playlist", color = C.bad) }, { update { p -> p.copy(items = p.items.filterIndexed { j, _ -> j != i }) }; itemMenu = -1 })
+                            if (i > 0) SMenuItem({ Text("Move up") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) }; itemMenu = -1 })
+                            if (i < pl.items.size - 1) SMenuItem({ Text("Move down") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) }; itemMenu = -1 })
+                            SMenuItem({ Text("Play next") }, { App.instance.player.playNext(listOf(MusicLibrary.fromPlEntry(e))); itemMenu = -1 })
+                            SMenuItem({ Text("Select…") }, { selected = setOf(i); itemMenu = -1 })
+                            SMenuItem({ Text("ReplayGain scan…") }, { rgItems = listOf(MusicLibrary.fromPlEntry(e)); itemMenu = -1 })
+                            SMenuItem({ Text("Remove from playlist", color = C.bad) }, { update { p -> p.copy(items = p.items.filterIndexed { j, _ -> j != i }) }; itemMenu = -1 })
                         }
                     }
                 }
@@ -477,13 +477,13 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
     rename?.let { n ->
         AlertDialog(onDismissRequest = { rename = null }, title = { Text("Rename playlist") },
             text = { OutlinedTextField(n, { rename = it }, singleLine = true) },
-            confirmButton = { TextButton({ update { it.copy(name = n.ifBlank { it.name }) }; rename = null }) { Text("Save") } },
-            dismissButton = { TextButton({ rename = null }) { Text("Cancel") } })
+            confirmButton = { STextButton({ update { it.copy(name = n.ifBlank { it.name }) }; rename = null }) { Text("Save") } },
+            dismissButton = { STextButton({ rename = null }) { Text("Cancel") } })
     }
     if (confirmDelete) AlertDialog(onDismissRequest = { confirmDelete = false }, title = { Text("Delete \"${pl.name}\"?") },
         text = { Text("Only the playlist is deleted; the music and video files stay where they are.") },
-        confirmButton = { TextButton({ store.update { s -> s.copy(playlists = s.playlists.filterNot { it.id == pl.id }) }; confirmDelete = false; nav.back() }) { Text("Delete", color = C.bad) } },
-        dismissButton = { TextButton({ confirmDelete = false }) { Text("Cancel") } })
+        confirmButton = { STextButton({ store.update { s -> s.copy(playlists = s.playlists.filterNot { it.id == pl.id }) }; confirmDelete = false; nav.back() }) { Text("Delete", color = C.bad) } },
+        dismissButton = { STextButton({ confirmDelete = false }) { Text("Cancel") } })
     if (cueChoice) AlertDialog(onDismissRequest = { cueChoice = false }, title = { Text("Add from .cue file") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -496,7 +496,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                 }
             }
         },
-        confirmButton = {}, dismissButton = { TextButton({ cueChoice = false }) { Text("Cancel") } })
+        confirmButton = {}, dismissButton = { STextButton({ cueChoice = false }) { Text("Cancel") } })
     cueResult?.let { r -> CueSummaryDialog(r, pl) { cueResult = null } }
     if (sendNas) SaveToNasDialog("Send playlist to NAS", "${pl.name}.m3u8", "playlist", { folder -> PlaylistFiles.toM3u8(pl.items, folder).toByteArray() }) { sendNas = false }
 }
@@ -513,7 +513,7 @@ fun CueSummaryDialog(r: CueResult, pl: Playlist, onDone: () -> Unit) {
             }
         },
         confirmButton = {
-            TextButton({
+            STextButton({
                 store.update { s -> s.copy(playlists = s.playlists.map { p ->
                     if (p.id != pl.id) p else {
                         val have = p.items.map { it.key }.toHashSet()
@@ -523,7 +523,7 @@ fun CueSummaryDialog(r: CueResult, pl: Playlist, onDone: () -> Unit) {
                 onDone()
             }, enabled = r.items.isNotEmpty()) { Text("Add ${r.items.size}") }
         },
-        dismissButton = { TextButton(onDone) { Text("Cancel") } })
+        dismissButton = { STextButton(onDone) { Text("Cancel") } })
 }
 
 /** Browse a saved source to pick a .cue file (the Library itself never shows .cue files). */
@@ -616,18 +616,18 @@ fun SaveToNasDialog(title: String, defaultName: String, what: String, content: (
             }
         },
         confirmButton = {
-            TextButton({
+            STextButton({
                 val s = src ?: return@TextButton
                 scope.launch {
                     if (NasWriter.exists(s, Urls.forSource(s.copy(path = ""), folder), name)) askReplace = true else doWrite(name)
                 }
             }, enabled = src != null && name.isNotBlank()) { Text("Save") }
         },
-        dismissButton = { TextButton(onDone) { Text("Cancel") } })
+        dismissButton = { STextButton(onDone) { Text("Cancel") } })
     if (askReplace) AlertDialog(onDismissRequest = { askReplace = false }, title = { Text("$name already exists") },
         text = { Text("Replace it, or keep both?") },
-        confirmButton = { TextButton({ askReplace = false; doWrite(name) }) { Text("Replace") } },
-        dismissButton = { TextButton({
+        confirmButton = { STextButton({ askReplace = false; doWrite(name) }) { Text("Replace") } },
+        dismissButton = { STextButton({
             askReplace = false
             val base = name.substringBeforeLast('.'); val ext = name.substringAfterLast('.', "")
             doWrite("$base (2)" + if (ext.isNotEmpty()) ".$ext" else "")
@@ -704,8 +704,8 @@ fun LogPageScreen(nav: Navigator, key: String) {
     }
     if (confirmEmpty) AlertDialog(onDismissRequest = { confirmEmpty = false }, title = { Text("Empty the log for $key?") },
         text = { Text("Only this server's log is cleared.") },
-        confirmButton = { TextButton({ ServerLog.clear(key); confirmEmpty = false }) { Text("Empty", color = C.bad) } },
-        dismissButton = { TextButton({ confirmEmpty = false }) { Text("Cancel") } })
+        confirmButton = { STextButton({ ServerLog.clear(key); confirmEmpty = false }) { Text("Empty", color = C.bad) } },
+        dismissButton = { STextButton({ confirmEmpty = false }) { Text("Cancel") } })
     if (saveNas) {
         val (name, text) = remember { ServerLog.exportText(key, App.VERSION) }
         SaveToNasDialog("Save log to NAS", name, "log", { text.toByteArray() }) { saveNas = false }

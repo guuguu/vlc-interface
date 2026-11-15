@@ -393,3 +393,11 @@ Java_app_vlcinterface_player_NativeAudio_adjust(JNIEnv *env, jobject thiz, jlong
     p_int(mp, 0, enable ? 1 : 0);
     return 0;
 }
+
+/* The phone's output changed (e.g. speaker → Bluetooth chosen in Android's output switcher): Android doesn't
+   always move an open stream, so reopen it on the device now in use (done on the next block of sound). */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_reroute(JNIEnv *env, jobject thiz) {
+    (void)env; (void)thiz;
+    atomic_store(&g_disconnected, true);
+}

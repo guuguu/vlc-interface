@@ -35,6 +35,7 @@ class App : Application() {
         player.currentOutputName = output.active?.name ?: ""
         output.onActiveChanged = { before, after ->
             player.currentOutputName = after?.name ?: ""
+            if (before?.name != after?.name) player.outputChanged()
             if (after != null) store.update { it.copy(lastOutput = after.name) }
             // Headphones unplugged / Bluetooth lost: fall back to the speaker paused, never blasting audio.
             val lostPersonal = before != null && before.kind != OutputKind.SPEAKER &&

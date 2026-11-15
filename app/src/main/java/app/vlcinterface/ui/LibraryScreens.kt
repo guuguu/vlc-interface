@@ -124,7 +124,7 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
         }
         // Audio / Video switch: every Library tab then lists only that kind of file.
         val kind = App.instance.store.state.collectAsState().value.settings.libraryKind
-        if (!(s.tab == 2 && s.sub != 0)) Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
+        if (!(s.tab == 2 && s.sub != 0)) Scaled { Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
             listOf("audio" to "♫  Audio", "video" to "▶  Video").forEach { (k, t) ->
                 Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(8.dp)).background(if (kind == k) accent() else Color.Transparent)
                     .clickable { App.instance.store.update { it.copy(settings = it.settings.copy(libraryKind = k)) } }, contentAlignment = Alignment.Center) {
@@ -132,12 +132,13 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
                 }
             }
         }
+        } // Audio / Video switch
         Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Internal", "LAN", "Internet").forEachIndexed { i, t ->
                 Pill(t, filled = s.tab == i) { nav.replace(Screen.Library(i, s.sub)) }
             }
         }
-        if (s.tab == 2) {
+        if (s.tab == 2) Scaled {
             Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
                 listOf("Storage", "Radio", "Streams & IPTV").forEachIndexed { i, t ->
                     Box(Modifier.weight(1f).height(36.dp).clip(RoundedCornerShape(8.dp)).background(if (s.sub == i) Color(0xFF2A2F38) else Color.Transparent)
@@ -168,6 +169,7 @@ fun BottomBar(nav: Navigator, current: Int) {
     val p by App.instance.player.state.collectAsState()
     Column {
         if (p.item != null) MiniPlayer(nav)
+        Scaled {
         Row(Modifier.fillMaxWidth().height(60.dp).background(C.bg), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             listOf("Library", "Playlists", "Settings").forEachIndexed { i, label ->
                 Text(label, color = if (current == i) accent() else C.muted, fontWeight = if (current == i) FontWeight.SemiBold else FontWeight.Normal, fontSize = 13.sp,
@@ -179,6 +181,7 @@ fun BottomBar(nav: Navigator, current: Int) {
                         }
                     }.padding(12.dp))
             }
+        }
         }
     }
 }
@@ -600,7 +603,7 @@ fun StreamsTab(nav: Navigator) {
         SectionTitle("Open a link")
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(link, { link = it }, Modifier.weight(1f), placeholder = { Text("http(s), m3u8, rtsp, sftp, ftp…") }, singleLine = true)
-            Button({
+            SButton({
                 val u = link.trim()
                 if (u.isNotEmpty()) {
                     if (u.substringBefore('?').endsWith(".m3u") || u.substringBefore('?').endsWith(".m3u8") && u.contains("playlist")) {

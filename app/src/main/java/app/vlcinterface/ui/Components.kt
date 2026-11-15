@@ -117,6 +117,11 @@ fun Pill(
     filled: Boolean = false,
     onClick: () -> Unit,
 ) {
+    Scaled { PillBody(text, selected, modifier, filled, onClick) }
+}
+
+@Composable
+private fun PillBody(text: String, selected: Boolean, modifier: Modifier, filled: Boolean, onClick: () -> Unit) {
     val a = accent()
     val bg = when { filled -> a; selected -> a.copy(alpha = 0.14f); else -> Color.Transparent }
     val fg = if (filled) Color(0xFF1A0E05) else C.text
@@ -133,7 +138,7 @@ fun Pill(
 }
 
 @Composable
-fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boolean) -> Unit) {
+fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boolean) -> Unit) = Scaled {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -147,7 +152,7 @@ fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boo
 }
 
 @Composable
-fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) {
+fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) = Scaled {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -165,7 +170,10 @@ fun Divider() = Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF22
 
 /** Header pill showing the current sound output; tap opens the output sheet. */
 @Composable
-fun OutputPill(onClick: () -> Unit) {
+fun OutputPill(onClick: () -> Unit) = Scaled { OutputPillBody(onClick) }
+
+@Composable
+private fun OutputPillBody(onClick: () -> Unit) {
     val devices by App.instance.output.devices.collectAsState()
     val active = devices.firstOrNull { it.active }
     val name = active?.name ?: "Sound output"
@@ -224,27 +232,73 @@ val LocalBtnScale = androidx.compose.runtime.staticCompositionLocalOf { 0.75f }
 @Composable
 fun btnScale(): Float = LocalBtnScale.current
 
-/** Symbol button (replaces IconButton): button, tap area and the symbol inside follow the Button size setting. */
+private val LocalScaled = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/**
+ * Draws its content at the Button size setting: size, tap area, padding and the writing on it, all together,
+ * so every button and menu item in the app looks the same. Nested buttons are scaled once only.
+ */
 @Composable
-fun SymButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable () -> Unit) {
+fun Scaled(content: @Composable () -> Unit) {
+    if (LocalScaled.current) { content(); return }
     val k = btnScale()
     val d = androidx.compose.ui.platform.LocalDensity.current
-    Box(modifier.size((48 * k).dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) {
-        // Text symbols (✕ ▶ ❚❚ …) shrink with the button too.
-        androidx.compose.runtime.CompositionLocalProvider(
-            androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, d.fontScale * k),
-            androidx.compose.material3.LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified,
-        ) { content() }
-    }
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density * k, d.fontScale),
+        LocalScaled provides true,
+    ) { content() }
+}
+
+/** Symbol button (replaces IconButton). */
+@Composable
+fun SymButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable () -> Unit) = Scaled {
+    Box(modifier.size(48.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) { content() }
 }
 
 /** Material symbol at the Button size setting. */
 @Composable
 fun SymIcon(imageVector: androidx.compose.ui.graphics.vector.ImageVector, contentDescription: String?, modifier: Modifier = Modifier,
-            tint: Color = androidx.compose.material3.LocalContentColor.current) {
-    androidx.compose.material3.Icon(imageVector, contentDescription, modifier.size((24 * btnScale()).dp), tint = tint)
+            tint: Color = androidx.compose.material3.LocalContentColor.current) = Scaled {
+    androidx.compose.material3.Icon(imageVector, contentDescription, modifier.size(24.dp), tint = tint)
 }
 
+// Material buttons, menu items and ticks at the Button size setting (same look everywhere).
+@Composable
+fun STextButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+                colors: androidx.compose.material3.ButtonColors = androidx.compose.material3.ButtonDefaults.textButtonColors(),
+                content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) = Scaled {
+    androidx.compose.material3.TextButton(onClick, modifier, enabled, colors = colors, content = content)
+}
+
+@Composable
+fun SButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+            colors: androidx.compose.material3.ButtonColors = androidx.compose.material3.ButtonDefaults.buttonColors(),
+            content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) = Scaled {
+    androidx.compose.material3.Button(onClick, modifier, enabled, colors = colors, content = content)
+}
+
+@Composable
+fun SOutlinedButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+                    colors: androidx.compose.material3.ButtonColors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(),
+                    content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) = Scaled {
+    androidx.compose.material3.OutlinedButton(onClick, modifier, enabled, colors = colors, content = content)
+}
+
+@Composable
+fun SMenuItem(text: @Composable () -> Unit, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+              leadingIcon: (@Composable () -> Unit)? = null, trailingIcon: (@Composable () -> Unit)? = null) = Scaled {
+    androidx.compose.material3.DropdownMenuItem(text, onClick, modifier, leadingIcon, trailingIcon, enabled)
+}
+
+@Composable
+fun SCheckbox(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) = Scaled {
+    androidx.compose.material3.Checkbox(checked, onCheckedChange, modifier, enabled)
+}
+
+@Composable
+fun SRadioButton(selected: Boolean, onClick: (() -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) = Scaled {
+    androidx.compose.material3.RadioButton(selected, onClick, modifier, enabled)
+}
 
 /**
  * A row of buttons that never overlaps or runs off screen: measured at the chosen Button size first;

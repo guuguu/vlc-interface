@@ -124,7 +124,7 @@ fun SettingsScreen(nav: Navigator) {
                             Text("Every symbol button and its tap area, everywhere in the app", color = C.muted, fontSize = 13.sp)
                         }
                         Text("${s.buttonScale}%", color = accent(), fontWeight = FontWeight.SemiBold)
-                        TextButton({ set(s.copy(buttonScale = 75)) }) { Text("Reset") }
+                        STextButton({ set(s.copy(buttonScale = 75)) }) { Text("Reset") }
                     }
                     androidx.compose.material3.Slider(s.buttonScale.toFloat(), { v -> set(s.copy(buttonScale = (Math.round(v / 5f) * 5).coerceIn(50, 125))) }, valueRange = 50f..125f)
                     Text("75 % = 25 % smaller than standard (default) · 100 % = standard Android size", color = C.muted, fontSize = 12.sp)
@@ -170,7 +170,7 @@ fun BackupScreen(nav: Navigator) {
     Column(Modifier.fillMaxSize()) {
         BackHeader("Export & import", nav)
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button({
+            SButton({
                 val name = "vlc-interface-setup_" + SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".json"
                 exporter.launch(name)
             }, Modifier.fillMaxWidth().height(64.dp), enabled = !withPasswords || passphrase.length >= 4,
@@ -193,7 +193,7 @@ fun BackupScreen(nav: Navigator) {
                 ToggleRow("Include saved passwords", "Encrypted with a passphrase you choose", withPasswords) { withPasswords = it }
                 if (withPasswords) Column(Modifier.padding(12.dp)) { Field("Passphrase (min. 4 characters)", passphrase, password = true) { passphrase = it } }
             }
-            OutlinedButton({ importer.launch(arrayOf("application/json", "*/*")) }, Modifier.fillMaxWidth().height(56.dp)) { Text("Import setup…", fontSize = 16.sp) }
+            SOutlinedButton({ importer.launch(arrayOf("application/json", "*/*")) }, Modifier.fillMaxWidth().height(56.dp)) { Text("Import setup…", fontSize = 16.sp) }
             SectionTitle("On import")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill("Merge · add new, keep mine", selected = !replace) { replace = false }
@@ -216,13 +216,13 @@ fun BackupScreen(nav: Navigator) {
             }
         },
         confirmButton = {
-            TextButton({
+            STextButton({
                 val err = store.applyImport(pv, replace, importPass)
                 status = err ?: "Imported. Previous setup backed up."
                 preview = null
             }) { Text("Import") }
         },
-        dismissButton = { TextButton({ preview = null }) { Text("Cancel") } },
+        dismissButton = { STextButton({ preview = null }) { Text("Cancel") } },
     )
 }
 
@@ -313,7 +313,7 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
                     Text(if (s.preampDb > 0f) "Above 0 dB loud tracks may distort" else "Music, video and radio", color = C.muted, fontSize = 13.sp)
                 }
                 Text("%+.1f dB".format(s.preampDb), color = accent(), fontWeight = FontWeight.SemiBold)
-                TextButton({ set(s.copy(preampDb = 0f)); App.instance.player.applySoundChain() }) { Text("Reset") }
+                STextButton({ set(s.copy(preampDb = 0f)); App.instance.player.applySoundChain() }) { Text("Reset") }
             }
             androidx.compose.material3.Slider(s.preampDb, { v -> set(s.copy(preampDb = Math.round(v * 2) / 2f)); App.instance.player.applySoundChain() }, valueRange = -12f..12f)
         }
