@@ -307,7 +307,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     QueueTimeLeft(item) { nav.go(Screen.Queue) } }
                 next.forEachIndexed { i, n ->
                     Row(Modifier.fillMaxWidth().clickable { player.jumpTo(p.index + 1 + i) }.padding(vertical = if (landscape) 5.dp else 8.dp)) {
-                        Text("${i + 1}.", color = C.muted, modifier = Modifier.width(28.dp))
+                        // Order number: fixed, outside the gliding text (which is clipped a little after it).
+                        Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
+                        Box(Modifier.width(6.dp))
                         // Artist - Album - Year - Song from the file's tags, gliding continuously in one direction
                         // (speed from the Songs list autoscroll setting).
                         val ctxN = LocalContext.current
