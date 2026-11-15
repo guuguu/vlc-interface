@@ -21,6 +21,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -170,11 +171,14 @@ private fun DriftText(text: String, color: Color, modifier: Modifier) {
             modifier = Modifier.horizontalScroll(scroll, enabled = false))
     }
     val max = scroll.maxValue
-    LaunchedEffect(text, max) {
+    val speed = App.instance.store.state.collectAsState().value.settings.songsScrollSpeed
+    LaunchedEffect(text, max, speed) {
+        if (speed <= 0) { scroll.scrollTo(0); return@LaunchedEffect }
         if (max <= 0 || max == Int.MAX_VALUE) return@LaunchedEffect
         val rnd = kotlin.random.Random(text.hashCode() xor System.nanoTime().toInt())
         delay(rnd.nextLong(1_500, 9_000))                       // random first start
-        val ms = (max * 22L).coerceIn(1_500L, 12_000L)           // slow: about 45 px per second
+        // Normal (100 %): about 45 px per second; the Settings slider scales it.
+        val ms = (max * 22L * 100 / speed).coerceIn(400L, 40_000L)
         while (true) {
             scroll.animateScrollTo(max, androidx.compose.animation.core.tween(ms.toInt(), easing = androidx.compose.animation.core.LinearEasing))
             delay(1_800)
