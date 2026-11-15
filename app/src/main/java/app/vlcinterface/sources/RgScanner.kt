@@ -91,12 +91,16 @@ object RgScanner {
         }
     }
 
-    private fun groupKey(it: PlayItem, mode: RgMode): String = when (mode) {
+    /** How many albums the items make in this mode (shown in the scan dialog). */
+    fun albumCount(items: List<PlayItem>, mode: RgMode): Int = items.filter { it.isMusic }.map { groupKey(it, mode) }.distinct().size
+
+    fun groupKey(it: PlayItem, mode: RgMode): String = when (mode) {
         RgMode.TRACK -> it.uri
         RgMode.SINGLE_ALBUM -> "all"
         RgMode.ALBUMS_BY_FOLDERS -> it.folderKey.ifEmpty { it.uri.substringBeforeLast('/') }
-        // foobar2000 default pattern: %album artist% | %date% | %album%; files without an album tag stay on their own.
-        RgMode.ALBUMS_BY_TAGS -> if (it.album.isBlank()) it.uri else
+        // foobar2000 default pattern: %album artist% | %date% | %album%. Files without an album tag:
+        // their folder is the album, so every album in a mixed selection gets its own album gain.
+        RgMode.ALBUMS_BY_TAGS -> if (it.album.isBlank()) "folder:" + it.folderKey.ifEmpty { it.uri.substringBeforeLast('/') } else
             (TagCache.get(it.uri)?.let { t -> "${t.albumArtist.ifEmpty { t.artist }}|${t.year}|" } ?: "${it.artist}||") + it.album
     }
 

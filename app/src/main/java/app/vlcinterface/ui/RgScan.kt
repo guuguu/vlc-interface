@@ -95,9 +95,16 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, onDone: 
                 Text(when (mode) {
                     RgMode.TRACK -> "Every file gets its own track gain."
                     RgMode.SINGLE_ALBUM -> "Track gain for each file, and one album gain for all selected files together."
-                    RgMode.ALBUMS_BY_TAGS -> "Track + album gain; albums grouped by album artist | year | album. Files with no album tag get track gain only."
+                    RgMode.ALBUMS_BY_TAGS -> "Track + album gain; each album gets its own album gain, saved on that album's songs (grouped by album artist | year | album; songs with no album tag: by folder)."
                     RgMode.ALBUMS_BY_FOLDERS -> "Track + album gain; every folder is one album."
                 }, color = C.muted, fontSize = 12.sp)
+                its?.let { l ->
+                    val n = RgScanner.albumCount(l, mode)
+                    if (mode != RgMode.TRACK) Text(if (mode == RgMode.SINGLE_ALBUM) "All ${l.size} songs share ONE album gain" +
+                        (RgScanner.albumCount(l, RgMode.ALBUMS_BY_TAGS).let { a -> if (a > 1) " — but they come from $a albums: choose \"As albums\" so each album gets its own" else "" })
+                        else "$n album${if (n == 1) "" else "s"} found — each saves its own album gain on its songs",
+                        color = if (mode == RgMode.SINGLE_ALBUM && RgScanner.albumCount(l, RgMode.ALBUMS_BY_TAGS) > 1) C.bad else accent(), fontSize = 12.sp)
+                }
                 Text("Save", color = C.text, fontWeight = FontWeight.SemiBold)
                 listOf(RgTarget.FILES to "Write into the files", RgTarget.APP to "Keep in the app only").forEach { (t, l) ->
                     Row(Modifier.fillMaxWidth().clickable { target = t }, verticalAlignment = Alignment.CenterVertically) {
