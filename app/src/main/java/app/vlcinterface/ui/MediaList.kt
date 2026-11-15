@@ -118,10 +118,12 @@ fun MediaList(
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    val list = entries ?: emptyList()
-    val groups = remember(entries) { MusicLibrary.group(list, folderName) }
-    val order = remember(entries) { MusicLibrary.playOrder(list, folderName) }
-    val rows = remember(entries) {
+    // Audio / Video switch of Libraries: folders always shown, files only of the chosen kind.
+    val kind = App.instance.store.state.collectAsState().value.settings.libraryKind
+    val list = remember(entries, kind) { (entries ?: emptyList()).filter { it.isDir || (if (kind == "video") it.isVideo else it.isAudio) } }
+    val groups = remember(list) { MusicLibrary.group(list, folderName) }
+    val order = remember(list) { MusicLibrary.playOrder(list, folderName) }
+    val rows = remember(list) {
         buildList<Row0> {
             list.filter { it.isDir }.forEach { add(Row0.Dir(it)) }
             groups.forEach { g -> add(Row0.Header(g)); g.entries.forEach { add(Row0.Song(it, g.multiDisc)) } }
@@ -148,7 +150,7 @@ fun MediaList(
     }
 
     fun itemsOfDir(e: Entry): suspend () -> List<PlayItem> = {
-        if (source != null) MusicLibrary.collectRecursive(source, e.uri) else emptyList()
+        ofKind(if (source != null) MusicLibrary.collectRecursive(source, e.uri) else emptyList())
     }
 
     when {
@@ -157,7 +159,7 @@ fun MediaList(
             if (source != null) Pill("Open server log", modifier = Modifier.padding(top = 12.dp)) { nav.go(Screen.LogPage(app.vlcinterface.data.ServerLog.keyOf(source.host))) }
         }
         entries == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
-        rows.isEmpty() -> Text("No audio or video here.", color = C.muted, modifier = Modifier.padding(20.dp))
+        rows.isEmpty() -> Text(if (kind == "video") "No videos here — switch to Audio at the top of Libraries for music." else "No music here — switch to Video at the top of Libraries for videos.", color = C.muted, modifier = Modifier.padding(20.dp))
         else -> LazyColumn(Modifier.fillMaxSize().scrollbar(state).padding(horizontal = 16.dp), state = state) {
             // Play the whole folder (its audio + video files, album order) in order or at random.
             if (order.size > 1) item {
@@ -344,3 +346,8 @@ fun openOrigin(nav: Navigator) {
         else -> nav.go(if (item.isMusic) Screen.Music else Screen.Player)
     }
 }
+
+
+/** Keeps only the kind chosen with the Libraries Audio / Video switch (folder actions: play all, queue, add to playlist). */
+fun ofKind(items: List<PlayItem>): List<PlayItem> =
+    if (App.instance.store.current.settings.libraryKind == "video") items.filter { !it.isMusic } else items.filter { it.isMusic }

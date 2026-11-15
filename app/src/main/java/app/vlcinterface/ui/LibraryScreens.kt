@@ -121,6 +121,16 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
                 else -> {}
             }
         }
+        // Audio / Video switch: every Library tab then lists only that kind of file.
+        val kind = App.instance.store.state.collectAsState().value.settings.libraryKind
+        if (!(s.tab == 2 && s.sub != 0)) Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
+            listOf("audio" to "♫  Audio", "video" to "▶  Video").forEach { (k, t) ->
+                Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(8.dp)).background(if (kind == k) accent() else Color.Transparent)
+                    .clickable { App.instance.store.update { it.copy(settings = it.settings.copy(libraryKind = k)) } }, contentAlignment = Alignment.Center) {
+                    Text(t, color = if (kind == k) Color(0xFF1A0E05) else C.muted, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
         Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("Internal", "LAN", "Internet").forEachIndexed { i, t ->
                 Pill(t, filled = s.tab == i) { nav.replace(Screen.Library(i, s.sub)) }
@@ -264,20 +274,23 @@ fun InternalTab(nav: Navigator) {
         when {
             folders == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
             folders!!.isEmpty() -> Text("No videos or music found. Allow access to videos and music when Android asks, then tap Rescan all.", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
-            else -> folders!!.forEach { f ->
+            else -> folders!!.filter { if (st.settings.libraryKind == "video") it.videos > 0 else it.songs > 0 }.also { shown ->
+                if (shown.isEmpty()) Text(if (st.settings.libraryKind == "video") "No videos on the phone." else "No music on the phone.", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
+            }.forEach { f ->
                 Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).combinedClickable(onClick = { nav.go(Screen.Folder(f)) }, onLongClick = { menuFor = f }),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) { Text("▤", color = accent()) }
                     Column(Modifier.weight(1f).padding(start = 14.dp)) {
                         Text(f.name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                        Text("${f.count} files · ${ago(st.scanned[f.id] ?: 0)}", color = C.muted, fontSize = 13.sp)
+                        val n = if (st.settings.libraryKind == "video") f.videos else f.songs
+                        Text("$n ${if (st.settings.libraryKind == "video") (if (n == 1) "video" else "videos") else (if (n == 1) "song" else "songs")} · ${ago(st.scanned[f.id] ?: 0)}", color = C.muted, fontSize = 13.sp)
                     }
                     Box {
                         if (menuFor == f) EntryMenu(Entry(f.name, f.relativePath, true), true, null, onDismiss = { menuFor = null },
-                            onPlayNext = { scope.launch { App.instance.player.playNext(MusicLibrary.collectLocal(ctx, f, true)) } },
-                            onQueue = { scope.launch { App.instance.player.addToQueue(MusicLibrary.collectLocal(ctx, f, true)) } },
+                            onPlayNext = { scope.launch { App.instance.player.playNext(ofKind(MusicLibrary.collectLocal(ctx, f, true))) } },
+                            onQueue = { scope.launch { App.instance.player.addToQueue(ofKind(MusicLibrary.collectLocal(ctx, f, true))) } },
                             onAddPlaylist = { addFolder = f },
-                            onDelete = { scope.launch { deleteFolder = f to InternalSource.files(ctx, f, true) } })
+                            onDelete = { scope.launch { deleteFolder = f to InternalSource.files(ctx, f, true).filter { if (st.settings.libraryKind == "video") it.isVideo else it.isAudio } } })
                     }
                     IconButton({
                         scope.launch {
@@ -296,7 +309,7 @@ fun InternalTab(nav: Navigator) {
         }
         Box(Modifier.height(16.dp))
     }
-    addFolder?.let { f -> AddToPlaylistDialog({ MusicLibrary.collectLocal(ctx, f, true) }) { addFolder = null } }
+    addFolder?.let { f -> AddToPlaylistDialog({ ofKind(MusicLibrary.collectLocal(ctx, f, true)) }) { addFolder = null } }
     deleteFolder?.let { (f, files) ->
         if (files.isEmpty()) deleteFolder = null
         else DeleteDialog(files.map { it.uri }, f.name, files.sumOf { it.size.coerceAtLeast(0) }, files.size) { deleteFolder = null; reload++ }

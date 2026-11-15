@@ -11,7 +11,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.coroutines.resume
 
-data class LocalFolder(val id: String, val name: String, val relativePath: String, val count: Int, val volume: String)
+data class LocalFolder(val id: String, val name: String, val relativePath: String, val count: Int, val volume: String,
+                       val videos: Int = 0, val songs: Int = 0)
 
 /** Videos and music on the phone and SD card, through Android's media index. */
 object InternalSource {
@@ -22,7 +23,7 @@ object InternalSource {
 
     suspend fun folders(ctx: Context): List<LocalFolder> = withContext(Dispatchers.IO) {
         val map = LinkedHashMap<String, LocalFolder>()
-        for (coll in collections) {
+        for ((ci, coll) in collections.withIndex()) {
             val proj = arrayOf(MediaStore.MediaColumns.RELATIVE_PATH, MediaStore.MediaColumns.VOLUME_NAME)
             try {
                 ctx.contentResolver.query(coll, proj, null, null, null)?.use { c ->
@@ -33,7 +34,8 @@ object InternalSource {
                         val prev = map[id]
                         val name = rel.trimEnd('/').substringAfterLast('/').ifEmpty { rel } +
                             if (vol != MediaStore.VOLUME_EXTERNAL_PRIMARY) " (SD card)" else ""
-                        map[id] = LocalFolder(id, name, rel, (prev?.count ?: 0) + 1, vol)
+                        map[id] = LocalFolder(id, name, rel, (prev?.count ?: 0) + 1, vol,
+                            (prev?.videos ?: 0) + if (ci == 0) 1 else 0, (prev?.songs ?: 0) + if (ci == 1) 1 else 0)
                     }
                 }
             } catch (_: SecurityException) {
