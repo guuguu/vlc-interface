@@ -76,6 +76,7 @@ fun SongsTab(nav: Navigator) {
     var netBusy by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf(setOf<String>()) }
     var ask by remember { mutableStateOf(false) }
+    var addPl by remember { mutableStateOf<List<PlayItem>?>(null) }
     fun sorted(l: List<PlayItem>) = l.distinctBy { it.uri }.sortedWith(compareBy<PlayItem>(
         { it.artist.ifEmpty { "￿" }.lowercase() }, { it.album.ifEmpty { "￿" }.lowercase() }, { it.trackNo }))
     LaunchedEffect(Unit) {
@@ -117,9 +118,12 @@ fun SongsTab(nav: Navigator) {
                 nav.go(Screen.Music)
             }
             if (selected.isNotEmpty()) Pill("+ Queue") {
-                App.instance.player.addToQueue(chosen)
-                android.widget.Toast.makeText(ctx, "${chosen.size} song${if (chosen.size == 1) "" else "s"} added to the queue", android.widget.Toast.LENGTH_SHORT).show()
+                val n = App.instance.player.addToQueue(chosen)
+                android.widget.Toast.makeText(ctx, "$n song${if (n == 1) "" else "s"} added to the queue" +
+                    if (chosen.size > n) " (${chosen.size - n} already in it)" else "", android.widget.Toast.LENGTH_SHORT).show()
             }
+            // Into an existing playlist (or a new one), without duplicates.
+            if (selected.isNotEmpty()) Pill("+ Playlist…") { addPl = chosen }
         }
         // Search: instant results in a pop-up; picking one scrolls the list to it and marks it.
         var query by remember { mutableStateOf("") }
@@ -177,6 +181,7 @@ fun SongsTab(nav: Navigator) {
             }
         }
     }
+    addPl?.let { its -> AddToPlaylistDialog({ its }) { addPl = null } }
     if (ask) {
         val pick = songs.filter { it.uri in selected }
         val ms = pick.sumOf { it.durationMs.coerceAtLeast(0) }

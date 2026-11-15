@@ -525,8 +525,15 @@ class PlayerController(private val context: Context, private val store: Store) {
      * In random mode the chosen item plays first and the rest of the queue is shuffled after it;
      * the original order is kept so switching back to "in order" restores it.
      */
-    fun playQueue(items: List<PlayItem>, index: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null) {
-        if (items.isEmpty()) return
+    /** Same file (and same .cue track) = the same queue entry. */
+    private fun qKey(it: PlayItem) = "${it.uri}#${it.startMs}"
+
+    fun playQueue(items0: List<PlayItem>, index0: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null) {
+        if (items0.isEmpty()) return
+        // Duplicates are left out (first one kept); the item that was tapped stays the one that starts.
+        val tapped = items0.getOrNull(index0.coerceIn(0, items0.size - 1))
+        val items = items0.distinctBy { qKey(it) }
+        val index = tapped?.let { t -> items.indexOfFirst { qKey(it) == qKey(t) } }?.takeIf { it >= 0 } ?: 0
         if (random != null && random != store.current.settings.shuffle) store.update { it.copy(settings = it.settings.copy(shuffle = random)) }
         var i = index.coerceIn(0, items.size - 1)
         var q = items
@@ -562,9 +569,13 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun play(item: PlayItem, startAt: Long = -1, origin: Origin = Origin(if (item.isRadio) "radio" else "single", item.sourceId, item.uri, item.title)) =
         playQueue(listOf(item), 0, origin, startAt)
 
-    fun playNext(items: List<PlayItem>) {
+    fun playNext(items0: List<PlayItem>) {
         val s = _state.value
-        if (s.item == null) { playQueue(items, 0, Origin("single")); return }
+        if (s.item == null) { playQueue(items0, 0, Origin("single")); return }
+        // Songs already in the queue aren't added twice.
+        val have = s.queue.map { qKey(it) }.toHashSet()
+        val items = items0.filter { have.add(qKey(it)) }
+        if (items.isEmpty()) return
         val q = s.queue.toMutableList(); q.addAll(s.index + 1, items)
         orderedQueue?.let { o ->
             val at = o.indexOfFirst { it === s.queue.getOrNull(s.index) }
@@ -573,11 +584,16 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = s.copy(queue = q)
     }
 
-    fun addToQueue(items: List<PlayItem>) {
+    /** Adds to the end of the queue; returns how many were new (songs already in the queue aren't added twice). */
+    fun addToQueue(items0: List<PlayItem>): Int {
         val s = _state.value
-        if (s.item == null) { playQueue(items, 0, Origin("single")); return }
+        if (s.item == null) { playQueue(items0, 0, Origin("single")); return items0.distinctBy { qKey(it) }.size }
+        val have = s.queue.map { qKey(it) }.toHashSet()
+        val items = items0.filter { have.add(qKey(it)) }
+        if (items.isEmpty()) return 0
         orderedQueue = orderedQueue?.plus(items)
         _state.value = s.copy(queue = s.queue + items)
+        return items.size
     }
 
     fun removeFromQueue(i: Int) {
