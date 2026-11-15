@@ -139,7 +139,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         rgInUse = rgSignature()
         mp = MediaPlayer(libVlc)
         // Our own audio output: real balance/preamp and stereo levels. Falls back to libVLC's output.
-        NativeAudio.attachTo(libVlc, mp)
+        NativeAudio.attachTo(libVlc, mp, store.current.settings.soundEngine != "libvlc")
         mp.setEventListener { ev -> onEvent(ev) }
         installDialogs()
         setupSoundChain()
@@ -234,6 +234,44 @@ class PlayerController(private val context: Context, private val store: Store) {
             mp.setEqualizer(e)
         } catch (_: Exception) {
         }
+    }
+
+    /**
+     * Watchdog for the app's own output: if no sound reaches the device within a few seconds of playing,
+     * switch to libVLC's output for this run and restart the item at the same position.
+     */
+    private fun watchSound() {
+        if (!NativeAudio.active) return
+        val before = NativeAudio.stats() ?: return
+        main.postDelayed({
+            val s = _state.value
+            if (!NativeAudio.active || !s.isPlaying || s.item == null) return@postDelayed
+            if (mp.audioTracksCount <= 0) return@postDelayed      // video without sound: nothing to check
+            val now = NativeAudio.stats() ?: return@postDelayed
+            val problem = when {
+                now.setupResult != 0L -> "the phone refused the audio stream (open ${now.openResult})"
+                now.plays == before.plays -> "libVLC delivered no sound to the app"
+                now.heard <= before.heard -> "the phone did not play the sound (state ${now.state}, start ${now.startResult})"
+                else -> null
+            }
+            if (problem != null) {
+                val detail = now.toString()
+                android.util.Log.w("PlayerController", "app sound output failed: $problem — $detail")
+                ServerLog.log("sound-engine", "sound", "AAudio", "", false, "App output gave no sound: $problem — switched to libVLC output", detail)
+                NativeAudio.markFailed("$problem — switched to libVLC output for now")
+                val pos = mp.time
+                recreateEngine(store.current.subStyle)
+                startItem(s.index, pos)
+            }
+        }, 3000)
+    }
+
+    /** Settings → Sound engine changed: rebuild the engine and continue where it was. */
+    fun applySoundEngine() {
+        val s = _state.value
+        val pos = if (s.item != null) mp.time else -1
+        recreateEngine(store.current.subStyle)
+        if (s.item != null) startItem(s.index, pos)
     }
 
     // ---------- audio focus + "headphones unplugged" ----------
@@ -558,6 +596,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 pendingSeek = -1
                 if (!offsetsApplied) {
                     offsetsApplied = true; applyStoredOffsets()
+                    watchSound()
                     // Successful opens are logged too, so each server page shows what worked, not only failures.
                     s.item?.takeIf { !it.isRadio && it.uri.contains("://") && !it.uri.startsWith("content://") && !it.uri.startsWith("file://") }?.let { item ->
                         ServerLog.log(item.uri, "play", item.uri.substringBefore("://").uppercase(), item.user, true,

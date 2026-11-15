@@ -123,6 +123,8 @@ data class Settings(
     val allowSmb1: Boolean = true,
     val repeat: String = "off", // off, all, one
     val shuffle: Boolean = false,
+    /** "app" = the app's own output (balance, preamp, meters), falls back by itself; "libvlc" = libVLC's output. */
+    val soundEngine: String = "app",
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -137,7 +139,7 @@ data class Settings(
         .put("sameOutputVideoRadio", sameOutputVideoRadio)
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
-        .put("repeat", repeat).put("shuffle", shuffle)
+        .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -163,6 +165,7 @@ data class Settings(
                 o.optBoolean("allowSmb1", true),
                 o.optString("repeat", "off"),
                 o.optBoolean("shuffle", false),
+                o.optString("soundEngine", "app"),
             )
         }
     }

@@ -58,6 +58,9 @@ static atomic_bool g_mute, g_limit;
 #define RING 256
 typedef struct { int64_t pts; float l, r; } peak_t;
 static peak_t g_ring[RING];
+
+/* Diagnostics, read by Kotlin (watchdog + Settings → Sound). */
+static atomic_long st_setup, st_setupRes = -99, st_play, st_frames, st_lastWrite, st_startRes = -99, st_ptsDelta, st_rate, st_open = -99;
 static atomic_uint g_w, g_r;
 
 static int64_t now_us(void) {
@@ -106,6 +109,7 @@ static bool open_stream(void) {
     AAudioStreamBuilder_setErrorCallback(b, on_error, NULL);
     aaudio_result_t r = AAudioStreamBuilder_openStream(b, &g_stream);
     AAudioStreamBuilder_delete(b);
+    atomic_store(&st_open, r);
     if (r != AAUDIO_OK) { g_stream = NULL; LOGW("open failed %d", r); return false; }
     g_rate = (unsigned)AAudioStream_getSampleRate(g_stream);
     atomic_store(&g_disconnected, false);
@@ -128,6 +132,24 @@ static int64_t latency_us(void) {
     return (written > 0 ? buf : 0) * 1000000LL / g_rate;
 }
 
+/* Make sure the device stream is really running (AAudio refuses start in some transient states). */
+static void ensure_started(void) {
+    if (!g_stream) return;
+    aaudio_stream_state_t st = AAudioStream_getState(g_stream);
+    if (st == AAUDIO_STREAM_STATE_STARTED || st == AAUDIO_STREAM_STATE_STARTING) { g_started = true; return; }
+    if (st == AAUDIO_STREAM_STATE_PAUSING || st == AAUDIO_STREAM_STATE_FLUSHING || st == AAUDIO_STREAM_STATE_STOPPING) {
+        aaudio_stream_state_t next = st;
+        AAudioStream_waitForStateChange(g_stream, st, &next, 200LL * 1000000);
+    }
+    aaudio_result_t r = AAudioStream_requestStart(g_stream);
+    atomic_store(&st_startRes, r);
+    if (r != AAUDIO_OK) {
+        /* Stream unusable: reopen it and try once more. */
+        if (open_stream()) { r = AAudioStream_requestStart(g_stream); atomic_store(&st_startRes, r); }
+    }
+    g_started = (r == AAUDIO_OK);
+}
+
 static inline float limit(float x) {
     /* Soft knee above -0.5 dBFS so preamp boosts never clip harshly. */
     const float k = 0.944f;
@@ -144,17 +166,21 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
         /* Output changed (headphones, Bluetooth…): reopen on the new device. */
         open_stream();
     }
+    atomic_fetch_add(&st_play, 1);
     if (!g_stream) { pthread_mutex_unlock(&g_lock); usleep((useconds_t)((int64_t)count * 1000000 / g_rate)); return; }
-    if (!g_started) { AAudioStream_requestStart(g_stream); g_started = true; }
+    if (!g_started) ensure_started();
 
-    /* Wait until it is time to hand this buffer to the device (keeps lip sync). */
-    int64_t wait = pts - now_us() - latency_us();
-    if (wait > 2000) {
+    /* Wait until it is time to hand this buffer to the device (keeps lip sync).
+       A delay that makes no sense (clock mismatch) is ignored rather than stalling the sound. */
+    int64_t delta = pts - now_us();
+    atomic_store(&st_ptsDelta, delta);
+    int64_t wait = delta - latency_us();
+    if (wait > 2000 && wait < 3000000) {
         pthread_mutex_unlock(&g_lock);
         usleep((useconds_t)(wait > 500000 ? 500000 : wait));
         pthread_mutex_lock(&g_lock);
         if (!g_stream) { pthread_mutex_unlock(&g_lock); return; }
-        if (!g_started) { AAudioStream_requestStart(g_stream); g_started = true; }
+        if (!g_started) ensure_started();
     }
 
     float gl = atomic_load(&g_gainL), gr = atomic_load(&g_gainR);
@@ -177,11 +203,15 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
             if (ar > pr) pr = ar;
         }
         int32_t w = AAudioStream_write(g_stream, buf, (int32_t)n, 1000000000LL);
+        atomic_store(&st_lastWrite, w);
         if (w < 0) { atomic_store(&g_disconnected, true); break; }
+        if (w == 0 && !g_started) ensure_started();
+        atomic_fetch_add(&st_frames, w);
         done += n;
     }
     unsigned wi = atomic_load(&g_w);
-    g_ring[wi % RING] = (peak_t){ pts, pl > 1.f ? 1.f : pl, pr > 1.f ? 1.f : pr };
+    int64_t when = (delta > -3000000 && delta < 3000000) ? pts : now_us() + latency_us();
+    g_ring[wi % RING] = (peak_t){ when, pl > 1.f ? 1.f : pl, pr > 1.f ? 1.f : pr };
     atomic_store(&g_w, wi + 1);
     pthread_mutex_unlock(&g_lock);
 }
@@ -196,7 +226,7 @@ static void cb_pause(void *d, int64_t pts) {
 static void cb_resume(void *d, int64_t pts) {
     (void)d; (void)pts;
     pthread_mutex_lock(&g_lock);
-    if (g_stream && !g_started) { AAudioStream_requestStart(g_stream); g_started = true; }
+    if (g_stream && !g_started) ensure_started();
     pthread_mutex_unlock(&g_lock);
 }
 
@@ -204,8 +234,11 @@ static void cb_flush(void *d, int64_t pts) {
     (void)d; (void)pts;
     pthread_mutex_lock(&g_lock);
     if (g_stream) {
+        aaudio_stream_state_t next = AAUDIO_STREAM_STATE_UNINITIALIZED;
         AAudioStream_requestPause(g_stream);
+        AAudioStream_waitForStateChange(g_stream, AAUDIO_STREAM_STATE_PAUSING, &next, 200LL * 1000000);
         AAudioStream_requestFlush(g_stream);
+        AAudioStream_waitForStateChange(g_stream, AAUDIO_STREAM_STATE_FLUSHING, &next, 200LL * 1000000);
         g_started = false;
     }
     atomic_store(&g_r, atomic_load(&g_w));
@@ -229,16 +262,23 @@ static void cb_volume(void *d, float vol, bool mute) {
 
 static int cb_setup(void **opaque, char *format, unsigned *rate, unsigned *channels) {
     (void)opaque;
+    atomic_fetch_add(&st_setup, 1);
     memcpy(format, "FL32", 4);
     *channels = 2;
     if (*rate < 8000 || *rate > 192000) *rate = 48000;
     pthread_mutex_lock(&g_lock);
     if (!g_stream || g_rate != *rate) {
         g_rate = *rate;
-        if (!open_stream()) { pthread_mutex_unlock(&g_lock); return -1; }
-        if (g_rate != *rate) *rate = g_rate; /* device picked another rate: libVLC resamples */
+        if (!open_stream()) {
+            /* Some devices refuse the file's rate: try the usual 48 kHz and let libVLC resample. */
+            g_rate = 48000;
+            if (!open_stream()) { pthread_mutex_unlock(&g_lock); atomic_store(&st_setupRes, -1); return -1; }
+        }
+        *rate = g_rate; /* device may have picked another rate: libVLC resamples */
     }
+    atomic_store(&st_rate, g_rate);
     pthread_mutex_unlock(&g_lock);
+    atomic_store(&st_setupRes, 0);
     return 0;
 }
 
@@ -315,4 +355,20 @@ Java_app_vlcinterface_player_NativeAudio_readPeaks(JNIEnv *env, jobject thiz, jf
     atomic_store(&g_r, r);
     jfloat v[2] = { pl, pr };
     (*env)->SetFloatArrayRegion(env, out, 0, 2, v);
+}
+
+/* [setup calls, setup result, play calls, frames written, last write, start result, frames heard, stream state, pts-now µs, rate, open result, volume×1000, mute] */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_stats(JNIEnv *env, jobject thiz, jlongArray out) {
+    (void)thiz;
+    jlong v[13];
+    pthread_mutex_lock(&g_lock);
+    v[6] = g_stream ? AAudioStream_getFramesRead(g_stream) : -1;
+    v[7] = g_stream ? AAudioStream_getState(g_stream) : -1;
+    pthread_mutex_unlock(&g_lock);
+    v[0] = atomic_load(&st_setup); v[1] = atomic_load(&st_setupRes); v[2] = atomic_load(&st_play);
+    v[3] = atomic_load(&st_frames); v[4] = atomic_load(&st_lastWrite); v[5] = atomic_load(&st_startRes);
+    v[8] = atomic_load(&st_ptsDelta); v[9] = atomic_load(&st_rate); v[10] = atomic_load(&st_open);
+    v[11] = (jlong)(atomic_load(&g_vol) * 1000.f); v[12] = atomic_load(&g_mute);
+    (*env)->SetLongArrayRegion(env, out, 0, 13, v);
 }

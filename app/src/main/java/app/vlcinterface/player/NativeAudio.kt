@@ -22,6 +22,28 @@ object NativeAudio {
     private external fun detach()
     private external fun setGains(left: Float, right: Float, limiter: Boolean)
     private external fun readPeaks(out: FloatArray)
+    private external fun stats(out: LongArray)
+
+    /** Turned off for this app run after the watchdog saw no sound come out. */
+    @Volatile var failed: Boolean = false
+        private set
+
+    data class Stats(val setups: Long, val setupResult: Long, val plays: Long, val written: Long, val lastWrite: Long,
+                     val startResult: Long, val heard: Long, val state: Long, val ptsDeltaUs: Long, val rate: Long,
+                     val openResult: Long, val volume: Float, val mute: Boolean) {
+        override fun toString() = "setup $setups/$setupResult, open $openResult, start $startResult, state $state, rate $rate, " +
+            "blocks $plays, written $written, heard $heard, last write $lastWrite, pts−now ${ptsDeltaUs / 1000} ms, " +
+            "volume ${"%.2f".format(volume)}${if (mute) " muted" else ""}"
+    }
+
+    fun stats(): Stats? {
+        if (!active) return null
+        val a = LongArray(13)
+        return try { stats(a); Stats(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11] / 1000f, a[12] != 0L) } catch (_: Throwable) { null }
+    }
+
+    /** Gives up on our output for this run; the player then uses libVLC's own output. */
+    fun markFailed(why: String) { failed = true; reason = why }
 
     private fun handle(o: Any): Long {
         var c: Class<*>? = o.javaClass
@@ -34,8 +56,10 @@ object NativeAudio {
         return 0
     }
 
-    fun attachTo(lib: LibVLC, mp: MediaPlayer): Boolean {
+    fun attachTo(lib: LibVLC, mp: MediaPlayer, wanted: Boolean): Boolean {
         active = false
+        if (!wanted) { reason = "chosen in Settings"; return false }
+        if (failed) return false
         if (!loaded) { reason = "native library missing"; return false }
         val r = try { attach(handle(lib), handle(mp)) } catch (t: Throwable) { -9 }
         active = r == 0
