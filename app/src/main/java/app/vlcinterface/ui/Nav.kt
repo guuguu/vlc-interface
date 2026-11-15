@@ -28,6 +28,8 @@ sealed interface Screen {
     data class Browse(val sourceId: String, val uri: String, val title: String, val highlight: String = "") : Screen
     data class EditSource(val zone: Zone, val sourceId: String? = null, val draft: Source? = null) : Screen
     data class SmbDetect(val input: String, val draft: Source) : Screen
+    /** "What do I need to connect?" for a host name or IP. */
+    data class ServerCheck(val host: String, val draft: Source = Source(zone = Zone.LAN)) : Screen
     data object Player : Screen
     data object Settings : Screen
     data object Backup : Screen
@@ -73,6 +75,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.Browse -> BrowseScreen(nav, top)
                     is Screen.EditSource -> EditSourceScreen(nav, top)
                     is Screen.SmbDetect -> SmbDetectScreen(nav, top)
+                    is Screen.ServerCheck -> ServerCheckScreen(nav, top)
                     is Screen.Player -> PlayerScreen(nav, openOutput)
                     is Screen.Settings -> SettingsScreen(nav)
                     is Screen.Backup -> BackupScreen(nav)

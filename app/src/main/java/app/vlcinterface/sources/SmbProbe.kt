@@ -39,12 +39,12 @@ object SmbProbe {
         return SmbPath(parts[0], parts.getOrElse(1) { "" }, parts.drop(2).joinToString("/"))
     }
 
-    private val versions = listOf(
+    internal val versions = listOf(
         "SMB311" to "SMB 3.1.1", "SMB302" to "SMB 3.0.2", "SMB300" to "SMB 3.0",
         "SMB210" to "SMB 2.1", "SMB202" to "SMB 2.0.2", "SMB1" to "SMB 1 (CIFS)",
     )
 
-    private fun context(version: String, user: String, pass: String, domain: String, guest: Boolean): CIFSContext {
+    internal fun context(version: String, user: String, pass: String, domain: String, guest: Boolean): CIFSContext {
         val p = Properties()
         p["jcifs.smb.client.minVersion"] = version
         p["jcifs.smb.client.maxVersion"] = version
@@ -57,7 +57,7 @@ object SmbProbe {
         return if (guest) base.withGuestCrendentials() else base.withCredentials(NtlmPasswordAuthenticator(domain, user, pass))
     }
 
-    private fun onLanCapableNetwork(): Pair<Boolean, String> {
+    internal fun onLanCapableNetwork(): Pair<Boolean, String> {
         return try {
             val cm = app.vlcinterface.App.instance.getSystemService(android.net.ConnectivityManager::class.java)
             val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false to "no network connection"

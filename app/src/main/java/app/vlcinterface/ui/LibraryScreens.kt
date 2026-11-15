@@ -332,6 +332,15 @@ fun SourcesTab(nav: Navigator, zone: Zone) {
     if (zone == Zone.LAN) LaunchedEffect(Unit) { found = VlcBrowse.discover() }
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (zone == Zone.LAN) CardBox(Modifier.clickable { nav.go(Screen.ServerCheck("")) }) {
+            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Check a server", color = C.text, fontWeight = FontWeight.SemiBold)
+                    Text("Type a host name or IP — see what it offers and what you still need to connect", color = C.muted, fontSize = 13.sp)
+                }
+                Text("›", color = C.muted, fontSize = 20.sp)
+            }
+        }
         SectionTitle(if (zone == Zone.LAN) "Saved on your LAN" else "Remote storage")
         if (list.isEmpty()) Text(
             if (zone == Zone.LAN) "No LAN sources yet. Tap + to add your NAS, or save one found below."

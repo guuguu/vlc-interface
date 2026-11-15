@@ -43,6 +43,8 @@ import app.vlcinterface.App
 import app.vlcinterface.data.Source
 import app.vlcinterface.data.Zone
 import app.vlcinterface.sources.Browse
+import app.vlcinterface.sources.CheckResult
+import app.vlcinterface.sources.ServerCheck
 import app.vlcinterface.sources.ProbeResult
 import app.vlcinterface.sources.SmbProbe
 import app.vlcinterface.sources.Urls
@@ -92,6 +94,7 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
                 Box(Modifier.weight(2f)) {
                     Field(if (s.proto in listOf("webdav", "http")) "Address (https://host)" else if (s.proto == "upnp") "Server address (upnp://…)" else "Host or IP", s.host) { s = s.copy(host = it) }
                 }
+                if (s.proto != "upnp") OutlinedButton({ nav.go(Screen.ServerCheck(s.host, s)) }, Modifier.padding(top = 8.dp), enabled = s.host.isNotBlank()) { Text("Check") }
                 if (s.proto != "upnp") Box(Modifier.weight(1f)) {
                     Field("Port", if (s.port > 0) s.port.toString() else s.defaultPort.toString(), KeyboardType.Number) { s = s.copy(port = it.toIntOrNull() ?: 0) }
                 }
@@ -103,6 +106,7 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
             }
             if (s.proto == "smb") Field("Domain / workgroup (optional)", s.domain) { s = s.copy(domain = it) }
             if (s.smbVersion.isNotEmpty()) Text("Detected: ${s.smbVersion}", color = C.ok, fontSize = 13.sp)
+            Text("Only know the name or IP? Type it in Host and tap Check: the app shows which services the server offers and what else you need.", color = C.muted, fontSize = 12.sp)
             if (s.zone == Zone.INTERNET) ToggleRow("Wi-Fi only", "Don't use mobile data for this source", s.wifiOnly) { s = s.copy(wifiOnly = it) }
             if (test.isNotEmpty()) Text(test, color = if (test.startsWith("✓")) C.ok else C.bad, fontSize = 14.sp)
             Text("Passwords are stored encrypted on this phone.", color = C.muted, fontSize = 12.sp)
@@ -191,5 +195,98 @@ fun SmbDetectScreen(nav: Navigator, d: Screen.SmbDetect) {
                 }
             }, Modifier.weight(1f), enabled = r?.works == true, colors = ButtonDefaults.buttonColors(containerColor = accent())) { Text("Use & save") }
         }
+    }
+}
+
+/** Host name or IP only → what the server offers and what is still needed, with one-tap set-up. */
+@Composable
+fun ServerCheckScreen(nav: Navigator, c: Screen.ServerCheck) {
+    var host by remember { mutableStateOf(c.host) }
+    var user by remember { mutableStateOf(c.draft.user) }
+    var pass by remember { mutableStateOf(c.draft.password) }
+    var domain by remember { mutableStateOf(c.draft.domain) }
+    var running by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf<CheckResult?>(null) }
+    val scope = rememberCoroutineScope()
+    fun check() {
+        if (host.isBlank() || running) return
+        running = true; result = null
+        scope.launch { result = ServerCheck.run(host, user, pass, domain); running = false }
+    }
+    LaunchedEffect(Unit) { if (c.host.isNotBlank()) check() }
+    val scroll = rememberScrollState()
+    Column(Modifier.fillMaxSize()) {
+        BackHeader("Check a server", nav, "What you need to connect")
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Field("Host name or IP", host) { host = it }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Box(Modifier.weight(1f)) { Field("User (optional)", user) { user = it } }
+                Box(Modifier.weight(1f)) { Field("Password", pass, password = true) { pass = it } }
+            }
+            Field("Domain / workgroup (optional)", domain) { domain = it }
+            Button({ check() }, Modifier.fillMaxWidth(), enabled = host.isNotBlank() && !running, colors = ButtonDefaults.buttonColors(containerColor = accent())) {
+                if (running) CircularProgressIndicator(Modifier.height(18.dp), color = C.text) else Text(if (result == null) "Check" else "Check again")
+            }
+            if (running) Text("Looking up the name, the open ports and each service… (up to ~30 s)", color = C.muted, fontSize = 13.sp)
+            val r = result
+            if (r != null) {
+                SectionTitle("Server")
+                CardBox {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        CheckLine(r.networkOk, "Phone network", r.network)
+                        CheckLine(r.ip.isNotEmpty(), "\"${r.host}\"", if (r.ip.isEmpty()) "not found" else r.ip + if (r.name.isNotEmpty() && !r.name.equals(r.host, true)) " · ${r.name}" else "")
+                        if (r.ip.isNotEmpty()) CheckLine(r.reachable, "File-sharing services", if (r.reachable) "${r.services.size} found" else "none answer")
+                    }
+                }
+                Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).border(2.dp, if (r.services.any { it.ok && it.proto != "info" }) accent() else C.bad, RoundedCornerShape(14.dp)).padding(14.dp)) {
+                    Text(r.summary, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                }
+                r.services.forEach { sv ->
+                    SectionTitle(sv.label)
+                    CardBox {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            CheckLine(sv.ok, if (sv.ok) "Ready to use" else if (sv.proto == "info") "Not a file share" else "Not ready yet", "port ${sv.port}")
+                            Text(sv.found, color = C.muted, fontSize = 13.sp)
+                            if (sv.needs.isNotEmpty()) {
+                                Text("What you still need", color = C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                sv.needs.forEach { Text("•  $it", color = C.text, fontSize = 13.sp) }
+                            } else Text("Nothing else needed.", color = C.ok, fontSize = 13.sp)
+                            val draft = c.draft.copy(zone = Zone.LAN, host = r.host, user = user, password = pass, domain = domain, port = 0)
+                            when (sv.proto) {
+                                "smb" -> {
+                                    if (sv.shares.isNotEmpty()) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        sv.shares.forEach { sh ->
+                                            Pill(sh, filled = true) {
+                                                nav.go(Screen.SmbDetect("\\\\${r.host}\\$sh", draft.copy(proto = "smb", user = if (sv.guest) "" else user, password = if (sv.guest) "" else pass)))
+                                            }
+                                        }
+                                    }
+                                    if (sv.hiddenShares > 0) Text("${sv.hiddenShares} hidden admin shares (IPC\$, C\$…) not shown", color = C.muted, fontSize = 12.sp)
+                                    Pill("Type a share instead") { nav.go(Screen.EditSource(Zone.LAN, draft = draft.copy(proto = "smb"))) }
+                                }
+                                "info", "upnp" -> {}
+                                "webdav", "http" -> Pill("Set up WebDAV", filled = sv.ok) {
+                                    nav.go(Screen.EditSource(Zone.LAN, draft = draft.copy(proto = "webdav", host = sv.address)))
+                                }
+                                else -> Pill("Set up ${sv.label.substringBefore(' ')}", filled = sv.ok) {
+                                    nav.go(Screen.EditSource(Zone.LAN, draft = draft.copy(proto = sv.proto, port = sv.port)))
+                                }
+                            }
+                        }
+                    }
+                }
+                Text("Every check is written to this server's log page.", color = C.muted, fontSize = 12.sp)
+            }
+            Box(Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun CheckLine(ok: Boolean, label: String, note: String) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 30.dp), verticalAlignment = Alignment.CenterVertically) {
+        Badge(if (ok) "✓" else "✕", ok)
+        Text(label, color = C.text, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(start = 10.dp))
+        Text(note, color = C.muted, fontSize = 12.sp)
     }
 }
