@@ -302,7 +302,15 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 next0.take((free / 30f).toInt().coerceIn(1, maxOf(1, next0.size)))
             }
             if (next.isNotEmpty()) Column(Modifier.fillMaxWidth().onGloballyPositioned { upNextYpx = it.positionInParent().y.toInt() }) {
-                Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); Text("Queue ›", color = accent(), modifier = Modifier.clickable { nav.go(Screen.Queue) }.padding(8.dp)) }
+                Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); 
+                    // Time still to play in what's playing now (playlist, folder or queue): rest of this song + all after it.
+                    val curLen = if (item.endMs > 0) item.endMs - item.startMs else p.length
+                    val curLeft = (curLen - (p.time - maxOf(item.startMs, 0L))).coerceAtLeast(0)
+                    val left = curLeft + p.queue.drop(p.index + 1).sumOf { q -> (if (q.endMs > 0) q.endMs - q.startMs else q.durationMs).coerceAtLeast(0) }
+                    val tl = left / 1000
+                    val leftTxt = if (tl >= 3600) "%d:%02d:%02d".format(tl / 3600, tl / 60 % 60, tl % 60) else "%d:%02d".format(tl / 60, tl % 60)
+                    val ofWhat = when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
+                    Text("Queue ›  $leftTxt left in $ofWhat", color = accent(), fontSize = 13.sp, modifier = Modifier.clickable { nav.go(Screen.Queue) }.padding(8.dp)) }
                 next.forEachIndexed { i, n ->
                     Row(Modifier.fillMaxWidth().clickable { player.jumpTo(p.index + 1 + i) }.padding(vertical = if (landscape) 5.dp else 8.dp)) {
                         Text("${i + 1}.", color = C.muted, modifier = Modifier.width(28.dp))
