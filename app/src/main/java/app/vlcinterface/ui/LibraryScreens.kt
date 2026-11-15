@@ -491,6 +491,16 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
                         android.widget.Toast.makeText(ctxPin, "Pinned — indexing its songs for search in the background", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }) { SymIcon(Icons.Filled.Star, if (pinned) "Unpin folder" else "Pin folder", tint = if (pinned) accent() else C.muted) }
+                // Index this folder now (songs + tags, subfolders) for search; pins it too if it isn't yet.
+                val indexing by app.vlcinterface.sources.NetIndex.busy.collectAsState()
+                SymButton({
+                    if (!pinned) App.instance.store.update { s -> s.copy(sources = s.sources.map { if (it.id == src.id) it.copy(pins = it.pins + path) else it }) }
+                    app.vlcinterface.sources.NetIndex.build(src, path)
+                    android.widget.Toast.makeText(ctxPin, "Indexing this folder for search…", android.widget.Toast.LENGTH_SHORT).show()
+                }) {
+                    if (indexing.isNotEmpty()) CircularProgressIndicator(color = accent(), strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                    else SymIcon(Icons.Filled.Search, "Index this folder for search", tint = if (app.vlcinterface.sources.NetIndex.has(src, path)) accent() else C.muted)
+                }
             }
             SymButton({ reload++ }) {
                 if (scanning) CircularProgressIndicator(Modifier.size(18.dp), color = accent(), strokeWidth = 2.dp)
