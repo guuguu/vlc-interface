@@ -13,6 +13,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -162,9 +166,9 @@ fun SongsTab(nav: Navigator) {
         var fieldBottom by remember { mutableStateOf(0f) }
         // The results pop-up ends above the keyboard: its height is limited to the space between the box and the keyboard.
         val dens = androidx.compose.ui.platform.LocalDensity.current
-        val imeBottom = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(dens)
+        val imeBottom = WindowInsets.ime.getBottom(dens)
         val winH = with(dens) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() } +
-            androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(dens) + androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(dens)
+            WindowInsets.navigationBars.getBottom(dens) + WindowInsets.statusBars.getTop(dens)
         val popMax = with(dens) { ((winH - imeBottom - fieldBottom - 12f).coerceAtLeast(120f)).toDp() }.coerceAtMost(340.dp)
         Box {
             androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true,
