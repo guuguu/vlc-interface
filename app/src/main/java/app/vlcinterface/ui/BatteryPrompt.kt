@@ -140,7 +140,9 @@ fun RgAskHost() {
                 STextButton({ close(); start(listOf(it0), app.vlcinterface.sources.RgMode.TRACK, it0.title) }) { Text("Scan this song", color = accent()) }
                 STextButton({
                     close()
-                    scope.launch {
+                    // Not tied to this pop-up: it closes at once, and a job tied to it was cancelled with it while the
+                    // folder was still being listed (so the folder scan never started).
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
                         val folder = app.vlcinterface.sources.MusicLibrary.folderOf(ctx.applicationContext, it0).ifEmpty { listOf(it0) }
                         start(folder, app.vlcinterface.sources.RgMode.ALBUMS_BY_TAGS, it0.album.ifEmpty { "this folder" })
                     }
