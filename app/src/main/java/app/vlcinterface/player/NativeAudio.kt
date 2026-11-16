@@ -21,6 +21,7 @@ object NativeAudio {
     private external fun attach(libObj: Long, mpObj: Long): Int
     private external fun detach()
     private external fun setGains(left: Float, right: Float, limiter: Boolean)
+    private external fun setGainsEq(left: Float, right: Float, limiter: Boolean, eq: FloatArray)
     private external fun readPeaks(out: FloatArray)
     private external fun stats(out: LongArray)
     private external fun reroute()
@@ -93,6 +94,8 @@ object NativeAudio {
     fun release() { if (active) try { detach() } catch (_: Throwable) {}; active = false }
 
     fun gains(left: Float, right: Float, limiter: Boolean) { if (active) setGains(left, right, limiter) }
+    /** Level and tone (10 band gains, dB) in one go: they change together, gliding, in the app's own output. */
+    fun gainsEq(left: Float, right: Float, limiter: Boolean, eq: FloatArray) { if (active) setGainsEq(left, right, limiter, eq) }
 
     /** Left/right peak (0..1) of what is being heard right now. */
     fun peaks(out: FloatArray) { if (active) readPeaks(out) else { out[0] = 0f; out[1] = 0f } }

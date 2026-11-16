@@ -59,6 +59,7 @@ static _Atomic float g_gainL = 1.f, g_gainR = 1.f, g_vol = 1.f;
    change the other device), so the app's own volume control works on the device actually playing. */
 static _Atomic float g_appVol = 1.f;
 static atomic_bool g_mute, g_limit;
+static bool g_eqRateChanged;       /* output sample rate changed: tone filters are remade */
 
 /* Peaks per written chunk, keyed by play time, read by the UI when that time comes. */
 #define RING 256
@@ -138,6 +139,7 @@ static bool open_stream(void) {
     atomic_store(&st_open, r);
     if (r != AAUDIO_OK) { g_stream = NULL; LOGW("open failed %d", r); return false; }
     g_rate = (unsigned)AAudioStream_getSampleRate(g_stream);
+    g_eqRateChanged = true;
     atomic_store(&g_disconnected, false);
     g_defaultBuf = AAudioStream_getBufferSizeInFrames(g_stream);
     apply_buffer();
@@ -187,6 +189,58 @@ static inline float limit(float x) {
     return x < 0 ? -y : y;
 }
 
+/* ---------- Tone (loudness / treble) equalizer, done here so it changes in the same place and at the same moment
+ * as the level: 10 peaking filters at libVLC's band frequencies; gains glide to their new values buffer by buffer
+ * and the overall level ramps inside each buffer, so nothing jumps or clicks. ---------- */
+#define NB 10
+static const float EQ_F[NB] = { 60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000 };
+static const float EQ_Q[NB] = { 0.9f, 0.9f, 0.9f, 0.9f, 0.9f, 0.9f, 0.9f, 1.8f, 2.4f, 2.4f };
+static _Atomic float g_eqTarget[NB];          /* dB, set from Kotlin */
+static float g_eqCur[NB];                     /* dB, gliding toward the target */
+static float g_eqUsed[NB] = { 99 };           /* dB the coefficients were made for */
+typedef struct { float b0, b1, b2, a1, a2; } bq_t;
+static bq_t g_bq[NB];
+static float g_z[NB][2][2];                   /* filter state per band, per channel */
+static bool g_eqActive;
+static float g_prevL = 1.f, g_prevR = 1.f;    /* overall gains of the previous buffer (ramp start) */
+
+static void eq_design(int b, float db) {
+    float fs = (float)g_rate, f = EQ_F[b];
+    if (f > fs * 0.45f) f = fs * 0.45f;
+    float A = powf(10.f, db / 40.f), w0 = 2.f * (float)M_PI * f / fs, cw = cosf(w0), al = sinf(w0) / (2.f * EQ_Q[b]);
+    float a0 = 1.f + al / A;
+    g_bq[b].b0 = (1.f + al * A) / a0; g_bq[b].b1 = -2.f * cw / a0; g_bq[b].b2 = (1.f - al * A) / a0;
+    g_bq[b].a1 = -2.f * cw / a0; g_bq[b].a2 = (1.f - al / A) / a0;
+}
+
+/* Once per buffer: glide the band gains toward their targets and remake the filters that changed. */
+static void eq_update(void) {
+    bool any = false;
+    if (g_eqRateChanged) { g_eqRateChanged = false; for (int b = 0; b < NB; b++) g_eqUsed[b] = 99; memset(g_z, 0, sizeof g_z); }
+    for (int b = 0; b < NB; b++) {
+        float t = atomic_load(&g_eqTarget[b]);
+        float c = g_eqCur[b] + (t - g_eqCur[b]) * 0.5f;
+        if (fabsf(t - c) < 0.02f) c = t;
+        g_eqCur[b] = c;
+        if (fabsf(c - g_eqUsed[b]) > 0.001f) { eq_design(b, c); g_eqUsed[b] = c; }
+        if (fabsf(c) > 0.001f) any = true;
+    }
+    if (!any && g_eqActive) memset(g_z, 0, sizeof g_z);
+    g_eqActive = any;
+}
+
+static inline float eq_run(float x, int ch) {
+    for (int b = 0; b < NB; b++) {
+        if (fabsf(g_eqCur[b]) < 0.001f) continue;
+        bq_t *q = &g_bq[b]; float *z = g_z[b][ch];
+        float y = q->b0 * x + z[0];
+        z[0] = q->b1 * x - q->a1 * y + z[1];
+        z[1] = q->b2 * x - q->a2 * y;
+        x = y;
+    }
+    return x;
+}
+
 /* libVLC's audio thread feeding our output: raised once to Android's "urgent audio" priority (-19), the level
  * the system's own audio threads use, so other work on the phone doesn't make the sound stutter. */
 static __thread int t_prio_done = 0;
@@ -223,7 +277,12 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     float gl = atomic_load(&g_gainL), gr = atomic_load(&g_gainR);
     float v = atomic_load(&g_mute) ? 0.f : atomic_load(&g_vol) * atomic_load(&g_appVol);
     gl *= v; gr *= v;
-    bool lim = atomic_load(&g_limit) || gl > 1.f || gr > 1.f;
+    bool lim = atomic_load(&g_limit) || gl > 1.f || gr > 1.f || g_prevL > 1.f || g_prevR > 1.f;
+    eq_update();
+    /* The level ramps from the last buffer's value to this one's over the buffer (no step). */
+    float sl = g_prevL, sr = g_prevR;
+    float dl = count ? (gl - sl) / (float)count : 0.f, dr = count ? (gr - sr) / (float)count : 0.f;
+    g_prevL = gl; g_prevR = gr;
 
     static float buf[4096 * 2];
     const int16_t *in = (const int16_t *)samples;
@@ -233,7 +292,10 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     while (done < count) {
         unsigned n = count - done; if (n > 4096) n = 4096;
         for (unsigned i = 0; i < n; i++) {
-            float l = in[(done + i) * 2] * k16 * gl, r = in[(done + i) * 2 + 1] * k16 * gr;
+            float x = in[(done + i) * 2] * k16, y = in[(done + i) * 2 + 1] * k16;
+            if (g_eqActive) { x = eq_run(x, 0); y = eq_run(y, 1); }
+            float k = (float)(done + i);
+            float l = x * (sl + dl * k), r = y * (sr + dr * k);
             if (lim) { l = limit(l); r = limit(r); }
             buf[i * 2] = l; buf[i * 2 + 1] = r;
             float al = fabsf(l), ar = fabsf(r);
@@ -373,6 +435,18 @@ Java_app_vlcinterface_player_NativeAudio_detach(JNIEnv *env, jobject thiz) {
 JNIEXPORT void JNICALL
 Java_app_vlcinterface_player_NativeAudio_setGains(JNIEnv *env, jobject thiz, jfloat l, jfloat r, jboolean lim) {
     (void)env; (void)thiz;
+    atomic_store(&g_gainL, l);
+    atomic_store(&g_gainR, r);
+    atomic_store(&g_limit, lim);
+}
+
+/* Level and tone together (one call, so both change in the same buffer): gains linear, eq = 10 band gains in dB. */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_setGainsEq(JNIEnv *env, jobject thiz, jfloat l, jfloat r, jboolean lim, jfloatArray eq) {
+    (void)thiz;
+    jfloat g[NB] = { 0 };
+    if (eq && (*env)->GetArrayLength(env, eq) >= NB) (*env)->GetFloatArrayRegion(env, eq, 0, NB, g);
+    for (int b = 0; b < NB; b++) atomic_store(&g_eqTarget[b], g[b]);
     atomic_store(&g_gainL, l);
     atomic_store(&g_gainR, r);
     atomic_store(&g_limit, lim);

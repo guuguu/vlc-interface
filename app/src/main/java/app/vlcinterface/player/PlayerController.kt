@@ -337,8 +337,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         val right = total + if (bal < 0) att(1f + bal / 100f) else 0f
         if (NativeAudio.active) {
             fun lin(db: Float) = if (db <= -60f) 0f else 10f.pow(db / 20f)
-            NativeAudio.gains(lin(left), lin(right), total > 0f)
-            applyTone(0f)
+            // Tone in the app's own output, together with the level (one update: no jump between them).
+            try { mp.setEqualizer(null) } catch (_: Exception) {}
+            NativeAudio.gainsEq(lin(left), lin(right), total > 0f, currentToneGains())
             return
         }
         val d = dp
@@ -379,6 +380,15 @@ class PlayerController(private val context: Context, private val store: Store) {
             mp.setEqualizer(e)
         } catch (_: Exception) {
         }
+    }
+
+    /** Band gains in use now (sliders on / off, Auto loudness included). */
+    private fun currentToneGains(): FloatArray {
+        val s = _state.value
+        val on = store.current.settings.toneSliders
+        val l = if (on) autoLoudness(s.loudDb) else 0f; val t = if (on) s.trebleDb else 0f
+        if (l != s.loudEffDb) _state.value = _state.value.copy(loudEffDb = l)
+        return if (l == 0f && t == 0f) FloatArray(10) else toneGains(l, t)
     }
 
     /** Band gains (10 bands, all ≤ 0 dB) for loudness [l] and treble [t]. */
