@@ -276,9 +276,13 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     App.instance.store.update { it.copy(settings = it.settings.copy(repeat = next)) }
                 }
                 // ReplayGain on / off, applied at once (the song continues from where it is).
-                Pill(if (st.settings.rgMode == "off") "RGain: Off" else "RGain: On" + (player.albumRgChoice(item)?.let { if (it == "album") " · album" else " · song" } ?: ""),
+                // Mixed list (songs from several albums): track gain, never asked. One album / folder: asked
+                // (when the song has both values) or album gain.
+                val mixed = remember(p.queue) { player.listIsMixed(p) }
+                Pill(if (st.settings.rgMode == "off") "RGain: Off" else "RGain: On" + (if (mixed) " · song"
+                    else player.albumRgChoice(item)?.let { if (it == "album") " · album" else " · song" } ?: ""),
                     selected = st.settings.rgMode != "off") {
-                    if (st.settings.rgMode != "off") player.toggleReplayGain()
+                    if (st.settings.rgMode != "off" || mixed) player.toggleReplayGain()
                     else rgScope.launch {
                         // Both values in the song's tags: ask which one (album gain is then kept for the whole album).
                         val rg = app.vlcinterface.sources.ReplayGain.read(ctxRg, item.uri, item.user, item.password, item.domain, item.smbVersion)

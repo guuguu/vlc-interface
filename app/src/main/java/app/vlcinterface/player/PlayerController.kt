@@ -993,9 +993,22 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     fun albumRgChoice(item: PlayItem): String? = store.current.settings.rgChoices[albumKey(item)]
 
-    private fun rgModeFor(s: PlayerState): String = s.item?.let { albumRgChoice(it) } ?: when (store.current.settings.rgMode) {
-        "track" -> "track"; "album" -> "album"
-        else -> if (store.current.settings.shuffle || s.origin.kind == "playlist") "track" else "album"
+    /**
+     * A mixed list: the songs playing come from more than one album (a mixed playlist, a Songs-list selection, a
+     * queue built from several places). Then track gain is always used — no question. A complete album / a folder
+     * of one album is not mixed: there the album gain (or your choice for that album) applies.
+     */
+    fun listIsMixed(s: PlayerState = _state.value): Boolean =
+        // Same album = same album tag (a 2-CD album in CD1 / CD2 folders stays one album); no tag → its folder.
+        s.queue.filter { it.isMusic }.map { it.album.trim().lowercase().ifEmpty { "folder:" + it.folderKey } }.distinct().size > 1
+
+    /** Track gain has priority: mixed lists always track; one album → the choice made for it, else album. */
+    private fun rgModeFor(s: PlayerState): String = when {
+        listIsMixed(s) -> "track"
+        else -> s.item?.let { albumRgChoice(it) } ?: when (store.current.settings.rgMode) {
+            "track" -> "track"; "album" -> "album"
+            else -> if (store.current.settings.shuffle) "track" else "album"
+        }
     }
 
     private fun makeMedia(item: PlayItem, s: PlayerState, useBridge: Boolean): Media {

@@ -138,7 +138,9 @@ fun RgAskHost() {
                 val listItems = pl?.items?.map { app.vlcinterface.sources.MusicLibrary.fromPlEntry(it) } ?: ps.queue
                 val songs = listItems.filter { it.isMusic && !it.isRadio }.distinctBy { it.uri }
                 if (songs.size > 1) STextButton({
-                    close(); start(songs, app.vlcinterface.sources.RgMode.ALBUMS_BY_TAGS, pl?.name ?: "the queue")
+                    // Track gain only: a playlist rarely holds whole albums, and an album value from part of an album
+                    // would be off. Album values come from folder / album scans.
+                    close(); start(songs, app.vlcinterface.sources.RgMode.TRACK, pl?.name ?: "the queue")
                 }) { Text("Scan the whole ${if (pl != null) "playlist" else "queue"} (${songs.size} songs)", color = accent()) }
                 STextButton({ close() }) { Text("Not now") }
             }
