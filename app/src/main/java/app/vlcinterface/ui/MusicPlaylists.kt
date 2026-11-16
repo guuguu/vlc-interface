@@ -378,13 +378,12 @@ private fun SeekBlock(item: PlayItem) {
                 val thumbX = 10.dp + (bw - 20.dp) * f
                 androidx.compose.ui.window.Popup(alignment = Alignment.TopStart,
                     offset = with(androidx.compose.ui.platform.LocalDensity.current) {
-                        androidx.compose.ui.unit.IntOffset((thumbX - bubbleW / 2).coerceIn(0.dp, bw - bubbleW).roundToPx(), (-64).dp.roundToPx())
+                        androidx.compose.ui.unit.IntOffset((thumbX - bubbleW / 2).coerceIn(0.dp, bw - bubbleW).roundToPx(), (-52).dp.roundToPx())
                     }) {
                     Column(Modifier.width(bubbleW).clip(RoundedCornerShape(14.dp)).background(C.popup).border(1.dp, accent(), RoundedCornerShape(14.dp))
                         .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        // Always the time from the start of the song.
                         Text(fmtTime(target), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                        val d = (target - pos) / 1000
-                        Text((if (d >= 0) "+" else "−") + fmtTime(kotlin.math.abs(d) * 1000), color = C.muted, fontSize = 12.sp)
                     }
                 }
             }
