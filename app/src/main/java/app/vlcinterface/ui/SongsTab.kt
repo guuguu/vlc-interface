@@ -63,6 +63,8 @@ internal object SongsCache {
     var phone: List<PlayItem>? = null
         set(v) { field = v; byKey = v?.mapNotNull { p -> app.vlcinterface.sources.NetIndex.songKey(p)?.let { it to p } }?.toMap() ?: emptyMap() }
     var network: List<PlayItem> = emptyList()
+    /** The Songs list exactly as last shown. */
+    var lastShown: List<PlayItem> = emptyList()
     private var byKey: Map<String, PlayItem> = emptyMap()
 
     /** The phone's copy of a network song (same artist, album and title), if there is one. */
@@ -100,7 +102,8 @@ private fun fmtLong(ms: Long): String {
 fun SongsTab(nav: Navigator) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var songs by remember { mutableStateOf((SongsCache.phone ?: emptyList()) + SongsCache.network) }
+    // The list as last shown (same order), so coming back keeps your place; then refreshed.
+    var songs by remember { mutableStateOf(SongsCache.lastShown) }
     val indexVer by app.vlcinterface.sources.NetIndex.version.collectAsState()
     var loading by remember { mutableStateOf(SongsCache.phone == null) }
     var netBusy by remember { mutableStateOf("") }
@@ -111,7 +114,11 @@ fun SongsTab(nav: Navigator) {
     fun sorted(l: List<PlayItem>) = l.distinctBy { it.uri }.sortedWith(compareBy<PlayItem>(
         { it.artist.ifEmpty { "￿" }.lowercase() }, { it.album.ifEmpty { "￿" }.lowercase() }, { it.trackNo }))
     // Phone songs + songs of the indexed ★ LAN folders (+ any read with "+ LAN / Internet"); a song on both = phone file.
-    LaunchedEffect(indexVer) { songs = sorted(SongsCache.all(ctx.applicationContext)); loading = false }
+    LaunchedEffect(indexVer) {
+        val fresh = sorted(SongsCache.all(ctx.applicationContext))
+        if (fresh != songs) songs = fresh
+        SongsCache.lastShown = fresh; loading = false
+    }
     // Folders pinned before indexing existed (or never indexed yet): indexed now, in the background.
     LaunchedEffect(Unit) {
         app.vlcinterface.sources.NetIndex.buildMissing()

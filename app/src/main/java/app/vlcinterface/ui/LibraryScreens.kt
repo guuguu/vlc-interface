@@ -329,9 +329,10 @@ fun InternalTab(nav: Navigator) {
 @Composable
 fun FolderScreen(nav: Navigator, folder: LocalFolder, highlight: String) {
     val ctx = LocalContext.current
-    var files by remember { mutableStateOf<List<Entry>?>(null) }
+    // Shown at once from the last listing (so coming back keeps your place), then refreshed.
+    var files by remember { mutableStateOf(ListCache.get("local:" + folder.id)) }
     var reload by remember { mutableIntStateOf(0) }
-    LaunchedEffect(folder.id, reload) { files = InternalSource.files(ctx, folder) }
+    LaunchedEffect(folder.id, reload) { files = InternalSource.files(ctx, folder).also { ListCache.put("local:" + folder.id, it) } }
     Column(Modifier.fillMaxSize()) {
         BackHeader(folder.name, nav, folder.relativePath)
         Box(Modifier.weight(1f)) {
@@ -473,17 +474,18 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
 fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
     val st by App.instance.store.state.collectAsState()
     val src = st.sources.firstOrNull { it.id == b.sourceId }
-    var entries by remember(b.uri) { mutableStateOf<List<Entry>?>(null) }
+    var entries by remember(b.uri) { mutableStateOf(ListCache.get(b.uri)) }
     var error by remember(b.uri) { mutableStateOf("") }
     var reload by remember { mutableIntStateOf(if (b.highlight == "\u0000rescan") 1 else 0) }
     var scanning by remember { mutableStateOf(false) }
     LaunchedEffect(b.uri, reload) {
-        entries = null; error = ""
+        if (reload > 0 || entries == null) entries = null
+        error = ""
         if (src == null) { error = "Source not found"; return@LaunchedEffect }
         val started = System.currentTimeMillis()
         val r = Browse.list(src, b.uri, if (reload > 0) "rescan" else "browse")
         r.onSuccess { l ->
-            entries = MusicLibrary.withCachedTags(l)
+            entries = MusicLibrary.withCachedTags(l).also { ListCache.put(b.uri, it) }
             // Tags are read only on a manual Rescan (no automatic scanning).
             if (reload > 0 && l.any { it.isAudio }) {
                 scanning = true
@@ -687,3 +689,13 @@ fun StreamsTab(nav: Navigator) {
     }
 }
 
+
+
+/** Last listing of each folder seen (in memory only): a folder you return to shows at once, at the same place. */
+object ListCache {
+    private val map = object : LinkedHashMap<String, List<Entry>>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<Entry>>?) = size > 60
+    }
+    @Synchronized fun get(k: String): List<Entry>? = map[k]
+    @Synchronized fun put(k: String, v: List<Entry>) { map[k] = v }
+}

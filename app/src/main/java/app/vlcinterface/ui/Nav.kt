@@ -105,6 +105,17 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 Modifier.fillMaxSize().background(if (isPlayer) Color.Black else C.bg)
                     .then(if (isPlayer) Modifier else Modifier.safeDrawingPadding())
             ) {
+                // Every page keeps its own scroll position (and other small state) while it stays in the back stack:
+                // coming back shows the same area, not the top of the page.
+                val holder = androidx.compose.runtime.saveable.rememberSaveableStateHolder()
+                val depth = nav.stack.size
+                val pageKey = "$depth:$top"
+                val kept = remember { HashSet<String>() }
+                LaunchedEffect(depth) {
+                    kept.filter { (it.substringBefore(':').toIntOrNull() ?: 0) > depth }.forEach { holder.removeState(it); kept.remove(it) }
+                }
+                kept += pageKey
+                holder.SaveableStateProvider(pageKey) {
                 when (top) {
                     is Screen.Library -> LibraryScreen(nav, top, openOutput)
                     is Screen.Folder -> FolderScreen(nav, top.folder, top.highlight)
@@ -126,6 +137,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.LogView -> LogViewScreen(nav, top.kind)
                     is Screen.PickCue -> PickCueScreen(nav, top)
                     is Screen.PickMedia -> PickMediaScreen(nav, top)
+                }
                 }
                 if (showOutput) OutputSheet(onDismiss = { showOutput = false })
                 // Failures of a finished ReplayGain scan pop up on whatever page is open.

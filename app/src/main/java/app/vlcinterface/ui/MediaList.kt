@@ -145,10 +145,12 @@ fun MediaList(
         }
     }
     val state = rememberLazyListState()
+    // Jump to the marked song once; coming back to this page later keeps the place you scrolled to.
+    var highlightDone by androidx.compose.runtime.saveable.rememberSaveable(highlightUri) { mutableStateOf(false) }
     LaunchedEffect(highlightUri, rows.size) {
-        if (highlightUri.isNotEmpty()) {
+        if (highlightUri.isNotEmpty() && !highlightDone) {
             val i = rows.indexOfFirst { (it as? Row0.Song)?.e?.uri == highlightUri || (it as? Row0.Video)?.e?.uri == highlightUri }
-            if (i >= 0) state.scrollToItem((i - 2).coerceAtLeast(0))
+            if (i >= 0) { state.scrollToItem((i - 2).coerceAtLeast(0)); highlightDone = true }
         }
     }
     var menuFor by remember { mutableStateOf<Entry?>(null) }
