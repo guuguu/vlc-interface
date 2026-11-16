@@ -45,6 +45,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -367,12 +371,34 @@ private fun SeekBlock(item: PlayItem) {
         val pos = (p.time - base).coerceAtLeast(0)
         // Touch / slide: a bubble over the thumb shows the time it points at, following the finger; the song keeps
         // playing and only jumps there when the finger is lifted.
-        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // A short tap (no sliding, quickly released) does not jump: it opens the "Jump to m:ss" window instead.
+        var moved by remember { mutableStateOf(false) }
+        var held by remember { mutableStateOf(false) }
+        var tapped by remember { mutableStateOf(false) }
+        var askTime by remember { mutableStateOf(false) }
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                moved = false; held = false; tapped = false
+                val t0 = down.uptimeMillis
+                while (true) {
+                    val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                    if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                    if (c.uptimeMillis - t0 > 300) held = true
+                    if (!c.pressed) { tapped = !moved && c.uptimeMillis - t0 < 300; break }
+                }
+            }
+        }) {
             val bw = maxWidth
             Slider(drag ?: if (len > 0) (pos.toFloat() / len).coerceIn(0f, 1f) else 0f, { drag = it },
-                onValueChangeFinished = { drag?.let { player.seekFraction(it) }; drag = null }, enabled = len > 0 || p.item != null,
+                onValueChangeFinished = {
+                    if (tapped) { if (len > 0) askTime = true } else drag?.let { player.seekFraction(it) }
+                    drag = null
+                }, enabled = len > 0 || p.item != null,
                 colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
-            drag?.let { f ->
+            // The bubble shows once the finger slides or stays down (not for a short tap).
+            drag?.takeIf { moved || held }?.let { f ->
                 val target = (f * len).toLong()
                 val bubbleW = 132.dp
                 val thumbX = 10.dp + (bw - 20.dp) * f
@@ -389,7 +415,47 @@ private fun SeekBlock(item: PlayItem) {
             }
         }
         Row { Text(fmtTime(pos), color = C.muted, fontSize = 13.sp); Grow(); Text("-" + fmtTime((len - pos).coerceAtLeast(0)), color = C.muted, fontSize = 13.sp) }
+        if (askTime) JumpToTimeDialog(len, onDismiss = { askTime = false }) { ms -> askTime = false; player.seekFraction(ms.toFloat() / len) }
     }
+}
+
+/** "Jump to" m:ss within the song: digits only, the ":" goes in by itself (323 → 3:23), no leading 0 on the minutes. */
+@Composable
+private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump: (Long) -> Unit) {
+    var digits by remember { mutableStateOf("") }
+    fun shown(d: String) = if (d.length <= 2) d else d.dropLast(2) + ":" + d.takeLast(2)
+    val ms: Long? = digits.takeIf { it.isNotEmpty() }?.let { d ->
+        val sec = if (d.length <= 2) d.toInt() else d.takeLast(2).toInt()
+        val min = if (d.length <= 2) 0 else d.dropLast(2).toInt()
+        if (d.length >= 3 && sec > 59) null else (min * 60L + sec) * 1000
+    }?.takeIf { it <= len }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(150); try { focus.requestFocus() } catch (_: Exception) {} }
+    AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
+        title = { Text("Jump to", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val tv = shown(digits)
+                androidx.compose.material3.OutlinedTextField(
+                    androidx.compose.ui.text.input.TextFieldValue(tv, androidx.compose.ui.text.TextRange(tv.length)),
+                    { v ->
+                        // Digits only; leading zeros dropped ("03:23" → "3:23"); at most 3 minute digits.
+                        val d = v.text.filter { it.isDigit() }.trimStart('0').take(5)
+                        digits = d
+                    },
+                    singleLine = true, placeholder = { Text("m:ss") },
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 24.sp, color = C.text),
+                    isError = digits.isNotEmpty() && ms == null,
+                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                        imeAction = androidx.compose.ui.text.input.ImeAction.Go),
+                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { ms?.let(onJump) }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus))
+                Text("0:00 – ${fmtTime(len)}", color = if (digits.isNotEmpty() && ms == null) C.bad else C.muted, fontSize = 12.sp)
+            }
+        },
+        confirmButton = { STextButton({ ms?.let(onJump) }, enabled = ms != null) { Text("Jump", color = if (ms != null) accent() else C.muted) } },
+        dismissButton = { STextButton(onDismiss) { Text("Cancel") } },
+    )
 }
 
 /** "Queue › 1h 23m 45s": time still to play in what's playing now (rest of this song + all after it), every second. */
