@@ -51,9 +51,6 @@ class FileMenuExtras(
 fun FileMenu(nav: Navigator, item: PlayItem, expanded: Boolean, onDismiss: () -> Unit, x: FileMenuExtras = FileMenuExtras()) {
     val ctx = LocalContext.current
     val player = App.instance.player
-    var addTo by remember { mutableStateOf(false) }
-    var rg by remember { mutableStateOf(false) }
-    var info by remember { mutableStateOf(false) }
     fun close(then: () -> Unit) { onDismiss(); then() }
     SDropdownMenu(expanded, onDismiss) {
         SMenuItem({ Text("▶  Play now") }, { close {
@@ -65,19 +62,34 @@ fun FileMenu(nav: Navigator, item: PlayItem, expanded: Boolean, onDismiss: () ->
             val n = player.addToQueue(listOf(item))
             android.widget.Toast.makeText(ctx, if (n == 0) "Already in the queue" else "Added to the queue", android.widget.Toast.LENGTH_SHORT).show()
         } })
-        SMenuItem({ Text("Add to playlist…") }, { close { addTo = true } })
+        SMenuItem({ Text("Add to playlist…") }, { close { FileDialogs.addTo = listOf(item) } })
         x.onSelect?.let { f -> SMenuItem({ Text("Select…") }, { close(f) }) }
         x.onMoveUp?.let { f -> SMenuItem({ Text("Move up") }, { close(f) }) }
         x.onMoveDown?.let { f -> SMenuItem({ Text("Move down") }, { close(f) }) }
         if (!item.isRadio) SMenuItem({ Text("Open song folder") }, { close { openItemFolder(nav, item) } })
-        if (!item.isRadio) SMenuItem({ Text("Tags & ReplayGain…") }, { close { info = true } })
-        if (item.isMusic) SMenuItem({ Text("ReplayGain scan…") }, { close { rg = true } })
+        if (!item.isRadio) SMenuItem({ Text("Tags & ReplayGain…") }, { close { FileDialogs.info = item } })
+        if (item.isMusic) SMenuItem({ Text("ReplayGain scan…") }, { close { FileDialogs.rg = item } })
         x.onRemove?.let { f -> SMenuItem({ Text(x.removeLabel, color = C.bad) }, { close(f) }) }
         x.onDelete?.let { f -> SMenuItem({ Text("Delete file…", color = C.bad) }, { close(f) }) }
     }
-    if (addTo) AddToPlaylistDialog({ listOf(item) }) { addTo = false }
-    if (rg) RgScanDialog(nav, { listOf(item) }) { rg = false }
-    if (info) TagInfoDialog(item) { info = false }
+}
+
+/**
+ * Windows opened from a file's menu. They live outside the menu: the menu (and often the row that showed it) goes
+ * away when an entry is tapped, and a window kept inside it would never appear.
+ */
+object FileDialogs {
+    var addTo by mutableStateOf<List<PlayItem>?>(null)
+    var rg by mutableStateOf<PlayItem?>(null)
+    var info by mutableStateOf<PlayItem?>(null)
+}
+
+/** Shows the windows asked for from file menus (placed once, at the app's root). */
+@Composable
+fun FileDialogsHost(nav: Navigator) {
+    FileDialogs.addTo?.let { l -> AddToPlaylistDialog({ l }) { FileDialogs.addTo = null } }
+    FileDialogs.rg?.let { it0 -> RgScanDialog(nav, { listOf(it0) }) { FileDialogs.rg = null } }
+    FileDialogs.info?.let { it0 -> TagInfoDialog(it0) { FileDialogs.info = null } }
 }
 
 /** Files taken out of the Library lists (folders, Songs list) with "Remove from this list" — never deleted. */
