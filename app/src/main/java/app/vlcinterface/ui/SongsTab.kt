@@ -158,8 +158,7 @@ fun SongsTab(nav: Navigator) {
         val hits = remember(query, songs) {
             val q = query.trim().lowercase()
             if (q.length < 2) emptyList() else {
-                val words = q.split(Regex("\\s+"))
-                songs.filter { s0 -> val t = "${s0.artist} ${s0.album} ${s0.title}".lowercase(); words.all { t.contains(it) } }.take(50)
+                songs.filter { s0 -> songMatches(s0, q) }.take(50)
             }
         }
         var fieldH by remember { mutableStateOf(0) }
@@ -316,4 +315,25 @@ fun QuickPlaylistDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, o
         },
         dismissButton = { STextButton({ onDone(false) }) { Text("Cancel") } },
     )
+}
+
+
+/** Lowercase, accents and punctuation dropped: "AC/DC" → "acdc", "You´ve" → "youve", "Béla" → "bela". */
+private fun searchNorm(t: String): String =
+    java.text.Normalizer.normalize(t.lowercase(), java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{M}+"), "")                     // accents
+        .replace(Regex("[´`’‘ʼ'/.\\-]"), "")                // joined marks: ac/dc, you've, a-ha
+        .replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+
+/**
+ * Search used by the Songs list, Play next and Jump to: every typed word (2 or more, any order) must appear,
+ * whole or partly, in the artist, album, title or file name — case, accents and punctuation ignored.
+ * E.g. "acd ros", "rosie acdc", "blood got".
+ */
+fun songMatches(p: PlayItem, query: String): Boolean {
+    val words = searchNorm(query).split(' ').filter { it.isNotEmpty() }
+    if (words.isEmpty()) return false
+    val hay = searchNorm("${p.artist} ${p.album} ${p.title} ${p.fileName}")
+    val joined = hay.replace(" ", "")
+    return words.all { w -> hay.contains(w) || joined.contains(w) }
 }

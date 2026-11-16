@@ -58,8 +58,7 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
     val hits = remember(query, library, queue) {
         val q = query.trim().lowercase()
         if (q.length < 2) emptyList() else {
-            val words = q.split(Regex("\\s+"))
-            fun ok(p: PlayItem) = "${p.artist} ${p.album} ${p.title}".lowercase().let { t -> words.all { t.contains(it) } }
+            fun ok(p: PlayItem) = songMatches(p, q)
             // Play next searches the whole Songs list; Jump to also looks in the queue first.
             ((if (playNext) emptyList() else queue.filter(::ok)) + (library ?: emptyList()).filter(::ok)).distinctBy { "${it.uri}#${it.startMs}" }.take(60)
         }
