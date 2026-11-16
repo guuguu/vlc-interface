@@ -87,11 +87,23 @@ object NetIndex {
     /** (Re)builds the index of one pinned folder, in the background. */
     private val building = java.util.Collections.synchronizedSet(HashSet<String>())
 
+    private val jobs = java.util.Collections.synchronizedSet(HashSet<kotlinx.coroutines.Job>())
+
+    /** Low battery: every indexing run stops (what was already indexed is kept). */
+    fun stopAll() {
+        val running = synchronized(jobs) { jobs.toList() }
+        if (running.isEmpty()) return
+        running.forEach { it.cancel() }
+        busy.value = ""
+        app.vlcinterface.data.ServerLog.log("battery", "index", "", "", false, "Indexing stopped: battery 15% or less")
+    }
+
     fun build(src: Source, pin: String) {
-        if (app.vlcinterface.player.BatteryGuard.blocked(silent = true)) return   // battery 10 % or less: no indexing
+        if (app.vlcinterface.player.BatteryGuard.busyBlocked(silent = true)) return   // battery 15 % or less: no indexing
         val k = key(src, pin)
         if (!building.add(k)) return                     // already queued / running
-        scope.launch {
+        lateinit var job: kotlinx.coroutines.Job
+        job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             try { lock.withLock {
                 val name = pin.trim('/').substringAfterLast('/')
                 busy.value = "Indexing $name…"
@@ -114,8 +126,9 @@ object NetIndex {
                         "Indexed $name: ${songs.size} songs", url)
                 }
                 busy.value = ""
-            } } finally { building.remove(k) }
+            } } finally { building.remove(k); jobs.remove(job); if (job.isCancelled) busy.value = "" }
         }
+        jobs.add(job); job.start()
     }
 
     /** Pinned folders not indexed yet (pinned before indexing existed, or never reachable so far). */

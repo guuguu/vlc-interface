@@ -43,7 +43,9 @@ object BatteryGuard {
 
     private fun update(pct: Int, charging: Boolean) {
         level = pct
+        val was = warnColour.value
         warnColour.value = !charging && pct <= 15
+        if (warnColour.value && !was) stopBackgroundWork()
         if (charging || pct > 15) { warned = false; stopped = false; low.value = false; if (charging && notice.value != 0) notice.value = 0; return }
         val player = App.instance.player
         val playing = player.state.value.item != null && player.state.value.isPlaying
@@ -69,6 +71,28 @@ object BatteryGuard {
         try { a.media.cancelAll() } catch (_: Exception) {}
         try { a.stopService(Intent(a, PlaybackService::class.java)) } catch (_: Exception) {}
         try { a.stopService(Intent(a, app.vlcinterface.sources.RgScanService::class.java)) } catch (_: Exception) {}
+    }
+
+    /**
+     * At 15 % or less (not charging) only playing is allowed: indexing, ReplayGain scans and rescans are refused
+     * (true = refused; a pop-up says why unless [silent]).
+     */
+    fun busyBlocked(silent: Boolean = false): Boolean {
+        if (!warnColour.value) return false
+        if (!silent) notice.value = 12
+        return true
+    }
+
+    /** 15 %: background work ends at once (indexing, ReplayGain scan); playback goes on. */
+    private fun stopBackgroundWork() {
+        val a = App.instance
+        try { app.vlcinterface.sources.NetIndex.stopAll() } catch (_: Exception) {}
+        try {
+            if (app.vlcinterface.sources.RgScanner.state.value.running) {
+                app.vlcinterface.sources.RgScanner.cancel()
+                a.stopService(Intent(a, app.vlcinterface.sources.RgScanService::class.java))
+            }
+        } catch (_: Exception) {}
     }
 
     /**

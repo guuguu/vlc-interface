@@ -96,7 +96,7 @@ object RgScanner {
     fun start(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescanTagged: Boolean,
               onlyWithoutRg: Boolean = false, confirmTitle: String = "") {
         if (_state.value.running) return
-        if (app.vlcinterface.player.BatteryGuard.blocked()) return     // battery 10 % or less
+        if (app.vlcinterface.player.BatteryGuard.busyBlocked()) return     // battery 15 % or less: only playing
         val music = items.filter { it.isMusic && it.startMs < 0 }.distinctBy { it.uri }
         val cueSkipped = items.count { it.isMusic && it.startMs >= 0 }
         _state.value = RgScanState(running = true, total = music.size, phase = "Preparing")

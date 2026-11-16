@@ -97,6 +97,7 @@ object InternalSource {
 
     /** Asks Android to re-index one folder (manual rescan). */
     suspend fun rescan(ctx: Context, relativePath: String) {
+        if (app.vlcinterface.player.BatteryGuard.busyBlocked()) return   // battery 15 % or less: only playing
         val dir = File(Environment.getExternalStorageDirectory(), relativePath)
         val paths = (dir.listFiles()?.map { it.absolutePath } ?: emptyList()) + dir.absolutePath
         suspendCancellableCoroutine<Unit> { cont ->
