@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 /**
  * Low battery while not charging:
  *  - 15 %: a pop-up warns that playback stops at 10 %;
- *  - 10 %: playback stops (paused, the queue and place are kept), the "screen stays on" is switched off, and a
+ *  - 10 %: every player service is ended (playback stopped, ReplayGain scan cancelled), screen-on switched off, and a
  *    pop-up says why; from then on nothing is played or started (scans, indexing) until the phone charges.
  */
 object BatteryGuard {
@@ -48,12 +48,24 @@ object BatteryGuard {
             low.value = true
             if (!stopped) {
                 stopped = true
-                if (playing) { player.pause(); notice.value = 10 }
+                val active = player.state.value.item != null || app.vlcinterface.sources.RgScanner.state.value.running
+                killServices()
+                if (active || playing) notice.value = 10
             }
         } else {
             low.value = false
             if (!warned) { warned = true; if (playing) notice.value = 15 }
         }
+    }
+
+    /** Every player / background service ends: playback stopped, ReplayGain scan cancelled, their notifications gone. */
+    private fun killServices() {
+        val a = App.instance
+        try { app.vlcinterface.sources.RgScanner.cancel() } catch (_: Exception) {}
+        try { a.player.stop() } catch (_: Exception) {}
+        try { a.media.cancelAll() } catch (_: Exception) {}
+        try { a.stopService(Intent(a, PlaybackService::class.java)) } catch (_: Exception) {}
+        try { a.stopService(Intent(a, app.vlcinterface.sources.RgScanService::class.java)) } catch (_: Exception) {}
     }
 
     /**
