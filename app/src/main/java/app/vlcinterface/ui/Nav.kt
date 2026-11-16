@@ -71,6 +71,15 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
             // Auto-rotate setting: everywhere except the video player (which turns with its own button / the video).
             val act = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
             LaunchedEffect(st.settings.autoRotate, isPlayer) { if (!isPlayer) act?.requestedOrientation = defaultOrientation() }
+            // Audio or video player on screen: the phone screen stays on (so it doesn't dim and lock) for as long as
+            // the player page is shown; any other page lets the screen time out as usual.
+            val keepOn = isPlayer || top is Screen.Music
+            androidx.compose.runtime.DisposableEffect(keepOn) {
+                val w = act?.window
+                if (keepOn) w?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                else w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                onDispose { w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+            }
             Box(
                 Modifier.fillMaxSize().background(if (isPlayer) Color.Black else C.bg)
                     .then(if (isPlayer) Modifier else Modifier.safeDrawingPadding())
