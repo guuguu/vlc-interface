@@ -160,7 +160,10 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                 DeleteDialog(listOf(f.uri), pickPath.ifEmpty { f.fileName.ifEmpty { f.title } }, 0, 1) { deleted ->
                     val path = pickPath
                     pick = null
-                    if (deleted) { forget(f.uri); note = ""; library = library?.filterNot { it.uri == f.uri }; done = path }
+                    if (deleted) {
+                        forget(f.uri); note = ""; library = library?.filterNot { it.uri == f.uri }; done = path
+                        app.vlcinterface.data.ServerLog.log(app.vlcinterface.data.ServerLog.DELETED, "delete", "phone", "", true, "Deleted $path", f.uri)
+                    }
                 }
             f.uri.startsWith("smb://") -> androidx.compose.material3.AlertDialog(onDismissRequest = { pick = null }, containerColor = C.panel,
                 title = { Text("Delete from the NAS?", color = C.bad) },
@@ -172,9 +175,18 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                             try {
                                 jcifs.smb.SmbFile(Uri.decode(target.uri), app.vlcinterface.sources.SmbProbe.fileContext(target.smbVersion, target.user, target.password, target.domain))
                                     .use { it.delete() }; true
-                            } catch (e: Exception) { note = "Not deleted: ${e.message ?: e.javaClass.simpleName}"; false }
+                            } catch (e: Exception) {
+                                note = "Not deleted: ${e.message ?: e.javaClass.simpleName}"
+                                app.vlcinterface.data.ServerLog.log(app.vlcinterface.data.ServerLog.DELETED, "delete", "SMB", target.user, false,
+                                    "Not deleted ${Uri.decode(target.uri)}: ${e.message ?: e.javaClass.simpleName}", target.uri)
+                                false
+                            }
                         }
-                        if (ok) { forget(target.uri); library = library?.filterNot { it.uri == target.uri }; done = Uri.decode(target.uri) }
+                        if (ok) {
+                            forget(target.uri); library = library?.filterNot { it.uri == target.uri }; done = Uri.decode(target.uri)
+                            app.vlcinterface.data.ServerLog.log(app.vlcinterface.data.ServerLog.DELETED, "delete", "SMB", target.user, true,
+                                "Deleted ${Uri.decode(target.uri)}", target.uri)
+                        }
                     }
                 }) { Text("Delete", color = C.bad) } },
                 dismissButton = { STextButton({ pick = null }) { Text("Cancel") } })

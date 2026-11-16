@@ -42,6 +42,8 @@ sealed interface Screen {
     data object Music : Screen
     data object Logs : Screen
     data class LogPage(val key: String) : Screen
+    /** A log made of entries from all logs: "errors", "indexing", "lan" (servers). */
+    data class LogView(val kind: String) : Screen
     /** Browse a saved source to pick a .cue file for a playlist. */
     data class PickCue(val playlistId: String, val sourceId: String, val uri: String) : Screen
     /** Choose files and folders (folders are added recursively) for a playlist. sourceId "" = start, "phone" = phone folders. */
@@ -102,6 +104,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.Music -> MusicScreen(nav, openOutput)
                     is Screen.Logs -> LogsScreen(nav)
                     is Screen.LogPage -> LogPageScreen(nav, top.key)
+                    is Screen.LogView -> LogViewScreen(nav, top.kind)
                     is Screen.PickCue -> PickCueScreen(nav, top)
                     is Screen.PickMedia -> PickMediaScreen(nav, top)
                 }

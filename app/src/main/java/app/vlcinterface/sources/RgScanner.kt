@@ -111,6 +111,15 @@ object RgScanner {
             }
             _state.value = _state.value.copy(running = false, finished = true, current = "", phase = "Done", results = results.toList(),
                 reportPending = results.any { !it.ok } || confirmTitle.isNotEmpty(), confirmTitle = confirmTitle)
+            // ReplayGain log: one line for the scan, one per file that had a problem.
+            try {
+                val L = app.vlcinterface.data.ServerLog
+                val bad = results.filter { !it.ok }
+                L.log(L.REPLAYGAIN, "scan", mode.name.lowercase(), "", bad.isEmpty(),
+                    "${confirmTitle.ifEmpty { "Scan" }}: ${music.size} files · saved ${_state.value.saved} · skipped ${_state.value.skipped} · problems ${bad.size}",
+                    "save: ${target.name.lowercase()}")
+                bad.take(200).forEach { r -> L.log(L.REPLAYGAIN, "file", "", "", false, "${r.name}: ${r.status}") }
+            } catch (_: Exception) {}
         }
     }
 

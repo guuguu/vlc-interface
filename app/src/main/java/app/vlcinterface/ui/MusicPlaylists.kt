@@ -873,7 +873,9 @@ fun SaveToNasDialog(title: String, defaultName: String, what: String, content: (
 fun LogsScreen(nav: Navigator) {
     val v by ServerLog.version.collectAsState()
     val saved by App.instance.store.state.collectAsState()
-    val servers = remember(v, saved.sources) { ServerLog.servers(saved.sources.filter { it.proto != "upnp" }.map { it.host to it.proto }) }
+    // Servers only: the app's own logs (deleted files, ReplayGain, sound engine, player) have their own pages in Settings.
+    val servers = remember(v, saved.sources) { ServerLog.servers(saved.sources.filter { it.proto != "upnp" }.map { it.host to it.proto })
+        .filter { it.key !in setOf(ServerLog.DELETED, ServerLog.REPLAYGAIN, "sound-engine", "player") } }
     val fmt = remember { SimpleDateFormat("dd MMM HH:mm", Locale.getDefault()) }
     Column(Modifier.fillMaxSize()) {
         BackHeader("Network logs", nav, "One page per server")
@@ -1068,4 +1070,38 @@ private fun PickRow(icon: String, label: String, checked: Boolean?, checkable: B
         if (icon == "▤") Text("›", color = C.muted, fontSize = 20.sp, modifier = Modifier.padding(horizontal = 8.dp))
     }
     Divider()
+}
+
+
+/**
+ * Entries gathered from every log, newest first: "errors" = everything that failed (any log), "indexing" = LAN
+ * indexing runs. Each line says which log it comes from; tap it to open that log.
+ */
+@Composable
+fun LogViewScreen(nav: Navigator, kind: String) {
+    val v by ServerLog.version.collectAsState()
+    val fmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
+    val rows = remember(v, kind) {
+        ServerLog.allKeys().flatMap { k -> ServerLog.entries(k).map { k to it } }
+            .filter { (_, e) -> when (kind) { "errors" -> !e.ok; "indexing" -> e.action == "index"; else -> true } }
+            .sortedByDescending { it.second.at }.take(1000)
+    }
+    Column(Modifier.fillMaxSize()) {
+        BackHeader(when (kind) { "errors" -> "All errors"; "indexing" -> "Indexing"; else -> "Logs" }, nav, "${rows.size} entries")
+        val state = rememberLazyListState()
+        LazyColumn(Modifier.weight(1f).scrollbar(state).padding(horizontal = 20.dp), state = state) {
+            if (rows.isEmpty()) item { Text("Nothing logged.", color = C.muted, modifier = Modifier.padding(vertical = 12.dp)) }
+            itemsIndexed(rows) { _, (k, e) ->
+                Row(Modifier.fillMaxWidth().clickable { nav.go(Screen.LogPage(k)) }.padding(vertical = 8.dp)) {
+                    Badge(if (e.ok) "✓" else "✕", e.ok)
+                    Column(Modifier.weight(1f).padding(start = 10.dp)) {
+                        Text("${fmt.format(Date(e.at))} · $k · ${e.action}", color = C.muted, fontSize = 12.sp)
+                        Text(e.message, color = C.text, fontSize = 14.sp)
+                        if (e.detail.isNotEmpty()) Text(e.detail, color = C.muted, fontSize = 12.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Divider()
+            }
+        }
+    }
 }

@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.vlcinterface.App
+import app.vlcinterface.data.ServerLog
 import app.vlcinterface.data.Settings
 import app.vlcinterface.data.Store
 import java.text.SimpleDateFormat
@@ -95,6 +96,17 @@ fun SettingsScreen(nav: Navigator) {
             CardBox {
                 ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }; Divider()
                 ValueRow("Network logs", "One page per server, with Empty log", "Open") { nav.go(Screen.Logs) }
+            }
+            // Logs, by kind. Each page has Errors only / Empty log / Share / Save to NAS.
+            SectionTitle("Logs")
+            CardBox {
+                ValueRow("All errors", "Every failure from every log, newest first", "Open") { nav.go(Screen.LogView("errors")) }; Divider()
+                ValueRow("Deleted files", "Every file deleted from Settings, with its full path", "Open") { nav.go(Screen.LogPage(ServerLog.DELETED)) }; Divider()
+                ValueRow("Network", "One page per LAN / Internet server", "Open") { nav.go(Screen.Logs) }; Divider()
+                ValueRow("Indexing", "LAN folders indexed for search (songs found, or why not)", "Open") { nav.go(Screen.LogView("indexing")) }; Divider()
+                ValueRow("ReplayGain", "Every scan, and each file that had a problem", "Open") { nav.go(Screen.LogPage(ServerLog.REPLAYGAIN)) }; Divider()
+                ValueRow("Sound engine", "The app's sound output: switches and problems", "Open") { nav.go(Screen.LogPage("sound-engine")) }; Divider()
+                ValueRow("Player", "Songs skipped (not found / not reachable)", "Open") { nav.go(Screen.LogPage("player")) }
             }
             SectionTitle("Subtitles")
             CardBox {

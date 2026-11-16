@@ -83,6 +83,13 @@ object ServerLog {
         return logged.sortedByDescending { it.last?.at ?: 0 } + empty
     }
 
+    /** Every log there is (one per server, plus "deleted-files", "replaygain", "sound-engine", "player"…). */
+    fun allKeys(): List<String> = (dir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".jsonl") }.map { it.name.removeSuffix(".jsonl") }
+
+    /** Fixed log names. */
+    const val DELETED = "deleted-files"
+    const val REPLAYGAIN = "replaygain"
+
     fun clear(key: String) {
         file(key).writeText("")
         _version.value++
