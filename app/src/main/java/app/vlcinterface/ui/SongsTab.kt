@@ -298,6 +298,14 @@ fun QuickPlaylistDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, o
         val mon = String.format(Locale.ENGLISH, "%tb", now).lowercase().take(3)
         val name = "${day}_${mon}_%02d_%02d_".format(now.get(java.util.Calendar.HOUR_OF_DAY), now.get(java.util.Calendar.MINUTE)) +
             (if (random) "random" else "${albums}album${if (albums == 1) "" else "s"}") + "_${(ms + 30_000) / 60_000}min"
+        // No duplicate lists: the same songs already saved as a playlist → that one is played, no new list.
+        val wanted = l.map { it.uri }.toSet()
+        val same = App.instance.store.current.playlists.firstOrNull { it.items.size == wanted.size && it.items.map { e -> e.uri }.toSet() == wanted }
+        if (same != null) {
+            onDone(true)
+            playPlaylist(nav, same, if (random) same.items.indices.random() else 0, random = random)
+            return
+        }
         val pl = Playlist(name = name, items = ordered.map { MusicLibrary.toPlEntry(it) })
         App.instance.store.update { st -> st.copy(playlists = st.playlists + pl) }
         onDone(true)

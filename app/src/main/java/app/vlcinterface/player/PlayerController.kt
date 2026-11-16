@@ -730,7 +730,13 @@ class PlayerController(private val context: Context, private val store: Store) {
      * songs in the order first played (no repeats), radio stations always at the end. Videos aren't counted.
      */
     private fun recordSession(item: PlayItem?) {
-        if (item != null && !item.isMusic && !item.isRadio) return
+        if (item == null || (!item.isMusic && !item.isRadio)) return
+        val st0 = _state.value
+        val set0 = store.current.settings
+        // Playing a saved playlist as it is adds nothing new: no session list is made (or changed) for it.
+        // Songs added to it (queue, play next…) still count.
+        if (st0.origin.kind == "playlist" && st0.origin.playlistId != set0.sessionPlaylistId &&
+            store.current.playlists.firstOrNull { it.id == st0.origin.playlistId }?.items?.any { it.uri == item.uri } == true) return
         val c = java.util.Calendar.getInstance()
         val day = "%04d-%02d-%02d".format(c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH) + 1, c.get(java.util.Calendar.DAY_OF_MONTH))
         val hour = c.get(java.util.Calendar.HOUR_OF_DAY)
@@ -744,7 +750,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             val radioMark = app.vlcinterface.sources.MusicLibrary.RADIO_MARK
             var songs = old.filter { it.sourceId != radioMark }
             var radios = old.filter { it.sourceId == radioMark }
-            if (item != null) {
+            run {
                 val e = app.vlcinterface.sources.MusicLibrary.toPlEntry(item)
                 if (item.isRadio) { if (radios.none { it.uri == e.uri }) radios = radios + e }
                 else if (songs.none { it.uri == e.uri && it.startMs == e.startMs }) songs = songs + e
@@ -765,7 +771,6 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (s.item == null) { playQueue(items0, 0, Origin("single")); return items0.distinctBy { qKey(it) }.size }
         val have = s.queue.map { qKey(it) }.toHashSet()
         val items = items0.filter { have.add(qKey(it)) }
-        recordSession(null)                                          // today's session playlist exists from now on
         if (items.isEmpty()) return 0
         orderedQueue = orderedQueue?.plus(items)
         _state.value = s.copy(queue = s.queue + items)
