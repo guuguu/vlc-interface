@@ -157,10 +157,14 @@ object MusicLibrary {
         smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "", fileName = e.name,
     )
 
-    fun toPlEntry(p: PlayItem) = PlEntry(p.uri, p.title, p.sourceId, p.artist, p.album, p.durationMs, p.startMs, p.endMs, p.trackNo, p.folderKey, p.fileName)
+    const val RADIO_MARK = "radio"
+
+    fun toPlEntry(p: PlayItem) = if (p.isRadio) PlEntry(p.uri, p.title, RADIO_MARK) else PlEntry(p.uri, p.title, p.sourceId, p.artist, p.album, p.durationMs, p.startMs, p.endMs, p.trackNo, p.folderKey, p.fileName)
 
     fun fromPlEntry(e: PlEntry): PlayItem {
         val src = App.instance.store.current.sources.firstOrNull { it.id == e.sourceId }
+        // Radio stations kept in playlists (session playlists) are marked with sourceId "radio".
+        if (e.sourceId == RADIO_MARK) return PlayItem(e.uri, e.title, isRadio = true)
         return PlayItem(e.uri, e.title, folderKey = e.folderKey, sourceId = e.sourceId, user = src?.user ?: "", password = src?.password ?: "",
             artist = e.artist, album = e.album, trackNo = e.trackNo, durationMs = e.durationMs, startMs = e.startMs, endMs = e.endMs,
             smbVersion = src?.smbVersion ?: "", domain = src?.domain ?: "", fileName = e.fileName.ifEmpty { fileNameOf(App.instance, e.uri) })
