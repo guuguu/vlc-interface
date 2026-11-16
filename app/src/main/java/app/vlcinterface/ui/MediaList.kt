@@ -133,7 +133,8 @@ fun MediaList(
     val scope = rememberCoroutineScope()
     // Audio / Video switch of Libraries: folders always shown, files only of the chosen kind.
     val kind = App.instance.store.state.collectAsState().value.settings.libraryKind
-    val list = remember(entries, kind) { (entries ?: emptyList()).filter { it.isDir || (if (kind == "video") it.isVideo else it.isAudio) } }
+    val hidden = App.instance.store.state.collectAsState().value.settings.hiddenUris
+    val list = remember(entries, kind, hidden) { (entries ?: emptyList()).filter { (it.isDir || (if (kind == "video") it.isVideo else it.isAudio)) && it.uri !in hidden } }
     val groups = remember(list) { MusicLibrary.group(list, folderName) }
     val order = remember(list) { MusicLibrary.playOrder(list, folderName) }
     val rows = remember(list) {
@@ -299,14 +300,11 @@ fun MediaList(
                                 if (e.artist.isNotEmpty() && e.artist != e.albumArtist) Text(e.artist, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             Text(if (e.durationMs > 0) fmtTime(e.durationMs) else "–:––", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp))
-                            Box { if (menuFor == e) EntryMenu(e, false, source, onDismiss = { menuFor = null },
-                                onPlayNext = { App.instance.player.playNext(listOf(MusicLibrary.toPlayItem(e, source, folderKey))) },
-                                onQueue = { App.instance.player.addToQueue(listOf(MusicLibrary.toPlayItem(e, source, folderKey))) },
-                                onAddPlaylist = { addTarget = { listOf(MusicLibrary.toPlayItem(e, source, folderKey)) } },
-                                onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null,
+                            // The common file menu (same on every page) + Select, Remove from this list, Delete file.
+                            Box { if (menuFor == e) FileMenu(nav, MusicLibrary.toPlayItem(e, source, folderKey), true, { menuFor = null }, FileMenuExtras(
                                 onSelect = { toggle(e) },
-                                onRgScan = { rgTarget = { listOf(MusicLibrary.toPlayItem(e, source, folderKey)) } },
-                                onInfo = { infoItem = MusicLibrary.toPlayItem(e, source, folderKey) }) }
+                                onRemove = { HiddenFiles.hide(e.uri) },
+                                onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null)) }
                         }
                     }
                     is Row0.Video -> {
@@ -320,12 +318,11 @@ fun MediaList(
                                 val meta = listOfNotNull(if (e.durationMs > 0) fmtTime(e.durationMs) else null, if (e.size > 0) "%.0f MB".format(e.size / 1e6) else null).joinToString(" · ")
                                 if (meta.isNotEmpty()) Text(meta, color = C.muted, fontSize = 12.sp)
                             }
-                            Box { if (menuFor == e) EntryMenu(e, false, source, onDismiss = { menuFor = null },
-                                onPlayNext = { App.instance.player.playNext(listOf(MusicLibrary.toPlayItem(e, source, folderKey))) },
-                                onQueue = { App.instance.player.addToQueue(listOf(MusicLibrary.toPlayItem(e, source, folderKey))) },
-                                onAddPlaylist = { addTarget = { listOf(MusicLibrary.toPlayItem(e, source, folderKey)) } },
-                                onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null,
-                                onInfo = { infoItem = MusicLibrary.toPlayItem(e, source, folderKey) }) }
+                            // The common file menu (same on every page) + Select, Remove from this list, Delete file.
+                            Box { if (menuFor == e) FileMenu(nav, MusicLibrary.toPlayItem(e, source, folderKey), true, { menuFor = null }, FileMenuExtras(
+                                onSelect = { toggle(e) },
+                                onRemove = { HiddenFiles.hide(e.uri) },
+                                onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null)) }
                         }
                     }
                 }

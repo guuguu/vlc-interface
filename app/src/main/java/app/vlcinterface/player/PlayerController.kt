@@ -765,6 +765,16 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     fun jumpTo(i: Int) { if (i in _state.value.queue.indices) startItem(i, -1) }
 
+    /** Moves a queue entry one place up (-1) or down (+1); the playing song keeps playing. */
+    fun moveInQueue(i: Int, dir: Int) {
+        val s = _state.value
+        val j = i + dir
+        if (i !in s.queue.indices || j !in s.queue.indices) return
+        val q = s.queue.toMutableList().also { val t = it[i]; it[i] = it[j]; it[j] = t }
+        val idx = when (s.index) { i -> j; j -> i; else -> s.index }
+        _state.value = s.copy(queue = q, index = idx)
+    }
+
     private var probeJob: kotlinx.coroutines.Job? = null
 
     /** Is the file there (and its network place reachable)? Quick check, done in the background. */

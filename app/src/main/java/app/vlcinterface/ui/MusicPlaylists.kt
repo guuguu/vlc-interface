@@ -117,6 +117,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     var sleepMenu by remember { mutableStateOf(false) }
     var jump by remember { mutableStateOf(false) }
     var playNextPick by remember { mutableStateOf(false) }
+    var upMenu by remember { mutableStateOf(-1) }
     val scroll = rememberScrollState()
     val meters = NativeAudio.active
     val conf = androidx.compose.ui.platform.LocalConfiguration.current
@@ -306,7 +307,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
 
                     QueueTimeLeft(item) { nav.go(Screen.Queue) } }
                 next.forEachIndexed { i, n ->
-                    Row(Modifier.fillMaxWidth().clickable { player.jumpTo(p.index + 1 + i) }.padding(vertical = if (landscape) 5.dp else 8.dp)) {
+                    Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
+                        .padding(vertical = if (landscape) 5.dp else 8.dp)) {
                         // Order number: fixed, outside the gliding text (which is clipped a little after it).
                         Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
                         Box(Modifier.width(6.dp))
@@ -317,6 +319,10 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                         LaunchedEffect(n.uri) { app.vlcinterface.sources.MediaInfo.upNextLine(ctxN.applicationContext, n)?.let { line = it } }
                         MarqueeText(line, C.text, Modifier.weight(1f).padding(end = 8.dp), fontSize = 15.sp)
                         if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
+                        Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
+                            onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
+                            onMoveDown = if (p.index + 2 + i < p.queue.size) ({ player.moveInQueue(p.index + 1 + i, 1) }) else null,
+                            removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
                     }
                 }
             }
@@ -432,6 +438,7 @@ fun QueueScreen(nav: Navigator) {
     val player = App.instance.player
     val p by player.state.collectAsState()
     var saveName by remember { mutableStateOf<String?>(null) }
+    var qMenu by remember { mutableStateOf(-1) }
     Column(Modifier.fillMaxSize()) {
         BackHeader("Queue", nav, "${p.queue.size} items") {
             if (p.queue.isNotEmpty()) STextButton({ saveName = "" }) { Text("Save as playlist", color = accent()) }
@@ -443,7 +450,7 @@ fun QueueScreen(nav: Navigator) {
             itemsIndexed(p.queue) { i, q ->
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
                     .background(if (i == p.index) accent().copy(alpha = 0.12f) else Color.Transparent)
-                    .clickable { player.jumpTo(i) }.padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    .combinedClickable(onClick = { player.jumpTo(i) }, onLongClick = { qMenu = i }).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("${i + 1}", color = if (i == p.index) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
                     Column(Modifier.weight(1f)) {
                         Text(q.title, color = if (i == p.index) accent() else C.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -451,6 +458,13 @@ fun QueueScreen(nav: Navigator) {
                     }
                     if (q.durationMs > 0) Text(fmtTime(q.durationMs), color = C.muted, fontSize = 13.sp)
                     if (i != p.index) SymButton({ player.removeFromQueue(i) }) { Text("✕", color = C.muted) }
+                    androidx.compose.foundation.layout.Box {
+                        FileMenu(nav, q, qMenu == i, { qMenu = -1 }, FileMenuExtras(
+                            onMoveUp = if (i > 0) ({ player.moveInQueue(i, -1) }) else null,
+                            onMoveDown = if (i < p.queue.size - 1) ({ player.moveInQueue(i, 1) }) else null,
+                            removeLabel = "Remove from queue",
+                            onRemove = if (i != p.index) ({ player.removeFromQueue(i) }) else null))
+                    }
                 }
             }
         }
@@ -677,15 +691,13 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                     Text(if (e.durationMs > 0) fmtTime(e.durationMs) else "–:––", color = C.muted, fontSize = 13.sp)
                     Box {
                         SymButton({ itemMenu = i }) { SymIcon(Icons.Filled.MoreVert, "Item options", tint = C.muted) }
-                        SDropdownMenu(itemMenu == i, { itemMenu = -1 }) {
-                            if (i > 0) SMenuItem({ Text("Move up") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) }; itemMenu = -1 })
-                            if (i < pl.items.size - 1) SMenuItem({ Text("Move down") }, { update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) }; itemMenu = -1 })
-                            SMenuItem({ Text("Play next") }, { App.instance.player.playNext(listOf(MusicLibrary.fromPlEntry(e))); itemMenu = -1 })
-                            SMenuItem({ Text("Select…") }, { selected = setOf(i); itemMenu = -1 })
-                            SMenuItem({ Text("ReplayGain scan…") }, { rgItems = listOf(MusicLibrary.fromPlEntry(e)); itemMenu = -1 })
-                            SMenuItem({ Text("Tags & ReplayGain…") }, { infoPl = MusicLibrary.fromPlEntry(e); itemMenu = -1 })
-                            SMenuItem({ Text("Remove from playlist", color = C.bad) }, { update { p -> p.copy(items = p.items.filterIndexed { j, _ -> j != i }) }; itemMenu = -1 })
-                        }
+                        // Same file menu as everywhere; here also Select, Move up / down and Remove from playlist.
+                        FileMenu(nav, MusicLibrary.fromPlEntry(e), itemMenu == i, { itemMenu = -1 }, FileMenuExtras(
+                            onSelect = { selected = setOf(i) },
+                            onMoveUp = if (i > 0) ({ update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i - 1, l.removeAt(i)) }) } }) else null,
+                            onMoveDown = if (i < pl.items.size - 1) ({ update { p -> p.copy(items = p.items.toMutableList().also { l -> l.add(i + 1, l.removeAt(i)) }) } }) else null,
+                            removeLabel = "Remove from playlist",
+                            onRemove = { update { p -> p.copy(items = p.items.filterIndexed { j, _ -> j != i }) } }))
                     }
                 }
             }

@@ -78,8 +78,11 @@ internal object SongsCache {
      * Phone songs + indexed LAN folders (★, only from servers reachable now) + LAN / Internet songs read in the
      * Songs list; a song on both the phone and the network = the phone file.
      */
-    suspend fun all(ctx: android.content.Context): List<PlayItem> =
-        app.vlcinterface.sources.NetIndex.preferLocal(loadPhone(ctx) + app.vlcinterface.sources.NetIndex.songsReachable() + network)
+    suspend fun all(ctx: android.content.Context): List<PlayItem> {
+        val hidden = App.instance.store.current.settings.hiddenUris
+        return app.vlcinterface.sources.NetIndex.preferLocal(loadPhone(ctx) + app.vlcinterface.sources.NetIndex.songsReachable() + network)
+            .filter { it.uri !in hidden }
+    }
 }
 
 private fun fmtLong(ms: Long): String {
@@ -103,6 +106,7 @@ fun SongsTab(nav: Navigator) {
     var selected by remember { mutableStateOf(setOf<String>()) }
     var ask by remember { mutableStateOf(false) }
     var addPl by remember { mutableStateOf<List<PlayItem>?>(null) }
+    var songMenu by remember { mutableStateOf<String?>(null) }
     fun sorted(l: List<PlayItem>) = l.distinctBy { it.uri }.sortedWith(compareBy<PlayItem>(
         { it.artist.ifEmpty { "￿" }.lowercase() }, { it.album.ifEmpty { "￿" }.lowercase() }, { it.trackNo }))
     // Phone songs + songs of the indexed ★ LAN folders (+ any read with "+ LAN / Internet"); a song on both = phone file.
@@ -197,7 +201,7 @@ fun SongsTab(nav: Navigator) {
         LaunchedEffect(focus) { if (focus.isNotEmpty()) { delay(4_000); focus = "" } }
         val indexing by app.vlcinterface.sources.NetIndex.busy.collectAsState()
         if (indexing.isNotEmpty()) Text("★ $indexing", color = accent(), fontSize = 11.sp)
-        Text("Tap songs to select them · long-press for the play time and a new playlist", color = C.muted, fontSize = 11.sp)
+        Text("Tap songs to select them · long-press: the song's menu (with songs selected: play time and a new playlist)", color = C.muted, fontSize = 11.sp)
         if (loading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
         LazyColumn(Modifier.weight(1f).scrollbar(state), state = state) {
             items(songs, key = { it.uri }) { s ->
@@ -206,11 +210,14 @@ fun SongsTab(nav: Navigator) {
                     .background(if (on) accent().copy(alpha = 0.22f) else Color.Transparent)
                     .then(if (s.uri == focus) Modifier.border(2.dp, accent(), RoundedCornerShape(6.dp)) else Modifier)
                     .combinedClickable(onClick = { selected = if (on) selected - s.uri else selected + s.uri },
-                        onLongClick = { if (selected.isEmpty()) selected = setOf(s.uri); ask = true })
+                        onLongClick = { if (selected.isNotEmpty()) ask = true else songMenu = s.uri })
                     .padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     DriftText(listOf(s.artist.ifEmpty { "Unknown artist" }, s.album.ifEmpty { "—" }, s.title).joinToString("  –  "),
                         if (on) accent() else C.text, Modifier.weight(1f))
                     Text(if (s.durationMs > 0) fmtLong(s.durationMs) else "–:––", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+                    Box { if (songMenu == s.uri) FileMenu(nav, s, true, { songMenu = null }, FileMenuExtras(
+                        onSelect = { selected = selected + s.uri },
+                        onRemove = { HiddenFiles.hide(s.uri); songs = songs.filterNot { it.uri == s.uri } })) }
                 }
             }
         }

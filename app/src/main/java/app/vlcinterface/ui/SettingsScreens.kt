@@ -130,6 +130,11 @@ fun SettingsScreen(nav: Navigator) {
             CardBox {
                 ToggleRow("Auto-rotate", "On: the app turns with the phone · Off: stays upright (videos still turn with the rotate button)", s.autoRotate) { set(s.copy(autoRotate = it)) }
             }
+            // Files taken out of lists with "Remove from this list" (never deleted): put them back.
+            if (s.hiddenUris.isNotEmpty()) CardBox {
+                ValueRow("Removed from lists", "${s.hiddenUris.size} file${if (s.hiddenUris.size == 1) "" else "s"} hidden from folders and the Songs list (not deleted)",
+                    "Show again") { HiddenFiles.showAll() }
+            }
             CardBox {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
