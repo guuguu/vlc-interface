@@ -46,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -1521,10 +1522,18 @@ private fun ToneSliders() {
     val p by player.state.collectAsState()
     @Composable
     fun row(label: String, v: Float, range: ClosedFloatingPointRange<Float>, recall: Boolean = true, onSet: (Float, Boolean) -> Unit) {
-        // Locked against accidental touches: long-press the row to unlock; it locks again 2 s after the last change.
+        // Locked against accidental touches: long-press to unlock; it locks again 10 s after the last change,
+        // or at once when the screen is locked / the app goes to the background.
         var open by remember { mutableStateOf(false) }
         var touched by remember { mutableStateOf(0L) }
-        LaunchedEffect(open, touched) { if (open) { kotlinx.coroutines.delay(2000); open = false } }
+        LaunchedEffect(open, touched) { if (open) { kotlinx.coroutines.delay(10_000); open = false } }
+        // Also locked at once when the screen is locked or the app goes to the background.
+        val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        DisposableEffect(owner) {
+            val obs = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP) open = false }
+            owner.lifecycle.addObserver(obs)
+            onDispose { owner.lifecycle.removeObserver(obs) }
+        }
         fun set(x: Float, done: Boolean) { touched = System.nanoTime(); onSet(x, done) }
         // Label above; the buttons sit on the slider's own line, centred on it.
         Column(Modifier.fillMaxWidth()) {
