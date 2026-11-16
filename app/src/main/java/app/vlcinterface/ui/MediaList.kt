@@ -459,7 +459,7 @@ fun openOrigin(nav: Navigator) {
     val item = st.item ?: return
     val o = st.origin
     when {
-        item.isRadio || o.kind == "radio" -> { nav.home(); nav.replace(Screen.Library(2, 1)) }
+        item.isRadio || o.kind == "radio" -> { nav.home(); nav.replace(Screen.Library(4, 0)) }
         o.kind == "playlist" -> { nav.home(); nav.go(Screen.PlaylistDetail(o.playlistId, item.uri)) }
         o.kind == "local" -> {
             val f = LocalFolder(o.localFolderId, o.title, o.uri, 0, o.sourceId)

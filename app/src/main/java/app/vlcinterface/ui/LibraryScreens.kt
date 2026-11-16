@@ -138,7 +138,7 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
         }
         // Audio / Video switch: every Library tab then lists only that kind of file.
         val kind = App.instance.store.state.collectAsState().value.settings.libraryKind
-        if (!(s.tab == 2 && s.sub != 0) && s.tab != 3) Scaled { Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
+        if (!(s.tab == 2 && s.sub != 0) && s.tab != 3 && s.tab != 4) Scaled { Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
             listOf("audio" to "♫  Audio", "video" to "▶  Video").forEach { (k, t) ->
                 Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(8.dp)).background(if (kind == k) accent() else Color.Transparent)
                     .clickable { App.instance.store.update { it.copy(settings = it.settings.copy(libraryKind = k)) } }, contentAlignment = Alignment.Center) {
@@ -147,14 +147,16 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
             }
         }
         } // Audio / Video switch
-        Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf("Internal", "LAN", "Internet", "Songs").forEachIndexed { i, t ->
-                Pill(t, filled = s.tab == i) { if (s.tab != i) nav.go(Screen.Library(i, s.sub)) }
+        // Internal · LAN · Internet · Radio · Songs (Radio is its own section, tab 4; shrinks to fit narrow screens).
+        AutoFitRow(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp), spacing = 8.dp) {
+            listOf(0 to "Internal", 1 to "LAN", 2 to "Internet", 4 to "Radio", 3 to "Songs").forEach { (i, t) ->
+                Pill(t, filled = s.tab == i) { if (s.tab != i) nav.go(Screen.Library(i, if (i == 2 && s.sub == 1) 0 else s.sub)) }
             }
         }
         if (s.tab == 2) Scaled {
             Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
-                listOf("Storage", "Radio", "Streams & IPTV").forEachIndexed { i, t ->
+                // Radio moved to its own section: Internet keeps Storage and Streams & IPTV (sub 0 and 2).
+                listOf(0 to "Storage", 2 to "Streams & IPTV").forEach { (i, t) ->
                     Box(Modifier.weight(1f).height(36.dp).clip(RoundedCornerShape(8.dp)).background(if (s.sub == i) Color(0xFF2A2F38) else Color.Transparent)
                         .clickable { if (s.sub != i) nav.go(Screen.Library(2, i)) }, contentAlignment = Alignment.Center) {
                         Text(t, color = if (s.sub == i) C.text else C.muted, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -167,9 +169,9 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
                 0 -> InternalTab(nav)
                 1 -> SourcesTab(nav, Zone.LAN)
                 3 -> SongsTab(nav)
+                4 -> RadioTab(nav)
                 else -> when (s.sub) {
-                    0 -> SourcesTab(nav, Zone.INTERNET)
-                    1 -> RadioTab(nav)
+                    0, 1 -> SourcesTab(nav, Zone.INTERNET)
                     else -> StreamsTab(nav)
                 }
             }
