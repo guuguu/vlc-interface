@@ -634,6 +634,20 @@ class PlayerController(private val context: Context, private val store: Store) {
     /** Same file (and same .cue track) = the same queue entry. */
     private fun qKey(it: PlayItem) = "${it.uri}#${it.startMs}"
 
+    /** Set by [loadQueue]: the first song is paused as soon as it's ready. */
+    private var startPaused = false
+
+    /**
+     * Playlists page → Load: the playlist becomes the queue, first song ready and paused (press ▶ to start).
+     * Silent while it gets ready.
+     */
+    fun loadQueue(items: List<PlayItem>, origin: Origin) {
+        if (items.isEmpty()) return
+        startPaused = true
+        NativeAudio.appVolume(0f)
+        playQueue(items, 0, origin, random = false)
+    }
+
     fun playQueue(items0: List<PlayItem>, index0: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null) {
         if (items0.isEmpty()) return
         // Duplicates are left out (first one kept); the item that was tapped stays the one that starts.
@@ -1286,6 +1300,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             MediaPlayer.Event.Playing -> {
                 _state.value = s.copy(isPlaying = true, error = "", ended = false, buffering = 100f, userPaused = false)
                 failsInRow = 0
+                if (startPaused) { startPaused = false; NativeAudio.appVolume(appVolume * fadeK); pause() }   // "Load": ready, not playing
                 // Every (re)start of playback — also resuming a paused video — re-applies the sound settings,
                 // so volume / preamp / balance always act at once, not only after some other action.
                 if (!ducked) mp.setVolume((100 * fadeK).toInt())

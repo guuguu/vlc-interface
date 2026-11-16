@@ -478,6 +478,7 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
     val p by App.instance.player.state.collectAsState()
     var newName by remember { mutableStateOf<String?>(null) }
     var status by remember { mutableStateOf("") }
+    var plMenu by remember { mutableStateOf<String?>(null) }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val text = try { ctx.contentResolver.openInputStream(uri)?.use { Cue.decode(it.readBytes()) } ?: "" } catch (_: Exception) { "" }
@@ -512,7 +513,8 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
             SectionTitle("Saved playlists")
             if (st.playlists.isEmpty()) Text("No playlists yet. Long-press a song or folder in the Library → Add to playlist, or create one here.", color = C.muted, fontSize = 14.sp)
             st.playlists.forEach { pl ->
-                CardBox(Modifier.clickable { nav.go(Screen.PlaylistDetail(pl.id)) }) {
+                // Tap opens it; long-press: Play, Random, Load (ready in the queue, not started), Add to queue, Open.
+                CardBox(Modifier.combinedClickable(onClick = { nav.go(Screen.PlaylistDetail(pl.id)) }, onLongClick = { plMenu = pl.id })) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(pl.name, color = C.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
@@ -521,6 +523,25 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
                         }
                         Pill("Play", filled = true) { playPlaylist(nav, pl, 0, random = false) }
                         Pill("Random", modifier = Modifier.padding(start = 6.dp)) { playPlaylist(nav, pl, pl.items.indices.random(), random = true) }
+                        Box {
+                            SDropdownMenu(plMenu == pl.id, { plMenu = null }) {
+                                SMenuItem({ Text("▶  Play") }, { plMenu = null; playPlaylist(nav, pl, 0, random = false) })
+                                SMenuItem({ Text("Play in random order") }, { plMenu = null; if (pl.items.isNotEmpty()) playPlaylist(nav, pl, pl.items.indices.random(), random = true) })
+                                SMenuItem({ Text("Load playlist (ready, not playing)") }, {
+                                    plMenu = null
+                                    if (pl.items.isNotEmpty()) {
+                                        App.instance.player.loadQueue(pl.items.map { MusicLibrary.fromPlEntry(it) }, Origin("playlist", playlistId = pl.id, title = pl.name))
+                                        nav.go(Screen.Music)
+                                    }
+                                })
+                                SMenuItem({ Text("Add to queue") }, {
+                                    plMenu = null
+                                    val n = App.instance.player.addToQueue(pl.items.map { MusicLibrary.fromPlEntry(it) })
+                                    android.widget.Toast.makeText(ctx, "$n added to the queue", android.widget.Toast.LENGTH_SHORT).show()
+                                })
+                                SMenuItem({ Text("Open") }, { plMenu = null; nav.go(Screen.PlaylistDetail(pl.id)) })
+                            }
+                        }
                     }
                 }
             }
