@@ -122,7 +122,7 @@ fun RgAskHost() {
                 androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.clickable { skipTagged = !skipTagged },
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     SCheckbox(skipTagged, { skipTagged = it })
-                    Text("Folder: skip files that already have ReplayGain", color = C.text, fontSize = 14.sp)
+                    Text("Folder / playlist: skip files that already have ReplayGain", color = C.text, fontSize = 14.sp)
                 }
                 STextButton({ close(); start(listOf(it0), app.vlcinterface.sources.RgMode.TRACK, it0.title) }) { Text("Scan this song", color = accent()) }
                 STextButton({
@@ -132,6 +132,14 @@ fun RgAskHost() {
                         start(folder, app.vlcinterface.sources.RgMode.ALBUMS_BY_TAGS, it0.album.ifEmpty { "this folder" })
                     }
                 }) { Text("Scan the whole folder", color = accent()) }
+                // A playlist (or a list) is loaded: scan everything in it — songs only, radio links and videos ignored.
+                val ps = App.instance.player.state.value
+                val pl = if (ps.origin.kind == "playlist") App.instance.store.current.playlists.firstOrNull { it.id == ps.origin.playlistId } else null
+                val listItems = pl?.items?.map { app.vlcinterface.sources.MusicLibrary.fromPlEntry(it) } ?: ps.queue
+                val songs = listItems.filter { it.isMusic && !it.isRadio }.distinctBy { it.uri }
+                if (songs.size > 1) STextButton({
+                    close(); start(songs, app.vlcinterface.sources.RgMode.ALBUMS_BY_TAGS, pl?.name ?: "the queue")
+                }) { Text("Scan the whole ${if (pl != null) "playlist" else "queue"} (${songs.size} songs)", color = accent()) }
                 STextButton({ close() }) { Text("Not now") }
             }
         },
