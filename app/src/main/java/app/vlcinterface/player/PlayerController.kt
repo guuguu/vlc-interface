@@ -400,6 +400,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         applySoundChain()
         toneDirty = true
         if (done) store.update { it.copy(settings = it.settings.copy(toneLoud = l, toneTreble = t)) }
+        // Radio: the values belong to the station at once (loaded whenever it is selected).
+        val item = _state.value.item
+        if (done && item?.isRadio == true) { ToneStore.put(item, l, t); toneDirty = false; _state.value = _state.value.copy(toneSaved = true) }
     }
 
     /** Radio pre-amp slider (cut only); kept for the station when the finger is lifted. */

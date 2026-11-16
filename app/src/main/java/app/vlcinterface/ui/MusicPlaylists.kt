@@ -49,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -1497,16 +1498,26 @@ private fun ToneSliders() {
     val p by player.state.collectAsState()
     @Composable
     fun row(label: String, v: Float, range: ClosedFloatingPointRange<Float>, recall: Boolean = true, onSet: (Float, Boolean) -> Unit) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            // Reset: 0 = no processing.
-            Text("0", color = if (v == 0f) C.muted else C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+        // Locked against accidental touches: long-press the row to unlock; it locks again 2 s after the last change.
+        var open by remember { mutableStateOf(false) }
+        var touched by remember { mutableStateOf(0L) }
+        LaunchedEffect(open, touched) { if (open) { kotlinx.coroutines.delay(2000); open = false } }
+        fun set(x: Float, done: Boolean) { touched = System.nanoTime(); onSet(x, done) }
+        Row(Modifier.fillMaxWidth().pointerInput(Unit) {
+            detectTapGestures(onLongPress = { open = true; touched = System.nanoTime() })
+        }, verticalAlignment = Alignment.CenterVertically) {
+            // Reset: 0 = no processing (only while unlocked).
+            Text("0", color = if (v == 0f || !open) C.muted else C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center, modifier = Modifier.size(36.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
-                    .clickable { onSet(0f, true) }.wrapContentHeight())
+                    .clickable(enabled = open) { set(0f, true) }.wrapContentHeight())
             Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
-                Text("$label  " + (if (v == 0f) "off" else "%+.1f dB".format(java.util.Locale.US, v)), color = C.muted, fontSize = 12.sp,
+                Text((if (open) "" else "🔒 ") + "$label  " + (if (v == 0f) "off" else "%+.1f dB".format(java.util.Locale.US, v)) +
+                    if (open) "" else "  · long-press to change", color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(start = 8.dp))
-                Slider(v, { x -> onSet(Math.round(x * 2) / 2f, false) }, valueRange = range, onValueChangeFinished = { onSet(v, true) },
-                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line),
+                Slider(v, { x -> set(Math.round(x * 2) / 2f, false) }, valueRange = range, onValueChangeFinished = { set(v, true) },
+                    enabled = open,
+                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line,
+                        disabledThumbColor = C.muted, disabledActiveTrackColor = accent().copy(alpha = 0.45f), disabledInactiveTrackColor = C.line),
                     modifier = Modifier.height(28.dp))
             }
             // Recall: this song's own values (dimmed when it has none).
