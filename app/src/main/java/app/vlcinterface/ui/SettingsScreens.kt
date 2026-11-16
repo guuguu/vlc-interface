@@ -55,6 +55,8 @@ fun SettingsScreen(nav: Navigator) {
     val s = st.settings
     fun set(n: Settings) = store.update { it.copy(settings = n) }
     val scroll = rememberScrollState()
+    var deleteFile by remember { mutableStateOf(false) }
+    if (deleteFile) DeleteFileDialog { deleteFile = false }
     Column(Modifier.fillMaxSize()) {
         val ctxV = LocalContext.current
         // Exact version of this build, e.g. "vlc interface 0.3.0-build29 (29)".
@@ -129,6 +131,15 @@ fun SettingsScreen(nav: Navigator) {
             SectionTitle("Look")
             CardBox {
                 ToggleRow("Auto-rotate", "On: the app turns with the phone · Off: stays upright (videos still turn with the rotate button)", s.autoRotate) { set(s.copy(autoRotate = it)) }
+            }
+            // Deleting a file for good: only here (not in the lists' menus), with a search like the Songs list / player.
+            CardBox {
+                Row(Modifier.fillMaxWidth().clickable { deleteFile = true }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Delete a file…", color = C.bad, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Search for a song and delete it from the phone or the NAS for good", color = C.bad.copy(alpha = 0.8f), fontSize = 13.sp)
+                    }
+                }
             }
             // Files taken out of lists with "Remove from this list" (never deleted): put them back.
             if (s.hiddenUris.isNotEmpty()) CardBox {

@@ -303,8 +303,7 @@ fun MediaList(
                             // The common file menu (same on every page) + Select, Remove from this list, Delete file.
                             Box { if (menuFor == e) FileMenu(nav, MusicLibrary.toPlayItem(e, source, folderKey), true, { menuFor = null }, FileMenuExtras(
                                 onSelect = { toggle(e) },
-                                onRemove = { HiddenFiles.hide(e.uri) },
-                                onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null)) }
+                                onRemove = { HiddenFiles.hide(e.uri) })) }   // deleting files: only from Settings
                         }
                     }
                     is Row0.Video -> {
@@ -321,8 +320,7 @@ fun MediaList(
                             // The common file menu (same on every page) + Select, Remove from this list, Delete file.
                             Box { if (menuFor == e) FileMenu(nav, MusicLibrary.toPlayItem(e, source, folderKey), true, { menuFor = null }, FileMenuExtras(
                                 onSelect = { toggle(e) },
-                                onRemove = { HiddenFiles.hide(e.uri) },
-                                onDelete = if (e.uri.startsWith("content://")) ({ deleteTarget = e }) else null)) }
+                                onRemove = { HiddenFiles.hide(e.uri) })) }   // deleting files: only from Settings
                         }
                     }
                 }

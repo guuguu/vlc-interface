@@ -292,7 +292,7 @@ fun InternalTab(nav: Navigator) {
                             onQueue = { scope.launch { App.instance.player.addToQueue(ofKind(MusicLibrary.collectLocal(ctx, f, true))) } },
                             onAddPlaylist = { addFolder = f },
                             onRgScan = if (st.settings.libraryKind == "audio") ({ rgFolder = f }) else null,
-                            onDelete = { scope.launch { deleteFolder = f to InternalSource.files(ctx, f, true).filter { if (st.settings.libraryKind == "video") it.isVideo else it.isAudio } } })
+                            onDelete = null)   // deleting files: only from Settings → Delete a file
                     }
                     SymButton({
                         scope.launch {
