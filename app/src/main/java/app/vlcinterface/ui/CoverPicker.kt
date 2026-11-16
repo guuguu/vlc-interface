@@ -72,7 +72,7 @@ fun CoverPicker(item: PlayItem, onNone: () -> Unit, onDone: (note: String, chang
                 val state = rememberLazyListState()
                 LazyColumn(Modifier.heightIn(max = 460.dp).scrollbar(state), state = state, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(l) { c ->
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card2).clickable { use(c) }.padding(6.dp),
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.tile).clickable { use(c) }.padding(6.dp),
                             verticalAlignment = Alignment.CenterVertically) {
                             Image(c.thumb.asImageBitmap(), null, Modifier.size(84.dp).clip(RoundedCornerShape(6.dp)), contentScale = ContentScale.Crop)
                             Column(Modifier.weight(1f).padding(start = 10.dp)) {

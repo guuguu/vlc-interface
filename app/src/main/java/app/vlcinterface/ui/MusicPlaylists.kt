@@ -1253,7 +1253,7 @@ fun OriginPickDialog(fromLabel: String, onOpen: () -> Unit, onDismiss: () -> Uni
                 val lists = st.playlists.filter { it.items.isNotEmpty() }
                 if (lists.isEmpty()) Text("No saved playlists yet.", color = C.muted, fontSize = 13.sp)
                 lists.forEach { pl ->
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.bg).padding(10.dp)) {
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.tile).padding(10.dp)) {
                         val total = pl.items.sumOf { it.durationMs }
                         Text(pl.name + if (pl.id == curId) "  (playing)" else "", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text("${pl.items.size} items" + if (total > 0) " · ${fmtTime(total)}" else "", color = C.muted, fontSize = 12.sp)

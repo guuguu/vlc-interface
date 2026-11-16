@@ -64,6 +64,8 @@ object C {
     val popup: Color get() = Color(0xFF14171C).copy(alpha = UiPrefs.popupAlpha)
     /** Long-press / ⋮ menus: their own opacity from Settings. */
     val menu: Color get() = Color(0xFF14171C).copy(alpha = UiPrefs.menuAlpha)
+    /** Rows / tiles inside pop-ups: a light wash, so the pop-up's own transparency is kept. */
+    val tile = Color.White.copy(alpha = 0.06f)
 }
 
 /** Look settings read while drawing (kept in step with Settings by the app's root). */

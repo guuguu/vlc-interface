@@ -88,7 +88,7 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
                 LazyColumn(Modifier.weight(1f, fill = false).scrollbar(st), state = st, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     items(hits) { h ->
                         val queued = "${h.uri}#${h.startMs}" in inQueue
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(C.card2)
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(C.tile)
                             .clickable { if (playNext) player.queueNext(h) else player.jumpToSong(h); onDone() }.padding(horizontal = 8.dp, vertical = 6.dp)) {
                             Text(h.title, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}" + if (queued) "  · in the queue" else "",
