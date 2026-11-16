@@ -424,10 +424,27 @@ private fun SeekBlock(item: PlayItem) {
  * a space / . / , / - / : or the keyboard's Next moves to the seconds box. The 2nd seconds digit jumps at once;
  * a time outside the song just closes the window (no error shown).
  */
+private object LastJump { var min = ""; var sec = "" }
+
 @Composable
-private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump: (Long) -> Unit) {
-    var min by remember { mutableStateOf("") }
-    var sec by remember { mutableStateOf("") }
+private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump0: (Long) -> Unit) {
+    // Opens with the last time jumped to (▶ jumps there again); typing anything clears it first.
+    var min by remember { mutableStateOf(LastJump.min) }
+    var sec by remember { mutableStateOf(LastJump.sec) }
+    var fresh by remember { mutableStateOf(LastJump.min.isNotEmpty() || LastJump.sec.isNotEmpty()) }
+    fun go() {
+        val m = min.toIntOrNull() ?: 0; val sc = sec.toIntOrNull() ?: 0
+        val target = (m * 60L + sc) * 1000
+        if ((min.isEmpty() && sec.isEmpty()) || sc > 59 || target > len) { onDismiss(); return }
+        LastJump.min = min; LastJump.sec = sec
+        onJump0(target)
+    }
+    /** First keystroke on a prefilled window: the old time goes, only the new character stays. */
+    fun typed(old: String, t: String): String {
+        if (!fresh) return t
+        fresh = false; min = ""; sec = ""
+        return if (t.length > old.length) t.last().toString() else ""
+    }
     val minF = remember { androidx.compose.ui.focus.FocusRequester() }
     val secF = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(Unit) { kotlinx.coroutines.delay(150); try { minF.requestFocus() } catch (_: Exception) {} }
@@ -440,24 +457,33 @@ private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump: (Long) ->
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
                 imeAction = if (last) androidx.compose.ui.text.input.ImeAction.None else androidx.compose.ui.text.input.ImeAction.Next),
             keyboardActions = androidx.compose.foundation.text.KeyboardActions(onNext = { secF.requestFocus() }),
-            modifier = Modifier.width(96.dp).focusRequester(f))
+            modifier = Modifier.width(84.dp).focusRequester(f))
     AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
         title = { Text("Jump to", color = C.text) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    box(min, "min", minF, false) { t ->
+                    box(min, "min", minF, false) { t0 ->
+                        val t = typed(min, t0)
                         if (t.any { it in " .,-:" }) secF.requestFocus()
                         min = t.filter { it.isDigit() }.trimStart('0').take(3)
                     }
                     Text(":", color = C.text, fontSize = 26.sp)
-                    box(sec, "sec", secF, true) { t ->
+                    box(sec, "sec", secF, true) { t0 ->
+                        val t = typed(sec, t0)
                         sec = t.filter { it.isDigit() }.take(2)
-                        if (sec.length == 2) {
-                            val m = min.toIntOrNull() ?: 0; val sc = sec.toInt()
-                            val target = (m * 60L + sc) * 1000
-                            if (sc <= 59 && target <= len) onJump(target) else onDismiss()
+                        if (sec.length == 2) go()
+                    }
+                    // Jump to the time shown (e.g. the same place again).
+                    val acc = accent()
+                    androidx.compose.foundation.Canvas(Modifier.padding(start = 6.dp).size(44.dp).clip(RoundedCornerShape(8.dp)).clickable { go() }) {
+                        val path = androidx.compose.ui.graphics.Path().apply {
+                            moveTo(size.width * 0.23f, size.height * 0.14f)
+                            lineTo(size.width * 0.86f, size.height * 0.5f)
+                            lineTo(size.width * 0.23f, size.height * 0.86f)
+                            close()
                         }
+                        drawPath(path, acc)
                     }
                 }
                 Text("0:00 – ${fmtTime(len)}", color = C.muted, fontSize = 12.sp)
