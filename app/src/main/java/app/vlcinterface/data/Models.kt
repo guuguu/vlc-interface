@@ -210,8 +210,8 @@ data class Settings(
                 o.optInt("songsScrollSpeed", 100).coerceIn(0, 300),
                 o.optBoolean("autoRotate", false),
                 o.optString("sessionDay", ""), o.optString("sessionPlaylistId", ""), o.optInt("sessionStartHour", 0),
-                o.optBoolean("sessionManual", false),
                 o.optJSONArray("sessionLog")?.let { a -> (0 until a.length()).map { PlEntry.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
+                o.optBoolean("sessionManual", false),
                 o.optJSONArray("hiddenUris")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: emptySet(),
             )
         }
