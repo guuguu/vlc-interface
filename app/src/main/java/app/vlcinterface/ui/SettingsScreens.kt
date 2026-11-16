@@ -217,19 +217,53 @@ fun SettingsScreen(nav: Navigator) {
                         .border(if (s.accent == c) 3.dp else 0.dp, Color.White, CircleShape)
                         .combinedClickable(onClick = { set(s.copy(accent = c)) }, onLongClick = { editSlot = i }))
                 }
-                if (s.customAccents.size < 3)
-                    Box(Modifier.size(34.dp).clip(CircleShape).border(2.dp, C.muted, CircleShape).clickable { editSlot = 3 }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(34.dp).clip(CircleShape).border(2.dp, C.muted, CircleShape).clickable { editSlot = 3 }, contentAlignment = Alignment.Center) {
                         Text("+", color = C.text, fontSize = 22.sp)
                     }
             }
+            var replacing by remember { mutableStateOf<Long?>(null) }   // new colour waiting for a slot (all 3 used)
             if (editSlot >= 0) {
                 val slot = editSlot
-                ColorPickDialog(s.customAccents.getOrNull(slot) ?: s.accent, onDismiss = { editSlot = -1 }) { c ->
+                val existing = slot < s.customAccents.size
+                ColorPickDialog(s.customAccents.getOrNull(slot) ?: s.accent, onDismiss = { editSlot = -1 },
+                    onRemove = if (existing) ({
+                        editSlot = -1
+                        val gone = s.customAccents[slot]
+                        set(s.copy(customAccents = s.customAccents.filterIndexed { i, _ -> i != slot },
+                            accent = if (s.accent == gone) 0xFFFF8A3D else s.accent))
+                    }) else null) { c ->
                     editSlot = -1
                     val list = s.customAccents.toMutableList()
-                    if (slot < list.size) list[slot] = c else list += c
-                    set(s.copy(customAccents = list.take(3), accent = c))
+                    when {
+                        existing -> { list[slot] = c; set(s.copy(customAccents = list, accent = c)) }
+                        list.size < 3 -> { list += c; set(s.copy(customAccents = list, accent = c)) }
+                        else -> replacing = c
+                    }
                 }
+            }
+            // All 3 slots used: tap the one to overwrite, or drop one first.
+            replacing?.let { c ->
+                AlertDialog(onDismissRequest = { replacing = null }, containerColor = C.panel,
+                    title = { Text("Overwrite which?", color = C.text) },
+                    text = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(40.dp).clip(CircleShape).background(Color(c)))
+                            Text("→", color = C.muted, fontSize = 20.sp)
+                            s.customAccents.forEachIndexed { i, old ->
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Box(Modifier.size(40.dp).clip(CircleShape).background(Color(old)).border(2.dp, Color.White, CircleShape).clickable {
+                                        replacing = null
+                                        set(s.copy(customAccents = s.customAccents.toMutableList().also { it[i] = c }, accent = c))
+                                    })
+                                    Text("Drop", color = C.bad, fontSize = 12.sp, modifier = Modifier.clickable {
+                                        set(s.copy(customAccents = s.customAccents.filterIndexed { k, _ -> k != i } + c, accent = c)); replacing = null
+                                    })
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = { STextButton({ replacing = null }) { Text("Cancel") } },
+                )
             }
             Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
         }
@@ -453,7 +487,7 @@ fun SoundSettingsScreen(nav: Navigator) {
 
 /** Colour picker: hue, saturation and brightness sliders with a preview. */
 @Composable
-fun ColorPickDialog(start: Long, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
+fun ColorPickDialog(start: Long, onDismiss: () -> Unit, onRemove: (() -> Unit)? = null, onPick: (Long) -> Unit) {
     val hsv = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(start.toInt(), it) } }
     var h by remember { mutableStateOf(hsv[0]) }
     var sat by remember { mutableStateOf(hsv[1]) }
@@ -473,6 +507,11 @@ fun ColorPickDialog(start: Long, onDismiss: () -> Unit, onPick: (Long) -> Unit) 
             }
         },
         confirmButton = { STextButton({ onPick(argb) }) { Text("Save", color = Color(argb)) } },
-        dismissButton = { STextButton(onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            Row {
+                onRemove?.let { STextButton(it) { Text("Remove", color = C.bad) } }
+                STextButton(onDismiss) { Text("Cancel") }
+            }
+        },
     )
 }
