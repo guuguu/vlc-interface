@@ -166,8 +166,8 @@ object CoverArt {
     suspend fun folderOnly(ctx: Context, item: PlayItem): Bitmap? = withContext(Dispatchers.IO) {
         val pl = place(ctx, item)
         if (!inAlbumFolder(ctx, item, pl)) {
-            val f = listOf(storeAlbum(item.artist, item.album), storeArtist(item.artist)).firstOrNull { it.exists() } ?: return@withContext null
-            return@withContext mem.get("store:" + f.name) ?: BitmapFactory.decodeFile(f.path)?.also { mem.put("store:" + f.name, it) }
+            val f = storeFind(item, item.artist, item.album) ?: return@withContext null
+            return@withContext mem.get("store:" + item.uri) ?: BitmapFactory.decodeFile(f.path)?.also { mem.put("store:" + item.uri, it) }
         }
         mem.get(pl!!.key) ?: readFolder(ctx, pl)?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.also { mem.put(pl.key, it) }
     }
@@ -187,19 +187,63 @@ object CoverArt {
         return one
     }
 
-    private fun fileSafe(s: String) = s.replace(Regex("""[\\/:*?"<>|\u0000-\u001f]"""), "_").trim().take(120)
-    private fun storeAlbum(artist: String, album: String) = File(store, fileSafe("${artist.ifBlank { "Unknown artist" }} - ${album.ifBlank { "Unknown album" }}") + ".jpg")
-    private fun storeArtist(artist: String) = File(store, fileSafe(artist.ifBlank { "Unknown artist" }) + ".jpg")
+    // Pictures store: every picture is "<uuid>.jpg"; index.json says which song it was downloaded for
+    // (song → uuid), and which album / artist it shows (so the other songs of that album use it too).
+    private val songPic = HashMap<String, String>()
+    private val keyPic = HashMap<String, String>()
+    private var indexLoaded = false
+
+    @Synchronized private fun loadIndex() {
+        if (indexLoaded) return
+        indexLoaded = true
+        try {
+            val f = File(store, "index.json")
+            if (f.exists()) {
+                val o = JSONObject(f.readText())
+                o.optJSONObject("songs")?.let { j -> j.keys().forEach { songPic[it] = j.getString(it) } }
+                o.optJSONObject("albums")?.let { j -> j.keys().forEach { keyPic[it] = j.getString(it) } }
+            }
+        } catch (_: Exception) {}
+    }
+
+    @Synchronized private fun saveIndex() {
+        try {
+            File(store, "index.json").writeText(JSONObject().put("songs", JSONObject(songPic as Map<*, *>)).put("albums", JSONObject(keyPic as Map<*, *>)).toString())
+        } catch (_: Exception) {}
+    }
+
+    private fun albumKey(artist: String, album: String) = "album:" + norm(artist) + "|" + norm(album)
+    private fun artistKey(artist: String) = "artist:" + norm(artist)
+
+    /** The stored picture for this song: its own, else its album's, else its artist's. */
+    @Synchronized private fun storeFind(item: PlayItem, artist: String, album: String): File? {
+        loadIndex()
+        return listOfNotNull(songPic[item.uri], keyPic[albumKey(artist, album)], keyPic[artistKey(artist)])
+            .map { File(store, "$it.jpg") }.firstOrNull { it.exists() }
+    }
+
+    /** Saves a picture under a new unique id, tied to the song it was downloaded for (and its album / artist). */
+    @Synchronized private fun storeSave(item: PlayItem, artist: String, album: String, isArtist: Boolean, jpeg: ByteArray): File? {
+        loadIndex()
+        val id = java.util.UUID.randomUUID().toString()
+        val f = File(store, "$id.jpg")
+        return try {
+            f.writeBytes(jpeg)
+            songPic[item.uri] = id
+            keyPic[if (isArtist) artistKey(artist) else albumKey(artist, album)] = id
+            saveIndex(); f
+        } catch (_: Exception) { null }
+    }
 
     /** For the music player: picture from the album folder — or, for songs not in a one-album folder, from the
      *  pictures store — else from the internet (album, then artist), saved back to the same place. */
     suspend fun forPlayer(ctx: Context, item: PlayItem, artist: String, album: String, online: Boolean, force: Boolean = false): Result = withContext(Dispatchers.IO) {
         val pl = place(ctx, item)
         val inFolder = inAlbumFolder(ctx, item, pl)
-        val memKey = if (inFolder) pl!!.key else "store:" + storeAlbum(artist, album).name
+        val memKey = if (inFolder) pl!!.key else "store:" + item.uri
         if (!force) mem.get(memKey)?.let { mem.put(item.uri, it); return@withContext Result(it, "") }
         val local = if (inFolder) readFolder(ctx, pl!!)
-            else listOf(storeAlbum(artist, album), storeArtist(artist)).firstOrNull { it.exists() }?.readBytes()
+            else storeFind(item, artist, album)?.readBytes()
         local?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.let { mem.put(memKey, it); mem.put(item.uri, it); return@withContext Result(it, "") }
         if (!online) return@withContext Result(null, "")
         val (bytes, name) = albumPicture(artist, album, force)?.let { it to "cover.jpg" } ?: artistPicture(artist, force)?.let { it to "artist.jpg" }
@@ -209,9 +253,8 @@ object CoverArt {
         val isArtist = name == "artist.jpg"
         val what = if (isArtist) "Artist photo" else "Album picture"
         if (!inFolder) {
-            val f = if (isArtist) storeArtist(artist) else storeAlbum(artist, album)
-            val ok = try { f.writeBytes(jpeg); true } catch (_: Exception) { false }
-            return@withContext Result(bmp, if (ok) "$what saved in the pictures folder (${f.name}) — this folder mixes albums" else "not saved")
+            val f = storeSave(item, artist, album, isArtist, jpeg)
+            return@withContext Result(bmp, if (f != null) "$what saved in the pictures folder (${f.name}) — this folder mixes albums" else "not saved")
         }
         val why = saveFolder(ctx, pl!!, name, jpeg)
         Result(bmp, if (why.isEmpty()) "$what saved in the album folder ($name)" else why)
@@ -372,10 +415,9 @@ object CoverArt {
         val pl = place(ctx, item)
         if (!inAlbumFolder(ctx, item, pl)) {
             // Not a one-album folder: the chosen picture goes to the pictures store, named after the album.
-            val f = storeAlbum(item.artist, item.album)
-            mem.put("store:" + f.name, bmp); mem.put(item.uri, bmp)
-            val ok = try { f.writeBytes(jpeg); true } catch (_: Exception) { false }
-            return@withContext Result(bmp, if (ok) "Album picture saved in the pictures folder (${f.name})" else "not saved")
+            val f = storeSave(item, item.artist, item.album, false, jpeg)
+            mem.put("store:" + item.uri, bmp); mem.put(item.uri, bmp)
+            return@withContext Result(bmp, if (f != null) "Album picture saved in the pictures folder (${f.name})" else "not saved")
         }
         mem.put(pl!!.key, bmp); mem.put(item.uri, bmp)
         val why = saveFolder(ctx, pl, "cover.jpg", jpeg)

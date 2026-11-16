@@ -129,7 +129,7 @@ fun SettingsScreen(nav: Navigator) {
                 ToggleRow("Watch folders for changes", "Off: no background file watching", s.watchFolders) { set(s.copy(watchFolders = it)) }; Divider()
                 ToggleRow("Album pictures from the internet", "For albums with no picture (MusicBrainz / Cover Art Archive); artist or band photo when the album has none (Wikimedia). Resized for the phone and saved in the album folder (cover.jpg / artist.jpg) when that folder holds one album; songs in folders mixing albums use the pictures folder below", s.coverDownload) { set(s.copy(coverDownload = it)) }
                 Divider()
-                ValueRow("Pictures folder", "For songs not in a one-album folder: \"Artist - Album.jpg\" / \"Artist.jpg\" in " +
+                ValueRow("Pictures folder", "For songs not in a one-album folder: each picture saved as <unique id>.jpg, tied to the song it was downloaded for (and its album / artist) in " +
                     app.vlcinterface.sources.CoverArt.store.path, "") {}
                 Divider()
                 val ctx = LocalContext.current
