@@ -71,7 +71,7 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onDone)
             .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.ime))
             .padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.TopCenter) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.panel)
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.popup)
                 .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
                 .padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(if (playNext) "Play next" else "Jump to song", color = C.text, fontSize = 22.sp)

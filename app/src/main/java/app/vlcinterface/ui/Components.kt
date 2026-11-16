@@ -60,6 +60,8 @@ object C {
     val muted = Color(0xFFA3A8B1)
     val ok = Color(0xFF7BD88F)
     val bad = Color(0xFFFF8F8F)
+    /** Pop-up windows and menus: 90% opaque, never a solid block. */
+    val popup = Color(0xFF14171C).copy(alpha = 0.9f)
 }
 
 val LocalAccent = staticCompositionLocalOf { Color(0xFFFF8A3D) }
@@ -344,7 +346,7 @@ val LocalMeasureOnly = androidx.compose.runtime.staticCompositionLocalOf { false
 fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = Modifier,
                   content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     if (LocalMeasureOnly.current) return
-    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier) {
+    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier, containerColor = C.popup) {
         SMenuItem(text = { Text("‹  Back", color = C.muted) }, onClick = onDismissRequest)
         content()
     }

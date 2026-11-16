@@ -135,7 +135,7 @@ fun DeleteFileDialog(onDone: () -> Unit) {
         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.ime)).padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
-            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.panel).padding(20.dp),
+            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.popup).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(if (folders) "Delete a folder" else "Delete a file", color = C.bad, fontSize = 22.sp)
                 Text(if (folders) "The folder and everything in it is removed for good — you see the full content first."

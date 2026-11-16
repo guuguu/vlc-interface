@@ -188,7 +188,7 @@ fun SongsTab(nav: Navigator) {
             if (hits.isNotEmpty()) androidx.compose.ui.window.Popup(alignment = Alignment.TopStart, offset = androidx.compose.ui.unit.IntOffset(0, fieldH + 4),
                 properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
                 val sc = androidx.compose.foundation.rememberScrollState()
-                Column(Modifier.fillMaxWidth(0.94f).heightIn(max = popMax).clip(RoundedCornerShape(10.dp)).background(C.panel)
+                Column(Modifier.fillMaxWidth(0.94f).heightIn(max = popMax).clip(RoundedCornerShape(10.dp)).background(C.popup)
                     .border(1.dp, C.line, RoundedCornerShape(10.dp)).scrollbar(sc).verticalScroll(sc).padding(4.dp)) {
                     Text("${hits.size}${if (hits.size == 50) "+" else ""} found", color = C.muted, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
                     hits.forEach { h ->

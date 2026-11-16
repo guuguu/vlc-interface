@@ -55,7 +55,7 @@ fun AlertDialog(
             .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.ime))
             .padding(horizontal = 20.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center) {
-            Column(modifier.widthIn(max = 560.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(containerColor)
+            Column(modifier.widthIn(max = 560.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(if (containerColor == C.panel) C.popup else containerColor.copy(alpha = 0.9f))
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
                 .padding(24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 CompositionLocalProvider(LocalContentColor provides C.text) {

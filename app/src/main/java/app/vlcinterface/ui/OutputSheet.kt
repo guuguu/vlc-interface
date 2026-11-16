@@ -50,7 +50,7 @@ fun OutputSheet(onDismiss: () -> Unit) {
     var vol by remember { mutableIntStateOf(router.volumePercent()) }
     LaunchedEffect(Unit) { router.refresh() }
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = C.panel) {
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet, containerColor = C.popup) {
         val scroll = rememberScrollState()
         Column(Modifier.scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
