@@ -435,7 +435,15 @@ object RgScanner {
             val check = ReplayGain.parse(tmp.inputStream().use { s -> ByteArray(512 * 1024).let { b -> val n = s.read(b); b.copyOf(maxOf(n, 0)) } } +
                 if (tmp.length() > 512 * 1024) java.io.RandomAccessFile(tmp, "r").use { r -> r.seek(tmp.length() - 65536); ByteArray(65536).also { r.readFully(it) } } else ByteArray(0))
             if (check.trackGain == null) throw IllegalStateException("tag check failed")
-            upload(ctx, item, src, tmp)
+            try { upload(ctx, item, src, tmp) } catch (e: Exception) {
+                // The playing file is locked by the server while open: let go of it for the write, then play on.
+                val m = (e.message ?: "") + " " + (e.cause?.message ?: "")
+                if (!m.contains("used by another process", true) && !m.contains("SHARING_VIOLATION", true) && !m.contains("locked", true)) throw e
+                App.instance.player.releasingFile(item.uri) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { upload(ctx, item, src, tmp) }
+                }
+                ServerLog.log(item.uri, "replaygain", item.uri.substringBefore("://").uppercase(), item.user, true, "${item.title}: file was in use by the player — released for the write, playback resumed")
+            }
             RgStore.remove(item.uri)       // the file now holds the newest values
             "written to the file"
         } catch (e: Exception) {
