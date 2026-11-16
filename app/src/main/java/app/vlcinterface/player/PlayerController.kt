@@ -665,6 +665,10 @@ class PlayerController(private val context: Context, private val store: Store) {
             i = 0
         } else orderedQueue = null
         skippedPlaces.clear()                                       // a new list: every place is tried again
+        // Today's list: the song playing until now was heard whole or cut off; a specific song picked to start
+        // with (not the first of the list, or a single file) is a choice made by hand.
+        _state.value.let { pv -> if (pv.item != null) sessionLeaving(pv.item, pv.time, pv.length) }
+        if (index0 > 0 || items0.size == 1) sessionManualChoice()
         _state.value = PlayerState(queue = q, index = i, origin = origin)
         // A playlist / folder / queue: ask about the battery setting again if it would stop playback in the background.
         if (items.size > 1) app.vlcinterface.ui.Battery.request()
@@ -743,48 +747,73 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     /**
-     * Today's session playlist — a log, never played by itself (only if you load it). Everything played today is
-     * noted from the start of the day. The list itself is made the first time something is added (queue, play next,
-     * jump to, files or folders loaded) or something is played that isn't a saved playlist as it is; it then holds
-     * everything played today so far, and keeps getting what's played and added. One per day, never two.
+     * Today's session playlist: made when the first song of the day plays and filled with every song played
+     * through to its end (a song skipped before its end is taken out again, unless it was heard whole earlier
+     * today), plus everything added. It's kept only if something was chosen by hand during the day — songs added,
+     * a specific song picked, a song skipped; a day of plain listening leaves no list (removed the next day).
+     * One per day, never two; a normal playlist you can play, but it never starts by itself.
      */
-    private fun session(played: PlayItem?, added: List<PlayItem>) {
+    private fun session(played: PlayItem?, added: List<PlayItem>, manual: Boolean = added.isNotEmpty()) {
         val add = added.filter { it.isMusic || it.isRadio }
-        if ((played == null || (!played.isMusic && !played.isRadio)) && add.isEmpty()) return
-        val st0 = _state.value
-        val set0 = store.current.settings
-        // A saved playlist played as it is: noted in today's log, but makes no list by itself.
-        val asIs = played != null && add.isEmpty() && st0.origin.kind == "playlist" && st0.origin.playlistId != set0.sessionPlaylistId &&
-            store.current.playlists.firstOrNull { it.id == st0.origin.playlistId }?.items?.any { it.uri == played.uri } == true
         val c = java.util.Calendar.getInstance()
         val day = "%04d-%02d-%02d".format(c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH) + 1, c.get(java.util.Calendar.DAY_OF_MONTH))
         val hour = c.get(java.util.Calendar.HOUR_OF_DAY)
         val playedE = played?.takeIf { it.isMusic || it.isRadio }?.let { listOf(app.vlcinterface.sources.MusicLibrary.toPlEntry(it)) } ?: emptyList()
         val addE = add.map { app.vlcinterface.sources.MusicLibrary.toPlEntry(it) }
-        store.update { st ->
-            val set = st.settings
+        if (playedE.isEmpty() && addE.isEmpty() && !manual) return
+        store.update { st0 ->
+            var st = st0
+            var set = st.settings
             val newDay = set.sessionDay != day
-            val log = sessionMerge(if (newDay) emptyList() else set.sessionLog, playedE)
-            val startH = if (newDay) hour else set.sessionStartHour
-            val cur = if (newDay) null else st.playlists.firstOrNull { it.id == set.sessionPlaylistId }
+            if (newDay) {
+                // Yesterday's list without anything chosen by hand: not kept.
+                if (!set.sessionManual && set.sessionPlaylistId.isNotEmpty())
+                    st = st.copy(playlists = st.playlists.filterNot { it.id == set.sessionPlaylistId })
+                set = set.copy(sessionDay = day, sessionPlaylistId = "", sessionStartHour = hour, sessionLog = emptyList(), sessionManual = false)
+                completedToday.clear()
+            }
+            val log = sessionMerge(set.sessionLog, playedE)
+            set = set.copy(sessionLog = log, sessionManual = set.sessionManual || manual)
             val name = "%02d_%02d_%02d_%02d_%02d_session".format(c.get(java.util.Calendar.YEAR) % 100, c.get(java.util.Calendar.MONTH) + 1,
-                c.get(java.util.Calendar.DAY_OF_MONTH), startH, hour)
-            val baseSet = set.copy(sessionDay = day, sessionLog = log, sessionStartHour = startH,
-                sessionPlaylistId = if (newDay) "" else set.sessionPlaylistId)
+                c.get(java.util.Calendar.DAY_OF_MONTH), set.sessionStartHour, hour)
+            val cur = st.playlists.firstOrNull { it.id == set.sessionPlaylistId }
             when {
                 cur != null -> {
                     val items = sessionMerge(cur.items, playedE + addE)
-                    st.copy(settings = baseSet, playlists = if (cur.name == name && cur.items == items) st.playlists
+                    st.copy(settings = set, playlists = if (cur.name == name && cur.items == items) st.playlists
                         else st.playlists.map { if (it.id == cur.id) it.copy(name = name, items = items) else it })
                 }
-                asIs || (addE.isEmpty() && playedE.isEmpty()) -> st.copy(settings = baseSet)
+                playedE.isEmpty() && addE.isEmpty() -> st.copy(settings = set)
                 else -> {
                     val pl = app.vlcinterface.data.Playlist(name = name, items = sessionMerge(log, addE))
-                    st.copy(playlists = st.playlists + pl, settings = baseSet.copy(sessionPlaylistId = pl.id))
+                    st.copy(playlists = st.playlists + pl, settings = set.copy(sessionPlaylistId = pl.id))
                 }
             }
         }
     }
+
+    /** Songs heard to (almost) their end today: never taken out of today's list by a later skip. */
+    private val completedToday = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /**
+     * Leaving a song: heard to its end (90 % or more) → stays in today's list; skipped before → taken out of it
+     * (and the skip counts as a choice made by hand).
+     */
+    private fun sessionLeaving(prev: PlayItem?, time: Long, length: Long) {
+        if (prev == null || (!prev.isMusic && !prev.isRadio) || prev.isRadio) return
+        val len = if (prev.endMs > 0) prev.endMs - prev.startMs else length
+        val pos = time - maxOf(prev.startMs, 0L)
+        if (len > 0 && pos >= len * 9 / 10) { completedToday += prev.uri; return }
+        if (prev.uri in completedToday) return
+        store.update { st ->
+            val id = st.settings.sessionPlaylistId
+            st.copy(settings = st.settings.copy(sessionLog = st.settings.sessionLog.filterNot { it.uri == prev.uri }, sessionManual = true),
+                playlists = st.playlists.map { if (it.id == id) it.copy(items = it.items.filterNot { e -> e.uri == prev.uri }) else it })
+        }
+    }
+
+    /** A song picked by hand (jump to, tap in the queue / Up next, skip): today's list is kept. */
+    private fun sessionManualChoice() = session(null, emptyList(), manual = true)
 
     /** Adds to the end of the queue; returns how many were new (songs already in the queue aren't added twice). */
     fun addToQueue(items0: List<PlayItem>): Int {
@@ -807,7 +836,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = s.copy(queue = q, index = if (i < s.index) s.index - 1 else s.index)
     }
 
-    fun jumpTo(i: Int) { if (i in _state.value.queue.indices) startItem(i, -1) }
+    fun jumpTo(i: Int) { if (i in _state.value.queue.indices) { sessionManualChoice(); startItem(i, -1) } }
 
     /** Moves a queue entry one place up (-1) or down (+1); the playing song keeps playing. */
     fun moveInQueue(i: Int, dir: Int) {
@@ -865,6 +894,7 @@ class PlayerController(private val context: Context, private val store: Store) {
      */
     fun jumpToSong(item: PlayItem) {
         val s = _state.value
+        sessionManualChoice()
         if (s.queue.none { qKey(it) == qKey(item) }) session(null, listOf(item))
         val at = s.queue.indexOfFirst { qKey(it) == qKey(item) }
         if (at >= 0) { startItem(at, -1); return }
@@ -893,12 +923,14 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     fun next(): Boolean {
+        sessionManualChoice()
         val s = _state.value
         val n = nextIndex(s, manual = true) ?: return false
         startItem(n, -1); return true
     }
 
     fun prev() {
+        sessionManualChoice()
         val s = _state.value
         val item = s.item ?: return
         if (mp.time > 4000 || s.index <= 0) { seekTo(if (item.startMs >= 0) item.startMs else 0); return }
@@ -928,6 +960,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun startItem(i0: Int, startAt: Long) {
         saveProgress()
         var i = i0
+        // Today's list: the song being left was heard whole, or skipped (then it's taken out).
+        _state.value.let { pv -> if (pv.item != null && pv.queue.getOrNull(i0) !== pv.item) sessionLeaving(pv.item, pv.time, pv.length) }
         // Songs from a place the user chose to skip: passed over without trying.
         if (skippedPlaces.isNotEmpty()) {
             val q = _state.value.queue
