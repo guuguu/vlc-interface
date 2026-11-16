@@ -373,6 +373,16 @@ class PlayerController(private val context: Context, private val store: Store) {
         try {
             if (l == 0f && t == 0f && preamp == 0f) { mp.setEqualizer(null); return }
             val e = eq ?: MediaPlayer.Equalizer.create().also { eq = it }
+            val g = toneGains(l, t)
+            for (b in 0 until 10) e.setAmp(b, g[b])
+            e.setPreAmp(preamp.coerceIn(-20f, 20f))
+            mp.setEqualizer(e)
+        } catch (_: Exception) {
+        }
+    }
+
+    /** Band gains (10 bands, all ≤ 0 dB) for loudness [l] and treble [t]. */
+    private fun toneGains(l: Float, t: Float): FloatArray {
             val loud = Iso226.cuts(l)              // ISO 226:2003 equal-loudness compensation, as cuts
             // Treble acts from 8 kHz up: an S-curve on a log-frequency scale from 0 at 8 kHz to full at 16 kHz
             // (bands below 8 kHz take the 8 kHz value). The curve's shape follows the setting, not just its depth:
@@ -384,18 +394,23 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val xa = x.pow(steep); val ya = (1 - x).pow(steep)
                 (if (xa + ya == 0.0) 0.0 else xa / (xa + ya)).toFloat()
             }
-            for (b in 0 until 10) {
-                val loudCut = loud[b]
+            return FloatArray(10) { b ->
                 val trebleCut = if (t >= 0f) -t * (1f - highShape[b]) else t * highShape[b]
-                e.setAmp(b, (loudCut + trebleCut).coerceIn(-20f, 0f))
+                (loud[b] + trebleCut).coerceIn(-20f, 0f)
             }
-            // Treble up lowers everything below 8 kHz (most of the music's level): half of that drop is given back
-            // through the pre-amp. Treble down only cuts the top (little level lost): nothing given back.
-            val trebleMakeup = if (t > 0f) t * 0.5f else 0f
-            e.setPreAmp((preamp + trebleMakeup).coerceIn(-20f, 20f))
-            mp.setEqualizer(e)
-        } catch (_: Exception) {
-        }
+    }
+
+    /**
+     * How much the overall level drops with these loudness / treble settings (dB, ≥ 0): the band gains weighted by
+     * a typical music spectrum (about equal energy per octave, less at the very top).
+     */
+    private fun toneLevelDrop(l: Float, t: Float): Float {
+        if (l == 0f && t == 0f) return 0f
+        val w = floatArrayOf(1f, 1f, 1f, 1f, 1f, 1f, 0.7f, 0.4f, 0.2f, 0.1f)
+        val g = toneGains(l, t)
+        var p = 0.0; var sw = 0.0
+        for (b in 0 until 10) { p += w[b] * 10.0.pow(g[b] / 10.0); sw += w[b] }
+        return (-10 * log10(p / sw)).toFloat().coerceAtLeast(0f)
     }
 
     /**
@@ -427,7 +442,13 @@ class PlayerController(private val context: Context, private val store: Store) {
     /** Slider moved (live); [done] = finger lifted. Kept as the "last values" too. */
     fun setTone(loud: Float, treble: Float, done: Boolean) {
         val l = loud.coerceIn(0f, 15f); val t = treble.coerceIn(-5f, 5f)
-        _state.value = _state.value.copy(loudDb = l, trebleDb = t)
+        // The Preamp follows so the overall level (VU meters) stays where it was: up by the drop Loudness / Treble
+        // cause, back down when they're reduced or switched off.
+        val s0 = _state.value
+        val delta = toneLevelDrop(l, t) - toneLevelDrop(s0.loudDb, s0.trebleDb)
+        val pre = (s0.radioPreDb + delta).coerceIn(-12f, 12f)
+        _state.value = s0.copy(loudDb = l, trebleDb = t, radioPreDb = pre)
+        if (done) s0.item?.let { ToneStore.putPre(it.uri, pre) }
         applySoundChain()
         toneDirty = true
         if (done) store.update { it.copy(settings = it.settings.copy(toneLoud = l, toneTreble = t)) }
@@ -453,7 +474,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         val item = _state.value.item ?: return
         val v = ToneStore.get(item)?.let { it.first to it.second.coerceIn(-5f, 5f) } ?: return
         toneDirty = false
-        _state.value = _state.value.copy(loudDb = v.first, trebleDb = v.second)
+        // The song's own preamp comes back with its loudness / treble (it was set together with them).
+        _state.value = _state.value.copy(loudDb = v.first, trebleDb = v.second, radioPreDb = ToneStore.getPre(item.uri) ?: _state.value.radioPreDb)
         applySoundChain()
         store.update { it.copy(settings = it.settings.copy(toneLoud = v.first, toneTreble = v.second)) }
     }
