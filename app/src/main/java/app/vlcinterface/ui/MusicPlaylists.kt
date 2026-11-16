@@ -58,6 +58,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1526,9 +1527,7 @@ private fun ToneSliders() {
         LaunchedEffect(open, touched) { if (open) { kotlinx.coroutines.delay(2000); open = false } }
         fun set(x: Float, done: Boolean) { touched = System.nanoTime(); onSet(x, done) }
         // Label above; the buttons sit on the slider's own line, centred on it.
-        Column(Modifier.fillMaxWidth().pointerInput(Unit) {
-            detectTapGestures(onLongPress = { open = true; touched = System.nanoTime() })
-        }) {
+        Column(Modifier.fillMaxWidth()) {
             Text((if (open) "" else "🔒 ") + "$label " + (if (v == 0f) "off" else "%+.1f".format(java.util.Locale.US, v)),
                 color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(start = 40.dp))
@@ -1537,11 +1536,53 @@ private fun ToneSliders() {
                 Text("0", color = if (v == 0f || !open) C.muted else C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center, modifier = Modifier.size(28.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
                         .clickable(enabled = open) { set(0f, true) }.wrapContentHeight())
-                Slider(v, { x -> set(Math.round(x * 2) / 2f, false) }, valueRange = range, onValueChangeFinished = { set(v, true) },
-                    enabled = open,
-                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line,
-                        disabledThumbColor = C.muted, disabledActiveTrackColor = accent().copy(alpha = 0.45f), disabledInactiveTrackColor = C.line),
-                    modifier = Modifier.weight(1f).height(28.dp).padding(horizontal = 6.dp))
+                // The slider only draws; touches are handled here so that one gesture can unlock and move:
+                // hold until it unlocks (long-press), then slide without lifting the finger. Unlocked: tap or slide.
+                val dens = androidx.compose.ui.platform.LocalDensity.current
+                val inset = with(dens) { 16.dp.toPx() }       // padding 6 dp + half the thumb
+                val vNow by rememberUpdatedState(v)
+                val openNow by rememberUpdatedState(open)
+                val setNow by rememberUpdatedState<(Float, Boolean) -> Unit> { x, d -> set(x, d) }
+                fun valueAt(x: Float, w: Int): Float {
+                    val f = ((x - inset) / (w - 2 * inset)).coerceIn(0f, 1f)
+                    return Math.round((range.start + f * (range.endInclusive - range.start)) * 2) / 2f
+                }
+                Box(Modifier.weight(1f).height(28.dp).pointerInput(range) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        if (!openNow) {
+                            // Locked: wait for the long-press (moving or lifting first cancels).
+                            val ended = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                                var done = false
+                                while (!done) {
+                                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                                    done = c == null || !c.pressed || (c.position - down.position).getDistance() > viewConfiguration.touchSlop
+                                }
+                                true
+                            }
+                            if (ended != null) return@awaitEachGesture
+                            open = true
+                        }
+                        touched = System.nanoTime()
+                        var last = valueAt(down.position.x, size.width)
+                        setNow(last, false)
+                        while (true) {
+                            val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                            if (!c.pressed) break
+                            c.consume()
+                            val nv = valueAt(c.position.x, size.width)
+                            if (nv != last) { last = nv; setNow(nv, false) }
+                        }
+                        setNow(last, true)
+                    }
+                }) {
+                    Slider(vNow, {}, valueRange = range, enabled = false,
+                        colors = SliderDefaults.colors(
+                            disabledThumbColor = if (open) Color.White else C.muted,
+                            disabledActiveTrackColor = if (open) accent() else accent().copy(alpha = 0.45f),
+                            disabledInactiveTrackColor = C.line),
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp))
+                }
                 // Recall: this song's own values (dimmed when it has none).
                 if (!recall) Box(Modifier.size(28.dp)) else
                 Text("↺", color = if (p.toneSaved) accent() else C.muted.copy(alpha = 0.5f), fontSize = 16.sp, textAlign = TextAlign.Center,
