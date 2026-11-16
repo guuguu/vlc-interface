@@ -25,6 +25,13 @@ class App : Application() {
         instance = this
         store = Store(this)
         ServerLog.init(this)
+        app.vlcinterface.data.CrashLog.init(this)        // crashes now, and why the app ended last time
+        app.vlcinterface.data.CrashLog.state = {
+            val s = player.state.value
+            "Playing: ${s.item?.title ?: "nothing"} (${s.item?.uri ?: ""})\nOutput: " +
+                (if (app.vlcinterface.player.NativeAudio.active) "app output" else "libVLC (" + app.vlcinterface.player.NativeAudio.reason + ")") +
+                "\nApp version: $VERSION"
+        }
         TagCache.init(this)
         app.vlcinterface.sources.RgStore.init(this)
         app.vlcinterface.player.BatteryGuard.init(this)   // 15 % warning, stop at 10 %

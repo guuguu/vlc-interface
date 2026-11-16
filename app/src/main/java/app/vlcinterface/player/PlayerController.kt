@@ -574,7 +574,12 @@ class PlayerController(private val context: Context, private val store: Store) {
             return
         }
         appRetries++
-        ServerLog.log("sound-engine", "sound", "AAudio", "", true, "Bringing the app output back (try $appRetries of 2) after: $reason")
+        // When and on what it happened: the song, the device, the phone's state — to find the pattern later.
+        val st = _state.value
+        val where = "Song: ${st.item?.title ?: "-"} (${st.item?.uri ?: ""})\nDevice: $currentOutputName\nPosition: ${fmtMs(st.time)}" +
+            "\nBattery: ${BatteryGuard.level} % · screen ${if ((context.getSystemService(android.os.PowerManager::class.java))?.isInteractive == true) "on" else "off"}" +
+            "\nNative stats: ${NativeAudio.stats() ?: "-"}"
+        ServerLog.log("sound-engine", "sound", "AAudio", "", true, "Bringing the app output back (try $appRetries of 2) after: $reason", where)
         main.postDelayed({
             if (store.current.settings.soundEngine != "libvlc" && !NativeAudio.active) applySoundEngine()
         }, 1000)
@@ -1939,3 +1944,6 @@ fun splitNowPlaying(np: String): Pair<String, String> {
     val i = listOf(" - ", " – ", " — ").map { t.indexOf(it) }.filter { it > 0 }.minOrNull() ?: return "" to t
     return t.substring(0, i).trim() to t.substring(i + 3).trim()
 }
+
+
+private fun fmtMs(ms: Long): String { val t = ms / 1000; return "%d:%02d".format(t / 60, t % 60) }
