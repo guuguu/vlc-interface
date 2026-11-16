@@ -770,7 +770,7 @@ fun PickCueScreen(nav: Navigator, p: Screen.PickCue) {
     if (r != null && pl != null) CueSummaryDialog(r, pl) { result = null; nav.back() }
 }
 
-internal suspend fun readBytes(src: Source, uri: String): ByteArray? = withContext(Dispatchers.IO) {
+private suspend fun readBytes(src: Source, uri: String): ByteArray? = withContext(Dispatchers.IO) {
     try {
         when {
             uri.startsWith("smb://") -> SmbFile(android.net.Uri.decode(uri), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain)).openInputStream().use { it.readBytes() }
