@@ -1531,46 +1531,68 @@ fun stationQuality(meta: String): String =
     } ?: Regex("""\b(MP3|AAC\+?|OGG|OPUS|FLAC)\b""", RegexOption.IGNORE_CASE).find(meta)?.value?.uppercase() ?: ""
 
 
-/** A station's details: name, link, style, bitrate, codec, country, what it announces now, its pre-amp. */
+/**
+ * Everything known about a station, in three parts — saved in the app, reported live by the stream (while it
+ * plays), and listed in the radio directory. Tap a line to copy its value; text can also be selected; Copy all
+ * copies the whole report.
+ */
 @Composable
 fun StationDetailsDialog(station: app.vlcinterface.data.Station, onDone: () -> Unit) {
     val p by App.instance.player.state.collectAsState()
     val ctx = LocalContext.current
-    val parts = station.meta.split(" · ").map { it.trim() }.filter { it.isNotEmpty() }
-    val q = stationQuality(station.meta)
-    val style = parts.firstOrNull { !it.contains("kbps", true) && it.length > 2 && it != parts.lastOrNull() } ?: ""
-    val country = parts.lastOrNull()?.takeIf { it.length == 2 } ?: ""
     val playing = p.item?.uri == station.url
-    val rows = listOfNotNull(
-        "Name" to station.name,
-        if (playing && p.stationName.isNotBlank()) "Announces itself as" to p.stationName else null,
-        "Link" to station.url,
-        if (style.isNotEmpty()) "Style" to style else null,
-        if (q.isNotEmpty()) "Bitrate / codec" to q else null,
-        if (country.isNotEmpty()) "Country" to country else null,
-        if (playing && p.nowPlaying.isNotBlank()) "Playing now" to p.nowPlaying else null,
-        "Preamp" to ((app.vlcinterface.player.ToneStore.getPre(station.url) ?: 0f).let { if (it == 0f) "0 dB (none)" else "%.1f dB".format(java.util.Locale.US, it) }),
+    val saved = buildList {
+        add("Name" to station.name)
+        add("Link" to station.url)
+        station.meta.takeIf { it.isNotBlank() }?.let { add("Saved details" to it) }
+        stationQuality(station.meta).takeIf { it.isNotEmpty() }?.let { add("Bitrate / codec" to it) }
+        station.favicon.takeIf { it.isNotBlank() }?.let { add("Logo" to it) }
+        add("Preamp" to ((app.vlcinterface.player.ToneStore.getPre(station.url) ?: 0f).let { if (it == 0f) "0 dB (none)" else "%.1f dB".format(java.util.Locale.US, it) }))
         app.vlcinterface.player.ToneStore.get(app.vlcinterface.player.PlayItem(station.url, station.name, isRadio = true))?.let { (l, t) ->
-            "Loudness / treble" to "%+.1f / %+.1f dB".format(java.util.Locale.US, l, t) },
-    )
+            add("Loudness / treble" to "%+.1f / %+.1f dB".format(java.util.Locale.US, l, t)) }
+        if (playing) add("Listening for" to fmtTime(p.time))
+    }
+    // Live: refreshed every 2 s while open.
+    var live by remember { mutableStateOf(emptyList<Pair<String, String>>()) }
+    LaunchedEffect(playing) { while (playing) { live = App.instance.player.streamInfo(); kotlinx.coroutines.delay(2000) } }
+    var dir by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
+    LaunchedEffect(station.url) { dir = app.vlcinterface.sources.RadioBrowser.details(station.url) }
+    fun copy(text: String, what: String) {
+        ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("station", text))
+        android.widget.Toast.makeText(ctx, "$what copied", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    fun report(): String = buildString {
+        append("Station: ${station.name}\n")
+        saved.forEach { (k, v) -> append("$k: $v\n") }
+        if (live.isNotEmpty()) { append("\nLive stream\n"); live.forEach { (k, v) -> append("$k: $v\n") } }
+        dir?.takeIf { it.isNotEmpty() }?.let { append("\nRadio directory\n"); it.forEach { (k, v) -> append("$k: $v\n") } }
+    }
+    @Composable
+    fun section(title: String, rows: List<Pair<String, String>>) {
+        Text(title, color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+        rows.forEach { (k, v) ->
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { copy(v, k) }.padding(vertical = 3.dp)) {
+                Text(k, color = C.muted, fontSize = 12.sp)
+                Text(v, color = C.text, fontSize = 14.sp)
+            }
+        }
+    }
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
         title = { Text("Station details", color = C.text) },
         text = {
-            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                rows.forEach { (k, v) ->
-                    Column {
-                        Text(k, color = C.muted, fontSize = 12.sp)
-                        Text(v, color = C.text, fontSize = 14.sp)
+            androidx.compose.foundation.text.selection.SelectionContainer {
+                Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Tap a line to copy it.", color = C.muted, fontSize = 12.sp)
+                    section("In the app", saved)
+                    if (playing) section("Live stream", live.ifEmpty { listOf("Stream" to "waiting for the stream to report…") })
+                    when (val d = dir) {
+                        null -> section("Radio directory", listOf("Directory" to "looking up…"))
+                        else -> section("Radio directory", d.ifEmpty { listOf("Directory" to "not listed in radio-browser.info") })
                     }
                 }
             }
         },
         confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
-        dismissButton = {
-            STextButton({
-                ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("station", station.url))
-                android.widget.Toast.makeText(ctx, "Link copied", android.widget.Toast.LENGTH_SHORT).show()
-            }) { Text("Copy link") }
-        },
+        dismissButton = { STextButton({ copy(report(), "Details") }) { Text("Copy all") } },
     )
 }

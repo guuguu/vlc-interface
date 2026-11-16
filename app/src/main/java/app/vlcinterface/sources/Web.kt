@@ -146,6 +146,34 @@ data class RadioStation(
 object RadioBrowser {
     private const val BASE = "https://all.api.radio-browser.info/json"
 
+    /**
+     * Everything the radio directory knows about a station (looked up by its stream address):
+     * label → value, empty values left out.
+     */
+    suspend fun details(url: String): List<Pair<String, String>> = withContext(Dispatchers.IO) {
+        try {
+            val u = Uri.parse("$BASE/stations/byurl").buildUpon().appendQueryParameter("url", url).build().toString()
+            val o = Net.http.newCall(Request.Builder().url(u).header("User-Agent", Net.UA).build()).execute().use { r ->
+                if (!r.isSuccessful) return@withContext emptyList()
+                JSONArray(r.body?.string() ?: "[]").optJSONObject(0)
+            } ?: return@withContext emptyList()
+            val labels = listOf(
+                "name" to "Directory name", "homepage" to "Homepage", "url" to "Stream address (listed)",
+                "url_resolved" to "Stream address (resolved)", "favicon" to "Logo", "tags" to "Tags / style",
+                "country" to "Country", "countrycode" to "Country code", "state" to "Region", "language" to "Language",
+                "languagecodes" to "Language codes", "codec" to "Codec", "bitrate" to "Bitrate (kbps)", "hls" to "HLS stream",
+                "votes" to "Votes", "clickcount" to "Plays (last day)", "clicktrend" to "Play trend", "lastcheckok" to "Online at last check",
+                "lastchecktime_iso8601" to "Last checked", "lastchangetime_iso8601" to "Last changed", "ssl_error" to "SSL error",
+                "geo_lat" to "Latitude", "geo_long" to "Longitude", "has_extended_info" to "Extended info", "stationuuid" to "Directory ID",
+            )
+            labels.mapNotNull { (k, l) ->
+                val v = o.opt(k)?.toString()?.trim().orEmpty()
+                if (v.isEmpty() || v == "null" || (k == "bitrate" && v == "0")) null
+                else l to when (k) { "hls", "lastcheckok", "ssl_error", "has_extended_info" -> if (v == "1" || v == "true") "yes" else "no"; else -> v }
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
     suspend fun search(name: String = "", tag: String = "", country: String = "", limit: Int = 60,
                        bitrateMin: Int = 0, bitrateMax: Int = 0, language: String = "", codec: String = "",
                        order: String = "clickcount"): Result<List<RadioStation>> =

@@ -836,6 +836,42 @@ class PlayerController(private val context: Context, private val store: Store) {
         playQueue(favs.map { PlayItem(it.url, it.name, isRadio = true) }, i, Origin("radio", "", url, "Favourite stations"), keepOrder = true)
     }
 
+    /**
+     * What the stream itself reports right now (radio): its tags (name, genre, description, publisher, link,
+     * language, playing now) and the audio as decoded (codec, sample rate, channels, bitrate, data read).
+     */
+    fun streamInfo(): List<Pair<String, String>> {
+        val out = ArrayList<Pair<String, String>>()
+        val m = try { mp.media } catch (_: Exception) { null } ?: return out
+        try {
+            fun meta(k: Int, label: String) { m.getMeta(k, true)?.trim()?.takeIf { it.isNotEmpty() }?.let { out += label to it } }
+            meta(IMedia.Meta.Title, "Stream name")
+            meta(IMedia.Meta.NowPlaying, "Playing now")
+            meta(IMedia.Meta.Genre, "Stream genre")
+            meta(IMedia.Meta.Description, "Stream description")
+            meta(IMedia.Meta.Publisher, "Publisher")
+            meta(IMedia.Meta.URL, "Stream link")
+            meta(IMedia.Meta.Language, "Stream language")
+            meta(IMedia.Meta.EncodedBy, "Encoded by")
+            for (i in 0 until m.trackCount) {
+                val t = m.getTrack(i) as? IMedia.AudioTrack ?: continue
+                t.codec?.takeIf { it.isNotBlank() }?.let { out += "Decoded codec" to it.trim() }
+                if (t.rate > 0) out += "Sample rate" to "${t.rate} Hz"
+                if (t.channels > 0) out += "Channels" to when (t.channels) { 1 -> "1 (mono)"; 2 -> "2 (stereo)"; else -> "${t.channels}" }
+                if (t.bitrate > 0) out += "Stream bitrate" to "${t.bitrate / 1000} kbps"
+                t.description?.takeIf { it.isNotBlank() }?.let { out += "Track" to it }
+                break
+            }
+            m.stats?.let { s ->
+                if (s.inputBitrate > 0) out += "Measured bitrate" to "${Math.round(s.inputBitrate * 8000)} kbps"
+                if (s.readBytes > 0) out += "Data read" to app.vlcinterface.player.NetGuard.fmt(s.readBytes.toLong())
+                if (s.lostAbuffers > 0) out += "Lost audio buffers" to "${s.lostAbuffers}"
+            }
+        } catch (_: Exception) {
+        } finally { m.release() }
+        return out
+    }
+
     /** Starts the current item again (a radio stream after the connection changed). */
     fun replayCurrent() { val s = _state.value; if (s.item != null) startItem(s.index, -1) }
 
