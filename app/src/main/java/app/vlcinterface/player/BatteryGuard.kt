@@ -11,7 +11,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 /**
  * Low battery while not charging:
  *  - 15 %: a pop-up warns that playback stops at 10 %;
- *  - 10 %: every player service is ended (playback stopped, ReplayGain scan cancelled), screen-on switched off, and a
+ *  - 10 %: everything stops and the app closes (like Exit); a notification and a pop-up at the next opening say
+ *    why. Opened at 10 % or less: nothing is accepted, a pop-up says so. Earlier note:
  *    pop-up says why; from then on nothing is played or started (scans, indexing) until the phone charges.
  */
 object BatteryGuard {
@@ -38,10 +39,39 @@ object BatteryGuard {
             }
         }
         val sticky = try { ctx.registerReceiver(rx, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) } catch (_: Exception) { null }
+        // Closed at 10 % last time: the pop-up shows once at this opening.
+        try { val p = ctx.getSharedPreferences("battery", Context.MODE_PRIVATE)
+            if (p.getBoolean("closed", false)) { p.edit().remove("closed").apply(); notice.value = 11 } } catch (_: Exception) {}
         sticky?.let { rx.onReceive(ctx, it) }
     }
 
+    private var first = true
+    const val TEXT = "Operations not accepted. Battery is 10% or less. Recharge and comeback."
+
+    /**
+     * 10 % reached: everything stops and the app closes like Exit; a notification and (at the next opening)
+     * a pop-up carry the message.
+     */
+    private fun closeAll() {
+        val a = App.instance
+        try { a.getSharedPreferences("battery", Context.MODE_PRIVATE).edit().putBoolean("closed", true).commit() } catch (_: Exception) {}
+        try {
+            val nm = a.getSystemService(android.app.NotificationManager::class.java)
+            nm.createNotificationChannel(android.app.NotificationChannel("battery", "Low battery", android.app.NotificationManager.IMPORTANCE_HIGH))
+            nm.notify(7302, android.app.Notification.Builder(a, "battery").setSmallIcon(android.R.drawable.ic_lock_idle_low_battery)
+                .setContentTitle("vlc interface stopped").setContentText(TEXT)
+                .setStyle(android.app.Notification.BigTextStyle().bigText(TEXT)).setAutoCancel(true).build())
+        } catch (_: Exception) {}
+        notice.value = 11
+        killServices()
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ app.vlcinterface.ui.exitApp(keepNotice = true) }, 300)
+    }
+
     private fun update(pct: Int, charging: Boolean) {
+        try { updateInner(pct, charging) } finally { first = false }
+    }
+
+    private fun updateInner(pct: Int, charging: Boolean) {
         level = pct
         val was = warnColour.value
         warnColour.value = !charging && pct <= 15
@@ -53,9 +83,8 @@ object BatteryGuard {
             low.value = true
             if (!stopped) {
                 stopped = true
-                val active = player.state.value.item != null || app.vlcinterface.sources.RgScanner.state.value.running
-                killServices()
-                if (active || playing) notice.value = 10
+                if (!first) closeAll()                       // reached 10 % while running: everything stops
+                else notice.value = 11                       // opened at 10 % or less: just the message
             }
         } else {
             low.value = false
