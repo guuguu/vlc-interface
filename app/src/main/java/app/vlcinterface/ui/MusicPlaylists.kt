@@ -538,9 +538,8 @@ fun StereoVu(modifier: Modifier) {
     Canvas(modifier) {
         // Bars and gap follow the meter's width (15 dp upright; narrower sideways), so they shrink in proportion.
         val w = size.width * 6f / 15f; val gap = size.width * 3f / 15f; val h = size.height
-        // Battery 15 % or less (not charging): the meters turn red too, like every coloured item.
-        val zones = if (UiPrefs.lowBattery) listOf(0f to 1f to LOW_BATTERY_RED)
-            else listOf(0f to 0.7f to Color(0xFF4CC26A), 0.7f to 0.9f to Color(0xFFE8B23A), 0.9f to 1f to Color(0xFFE5534B))
+        // Own fixed colours (not changed by the low-battery red).
+        val zones = listOf(0f to 0.7f to Color(0xFF4CC26A), 0.7f to 0.9f to Color(0xFFE8B23A), 0.9f to 1f to Color(0xFFE5534B))
         listOf(lvL to pkL, lvR to pkR).forEachIndexed { i, (lv, pk) ->
             val x = size.width - (2 - i) * w - (1 - i) * gap
             drawRect(Color(0xFF1A1D23), Offset(x, 0f), Size(w, h))
