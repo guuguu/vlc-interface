@@ -158,8 +158,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Long-press: all fitting album pictures online; several → choose one from the list.
             var coverPick by remember(item.uri) { mutableStateOf(false) }
             val coverItem = item.copy(artist = p.metaArtist.ifEmpty { item.artist }, album = p.metaAlbum.ifEmpty { item.album })
-            Cover(item.artwork, if (!landscape) 280 else if (leftHpx <= 0) 190 else (with(dens) { leftHpx.toDp().value }.toInt() - 128).coerceIn(110, 240), Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
-                item = coverItem, download = true, refresh = coverRefresh,
+            // The picture goes as soon as the song ends (the next song brings its own).
+            Cover(if (p.songOver) "" else item.artwork, if (!landscape) 280 else if (leftHpx <= 0) 190 else (with(dens) { leftHpx.toDp().value }.toInt() - 128).coerceIn(110, 240), Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
+                item = if (p.songOver) null else coverItem, download = !p.songOver, refresh = coverRefresh,
                 onNote = { coverNote = it }, onFound = { player.useDownloadedArtwork(item, "mem:" + item.uri) })
             if (coverPick) CoverPicker(coverItem,
                 onNone = { coverPick = false; coverNote = "Looking for the picture online…"; coverRetry++ },

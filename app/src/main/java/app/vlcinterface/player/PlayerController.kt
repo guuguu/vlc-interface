@@ -99,6 +99,8 @@ data class PlayerState(
     val buffering: Float = 100f,
     val error: String = "",
     val ended: Boolean = false,
+    /** The song just ended: its picture is cleared at once (until the next song shows its own). */
+    val songOver: Boolean = false,
     val rgInfo: String = "",
     val sleepUntil: Long = 0,
     val sleepEndOfTrack: Boolean = false,
@@ -1078,7 +1080,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, videoW = 0, videoH = 0,
             audioTracks = emptyList(), spuTracks = emptyList(), audioDelayMs = 0, spuDelayMs = 0, rate = 1f, nowPlaying = "",
             metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, buffering = 0f, error = "", ended = false,
-            rgInfo = "", userPaused = false)
+            rgInfo = "", userPaused = false, songOver = false)
         loadReplayGain(item, _state.value)
         NativeAudio.deepBuffer(item.isMusic || item.isRadio)
         am.requestAudioFocus(focusRequest)
@@ -1396,6 +1398,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun handleEnd(s: PlayerState) {
         if (endHandled) return
         endHandled = true
+        _state.value = _state.value.copy(songOver = true)
         if (s.sleepEndOfTrack) { sleepStop(); return }
         s.item?.let { item -> store.update { st -> st.copy(recent = st.recent.filterNot { it.uri == item.uri }) } }
         // Sleep after a number of songs: count down; when the queue / playlist runs out first, go on from its beginning.

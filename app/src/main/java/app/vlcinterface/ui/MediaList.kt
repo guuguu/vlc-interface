@@ -76,6 +76,7 @@ fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayIte
     val ctx = LocalContext.current
     val online = download && App.instance.store.current.settings.coverDownload
     val bmp by produceState<Bitmap?>(null, url, item?.uri, online, retry, refresh) {
+        value = null          // a new song: the old picture goes at once, not when the new one has loaded
         value = withContext(Dispatchers.IO) {
             // A picture chosen by hand (refresh) wins over the one inside the file.
             val own = if (refresh > 0) null else try {
