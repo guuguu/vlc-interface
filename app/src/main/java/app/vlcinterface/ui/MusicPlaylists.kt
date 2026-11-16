@@ -256,7 +256,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     title = { Text("Which ReplayGain?", color = C.text) },
                     text = {
                         Text("This song has both values. Album gain keeps the album's own loud and quiet songs as they are; " +
-                            "song gain makes every song equally loud. Your choice is kept for all songs of \"${item.album.ifEmpty { "this album" }}\" until you change it.",
+                            "track gain makes every song equally loud. Your choice is kept for all songs of \"${item.album.ifEmpty { "this album" }}\" until you change it.",
                             color = C.muted, fontSize = 13.sp)
                     },
                     confirmButton = {
@@ -265,7 +265,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     },
                     dismissButton = {
                         STextButton({ player.setAlbumRgChoice(item, "track"); rgAsk = null; player.toggleReplayGain() }) {
-                            Text("Song  %+.1f dB".format(java.util.Locale.US, rg.trackGain), color = accent()) }
+                            Text("Track  %+.1f dB".format(java.util.Locale.US, rg.trackGain), color = accent()) }
                     },
                 )
             }
@@ -279,8 +279,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 // Mixed list (songs from several albums): track gain, never asked. One album / folder: asked
                 // (when the song has both values) or album gain.
                 val mixed = remember(p.queue) { player.listIsMixed(p) }
-                Pill(if (st.settings.rgMode == "off") "RGain: Off" else "RGain: On" + (if (mixed) " · song"
-                    else player.albumRgChoice(item)?.let { if (it == "album") " · album" else " · song" } ?: ""),
+                Pill(if (st.settings.rgMode == "off") "RGain: Off" else "RGain: On" + (if (mixed) " · track"
+                    else player.albumRgChoice(item)?.let { if (it == "album") " · album" else " · track" } ?: ""),
                     selected = st.settings.rgMode != "off") {
                     if (st.settings.rgMode != "off" || mixed) player.toggleReplayGain()
                     else rgScope.launch {
@@ -645,7 +645,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                         else {
                             app.vlcinterface.sources.RgScanner.start(ctx.applicationContext, its, app.vlcinterface.sources.RgMode.TRACK,
                                 app.vlcinterface.sources.RgTarget.FILES, rescanTagged = false, onlyWithoutRg = true, confirmTitle = pl.name)
-                            android.widget.Toast.makeText(ctx, "ReplayGain scan started: ${its.size} songs, those without RG get per-song gain",
+                            android.widget.Toast.makeText(ctx, "ReplayGain scan started: ${its.size} songs, those without RG get track gain",
                                 android.widget.Toast.LENGTH_LONG).show()
                         }
                     })
