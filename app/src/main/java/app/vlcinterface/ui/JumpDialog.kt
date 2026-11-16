@@ -5,13 +5,15 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -59,10 +61,18 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
             ((if (playNext) emptyList() else queue.filter(::ok)) + (library ?: emptyList()).filter(::ok)).distinctBy { "${it.uri}#${it.startMs}" }.take(60)
         }
     }
-    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text(if (playNext) "Play next" else "Jump to song", color = C.text) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    // Own window instead of a centred dialog: it sits at the top and always ends above the keyboard (the results
+    // list shrinks to the space left), so it never goes under the keyboard.
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDone,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().clickable(
+            interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onDone)
+            .windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing.union(androidx.compose.foundation.layout.WindowInsets.ime))
+            .padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.TopCenter) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.panel)
+                .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+                .padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(if (playNext) "Play next" else "Jump to song", color = C.text, fontSize = 22.sp)
                 OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Artist, album or song", fontSize = 13.sp) }, textStyle = TextStyle(fontSize = 14.sp, color = C.text))
                 Text(when {
@@ -73,7 +83,7 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
                 }, color = C.muted, fontSize = 12.sp)
                 if (indexing.isNotEmpty()) Text("★ $indexing — LAN songs appear when done", color = accent(), fontSize = 12.sp)
                 val st = rememberLazyListState()
-                LazyColumn(Modifier.heightIn(max = 380.dp).scrollbar(st), state = st, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                LazyColumn(Modifier.weight(1f, fill = false).scrollbar(st), state = st, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     items(hits) { h ->
                         val queued = "${h.uri}#${h.startMs}" in inQueue
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(C.card2)
@@ -84,9 +94,10 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
                         }
                     }
                 }
+                androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    STextButton(onDone) { Text("‹ Back") }
+                }
             }
-        },
-        confirmButton = {},
-        dismissButton = { STextButton(onDone) { Text("‹ Back") } },
-    )
+        }
+    }
 }

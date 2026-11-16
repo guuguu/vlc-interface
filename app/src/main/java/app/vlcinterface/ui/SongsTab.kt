@@ -37,6 +37,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -158,15 +159,22 @@ fun SongsTab(nav: Navigator) {
             }
         }
         var fieldH by remember { mutableStateOf(0) }
+        var fieldBottom by remember { mutableStateOf(0f) }
+        // The results pop-up ends above the keyboard: its height is limited to the space between the box and the keyboard.
+        val dens = androidx.compose.ui.platform.LocalDensity.current
+        val imeBottom = androidx.compose.foundation.layout.WindowInsets.ime.getBottom(dens)
+        val winH = with(dens) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() } +
+            androidx.compose.foundation.layout.WindowInsets.navigationBars.getBottom(dens) + androidx.compose.foundation.layout.WindowInsets.statusBars.getTop(dens)
+        val popMax = with(dens) { ((winH - imeBottom - fieldBottom - 12f).coerceAtLeast(120f)).toDp() }.coerceAtMost(340.dp)
         Box {
             androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).onGloballyPositioned { fieldH = it.size.height },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).onGloballyPositioned { fieldH = it.size.height; fieldBottom = it.positionInWindow().y + it.size.height },
                 placeholder = { Text("Search artist, album or song", fontSize = 13.sp) }, textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = C.text),
                 trailingIcon = { if (query.isNotEmpty()) Text("✕", color = C.muted, modifier = Modifier.clickable { query = "" }.padding(10.dp)) })
             if (hits.isNotEmpty()) androidx.compose.ui.window.Popup(alignment = Alignment.TopStart, offset = androidx.compose.ui.unit.IntOffset(0, fieldH + 4),
                 properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
                 val sc = androidx.compose.foundation.rememberScrollState()
-                Column(Modifier.fillMaxWidth(0.94f).heightIn(max = 340.dp).clip(RoundedCornerShape(10.dp)).background(C.panel)
+                Column(Modifier.fillMaxWidth(0.94f).heightIn(max = popMax).clip(RoundedCornerShape(10.dp)).background(C.panel)
                     .border(1.dp, C.line, RoundedCornerShape(10.dp)).scrollbar(sc).verticalScroll(sc).padding(4.dp)) {
                     Text("${hits.size}${if (hits.size == 50) "+" else ""} found", color = C.muted, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
                     hits.forEach { h ->
