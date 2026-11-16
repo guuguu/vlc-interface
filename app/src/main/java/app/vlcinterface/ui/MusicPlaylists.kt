@@ -1529,12 +1529,12 @@ private fun ToneSliders() {
             detectTapGestures(onLongPress = { open = true; touched = System.nanoTime() })
         }, verticalAlignment = Alignment.CenterVertically) {
             // Reset: 0 = no processing (only while unlocked).
-            Text("0", color = if (v == 0f || !open) C.muted else C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center, modifier = Modifier.size(36.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
+            Text("0", color = if (v == 0f || !open) C.muted else C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center, modifier = Modifier.size(28.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
                     .clickable(enabled = open) { set(0f, true) }.wrapContentHeight())
-            Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
-                Text((if (open) "" else "🔒 ") + "$label  " + (if (v == 0f) "off" else "%+.1f dB".format(java.util.Locale.US, v)) +
-                    if (open) "" else "  · long-press to change", color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
+                Text((if (open) "" else "🔒 ") + "$label " + (if (v == 0f) "off" else "%+.1f".format(java.util.Locale.US, v)),
+                    color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(start = 8.dp))
                 Slider(v, { x -> set(Math.round(x * 2) / 2f, false) }, valueRange = range, onValueChangeFinished = { set(v, true) },
                     enabled = open,
@@ -1543,13 +1543,14 @@ private fun ToneSliders() {
                     modifier = Modifier.height(28.dp))
             }
             // Recall: this song's own values (dimmed when it has none).
-            if (!recall) Box(Modifier.size(36.dp)) else
-            Text("↺", color = if (p.toneSaved) accent() else C.muted.copy(alpha = 0.5f), fontSize = 20.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.size(36.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
+            if (!recall) Box(Modifier.size(28.dp)) else
+            Text("↺", color = if (p.toneSaved) accent() else C.muted.copy(alpha = 0.5f), fontSize = 16.sp, textAlign = TextAlign.Center,
+                modifier = Modifier.size(28.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
                     .clickable(enabled = p.toneSaved) { player.recallTone() }.wrapContentHeight())
         }
     }
-    Column(Modifier.fillMaxWidth()) {
+    // One slider per row, centred, narrower than the page (about three quarters of it).
+    Column(Modifier.fillMaxWidth(0.78f)) {
         // Auto loudness on: the label also shows how much is used at the phone's current volume.
         row(if (p.loudEffDb != p.loudDb && p.loudDb > 0f) "Loudness (auto %.1f)".format(java.util.Locale.US, p.loudEffDb) else "Loudness",
             p.loudDb, 0f..15f) { x, done -> player.setTone(x, p.trebleDb, done) }
