@@ -4,6 +4,9 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -73,7 +76,12 @@ object UiPrefs {
     var popupAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
     var menuAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
     var menuFont by androidx.compose.runtime.mutableStateOf("medium")
-    val menuFontSp get() = when (menuFont) { "small" -> 13; "large" -> 19; else -> 15 }
+    /** 4 menu text sizes; the biggest still fits a menu (max 340 dp wide, long entries wrap). */
+    val menuSizes = listOf("small" to "S", "medium" to "M", "large" to "L", "xlarge" to "XL")
+    fun spOf(k: String) = when (k) { "small" -> 13; "large" -> 18; "xlarge" -> 21; else -> 15 }
+    val menuFontSp get() = spOf(menuFont)
+    /** Long-press on any menu entry: the size choice shows at the top of that menu. */
+    var sizePick by androidx.compose.runtime.mutableStateOf(false)
 }
 
 val LocalAccent = staticCompositionLocalOf { Color(0xFFFF8A3D) }
@@ -305,7 +313,31 @@ fun SMenuItem(text: @Composable () -> Unit, onClick: () -> Unit, modifier: Modif
     val sp = UiPrefs.menuFontSp
     androidx.compose.material3.DropdownMenuItem({
         androidx.compose.material3.ProvideTextStyle(androidx.compose.material3.LocalTextStyle.current.copy(fontSize = sp.sp, lineHeight = (sp + 4).sp)) { text() }
-    }, onClick, modifier.heightIn(min = (sp * 3).dp), leadingIcon, trailingIcon, enabled)
+    }, onClick, modifier.heightIn(min = (sp * 3).dp).pointerInput(Unit) {
+        // Long-press (no click afterwards): show the menu text size choice in this menu.
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+            val ended = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
+                var done = false
+                while (!done) {
+                    val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    val c = ev.changes.firstOrNull { it.id == down.id }
+                    done = c == null || !c.pressed || (c.position - down.position).getDistance() > viewConfiguration.touchSlop
+                }
+                true
+            }
+            val long = ended == null
+            if (long) {
+                UiPrefs.sizePick = true
+                // Swallow the rest of the touch so the entry is not also chosen.
+                while (true) {
+                    val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    ev.changes.forEach { it.consume() }
+                    if (ev.changes.none { it.pressed }) break
+                }
+            }
+        }
+    }, leadingIcon, trailingIcon, enabled)
 }
 
 @Composable
@@ -366,6 +398,20 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
     val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     if (expanded) androidx.compose.runtime.LaunchedEffect(Unit) { kb?.hide() }
     androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = 340.dp), containerColor = C.menu) {
+        if (!expanded) UiPrefs.sizePick = false
+        if (UiPrefs.sizePick) {
+            // Quick menu text size check (same setting as in Settings); the menu stays open to see the result.
+            androidx.compose.foundation.layout.Row(Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                UiPrefs.menuSizes.forEach { (k, l) ->
+                    Pill(l, selected = UiPrefs.menuFont == k, filled = UiPrefs.menuFont == k) {
+                        App.instance.store.update { it.copy(settings = it.settings.copy(menuFont = k)) }
+                    }
+                }
+                Text("✓", color = C.text, fontSize = 20.sp, modifier = Modifier.clickable { UiPrefs.sizePick = false }.padding(horizontal = 8.dp))
+            }
+        }
         SMenuItem(text = { Text("‹  Back", color = C.muted) }, onClick = onDismissRequest)
         content()
     }

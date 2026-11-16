@@ -204,12 +204,12 @@ fun SettingsScreen(nav: Navigator) {
                         Text("${s.menuOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(menuOpacity = 90)) }) { Text("Reset") }
                     }
-                    OpacityPreview(s.menuOpacity / 100f, "Menu entry", when (s.menuFont) { "small" -> 13; "large" -> 19; else -> 15 })
+                    OpacityPreview(s.menuOpacity / 100f, "Menu entry", UiPrefs.spOf(s.menuFont))
                     androidx.compose.material3.Slider(s.menuOpacity.toFloat(), { v -> set(s.copy(menuOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
                     Text("Menu text", color = C.text, fontSize = 15.sp)
                     Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("small" to "Small", "medium" to "Medium", "large" to "Large").forEach { (k, l) ->
-                            Pill(l, selected = s.menuFont == k) { set(s.copy(menuFont = k)) }
+                        listOf("small" to "Small", "medium" to "Medium", "large" to "Large", "xlarge" to "Extra large").forEach { (k, l) ->
+                            Pill(l, selected = s.menuFont == k, filled = s.menuFont == k) { set(s.copy(menuFont = k)) }
                         }
                     }
                 }

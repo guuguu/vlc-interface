@@ -222,7 +222,7 @@ data class Settings(
                 o.optBoolean("sessionManual", false),
                 o.optJSONArray("hiddenUris")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: emptySet(),
                 popupOpacity = o.optInt("popupOpacity", 90).coerceIn(50, 100),
-                menuFont = o.optString("menuFont", "medium").let { if (it in setOf("small", "medium", "large")) it else "medium" },
+                menuFont = o.optString("menuFont", "medium").let { if (it in setOf("small", "medium", "large", "xlarge")) it else "medium" },
                 menuOpacity = o.optInt("menuOpacity", 90).coerceIn(50, 100),
                 customAccents = ((o.optJSONArray("customAccents")?.let { a -> (0 until a.length()).map { a.getLong(it) } }
                     ?: listOfNotNull(o.optLong("customAccent", 0L).takeIf { it != 0L }))
