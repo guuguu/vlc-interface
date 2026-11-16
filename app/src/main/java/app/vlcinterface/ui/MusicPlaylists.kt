@@ -1548,7 +1548,7 @@ private fun ToneSliders() {
                 // The slider only draws; touches are handled here so that one gesture can unlock and move:
                 // hold until it unlocks (long-press), then slide without lifting the finger. Unlocked: tap or slide.
                 val dens = androidx.compose.ui.platform.LocalDensity.current
-                val inset = with(dens) { 16.dp.toPx() }       // padding 6 dp + half the thumb
+                val inset = with(dens) { 14.dp.toPx() }       // padding 6 dp + half the thumb (8 dp)
                 val vNow by rememberUpdatedState(v)
                 val openNow by rememberUpdatedState(open)
                 // Short tap on a locked slider: "Long press to unlock" for 3 s.
@@ -1599,12 +1599,23 @@ private fun ToneSliders() {
                         setNow(last, true)
                     }
                 }) {
-                    Slider(vNow, {}, valueRange = range, enabled = false,
-                        colors = SliderDefaults.colors(
-                            disabledThumbColor = if (open) Color.White else C.muted,
-                            disabledActiveTrackColor = if (open) accent() else accent().copy(alpha = 0.45f),
-                            disabledInactiveTrackColor = C.line),
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 6.dp))
+                    // Thin slider drawn here: 4 dp track, 16 dp round knob (the standard slider is much thicker).
+                    val active = if (open) accent() else accent().copy(alpha = 0.45f)
+                    val knob = if (open) Color.White else C.muted
+                    val line = C.line
+                    androidx.compose.foundation.Canvas(Modifier.fillMaxSize()) {
+                        val y = size.height / 2
+                        val x0 = inset; val x1 = size.width - inset
+                        val f = ((vNow - range.start) / (range.endInclusive - range.start)).coerceIn(0f, 1f)
+                        val xv = x0 + (x1 - x0) * f
+                        // For ranges around 0 (Treble, Preamp) the coloured part runs from 0 to the value.
+                        val zero = if (range.start < 0f) x0 + (x1 - x0) * ((0f - range.start) / (range.endInclusive - range.start)) else x0
+                        val th = 4.dp.toPx()
+                        drawLine(line, androidx.compose.ui.geometry.Offset(x0, y), androidx.compose.ui.geometry.Offset(x1, y), th, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                        if (xv != zero) drawLine(active, androidx.compose.ui.geometry.Offset(minOf(zero, xv), y), androidx.compose.ui.geometry.Offset(maxOf(zero, xv), y), th, cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                        if (range.start < 0f) drawCircle(line, 2.5.dp.toPx(), androidx.compose.ui.geometry.Offset(zero, y))
+                        drawCircle(knob, 8.dp.toPx(), androidx.compose.ui.geometry.Offset(xv, y))
+                    }
                 }
                 // Recall: this song's own values (dimmed when it has none).
                 if (!recall) Box(Modifier.size(28.dp)) else
