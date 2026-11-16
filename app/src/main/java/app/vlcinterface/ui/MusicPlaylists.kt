@@ -1525,28 +1525,29 @@ private fun ToneSliders() {
         var touched by remember { mutableStateOf(0L) }
         LaunchedEffect(open, touched) { if (open) { kotlinx.coroutines.delay(2000); open = false } }
         fun set(x: Float, done: Boolean) { touched = System.nanoTime(); onSet(x, done) }
-        Row(Modifier.fillMaxWidth().pointerInput(Unit) {
+        // Label above; the buttons sit on the slider's own line, centred on it.
+        Column(Modifier.fillMaxWidth().pointerInput(Unit) {
             detectTapGestures(onLongPress = { open = true; touched = System.nanoTime() })
-        }, verticalAlignment = Alignment.CenterVertically) {
-            // Reset: 0 = no processing (only while unlocked).
-            Text("0", color = if (v == 0f || !open) C.muted else C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center, modifier = Modifier.size(28.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
-                    .clickable(enabled = open) { set(0f, true) }.wrapContentHeight())
-            Column(Modifier.weight(1f).padding(horizontal = 4.dp)) {
-                Text((if (open) "" else "🔒 ") + "$label " + (if (v == 0f) "off" else "%+.1f".format(java.util.Locale.US, v)),
-                    color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 8.dp))
+        }) {
+            Text((if (open) "" else "🔒 ") + "$label " + (if (v == 0f) "off" else "%+.1f".format(java.util.Locale.US, v)),
+                color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 40.dp))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // Reset: 0 = no processing (only while unlocked).
+                Text("0", color = if (v == 0f || !open) C.muted else C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center, modifier = Modifier.size(28.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
+                        .clickable(enabled = open) { set(0f, true) }.wrapContentHeight())
                 Slider(v, { x -> set(Math.round(x * 2) / 2f, false) }, valueRange = range, onValueChangeFinished = { set(v, true) },
                     enabled = open,
                     colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line,
                         disabledThumbColor = C.muted, disabledActiveTrackColor = accent().copy(alpha = 0.45f), disabledInactiveTrackColor = C.line),
-                    modifier = Modifier.height(28.dp))
+                    modifier = Modifier.weight(1f).height(28.dp).padding(horizontal = 6.dp))
+                // Recall: this song's own values (dimmed when it has none).
+                if (!recall) Box(Modifier.size(28.dp)) else
+                Text("↺", color = if (p.toneSaved) accent() else C.muted.copy(alpha = 0.5f), fontSize = 16.sp, textAlign = TextAlign.Center,
+                    modifier = Modifier.size(28.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
+                        .clickable(enabled = p.toneSaved) { player.recallTone() }.wrapContentHeight())
             }
-            // Recall: this song's own values (dimmed when it has none).
-            if (!recall) Box(Modifier.size(28.dp)) else
-            Text("↺", color = if (p.toneSaved) accent() else C.muted.copy(alpha = 0.5f), fontSize = 16.sp, textAlign = TextAlign.Center,
-                modifier = Modifier.size(28.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
-                    .clickable(enabled = p.toneSaved) { player.recallTone() }.wrapContentHeight())
         }
     }
     // One slider per row, centred, narrower than the page (about three quarters of it).
