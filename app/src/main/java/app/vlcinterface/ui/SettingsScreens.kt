@@ -4,6 +4,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -204,20 +205,31 @@ fun SettingsScreen(nav: Navigator) {
                     }
                 }
             }
-            var picking by remember { mutableStateOf(false) }
+            // Custom colours: up to 3 slots; tap uses one, long-press edits it. "+" adds while a slot is free.
+            var editSlot by remember { mutableStateOf(-1) }      // -1 closed, 0..2 edit that slot, 3 new
             Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                (listOf(0xFFFF8A3D, 0xFF4FB3FF, 0xFF7BD88F, 0xFFC792EA) + s.customAccents).forEach { c ->
+                listOf(0xFFFF8A3D, 0xFF4FB3FF, 0xFF7BD88F, 0xFFC792EA).forEach { c ->
                     Box(Modifier.size(34.dp).clip(CircleShape).background(Color(c))
                         .border(if (s.accent == c) 3.dp else 0.dp, Color.White, CircleShape).clickable { set(s.copy(accent = c)) })
                 }
-                // Pick any colour; it is kept as the custom one.
-                Box(Modifier.size(34.dp).clip(CircleShape).border(2.dp, C.muted, CircleShape).clickable { picking = true }, contentAlignment = Alignment.Center) {
-                    Text("+", color = C.text, fontSize = 22.sp)
+                s.customAccents.forEachIndexed { i, c ->
+                    Box(Modifier.size(34.dp).clip(CircleShape).background(Color(c))
+                        .border(if (s.accent == c) 3.dp else 0.dp, Color.White, CircleShape)
+                        .combinedClickable(onClick = { set(s.copy(accent = c)) }, onLongClick = { editSlot = i }))
                 }
+                if (s.customAccents.size < 3)
+                    Box(Modifier.size(34.dp).clip(CircleShape).border(2.dp, C.muted, CircleShape).clickable { editSlot = 3 }, contentAlignment = Alignment.Center) {
+                        Text("+", color = C.text, fontSize = 22.sp)
+                    }
             }
-            // Up to 3 picked colours are kept; a new one pushes out the oldest.
-            if (picking) ColorPickDialog(s.customAccents.firstOrNull() ?: s.accent, onDismiss = { picking = false }) { c ->
-                picking = false; set(s.copy(customAccents = (listOf(c) + s.customAccents.filter { it != c }).take(3), accent = c))
+            if (editSlot >= 0) {
+                val slot = editSlot
+                ColorPickDialog(s.customAccents.getOrNull(slot) ?: s.accent, onDismiss = { editSlot = -1 }) { c ->
+                    editSlot = -1
+                    val list = s.customAccents.toMutableList()
+                    if (slot < list.size) list[slot] = c else list += c
+                    set(s.copy(customAccents = list.take(3), accent = c))
+                }
             }
             Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
         }
