@@ -162,6 +162,8 @@ data class Settings(
     val menuFont: String = "medium",
     /** Long-press / ⋮ menus: opacity in % (50–100). */
     val menuOpacity: Int = 90,
+    /** Auto loudness: Loudness follows the phone's media volume (full up to each device's start %, then flattening). */
+    val autoLoud: Boolean = false,
     /** Loudness / treble last used (kept for songs without their own values, also after a restart). */
     val toneLoud: Float = 0f,
     val toneTreble: Float = 0f,
@@ -186,7 +188,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccents", org.json.JSONArray(customAccents)).put("menuOpacity", menuOpacity).put("upNextCount", upNextCount).put("radioAccent", radioAccent).put("toneLoud", toneLoud.toDouble()).put("toneTreble", toneTreble.toDouble())
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccents", org.json.JSONArray(customAccents)).put("menuOpacity", menuOpacity).put("upNextCount", upNextCount).put("radioAccent", radioAccent).put("autoLoud", autoLoud).put("toneLoud", toneLoud.toDouble()).put("toneTreble", toneTreble.toDouble())
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -233,6 +235,7 @@ data class Settings(
                 menuOpacity = o.optInt("menuOpacity", 90).coerceIn(50, 100),
                 upNextCount = o.optInt("upNextCount", 2).coerceIn(0, 20),
                 radioAccent = o.optLong("radioAccent", 0L),
+                autoLoud = o.optBoolean("autoLoud", false),
                 toneLoud = o.optDouble("toneLoud", 0.0).toFloat().coerceIn(0f, 15f),
                 toneTreble = o.optDouble("toneTreble", 0.0).toFloat().coerceIn(-12f, 12f),
                 customAccents = ((o.optJSONArray("customAccents")?.let { a -> (0 until a.length()).map { a.getLong(it) } }
@@ -330,6 +333,8 @@ data class AppState(
     val devicePreamp: Map<String, Float> = emptyMap(),
     /** output device name -> balance -100 (left) .. 100 (right) */
     val deviceBalance: Map<String, Int> = emptyMap(),
+    /** output device name -> phone volume % above which Auto loudness starts flattening (default 50) */
+    val deviceLoudFrom: Map<String, Int> = emptyMap(),
 )
 
 fun JSONArray?.strings(): List<String> {

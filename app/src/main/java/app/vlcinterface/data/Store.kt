@@ -118,6 +118,7 @@ class Store(private val context: Context) {
                 playlists = mine.playlists + incoming.playlists.filter { p -> mine.playlists.none { it.id == p.id || it.name == p.name } },
                 devicePreamp = incoming.devicePreamp + mine.devicePreamp,
                 deviceBalance = incoming.deviceBalance + mine.deviceBalance,
+                deviceLoudFrom = incoming.deviceLoudFrom + mine.deviceLoudFrom,
             )
         }
         return null
@@ -149,6 +150,7 @@ class Store(private val context: Context) {
             .put("playlists", JSONArray(s.playlists.map { it.toJson() }))
             .put("devicePreamp", JSONObject().also { o -> s.devicePreamp.forEach { (k, v) -> o.put(k, v.toDouble()) } })
             .put("deviceBalance", JSONObject().also { o -> s.deviceBalance.forEach { (k, v) -> o.put(k, v) } })
+            .put("deviceLoudFrom", JSONObject().also { o -> s.deviceLoudFrom.forEach { (k, v) -> o.put(k, v) } })
 
         fun fromJson(o: JSONObject, pw: (String) -> String): AppState {
             fun arr(name: String) = o.optJSONArray(name) ?: JSONArray()
@@ -168,6 +170,7 @@ class Store(private val context: Context) {
                 playlists = arr("playlists").let { a -> (0 until a.length()).map { Playlist.fromJson(a.getJSONObject(it)) } },
                 devicePreamp = o.optJSONObject("devicePreamp").let { d -> if (d == null) emptyMap() else d.keys().asSequence().associateWith { d.optDouble(it, 0.0).toFloat() } },
                 deviceBalance = o.optJSONObject("deviceBalance").let { d -> if (d == null) emptyMap() else d.keys().asSequence().associateWith { d.optInt(it, 0) } },
+                deviceLoudFrom = o.optJSONObject("deviceLoudFrom").let { d -> if (d == null) emptyMap() else d.keys().asSequence().associateWith { d.optInt(it, 50).coerceIn(0, 100) } },
             )
         }
     }

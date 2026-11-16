@@ -415,6 +415,16 @@ fun DeviceSoundList() {
             if (diag.isNotEmpty()) Text(diag, color = C.muted, fontSize = 11.sp)
         }
         Text("Added on top of the general preamp (total max +12 dB). Applied automatically when the output changes.", color = C.muted, fontSize = 12.sp)
+        // Auto loudness: Loudness follows the phone's volume; each device below has its own start %.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Auto loudness", color = C.text, fontSize = 15.sp)
+                Text("Full Loudness up to each device's start %, flattening step by step above it, none at full volume", color = C.muted, fontSize = 12.sp)
+            }
+            androidx.compose.material3.Switch(st.settings.autoLoud, { on ->
+                store.update { it.copy(settings = it.settings.copy(autoLoud = on)) }; App.instance.player.applySoundChain()
+            })
+        }
         names.forEach { n -> DeviceSoundControls(n) }
     }
 }
@@ -433,6 +443,17 @@ fun DeviceSoundControls(name: String) {
                 store.update { it.copy(devicePreamp = it.devicePreamp + (name to Math.round(v * 2) / 2f)) }; App.instance.player.applySoundChain()
             }, valueRange = -12f..12f, modifier = Modifier.weight(1f))
             Text("%+.1f dB".format(pre), color = accent(), fontSize = 12.sp, modifier = Modifier.width(64.dp))
+        }
+        if (st.settings.autoLoud) {
+            val from = st.deviceLoudFrom[name] ?: 50
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Loudness\nflat from", color = C.muted, fontSize = 12.sp, lineHeight = 13.sp, modifier = Modifier.width(64.dp))
+                androidx.compose.material3.Slider(from.toFloat(), { v ->
+                    store.update { it.copy(deviceLoudFrom = it.deviceLoudFrom + (name to (Math.round(v / 5f) * 5).coerceIn(0, 95))) }
+                    App.instance.player.applySoundChain()
+                }, valueRange = 0f..95f, modifier = Modifier.weight(1f))
+                Text("$from % vol", color = accent(), fontSize = 12.sp, modifier = Modifier.width(64.dp))
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Balance", color = C.muted, fontSize = 12.sp, modifier = Modifier.width(64.dp))

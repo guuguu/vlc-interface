@@ -98,6 +98,8 @@ data class PlayerState(
     val artworkUrl: String = "",
     /** Loudness (0…15 dB of ISO 226 compensation at 60 Hz) and treble (−12…+12 dB) in use; 0 / 0 = no processing. */
     val loudDb: Float = 0f,
+    /** Loudness actually applied (Auto loudness may use less of the setting at higher phone volume). */
+    val loudEffDb: Float = 0f,
     val trebleDb: Float = 0f,
     /** Radio: this station's pre-amp cut (−12…0 dB; stations have no ReplayGain). */
     val radioPreDb: Float = 0f,
@@ -364,7 +366,8 @@ class PlayerController(private val context: Context, private val store: Store) {
      */
     private fun applyTone(preamp: Float) {
         val s = _state.value
-        val l = s.loudDb; val t = s.trebleDb
+        val l = autoLoudness(s.loudDb); val t = s.trebleDb
+        if (l != s.loudEffDb) _state.value = _state.value.copy(loudEffDb = l)
         try {
             if (l == 0f && t == 0f && preamp == 0f) { mp.setEqualizer(null); return }
             val e = eq ?: MediaPlayer.Equalizer.create().also { eq = it }
@@ -387,6 +390,29 @@ class PlayerController(private val context: Context, private val store: Store) {
             e.setPreAmp(preamp)
             mp.setEqualizer(e)
         } catch (_: Exception) {
+        }
+    }
+
+    /**
+     * Auto loudness: the phone's media volume decides how much of the Loudness setting is used — all of it up to the
+     * output device's start % (Sound settings), then less with every volume step above, down to none at full volume.
+     */
+    private fun autoLoudness(l: Float): Float {
+        val st = store.current
+        if (!st.settings.autoLoud || l == 0f) return l
+        val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val vol = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+        val pct = vol * 100f / max
+        val from = (st.deviceLoudFrom[currentOutputName] ?: 50).coerceIn(0, 99).toFloat()
+        if (pct <= from) return l
+        val k = (1f - (pct - from) / (100f - from)).coerceIn(0f, 1f)
+        return Math.round(l * k * 2) / 2f
+    }
+
+    /** Phone volume changed (buttons, speaker): Auto loudness follows at once. */
+    private val volumeRx = object : android.content.BroadcastReceiver() {
+        override fun onReceive(c: Context, i: android.content.Intent) {
+            if (store.current.settings.autoLoud && ::mp.isInitialized) main.post { applySoundChain() }
         }
     }
 
@@ -1744,6 +1770,10 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     init {
         main.post(metaPoller)
+        try {
+            val f = android.content.IntentFilter("android.media.VOLUME_CHANGED_ACTION")
+            if (android.os.Build.VERSION.SDK_INT >= 33) context.registerReceiver(volumeRx, f, Context.RECEIVER_EXPORTED) else context.registerReceiver(volumeRx, f)
+        } catch (_: Exception) {}
     }
 
     fun saveProgress() {
