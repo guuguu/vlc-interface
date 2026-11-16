@@ -158,7 +158,7 @@ fun MediaList(
     }
     LaunchedEffect(memKey) {
         androidx.compose.runtime.snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }.collect { (i, o) ->
-            if (placed && rows.isNotEmpty()) { ScrollMemory.pos[memKey] = i; ScrollMemory.pos["$memKey#o"] = o }
+            if (placed && state.layoutInfo.totalItemsCount > 0) { ScrollMemory.pos[memKey] = i; ScrollMemory.pos["$memKey#o"] = o }
         }
     }
     // Jump to the marked song once; coming back to this page later keeps the place you scrolled to.
