@@ -527,24 +527,39 @@ fun ColorPickDialog(start: Long, onDismiss: () -> Unit, onRemove: (() -> Unit)? 
 }
 
 
-/** Live sample: a panel at the chosen opacity over a striped background, so what shows through is visible. */
+/**
+ * Live sample, big enough to judge: a pop-up window or a menu at the chosen opacity over a busy background
+ * (stripes and text, like a page behind it), so both what shows through and how readable it stays can be checked.
+ */
 @Composable
 fun OpacityPreview(alpha: Float, label: String, fontSp: Int) {
     val a = accent()
-    Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(56.dp).clip(RoundedCornerShape(12.dp))
+    val menu = label.startsWith("Menu")
+    Box(Modifier.padding(top = 8.dp).fillMaxWidth().height(200.dp).clip(RoundedCornerShape(14.dp))
         .drawBehind {
-            val w = 18.dp.toPx()
+            val w = 22.dp.toPx()
             var x = -size.height
             var k = 0
             while (x < size.width) {
-                drawLine(if (k % 2 == 0) a else Color.White, androidx.compose.ui.geometry.Offset(x, size.height),
-                    androidx.compose.ui.geometry.Offset(x + size.height, 0f), strokeWidth = w)
+                drawLine(when (k % 3) { 0 -> a; 1 -> Color.White; else -> Color(0xFF2A6FDB) },
+                    androidx.compose.ui.geometry.Offset(x, size.height), androidx.compose.ui.geometry.Offset(x + size.height, 0f), strokeWidth = w)
                 x += w; k++
             }
-        }, contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxWidth(0.8f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF14171C).copy(alpha = alpha))
-            .padding(horizontal = 14.dp, vertical = 8.dp)) {
-            Text(label, color = C.text, fontSize = fontSp.sp)
+        }) {
+        // Page text behind the window.
+        Column(Modifier.padding(10.dp)) {
+            repeat(6) { Text("Artist – Album – Song title ${it + 1}", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.SemiBold) }
+        }
+        Column(Modifier.align(Alignment.Center).fillMaxWidth(0.8f).clip(RoundedCornerShape(if (menu) 8.dp else 20.dp))
+            .background(Color(0xFF14171C).copy(alpha = alpha)).padding(if (menu) 6.dp else 16.dp),
+            verticalArrangement = Arrangement.spacedBy(if (menu) 2.dp else 6.dp)) {
+            if (menu) listOf("▶  Play", "Play next", "Add to playlist…").forEach {
+                Text(it, color = C.text, fontSize = fontSp.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp))
+            } else {
+                Text(label, color = C.text, fontSize = 20.sp)
+                Text("Text inside a window", color = C.muted, fontSize = 14.sp)
+                Text("Cancel     OK", color = a, fontSize = 15.sp, modifier = Modifier.align(Alignment.End))
+            }
         }
     }
 }
