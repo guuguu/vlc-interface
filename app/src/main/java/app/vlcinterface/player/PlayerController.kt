@@ -579,11 +579,20 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun syncPicture() { _state.value.item?.let { loadPictureForFile(it) } }
 
     /** Settings → Sound engine changed: rebuild the engine and continue where it was. */
+    /**
+     * Switches the sound output to the one chosen in Settings: the app output gets a fresh try (an earlier failure is
+     * forgotten), the engine is rebuilt, and the current item goes on from the same place, playing or paused as it was.
+     */
     fun applySoundEngine() {
+        if (store.current.settings.soundEngine != "libvlc") NativeAudio.resetFailed()
         val s = _state.value
         val pos = if (s.item != null) mp.time else -1
+        val playing = s.item != null && mp.isPlaying
         recreateEngine(store.current.subStyle)
-        if (s.item != null) startItem(s.index, pos)
+        if (s.item != null) {
+            startItem(s.index, pos)
+            if (!playing) main.postDelayed({ pause() }, 400)
+        }
     }
 
     // ---------- audio focus + "headphones unplugged" ----------

@@ -65,6 +65,8 @@ object NativeAudio {
 
     /** Gives up on our output for this run; the player then uses libVLC's own output. */
     fun markFailed(why: String) { failed = true; reason = why }
+    /** Lets the app output be tried again (chosen again in Settings). */
+    fun resetFailed() { failed = false; reason = "" }
 
     private fun handle(o: Any): Long {
         var c: Class<*>? = o.javaClass

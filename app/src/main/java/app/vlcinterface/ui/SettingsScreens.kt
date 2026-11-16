@@ -299,8 +299,10 @@ fun DeviceSoundList() {
         Text("Sound engine", color = C.text, fontSize = 15.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("app" to "App output", "libvlc" to "libVLC output").forEach { (k, l) ->
-                Pill(l, selected = st.settings.soundEngine == k) {
-                    if (st.settings.soundEngine != k) {
+                val inUse = if (k == "app") na.active else !na.active
+                Pill(l, selected = st.settings.soundEngine == k && inUse) {
+                    // Also acts when the setting already says so but the other output is running (e.g. after a fallback).
+                    if (st.settings.soundEngine != k || !inUse) {
                         store.update { it.copy(settings = it.settings.copy(soundEngine = k)) }
                         App.instance.player.applySoundEngine()
                     }
