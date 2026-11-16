@@ -70,7 +70,11 @@ internal object SongsCache {
     fun localTwin(p: PlayItem): PlayItem? =
         if (app.vlcinterface.sources.NetIndex.isLocal(p)) null else app.vlcinterface.sources.NetIndex.songKey(p)?.let { byKey[it] }
 
-    suspend fun loadPhone(ctx: android.content.Context): List<PlayItem> {
+    /** The folder key of a phone song (by its address), from the phone's song list. */
+    suspend fun phoneFolderOf(ctx: android.content.Context, uri: String): String? =
+        loadPhone(ctx).firstOrNull { it.uri == uri }?.folderKey?.takeIf { it.isNotEmpty() }
+
+        suspend fun loadPhone(ctx: android.content.Context): List<PlayItem> {
         if (phone == null) phone = InternalSource.folders(ctx).flatMap { f -> MusicLibrary.collectLocal(ctx, f, false) }.filter { it.isMusic }
         return phone!!
     }

@@ -42,8 +42,28 @@ fun trackFromName(name: String): Int {
 object MusicLibrary {
     /** Every audio / video file in the same folder as [item] (no subfolders), in album order. Empty when unknown. */
     suspend fun folderOf(ctx: Context, item: PlayItem): List<PlayItem> {
-        val fk = item.folderKey
-        val src = App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }
+        // The song's folder, also when the song came from a playlist, the queue, the search or the index without a
+        // folder / server noted (that used to give just the one song): worked out from its address then.
+        val sources = App.instance.store.current.sources
+        var fk = item.folderKey
+        var src = sources.firstOrNull { it.id == item.sourceId }
+        if (item.uri.contains("://") && !item.uri.startsWith("content://")) {
+            if (src == null) {
+                val host = item.uri.substringAfter("://").substringBefore('/').substringAfter('@').substringBefore(':')
+                src = sources.firstOrNull { it.host.substringAfter("://").substringBefore('/').substringBefore(':').equals(host, true) }
+            }
+            if (fk.isEmpty() || fk.startsWith("local:")) fk = Urls.parent(item.uri)
+        } else if (!fk.startsWith("local:")) {
+            // A phone song without its folder noted: take it from the phone's song list.
+            fk = app.vlcinterface.ui.SongsCache.phoneFolderOf(ctx, item.uri) ?: fk
+        }
+        val r = folderOfKey(ctx, fk, src)
+        if (r.size <= 1) app.vlcinterface.data.ServerLog.log(ServerLog.REPLAYGAIN, "folder", "", "", r.isNotEmpty(),
+            "Folder of \"${item.title}\": ${r.size} song(s) found (folder ${fk.ifEmpty { "unknown" }}, server ${src?.name ?: src?.host ?: "none"})")
+        return r
+    }
+
+    private suspend fun folderOfKey(ctx: Context, fk: String, src: Source?): List<PlayItem> {
         return try {
             when {
                 fk.startsWith("local:") -> {
