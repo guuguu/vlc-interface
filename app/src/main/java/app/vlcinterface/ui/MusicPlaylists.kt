@@ -217,7 +217,10 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 "folder", "local" -> "Folder: " + p.origin.title
                 else -> "Open song folder"
             }
-            Pill("☰  $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { openOrigin(nav) }
+            // Tap: open where it plays from, or load another saved playlist instead.
+            var originPick by remember { mutableStateOf(false) }
+            Pill("☰  $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { originPick = true }
+            if (originPick) OriginPickDialog(fromLabel, onOpen = { originPick = false; openOrigin(nav) }, onDismiss = { originPick = false })
             // Search all songs; the one picked plays next (inserted after the current song), window closes by itself.
             Pill("♪  Play next…", modifier = Modifier.fillMaxWidth()) { playNextPick = true }
             // Sleep: number input (up to 3 digits) for "After … songs" and "Custom minutes…".
@@ -1108,4 +1111,42 @@ fun LogViewScreen(nav: Navigator, kind: String) {
             }
         }
     }
+}
+
+
+/**
+ * From the player's "Playlist / Folder" button: open the current source, or load another saved playlist
+ * (play it now, in random order, or have it ready without starting).
+ */
+@Composable
+fun OriginPickDialog(fromLabel: String, onOpen: () -> Unit, onDismiss: () -> Unit) {
+    val st by App.instance.store.state.collectAsState()
+    val player = App.instance.player
+    val curId = player.state.value.origin.let { if (it.kind == "playlist") it.playlistId else null }
+    androidx.compose.material3.AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
+        title = { Text("Playing from", color = C.text) },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Pill("☰  Open $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { onOpen() }
+                Text("Load another playlist", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
+                val lists = st.playlists.filter { it.items.isNotEmpty() }
+                if (lists.isEmpty()) Text("No saved playlists yet.", color = C.muted, fontSize = 13.sp)
+                lists.forEach { pl ->
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.bg).padding(10.dp)) {
+                        val total = pl.items.sumOf { it.durationMs }
+                        Text(pl.name + if (pl.id == curId) "  (playing)" else "", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("${pl.items.size} items" + if (total > 0) " · ${fmtTime(total)}" else "", color = C.muted, fontSize = 12.sp)
+                        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            val items = { pl.items.map { MusicLibrary.fromPlEntry(it) } }
+                            val origin = Origin("playlist", playlistId = pl.id, title = pl.name)
+                            Pill("▶ Play", filled = true) { onDismiss(); player.playQueue(items(), 0, origin, random = false) }
+                            Pill("Random") { onDismiss(); player.playQueue(items(), pl.items.indices.random(), origin, random = true) }
+                            Pill("Load") { onDismiss(); player.loadQueue(items(), origin) }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton(onDismiss) { Text("Close") } },
+    )
 }
