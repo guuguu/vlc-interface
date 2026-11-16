@@ -237,6 +237,9 @@ object CoverArt {
 
     /** For the music player: picture from the album folder — or, for songs not in a one-album folder, from the
      *  pictures store — else from the internet (album, then artist), saved back to the same place. */
+    /** On mobile data (no Wi-Fi): no picture downloads. */
+    fun onMobile() = app.vlcinterface.player.NetGuard.cellular.value
+
     /** "Beatles, The" → "The Beatles" (library-sorted names don't match online catalogues). */
     fun canonicalArtist(a: String): String {
         val m = Regex("""^(.+?),\s*(the|a|an|die|der|das|les|los|las|la|le|il|el)$""", RegexOption.IGNORE_CASE).find(a.trim()) ?: return a.trim()
@@ -253,6 +256,8 @@ object CoverArt {
             else storeFind(item, artist, album)?.readBytes()
         local?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.let { mem.put(memKey, it); mem.put(item.uri, it); return@withContext Result(it, "") }
         if (!online) return@withContext Result(null, "")
+        // Pictures are downloaded only over Wi-Fi (never on mobile data).
+        if (onMobile()) return@withContext Result(null, if (force) "Pictures are downloaded only on Wi-Fi" else "")
         val (bytes, name) = albumPicture(artist, album, force)?.let { it to "cover.jpg" } ?: artistPicture(artist, force)?.let { it to "artist.jpg" }
             ?: return@withContext Result(null, if (force) "No picture found online for \"$album\"" + if (artist.isNotBlank()) " by $artist" else "" else "")
         val (bmp, jpeg) = resize(bytes) ?: return@withContext Result(null, "")
@@ -410,6 +415,39 @@ object CoverArt {
         return null
     }
 
+    /**
+     * Song announced by a radio station: its album picture (iTunes, then Deezer), kept in a temporary folder
+     * (app cache "radio-pictures", newest 60 kept). Null when not found.
+     */
+    fun radioSong(ctx: Context, artist: String, title: String): File? {
+        val dir = File(ctx.cacheDir, "radio-pictures").apply { mkdirs() }
+        val f = File(dir, key("$artist|$title") + ".jpg")
+        if (f.exists() && f.length() > 1000) { f.setLastModified(System.currentTimeMillis()); return f }
+        if (missed("rs" + key("$artist|$title"))) return null
+        if (onMobile()) return null                           // only on Wi-Fi
+        val term = URLEncoder.encode("$artist $title", "UTF-8")
+        var url: String? = null
+        json("https://itunes.apple.com/search?media=music&entity=song&limit=10&term=$term")?.optJSONArray("results")?.let { a ->
+            for (i in 0 until a.length()) { val o = a.getJSONObject(i)
+                if (artistFits(artist, o.optString("artistName")) && norm(o.optString("trackName")).startsWith(norm(title).take(12))) {
+                    url = o.optString("artworkUrl100").replace("100x100bb", "600x600bb").ifBlank { null }; if (url != null) break }
+            }
+        }
+        if (url == null) json("https://api.deezer.com/search/track?limit=10&q=$term")?.optJSONArray("data")?.let { a ->
+            for (i in 0 until a.length()) { val o = a.getJSONObject(i)
+                if (artistFits(artist, o.optJSONObject("artist")?.optString("name") ?: "") && norm(o.optString("title")).startsWith(norm(title).take(12))) {
+                    url = o.optJSONObject("album")?.optString("cover_xl")?.takeIf { it.isNotBlank() && "/cover//" !in it }; if (url != null) break }
+            }
+        }
+        val bytes = url?.let { try { get(it) } catch (_: Exception) { null } }
+        if (bytes == null) { markMissed("rs" + key("$artist|$title")); return null }
+        val jpeg = resize(bytes)?.second ?: return null
+        f.writeBytes(jpeg)
+        // Temporary: only the newest pictures are kept.
+        dir.listFiles()?.sortedByDescending { it.lastModified() }?.drop(60)?.forEach { it.delete() }
+        return f
+    }
+
     // ---------- choosing among several pictures ----------
 
     /** One album picture found online, to choose from (long-press on the player's picture). */
@@ -430,6 +468,7 @@ object CoverArt {
     suspend fun candidates(artist0: String, album: String): List<Candidate> = withContext(Dispatchers.IO) {
         val artist = canonicalArtist(artist0)
         if (album.isBlank() && artist.isBlank()) return@withContext emptyList()
+        if (onMobile()) return@withContext emptyList()       // only on Wi-Fi
         val hits = LinkedHashMap<String, Triple<String, String, JSONObject>>()   // id → (kind, id, json)
         lock.withLock {
             try {

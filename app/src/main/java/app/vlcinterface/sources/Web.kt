@@ -134,6 +134,7 @@ data class RadioStation(
     val uuid: String, val name: String, val url: String, val codec: String,
     val bitrate: Int, val country: String, val tags: String, val favicon: String,
 ) {
+    val isFlac: Boolean get() = codec.contains("flac", true)
     val meta: String get() = listOfNotNull(
         tags.split(',').firstOrNull()?.trim()?.replaceFirstChar { it.uppercase() }?.ifEmpty { null },
         if (bitrate > 0) "$bitrate kbps ${codec}".trim() else codec.ifEmpty { null },
@@ -145,17 +146,23 @@ data class RadioStation(
 object RadioBrowser {
     private const val BASE = "https://all.api.radio-browser.info/json"
 
-    suspend fun search(name: String = "", tag: String = "", country: String = "", limit: Int = 60): Result<List<RadioStation>> =
+    suspend fun search(name: String = "", tag: String = "", country: String = "", limit: Int = 60,
+                       bitrateMin: Int = 0, bitrateMax: Int = 0, language: String = "", codec: String = "",
+                       order: String = "clickcount"): Result<List<RadioStation>> =
         withContext(Dispatchers.IO) {
             try {
                 val b = Uri.parse("$BASE/stations/search").buildUpon()
                     .appendQueryParameter("limit", limit.toString())
                     .appendQueryParameter("hidebroken", "true")
-                    .appendQueryParameter("order", "clickcount")
+                    .appendQueryParameter("order", order)
                     .appendQueryParameter("reverse", "true")
                 if (name.isNotBlank()) b.appendQueryParameter("name", name.trim())
                 if (tag.isNotBlank()) b.appendQueryParameter("tag", tag.trim().lowercase())
                 if (country.isNotBlank()) b.appendQueryParameter("countrycode", country.trim().uppercase())
+                if (bitrateMin > 0) b.appendQueryParameter("bitrateMin", bitrateMin.toString())
+                if (bitrateMax > 0) b.appendQueryParameter("bitrateMax", bitrateMax.toString())
+                if (language.isNotBlank()) b.appendQueryParameter("language", language.trim().lowercase())
+                if (codec.isNotBlank()) b.appendQueryParameter("codec", codec.trim())
                 val req = Request.Builder().url(b.build().toString()).header("User-Agent", Net.UA).build()
                 Net.http.newCall(req).execute().use { r ->
                     if (!r.isSuccessful) return@withContext Result.failure(Exception("Directory answered ${r.code}"))

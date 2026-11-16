@@ -164,7 +164,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     }
     LaunchedEffect(toast) { if (toast.isNotEmpty()) { delay(900); toast = "" } }
     // Music never uses the video player: hand over to the music screen (also when a queue moves on to a song).
-    LaunchedEffect(p.item?.uri, p.item?.startMs) { if (p.item?.isMusic == true) nav.replace(Screen.Music) }
+    LaunchedEffect(p.item?.uri, p.item?.startMs) { if (p.item?.isMusic == true || p.item?.isRadio == true) nav.replace(Screen.Music) }
 
     // Auto-download subtitles when nothing in the preferred languages is present.
     LaunchedEffect(p.item?.uri) {

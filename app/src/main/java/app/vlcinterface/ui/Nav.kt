@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -73,7 +74,11 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
     // Battery 15 % or less (not charging): every accent-coloured item turns bright red as a warning.
     val lowColour by app.vlcinterface.player.BatteryGuard.warnColour.collectAsState()
     UiPrefs.lowBattery = lowColour
-    val accent = if (lowColour) LOW_BATTERY_RED else Color(st.settings.accent)
+    // A radio station playing: the radio colour (if one is set), else the files colour.
+    val pFull = App.instance.player.state.collectAsState()
+    val radioOn by remember { derivedStateOf { pFull.value.item?.isRadio == true } }
+    val accent = if (lowColour) LOW_BATTERY_RED
+        else Color(if (radioOn && st.settings.radioAccent != 0L) st.settings.radioAccent else st.settings.accent)
     var showOutput by remember { mutableStateOf(false) }
     val openOutput = { showOutput = true }
 
@@ -156,6 +161,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 FailAskHost()
                 RgAskHost()
                 LowBatteryHost()
+                WifiLostHost()
             }
             BackHandler(enabled = true) {
                 if (showOutput) showOutput = false else if (!nav.back()) onFinish()

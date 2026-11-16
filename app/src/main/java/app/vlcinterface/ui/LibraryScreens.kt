@@ -223,7 +223,7 @@ fun MiniPlayer(nav: Navigator) {
             }
             Text(sub, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (!item.isRadio) SymButton({ nav.go(if (item.isMusic) Screen.Music else Screen.Player) }) {
+        SymButton({ nav.go(if (item.isMusic || item.isRadio) Screen.Music else Screen.Player) }) {
             SymIcon(Icons.Filled.KeyboardArrowUp, "Open player", tint = C.text)
         }
         SymButton({ App.instance.player.togglePause() }) {
@@ -553,8 +553,10 @@ fun RadioTab(nav: Navigator) {
             RadioBrowser.search(name, tag, country).onSuccess { results = it }.onFailure { results = emptyList(); error = it.message ?: "Search failed" }
         }
     }
+    // Stations play in the audio player (radio mode); the favourites are its station list.
     fun play(name: String, url: String) {
-        App.instance.player.play(PlayItem(url, name, isRadio = true))
+        App.instance.player.playStation(name, url)
+        nav.go(Screen.Music)
     }
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -568,11 +570,14 @@ fun RadioTab(nav: Navigator) {
         }
         if (st.stations.isNotEmpty()) {
             SectionTitle("Favourite stations")
+            var renameS by remember { mutableStateOf<Station?>(null) }
+            renameS?.let { s -> StationRenameDialog(s) { renameS = null } }
             CardBox {
                 st.stations.forEach { s ->
+                    // Long-press: rename the station.
                     StationRow(s.name, s.meta, fav = true, onFav = {
                         App.instance.store.update { x -> x.copy(stations = x.stations.filterNot { it.id == s.id }) }
-                    }) { play(s.name, s.url) }
+                    }, onLong = { renameS = s }) { play(s.name, s.url) }
                     Divider()
                 }
             }
@@ -612,8 +617,8 @@ fun RadioTab(nav: Navigator) {
 }
 
 @Composable
-fun StationRow(name: String, meta: String, fav: Boolean, onFav: () -> Unit, onPlay: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clickable(onClick = onPlay).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+fun StationRow(name: String, meta: String, fav: Boolean, onFav: () -> Unit, onLong: (() -> Unit)? = null, onPlay: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).combinedClickable(onClick = onPlay, onLongClick = onLong).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (meta.isNotEmpty()) Text(meta, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

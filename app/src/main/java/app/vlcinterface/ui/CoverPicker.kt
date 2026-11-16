@@ -54,6 +54,7 @@ fun CoverPicker(item: PlayItem, onNone: () -> Unit, onDone: (note: String, chang
         scope.launch { val r = CoverArt.useCandidate(ctx.applicationContext, item, c); onDone(r.note, r.bitmap != null) }
     }
     LaunchedEffect(item.uri) {
+        if (CoverArt.onMobile()) { onDone("Pictures are downloaded only on Wi-Fi", false); return@LaunchedEffect }
         val l = CoverArt.candidates(item.artist, item.album)
         when (l.size) {
             0 -> onNone()

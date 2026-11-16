@@ -96,6 +96,8 @@ data class PlayerState(
     val metaArtist: String = "",
     val metaAlbum: String = "",
     val artworkUrl: String = "",
+    /** Radio: the name the station announces about itself (ICY name), if any. */
+    val stationName: String = "",
     val buffering: Float = 100f,
     val error: String = "",
     val ended: Boolean = false,
@@ -693,7 +695,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         playQueue(items, 0, origin, random = false)
     }
 
-    fun playQueue(items0: List<PlayItem>, index0: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null) {
+    fun playQueue(items0: List<PlayItem>, index0: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null, keepOrder: Boolean = false) {
         if (items0.isEmpty()) return
         // Duplicates are left out (first one kept); the item that was tapped stays the one that starts.
         val tapped = items0.getOrNull(index0.coerceIn(0, items0.size - 1))
@@ -702,7 +704,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (random != null && random != store.current.settings.shuffle) store.update { it.copy(settings = it.settings.copy(shuffle = random)) }
         var i = index.coerceIn(0, items.size - 1)
         var q = items
-        if (store.current.settings.shuffle && items.size > 1) {
+        if (!keepOrder && store.current.settings.shuffle && items.size > 1) {
             orderedQueue = items
             q = listOf(items[i]) + items.filterIndexed { j, _ -> j != i }.shuffled()
             i = 0
@@ -735,6 +737,20 @@ class PlayerController(private val context: Context, private val store: Store) {
             _state.value = s.copy(queue = o, index = idx.coerceAtLeast(0))
         }
     }
+
+    /**
+     * A radio station: played in the audio player with all favourite stations as the list, in their order
+     * (⏮ / ⏭ go to the previous / next favourite). A station that isn't a favourite plays on its own.
+     */
+    fun playStation(name: String, url: String) {
+        val favs = store.current.stations
+        val i = favs.indexOfFirst { it.url == url }
+        if (i < 0) { playQueue(listOf(PlayItem(url, name, isRadio = true)), 0, Origin("radio", "", url, name), keepOrder = true); return }
+        playQueue(favs.map { PlayItem(it.url, it.name, isRadio = true) }, i, Origin("radio", "", url, "Favourite stations"), keepOrder = true)
+    }
+
+    /** Starts the current item again (a radio stream after the connection changed). */
+    fun replayCurrent() { val s = _state.value; if (s.item != null) startItem(s.index, -1) }
 
     fun play(item: PlayItem, startAt: Long = -1, origin: Origin = Origin(if (item.isRadio) "radio" else "single", item.sourceId, item.uri, item.title)) =
         playQueue(listOf(item), 0, origin, startAt)
@@ -976,6 +992,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         sessionManualChoice()
         val s = _state.value
         val item = s.item ?: return
+        // Radio: previous station (round), never "back to the start".
+        if (item.isRadio) { if (s.queue.size > 1) startItem(if (s.index <= 0) s.queue.size - 1 else s.index - 1, -1); return }
         if (mp.time > 4000 || s.index <= 0) { seekTo(if (item.startMs >= 0) item.startMs else 0); return }
         startItem(s.index - 1, -1)
     }
@@ -983,6 +1001,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun nextIndex(s: PlayerState, manual: Boolean): Int? {
         val repeat = store.current.settings.repeat
         if (!manual && repeat == "one") return s.index
+        // Radio stations: next one in the list, round.
+        if (manual && s.item?.isRadio == true && s.queue.size > 1) return (s.index + 1) % s.queue.size
         return when {
             s.index + 1 < s.queue.size -> s.index + 1
             // Random + repeat all: a fresh random order for the next round (not starting with the song that just ended).
@@ -1564,14 +1584,29 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val item = s.item
                 if (item != null && item.isRadio) {
                     val m = mp.media
+                    // The song the station announces (stream tags), and the station's own announced name.
                     val np = m?.getMeta(IMedia.Meta.NowPlaying, true)?.trim().orEmpty()
-                        .ifEmpty { m?.getMeta(IMedia.Meta.Title, true)?.trim().orEmpty().takeIf { it != item.title && !it.startsWith("http") } ?: "" }
+                    val sn = m?.getMeta(IMedia.Meta.Title, true)?.trim().orEmpty().takeIf { !it.contains("://") && it != np } ?: ""
                     m?.release()
-                    if (np != s.nowPlaying) _state.value = _state.value.copy(nowPlaying = np)
+                    if (np != s.nowPlaying || sn != s.stationName) {
+                        _state.value = _state.value.copy(nowPlaying = np, stationName = sn)
+                        if (np != s.nowPlaying) radioSongChanged(item, np)
+                    }
                 }
             } catch (_: Exception) {
             }
             main.postDelayed(this, 3000)
+        }
+    }
+
+    /** Announced song on a station: its album picture (temporary radio pictures folder), else back to the station's own. */
+    private fun radioSongChanged(item: PlayItem, np: String) {
+        val (artist, title) = splitNowPlaying(np)
+        if (title.isEmpty() || artist.isEmpty()) { _state.value = _state.value.copy(artworkUrl = item.artwork); return }
+        bg.launch {
+            val f = try { app.vlcinterface.sources.CoverArt.radioSong(context, artist, title) } catch (_: Exception) { null }
+            val s = _state.value
+            if (s.item === item && s.nowPlaying == np) _state.value = s.copy(artworkUrl = f?.absolutePath ?: item.artwork)
         }
     }
 
@@ -1655,4 +1690,12 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     val isPlaying: Boolean get() = mp.isPlaying
     val position: Long get() = mp.time
+}
+
+
+/** "Artist - Title" as stations announce it → (artist, title); anything else → ("", whole text). */
+fun splitNowPlaying(np: String): Pair<String, String> {
+    val t = np.trim()
+    val i = listOf(" - ", " – ", " — ").map { t.indexOf(it) }.filter { it > 0 }.minOrNull() ?: return "" to t
+    return t.substring(0, i).trim() to t.substring(i + 3).trim()
 }

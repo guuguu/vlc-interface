@@ -77,6 +77,7 @@ import app.vlcinterface.data.ServerLog
 import app.vlcinterface.data.Source
 import app.vlcinterface.player.Origin
 import app.vlcinterface.player.PlayItem
+import app.vlcinterface.player.PlayerState
 import app.vlcinterface.sources.Browse
 import app.vlcinterface.sources.Cue
 import app.vlcinterface.sources.CueResult
@@ -158,6 +159,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Long-press: all fitting album pictures online; several → choose one from the list.
             var coverPick by remember(item.uri) { mutableStateOf(false) }
             val coverItem = item.copy(artist = p.metaArtist.ifEmpty { item.artist }, album = p.metaAlbum.ifEmpty { item.album })
+            val coverSize = if (!landscape) 280 else if (leftHpx <= 0) 190 else (with(dens) { leftHpx.toDp().value }.toInt() - 128).coerceIn(110, 240)
+            // Radio: the announced song's album picture (temporary radio pictures), else the station's logo.
+            if (item.isRadio) Cover(p.artworkUrl.ifEmpty { item.artwork }, coverSize, Modifier.padding(top = 8.dp)) else
             // The picture goes as soon as the song ends (the next song brings its own).
             Cover(if (p.songOver) "" else item.artwork, if (!landscape) 280 else if (leftHpx <= 0) 190 else (with(dens) { leftHpx.toDp().value }.toInt() - 128).coerceIn(110, 240), Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
                 item = if (p.songOver) null else coverItem, download = !p.songOver, refresh = coverRefresh,
@@ -170,6 +174,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     if (changed) { coverRefresh++; player.useDownloadedArtwork(item, "mem:" + item.uri + "#v" + System.currentTimeMillis()) }
                 })
             if (coverNote.isNotEmpty()) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)
+            if (item.isRadio) RadioHeader(item, p, tk) else
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 // Tap the song name: its folder in Libraries.
                 Text(item.title, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -197,37 +202,41 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
         }
         val partB: @Composable ColumnScope.() -> Unit = {
-            SeekBlock(item)
+            val radio = item.isRadio
+            // Radio: no position to move to — only how long this station has been on.
+            if (radio) RadioListening() else SeekBlock(item)
             // Skip buttons say where they skip in: the playlist or the folder playback started from.
-            val within = when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
+            val within = if (radio) "station" else when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
             // Never overlapping: shrinks the controls if they don't fit the width (large Button size, narrow phone).
             AutoFitRow(spacing = 12.dp) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
                     CtlBtn("⏮", 52) { player.prev() }
-                    Text("Prev in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text(if (radio) "Prev\nstation" else "Prev in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
-                Box(Modifier.padding(top = 4.dp)) { CtlBtn("−${st.settings.doubleTapSeekSec}", 44) { player.seekBy(-st.settings.doubleTapSeekSec * 1000L) } }
+                if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("−${st.settings.doubleTapSeekSec}", 44) { player.seekBy(-st.settings.doubleTapSeekSec * 1000L) } }
                 Box(Modifier.size((76 * btnScale()).dp).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
                     Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (26 * btnScale()).sp, fontWeight = FontWeight.Bold)
                 }
-                Box(Modifier.padding(top = 4.dp)) { CtlBtn("+${st.settings.doubleTapSeekSec}", 44) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) } }
+                if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("+${st.settings.doubleTapSeekSec}", 44) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) } }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
                     CtlBtn("⏭", 52) { player.next() }
-                    Text("Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                    Text(if (radio) "Next\nstation" else "Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
             // Prominent shortcut: where the music is playing from (playlist or Library folder).
-            val fromLabel = when (p.origin.kind) {
+            val fromLabel = when {
+                radio && p.origin.kind == "radio" -> "Favourites: ${p.queue.size} station" + if (p.queue.size == 1) "" else "s"
+                else -> when (p.origin.kind) {
                 "playlist" -> "Playlist: " + (st.playlists.firstOrNull { it.id == p.origin.playlistId }?.name ?: "")
                 "folder", "local" -> "Folder: " + p.origin.title
                 else -> "Open song folder"
-            }
+            } }
             // Tap: open where it plays from, or load another saved playlist instead.
             var originPick by remember { mutableStateOf(false) }
             Pill("☰  $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { originPick = true }
             if (originPick) OriginPickDialog(fromLabel, onOpen = { originPick = false; openOrigin(nav) }, onDismiss = { originPick = false })
             // Search all songs; the one picked plays next (inserted after the current song), window closes by itself.
-            Pill("♪  Play next…", modifier = Modifier.fillMaxWidth()) { playNextPick = true }
+            if (!radio) Pill("♪  Play next…", modifier = Modifier.fillMaxWidth()) { playNextPick = true }
             // Sleep: number input (up to 3 digits) for "After … songs" and "Custom minutes…".
             var sleepAsk by remember { mutableStateOf("") }
             var sleepNote by remember { mutableStateOf("") }
@@ -278,8 +287,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 )
             }
             AutoFitRow(spacing = 8.dp) {
-                Pill(if (st.settings.shuffle) "Random" else "Sequential", selected = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
-                Pill("Repeat: " + st.settings.repeat.replaceFirstChar { it.uppercase() }, selected = st.settings.repeat != "off") {
+                if (!radio) Pill(if (st.settings.shuffle) "Random" else "Sequential", selected = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
+                if (!radio) Pill("Repeat: " + st.settings.repeat.replaceFirstChar { it.uppercase() }, selected = st.settings.repeat != "off") {
                     val next = when (st.settings.repeat) { "off" -> "all"; "all" -> "one"; else -> "off" }
                     App.instance.store.update { it.copy(settings = it.settings.copy(repeat = next)) }
                 }
@@ -300,16 +309,21 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 Box {
                     Pill("Sleep", selected = p.sleepUntil > 0 || p.sleepSongs > 0) { sleepMenu = true }
                     SDropdownMenu(sleepMenu, { sleepMenu = false }) {
+                        // Radio: time only (a station has no songs to count).
+                        if (!radio) {
                         SMenuItem({ Text("After 1 song (this one)") }, { player.setSleepSongs(1); sleepMenu = false })
                         SMenuItem({ Text("After this album") }, { sleepMenu = false; sleepScope.launch { val n = player.sleepAfterAlbum(); if (n <= 1) sleepNote = "No more songs of this album after this one: stops after this song" } })
                         SMenuItem({ Text("After … songs") }, { sleepMenu = false; sleepAsk = "songs" })
+                        }
                         SMenuItem({ Text("30 minutes") }, { player.setSleep(30); sleepMenu = false })
                         SMenuItem({ Text("Custom minutes…") }, { sleepMenu = false; sleepAsk = "minutes" })
                         if (p.sleepUntil > 0 || p.sleepSongs > 0) SMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
                     }
                 }
             }
-            val next0 = if (p.index >= 0) p.queue.drop(p.index + 1).take(st.settings.upNextCount) else emptyList()
+            // Radio: favourite stations and the station search instead of "Up next".
+            if (radio) RadioPanel(nav)
+            val next0 = if (radio) emptyList() else if (p.index >= 0) p.queue.drop(p.index + 1).take(st.settings.upNextCount) else emptyList()
             // Same number of songs upright and sideways (the side column scrolls if they don't fit).
             val next = next0
             if (next.isNotEmpty()) Column(Modifier.fillMaxWidth().onGloballyPositioned { upNextYpx = it.positionInParent().y.toInt() }) {
@@ -704,7 +718,7 @@ fun playPlaylist(nav: Navigator, pl: Playlist, index: Int, random: Boolean? = nu
     if (pl.items.isEmpty()) return
     val items = pl.items.map { MusicLibrary.fromPlEntry(it) }
     App.instance.player.playQueue(items, index, Origin("playlist", playlistId = pl.id, title = pl.name), random = random)
-    nav.go(if (items[index.coerceIn(0, items.size - 1)].isMusic) Screen.Music else Screen.Player)
+    nav.go(items[index.coerceIn(0, items.size - 1)].let { if (it.isMusic || it.isRadio) Screen.Music else Screen.Player })
 }
 
 /** "In order" / "Random" switch for the queue. */
@@ -1270,4 +1284,194 @@ fun OriginPickDialog(fromLabel: String, onOpen: () -> Unit, onDismiss: () -> Uni
         },
         confirmButton = { STextButton(onDismiss) { Text("Close") } },
     )
+}
+
+// ---------------- Radio mode of the audio player ----------------
+
+/**
+ * Radio header: RADIO STATION, the station (your name for it, and the name it announces when different), its link,
+ * then the announced song shown like a song's tags (title big, artist under it), the station's details and,
+ * on mobile data, the data this station has used so far.
+ */
+@Composable
+private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
+    val st by App.instance.store.state.collectAsState()
+    val fav = st.stations.firstOrNull { it.url == item.uri }
+    val name = fav?.name ?: item.title
+    val (artist, title) = app.vlcinterface.player.splitNowPlaying(p.nowPlaying)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("RADIO STATION", color = accent(), fontSize = 12.sp, letterSpacing = 1.sp)
+        Text(name + if (p.stationName.isNotBlank() && !p.stationName.equals(name, true)) " · ${p.stationName}" else "",
+            color = C.text, fontSize = (16 * tk).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(item.uri.substringAfter("://").take(60), color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(title.ifEmpty { "Live" }, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+        if (artist.isNotEmpty()) Text(artist, color = C.muted, fontSize = (15 * tk).sp, textAlign = TextAlign.Center)
+        val details = listOfNotNull(fav?.meta?.ifEmpty { null }, p.rgInfo.ifEmpty { null },
+            if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else null)
+        if (details.isNotEmpty()) Text(details.joinToString(" · "), color = accent(), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(4.dp))
+        if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        // Mobile data only: what this station has used so far, live.
+        val cell by app.vlcinterface.player.NetGuard.cellular.collectAsState()
+        if (cell) {
+            var used by remember { mutableStateOf(0L) }
+            LaunchedEffect(item.uri) { while (true) { used = app.vlcinterface.player.NetGuard.stationBytes().coerceAtLeast(0); kotlinx.coroutines.delay(1000) } }
+            Text("Mobile data: ${app.vlcinterface.player.NetGuard.fmt(used)}" + if (fav?.meta?.contains("flac", true) == true) " · FLAC uses a lot of data" else "",
+                color = C.bad, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+/** Radio: how long this station has been playing (no progress bar, nothing to seek). */
+@Composable
+private fun RadioListening() {
+    val p by App.instance.player.state.collectAsState()
+    Text("Live · listening ${fmtTime(p.time)}", color = C.muted, fontSize = 13.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+}
+
+/** Rename a favourite station (the name shown everywhere in the app). */
+@Composable
+fun StationRenameDialog(station: app.vlcinterface.data.Station, onDone: () -> Unit) {
+    var name by remember { mutableStateOf(station.name) }
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("Rename station", color = C.text) },
+        text = { androidx.compose.material3.OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth()) },
+        confirmButton = {
+            STextButton({
+                val n = name.trim()
+                if (n.isNotEmpty()) App.instance.store.update { x -> x.copy(stations = x.stations.map { if (it.id == station.id) it.copy(name = n) else it }) }
+                onDone()
+            }) { Text("Save", color = accent()) }
+        },
+        dismissButton = { STextButton(onDone) { Text("Cancel") } },
+    )
+}
+
+/** Radio, lower part of the player: all favourite stations (scrollable) and the station search with filters. */
+@Composable
+private fun RadioPanel(nav: Navigator) {
+    val st by App.instance.store.state.collectAsState()
+    val player = App.instance.player
+    val cur = player.state.collectAsState().value.item?.uri
+    val ctx = LocalContext.current
+    var menu by remember { mutableStateOf<String?>(null) }
+    var rename by remember { mutableStateOf<app.vlcinterface.data.Station?>(null) }
+    rename?.let { s -> StationRenameDialog(s) { rename = null } }
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        SectionTitle("Favourite stations")
+        if (st.stations.isEmpty()) Text("No favourites yet: find stations below and tap ☆.", color = C.muted, fontSize = 13.sp)
+        else {
+            val ls = androidx.compose.foundation.lazy.rememberLazyListState()
+            LaunchedEffect(Unit) { st.stations.indexOfFirst { it.url == cur }.takeIf { it > 1 }?.let { ls.scrollToItem(it - 1) } }
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp).clip(RoundedCornerShape(10.dp))
+                .border(1.dp, C.line, RoundedCornerShape(10.dp)).scrollbar(ls), state = ls) {
+                items(st.stations.size) { i ->
+                    val s = st.stations[i]
+                    val on = s.url == cur
+                    Row(Modifier.fillMaxWidth().background(if (on) accent().copy(alpha = 0.14f) else Color.Transparent)
+                        .combinedClickable(onClick = { player.playStation(s.name, s.url) }, onLongClick = { menu = s.id })
+                        .padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${i + 1}", color = if (on) accent() else C.muted, fontSize = 13.sp, modifier = Modifier.width(26.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text((if (on) "▶ " else "") + s.name, color = if (on) accent() else C.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            if (s.meta.isNotEmpty()) Text(s.meta, color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Box {
+                            SDropdownMenu(menu == s.id, { menu = null }) {
+                                SMenuItem({ Text("▶  Play") }, { menu = null; player.playStation(s.name, s.url) })
+                                SMenuItem({ Text("Rename…") }, { menu = null; rename = s })
+                                SMenuItem({ Text("Copy link") }, {
+                                    menu = null
+                                    ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("station", s.url))
+                                })
+                                if (i > 0) SMenuItem({ Text("Move up") }, { menu = null; App.instance.store.update { x -> x.copy(stations = x.stations.toMutableList().also { l -> java.util.Collections.swap(l, i, i - 1) }) } })
+                                if (i < st.stations.size - 1) SMenuItem({ Text("Move down") }, { menu = null; App.instance.store.update { x -> x.copy(stations = x.stations.toMutableList().also { l -> java.util.Collections.swap(l, i, i + 1) }) } })
+                                SMenuItem({ Text("Remove from favourites", color = C.bad) }, { menu = null; App.instance.store.update { x -> x.copy(stations = x.stations.filterNot { it.id == s.id }) } })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        StationSearch()
+    }
+}
+
+/** Station search (radio-browser.info): name, plus Style, Bitrate, Country, Language, Codec and Sort filters. */
+@Composable
+fun StationSearch() {
+    val st by App.instance.store.state.collectAsState()
+    val player = App.instance.player
+    val scope = rememberCoroutineScope()
+    var q by remember { mutableStateOf("") }
+    var style by remember { mutableStateOf("") }
+    var bitrate by remember { mutableStateOf(0) }       // 0 any, -1 = up to 128 (mobile data), else minimum
+    var country by remember { mutableStateOf("") }
+    var language by remember { mutableStateOf("") }
+    var codec by remember { mutableStateOf("") }
+    var order by remember { mutableStateOf("clickcount") }
+    var results by remember { mutableStateOf<List<app.vlcinterface.sources.RadioStation>?>(emptyList()) }
+    var error by remember { mutableStateOf("") }
+    var open by remember { mutableStateOf("") }
+    fun run() {
+        scope.launch {
+            results = null; error = ""
+            app.vlcinterface.sources.RadioBrowser.search(q, style, country, 40,
+                bitrateMin = if (bitrate > 0) bitrate else 0, bitrateMax = if (bitrate < 0) 128 else 0,
+                language = language, codec = codec, order = order)
+                .onSuccess { results = it }.onFailure { results = emptyList(); error = it.message ?: "Search failed" }
+        }
+    }
+    @Composable
+    fun Filter(key: String, label: String, value: String, options: List<Pair<String, () -> Unit>>) {
+        Box {
+            Pill("$label: ${value.ifEmpty { "any" }} ▾", selected = value.isNotEmpty()) { open = key }
+            SDropdownMenu(open == key, { open = "" }) {
+                options.forEach { (l, f) -> SMenuItem({ Text(l) }, { open = ""; f(); run() }) }
+            }
+        }
+    }
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Find stations", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.material3.OutlinedTextField(q, { q = it }, Modifier.weight(1f), singleLine = true, placeholder = { Text("Station name") },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { run() }))
+            SymButton({ run() }) { SymIcon(Icons.Filled.Search, "Search", tint = C.text) }
+        }
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Filter("style", "Style", style, (listOf("any" to "") + listOf("Rock", "Pop", "Jazz", "Classical", "Blues", "Metal", "Electronic", "Chill", "Ambient",
+                "Hip hop", "Country", "Folk", "Reggae", "Soul", "Oldies", "80s", "90s", "News", "Talk").map { it to it.lowercase() })
+                .map { (l, v) -> l to { style = v } })
+            Filter("bitrate", "Bitrate", when { bitrate < 0 -> "≤ 128"; bitrate > 0 -> "≥ $bitrate"; else -> "" },
+                listOf("any" to 0, "≤ 128 kbps (mobile data)" to -1, "≥ 128 kbps" to 128, "≥ 192 kbps" to 192, "≥ 320 kbps / lossless" to 320).map { (l, v) -> l to { bitrate = v } })
+            Filter("country", "Country", country, (listOf("any" to "", "Near me (${java.util.Locale.getDefault().country})" to java.util.Locale.getDefault().country) +
+                listOf("US", "GB", "DE", "FR", "ES", "IT", "NL", "RO", "CH", "AT", "BE", "CA", "AU", "BR", "JP").map { it to it }).map { (l, v) -> l to { country = v } })
+            Filter("language", "Language", language, (listOf("any" to "") + listOf("English", "Spanish", "German", "French", "Italian", "Romanian", "Portuguese", "Dutch")
+                .map { it to it.lowercase() }).map { (l, v) -> l to { language = v } })
+            Filter("codec", "Codec", codec, listOf("any" to "", "MP3" to "MP3", "AAC" to "AAC", "AAC+" to "AAC+", "OGG" to "OGG", "FLAC" to "FLAC").map { (l, v) -> l to { codec = v } })
+            Filter("sort", "Sort", when (order) { "votes" -> "votes"; "bitrate" -> "bitrate"; "name" -> "name"; else -> "popular" },
+                listOf("popular" to "clickcount", "votes" to "votes", "bitrate" to "bitrate", "name" to "name").map { (l, v) -> l to { order = v } })
+        }
+        when {
+            results == null -> Box(Modifier.fillMaxWidth().padding(10.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
+            error.isNotEmpty() -> Text(error, color = C.bad, fontSize = 13.sp)
+            else -> results!!.forEach { r ->
+                val fav = st.stations.any { it.url == r.url }
+                Row(Modifier.fillMaxWidth().clickable { player.playStation(r.name, r.url) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(r.name, color = C.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (r.meta.isNotEmpty()) Text(r.meta, color = if (r.isFlac) C.bad.copy(alpha = 0.8f) else C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    Text(if (fav) "★" else "☆", color = accent(), fontSize = 22.sp, modifier = Modifier.clickable {
+                        App.instance.store.update { x ->
+                            if (fav) x.copy(stations = x.stations.filterNot { it.url == r.url })
+                            else x.copy(stations = x.stations + app.vlcinterface.data.Station(name = r.name, url = r.url, meta = r.meta, favicon = r.favicon))
+                        }
+                    }.padding(horizontal = 8.dp))
+                }
+            }
+        }
+    }
 }

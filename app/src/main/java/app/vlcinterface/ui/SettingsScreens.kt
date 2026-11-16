@@ -222,17 +222,26 @@ fun SettingsScreen(nav: Navigator) {
                     }
                 }
             }
+            // Separate colours for local / LAN files and for radio: choose which one the circles below set.
+            var forRadio by remember { mutableStateOf(false) }
+            val cur = if (forRadio) (s.radioAccent.takeIf { it != 0L } ?: s.accent) else s.accent
+            fun pick(c: Long) = set(if (forRadio) s.copy(radioAccent = c) else s.copy(accent = c))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Colour for", color = C.text, fontSize = 15.sp)
+                Pill("Files", selected = !forRadio, filled = !forRadio) { forRadio = false }
+                Pill("Radio", selected = forRadio, filled = forRadio) { forRadio = true }
+            }
             // Custom colours: up to 5 slots; tap uses one, long-press edits it. "+" adds while a slot is free.
             var editSlot by remember { mutableStateOf(-1) }      // -1 closed, 0..2 edit that slot, 3 new
             Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 listOf(0xFFFF8A3D).forEach { c ->
                     Box(Modifier.size(34.dp).clip(CircleShape).background(Color(c))
-                        .border(if (s.accent == c) 3.dp else 0.dp, Color.White, CircleShape).clickable { set(s.copy(accent = c)) })
+                        .border(if (cur == c) 3.dp else 0.dp, Color.White, CircleShape).clickable { pick(c) })
                 }
                 s.customAccents.forEachIndexed { i, c ->
                     Box(Modifier.size(34.dp).clip(CircleShape).background(Color(c))
-                        .border(if (s.accent == c) 3.dp else 0.dp, Color.White, CircleShape)
-                        .combinedClickable(onClick = { set(s.copy(accent = c)) }, onLongClick = { editSlot = i }))
+                        .border(if (cur == c) 3.dp else 0.dp, Color.White, CircleShape)
+                        .combinedClickable(onClick = { pick(c) }, onLongClick = { editSlot = i }))
                 }
                 Box(Modifier.size(34.dp).clip(CircleShape).border(2.dp, C.muted, CircleShape).clickable { editSlot = 3 }, contentAlignment = Alignment.Center) {
                         Text("+", color = C.text, fontSize = 22.sp)
@@ -242,18 +251,18 @@ fun SettingsScreen(nav: Navigator) {
             if (editSlot >= 0) {
                 val slot = editSlot
                 val existing = slot < s.customAccents.size
-                ColorPickDialog(s.customAccents.getOrNull(slot) ?: s.accent, onDismiss = { editSlot = -1 },
+                ColorPickDialog(s.customAccents.getOrNull(slot) ?: cur, onDismiss = { editSlot = -1 },
                     onRemove = if (existing) ({
                         editSlot = -1
                         val gone = s.customAccents[slot]
                         set(s.copy(customAccents = s.customAccents.filterIndexed { i, _ -> i != slot },
-                            accent = if (s.accent == gone) 0xFFFF8A3D else s.accent))
+                            accent = if (s.accent == gone) 0xFFFF8A3D else s.accent, radioAccent = if (s.radioAccent == gone) 0L else s.radioAccent))
                     }) else null) { c ->
                     editSlot = -1
                     val list = s.customAccents.toMutableList()
                     when {
-                        existing -> { list[slot] = c; set(s.copy(customAccents = list, accent = c)) }
-                        list.size < 5 -> { list += c; set(s.copy(customAccents = list, accent = c)) }
+                        existing -> { list[slot] = c; set(s.copy(customAccents = list, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio) c else s.radioAccent)) }
+                        list.size < 5 -> { list += c; set(s.copy(customAccents = list, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio) c else s.radioAccent)) }
                         else -> replacing = c
                     }
                 }
@@ -270,10 +279,10 @@ fun SettingsScreen(nav: Navigator) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     Box(Modifier.size(34.dp).clip(CircleShape).background(Color(old)).border(2.dp, Color.White, CircleShape).clickable {
                                         replacing = null
-                                        set(s.copy(customAccents = s.customAccents.toMutableList().also { it[i] = c }, accent = c))
+                                        set(s.copy(customAccents = s.customAccents.toMutableList().also { it[i] = c }, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio) c else s.radioAccent))
                                     })
                                     Text("Drop", color = C.bad, fontSize = 12.sp, modifier = Modifier.clickable {
-                                        set(s.copy(customAccents = s.customAccents.filterIndexed { k, _ -> k != i } + c, accent = c)); replacing = null
+                                        set(s.copy(customAccents = s.customAccents.filterIndexed { k, _ -> k != i } + c, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio) c else s.radioAccent)); replacing = null
                                     })
                                 }
                             }

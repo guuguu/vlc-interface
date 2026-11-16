@@ -16,6 +16,19 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 import app.vlcinterface.App
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
 
 /** Battery "Unrestricted" for this app, so Android doesn't stop playback while the app is in the background. */
 object Battery {
@@ -164,5 +177,47 @@ fun LowBatteryHost() {
             else -> app.vlcinterface.player.BatteryGuard.TEXT
         }, color = C.text) },
         confirmButton = { STextButton({ g.seen() }) { Text("OK", color = accent()) } },
+    )
+}
+
+
+/**
+ * Wi-Fi lost while a station played: exit, or go on over mobile data. Lower-bitrate favourites are offered, and
+ * FLAC stations are advised against on mobile data.
+ */
+@Composable
+fun WifiLostHost() {
+    val ask by app.vlcinterface.player.NetGuard.ask.collectAsState()
+    if (!ask) return
+    val g = app.vlcinterface.player.NetGuard
+    val st by App.instance.store.state.collectAsState()
+    val cur = App.instance.player.state.value.item
+    val curMeta = st.stations.firstOrNull { it.url == cur?.uri }?.meta ?: ""
+    val light = st.stations.filter { s -> g.bitrateOf(s.meta).let { it in 1..128 } && !s.meta.contains("flac", true) && s.url != cur?.uri }
+    AlertDialog(onDismissRequest = {}, containerColor = C.panel,
+        title = { Text("Wi-Fi lost", color = C.text) },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("The radio stopped. Exit, or continue on mobile data?", color = C.text)
+                Text("Use lower bitrate stations on mobile data (128 kbps or less). Don't use FLAC stations on mobile data: they use a lot of data.",
+                    color = C.muted, fontSize = 13.sp)
+                if (curMeta.contains("flac", true)) Text("This station is FLAC.", color = C.bad, fontSize = 13.sp)
+                if (light.isNotEmpty()) {
+                    Text("Lower bitrate favourites", color = C.text, fontSize = 14.sp)
+                    light.take(8).forEach { s ->
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(C.tile).clickable {
+                            g.mobileOk = true; g.ask.value = false; App.instance.player.playStation(s.name, s.url)
+                        }.padding(10.dp)) {
+                            Column {
+                                Text(s.name, color = C.text, fontSize = 14.sp)
+                                if (s.meta.isNotEmpty()) Text(s.meta, color = C.muted, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton({ g.goOnMobile() }) { Text("Continue on mobile data", color = accent()) } },
+        dismissButton = { STextButton({ g.ask.value = false; exitApp() }) { Text("Exit") } },
     )
 }
