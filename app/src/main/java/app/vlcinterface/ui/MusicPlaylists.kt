@@ -157,8 +157,6 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             Cover(item.artwork, if (!landscape) 280 else if (leftHpx <= 0) 190 else (with(dens) { leftHpx.toDp().value }.toInt() - 128).coerceIn(110, 240), Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
                 item = coverItem, download = true, refresh = coverRefresh,
                 onNote = { coverNote = it }, onFound = { player.useDownloadedArtwork(item, "mem:" + item.uri) })
-            // Change the picture whenever you like (also: long-press on it): the pictures found online to choose from.
-            Text("Change picture…", color = C.muted, fontSize = 12.sp, modifier = Modifier.clickable { coverNote = ""; coverPick = true }.padding(4.dp))
             if (coverPick) CoverPicker(coverItem,
                 onNone = { coverPick = false; coverNote = "Looking for the picture online…"; coverRetry++ },
                 onDone = { note, changed ->
