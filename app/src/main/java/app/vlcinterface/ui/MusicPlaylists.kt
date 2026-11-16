@@ -1535,6 +1535,8 @@ private fun ToneSliders() {
     @Composable
     fun row(label: String, v: Float, range: ClosedFloatingPointRange<Float>, recall: Boolean = true, onSet: (Float, Boolean) -> Unit) {
         fun set(x: Float, done: Boolean) { touched = System.nanoTime(); onSet(x, done) }
+        // Short tap on anything locked in this row: "Long press to unlock" for 3 s.
+        val hintNow = remember { mutableStateOf(0L) }
         // Label above; the buttons sit on the slider's own line, centred on it.
         Column(Modifier.fillMaxWidth()) {
             Text((if (open) "" else "🔒 ") + "$label " + (if (v == 0f) "off" else "%+.1f".format(java.util.Locale.US, v)),
@@ -1542,17 +1544,17 @@ private fun ToneSliders() {
                 modifier = Modifier.padding(start = 40.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 // Reset: 0 = no processing (only while unlocked).
+                // 0: reset (unlocked); long-press also unlocks all the sliders.
                 Text("0", color = if (v == 0f || !open) C.muted else C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center, modifier = Modifier.size(28.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
-                        .clickable(enabled = open) { set(0f, true) }.wrapContentHeight())
+                        .combinedClickable(onClick = { if (open) set(0f, true) else hintNow.value = System.nanoTime() },
+                            onLongClick = { open = true; touched = System.nanoTime() }).wrapContentHeight())
                 // The slider only draws; touches are handled here so that one gesture can unlock and move:
                 // hold until it unlocks (long-press), then slide without lifting the finger. Unlocked: tap or slide.
                 val dens = androidx.compose.ui.platform.LocalDensity.current
                 val inset = with(dens) { 14.dp.toPx() }       // padding 6 dp + half the thumb (8 dp)
                 val vNow by rememberUpdatedState(v)
                 val openNow by rememberUpdatedState(open)
-                // Short tap on a locked slider: "Long press to unlock" for 3 s.
-                val hintNow = remember { mutableStateOf(0L) }
                 if (hintNow.value != 0L) {
                     LaunchedEffect(hintNow.value) { kotlinx.coroutines.delay(3000); hintNow.value = 0L }
                     androidx.compose.ui.window.Popup(alignment = Alignment.TopCenter,
@@ -1621,7 +1623,8 @@ private fun ToneSliders() {
                 if (!recall) Box(Modifier.size(28.dp)) else
                 Text("↺", color = if (p.toneSaved) accent() else C.muted.copy(alpha = 0.5f), fontSize = 16.sp, textAlign = TextAlign.Center,
                     modifier = Modifier.size(28.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
-                        .clickable(enabled = p.toneSaved) { player.recallTone() }.wrapContentHeight())
+                        .combinedClickable(onClick = { if (p.toneSaved) player.recallTone() },
+                            onLongClick = { open = true; touched = System.nanoTime() }).wrapContentHeight())
             }
         }
     }
