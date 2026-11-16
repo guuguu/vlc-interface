@@ -329,7 +329,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val st = store.current
         val dev = currentOutputName
         val rg = (if (NativeAudio.active && _state.value.item?.isMusic == true) rgDb else 0f) +
-            (if (_state.value.item?.let { it.isRadio || it.isMusic } == true) _state.value.radioPreDb else 0f)
+            (if (st.settings.toneSliders && _state.value.item?.let { it.isRadio || it.isMusic } == true) _state.value.radioPreDb else 0f)
         val total = (st.settings.preampDb + (st.devicePreamp[dev] ?: 0f) + rg).coerceIn(-36f, 12f)
         val bal = (st.deviceBalance[dev] ?: 0).coerceIn(-100, 100)
         fun att(f: Float): Float = if (f <= 0.001f) -60f else (20f * log10(f)).coerceAtLeast(-60f)
@@ -366,7 +366,9 @@ class PlayerController(private val context: Context, private val store: Store) {
      */
     private fun applyTone(preamp: Float) {
         val s = _state.value
-        val l = autoLoudness(s.loudDb); val t = s.trebleDb
+        // Sliders switched off in Settings: no loudness / treble at all (values stay saved for when they're back).
+        val on = store.current.settings.toneSliders
+        val l = if (on) autoLoudness(s.loudDb) else 0f; val t = if (on) s.trebleDb else 0f
         if (l != s.loudEffDb) _state.value = _state.value.copy(loudEffDb = l)
         try {
             if (l == 0f && t == 0f && preamp == 0f) { mp.setEqualizer(null); return }

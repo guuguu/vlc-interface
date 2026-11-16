@@ -228,8 +228,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     Text(if (radio) "Next\nstation" else "Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
-            // Loudness and treble, right under the player buttons.
-            ToneSliders()
+            // Loudness, treble and preamp, right under the player buttons (unless switched off in Settings).
+            if (st.settings.toneSliders) ToneSliders()
             // Prominent shortcut: where the music is playing from (playlist or Library folder).
             val fromLabel = when {
                 radio && p.origin.kind == "radio" -> "Favourites: ${p.queue.size} station" + if (p.queue.size == 1) "" else "s"

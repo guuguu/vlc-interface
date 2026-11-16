@@ -495,6 +495,11 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
                 STextButton({ set(s.copy(preampDb = 0f)); App.instance.player.applySoundChain() }) { Text("Reset") }
             }
             androidx.compose.material3.Slider(s.preampDb, { v -> set(s.copy(preampDb = Math.round(v * 2) / 2f)); App.instance.player.applySoundChain() }, valueRange = -12f..12f)
+            Divider()
+            // All three player sliders on / off: off takes them off the players and stops their processing.
+            ToggleRow("Loudness, Treble and Preamp sliders", "On the audio and radio players", s.toneSliders) { on ->
+                set(s.copy(toneSliders = on)); App.instance.player.applySoundChain()
+            }
         }
         Divider()
         DeviceSoundList()
