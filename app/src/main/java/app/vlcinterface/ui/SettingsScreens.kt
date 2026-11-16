@@ -95,8 +95,7 @@ fun SettingsScreen(nav: Navigator) {
             SoundSettings(s, ::set)
             SectionTitle("Network")
             CardBox {
-                ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }; Divider()
-                ValueRow("Network logs", "One page per server, with Empty log", "Open") { nav.go(Screen.Logs) }
+                ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }
             }
             // Logs, by kind. Each page has Errors only / Empty log / Share / Save to NAS.
             SectionTitle("Logs")
