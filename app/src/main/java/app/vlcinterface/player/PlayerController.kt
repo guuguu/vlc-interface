@@ -355,7 +355,8 @@ class PlayerController(private val context: Context, private val store: Store) {
      * Loudness and treble through libVLC's 10-band equalizer (60 Hz … 16 kHz), cutting only — nothing is ever
      * amplified, and the top frequencies stay at their starting level:
      *  - loudness: the ISO 226:2003 equal-loudness compensation (see [Iso226]), applied as cuts;
-     *  - treble up: everything below the highs is lowered; treble down: the highs are lowered.
+     *  - treble (8 → 16 kHz curve): treble down lowers the top by the curve; treble up lowers everything else by the
+ *    complement of the curve (the top stays).
      * Both at 0 (and no pre-amp needed): no equalizer at all.
      */
     private fun applyTone(preamp: Float) {
@@ -365,7 +366,12 @@ class PlayerController(private val context: Context, private val store: Store) {
             if (l == 0f && t == 0f && preamp == 0f) { mp.setEqualizer(null); return }
             val e = eq ?: MediaPlayer.Equalizer.create().also { eq = it }
             val loud = Iso226.cuts(l)              // ISO 226:2003 equal-loudness compensation, as cuts
-            val highShape = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0.15f, 0.4f, 0.8f, 1f, 1f)
+            // Treble acts from 8 kHz up: a smooth (raised-cosine) curve on a log-frequency scale from 0 at 8 kHz
+            // to full at 16 kHz; bands below 8 kHz are untouched by it.
+            val highShape = FloatArray(10) { b ->
+                val x = (kotlin.math.ln(Iso226.bands[b] / 8000.0) / kotlin.math.ln(2.0)).coerceIn(0.0, 1.0)
+                (0.5 - 0.5 * kotlin.math.cos(Math.PI * x)).toFloat()
+            }
             for (b in 0 until 10) {
                 val loudCut = loud[b]
                 val trebleCut = if (t >= 0f) -t * (1f - highShape[b]) else t * highShape[b]
