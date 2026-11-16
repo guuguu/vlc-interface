@@ -299,7 +299,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 // Mixed list (songs from several albums): track gain, never asked. One album / folder: asked
                 // (when the song has both values) or album gain.
                 val mixed = remember(p.queue) { player.listIsMixed(p) }
-                Pill(if (st.settings.rgMode == "off") "RGain: Off" else "RGain: On" + (if (mixed) " · track"
+                // Radio: no ReplayGain (stations use the Preamp slider instead) — no RGain button.
+                if (!radio) Pill(if (st.settings.rgMode == "off") "RGain: Off" else "RGain: On" + (if (mixed) " · track"
                     else player.albumRgChoice(item)?.let { if (it == "album") " · album" else " · track" } ?: ""),
                     selected = st.settings.rgMode != "off") {
                     if (st.settings.rgMode != "off" || mixed) player.toggleReplayGain()
