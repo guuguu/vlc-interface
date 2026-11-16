@@ -1845,7 +1845,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         // Whatever form the station announces it in (with or without "Artist - Title"), it is looked up.
         if (np.isBlank()) { _state.value = _state.value.copy(artworkUrl = item.artwork); return }
         bg.launch {
-            val f = try { app.vlcinterface.sources.CoverArt.radioSong(context, np) } catch (e: Exception) {
+            // Network work off the main thread (it used to run on it, which Android refuses: no picture ever came).
+            val f = try { kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { app.vlcinterface.sources.CoverArt.radioSong(context, np) } } catch (e: Exception) {
                 ServerLog.log("radio-pictures", "picture", "web", "", false, "Picture lookup failed for \"$np\": ${e.message}"); null }
             val s = _state.value
             if (s.item === item && s.nowPlaying == np) _state.value = s.copy(artworkUrl = f?.absolutePath ?: item.artwork)
