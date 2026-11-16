@@ -160,6 +160,8 @@ data class Settings(
     val popupOpacity: Int = 90,
     /** Text size in long-press / ⋮ menus: small, medium, large. */
     val menuFont: String = "medium",
+    /** Colour picked by hand in Settings (0 = none yet). */
+    val customAccent: Long = 0L,
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -175,7 +177,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont)
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccent", customAccent)
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -219,6 +221,7 @@ data class Settings(
                 o.optJSONArray("hiddenUris")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: emptySet(),
                 popupOpacity = o.optInt("popupOpacity", 90).coerceIn(50, 100),
                 menuFont = o.optString("menuFont", "medium").let { if (it in setOf("small", "medium", "large")) it else "medium" },
+                customAccent = o.optLong("customAccent", 0L),
             )
         }
     }

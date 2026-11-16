@@ -204,11 +204,19 @@ fun SettingsScreen(nav: Navigator) {
                     }
                 }
             }
-            Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                listOf(0xFFFF8A3D, 0xFF4FB3FF, 0xFF7BD88F, 0xFFC792EA).forEach { c ->
+            var picking by remember { mutableStateOf(false) }
+            Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                (listOf(0xFFFF8A3D, 0xFF4FB3FF, 0xFF7BD88F, 0xFFC792EA) + listOfNotNull(s.customAccent.takeIf { it != 0L })).forEach { c ->
                     Box(Modifier.size(40.dp).clip(CircleShape).background(Color(c))
                         .border(if (s.accent == c) 3.dp else 0.dp, Color.White, CircleShape).clickable { set(s.copy(accent = c)) })
                 }
+                // Pick any colour; it is kept as the custom one.
+                Box(Modifier.size(40.dp).clip(CircleShape).border(2.dp, C.muted, CircleShape).clickable { picking = true }, contentAlignment = Alignment.Center) {
+                    Text("+", color = C.text, fontSize = 22.sp)
+                }
+            }
+            if (picking) ColorPickDialog(if (s.customAccent != 0L) s.customAccent else s.accent, onDismiss = { picking = false }) { c ->
+                picking = false; set(s.copy(customAccent = c, accent = c))
             }
             Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
         }
@@ -427,4 +435,31 @@ fun SoundSettingsScreen(nav: Navigator) {
             Box(Modifier.height(16.dp))
         }
     }
+}
+
+
+/** Colour picker: hue, saturation and brightness sliders with a preview. */
+@Composable
+fun ColorPickDialog(start: Long, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
+    val hsv = remember { FloatArray(3).also { android.graphics.Color.colorToHSV(start.toInt(), it) } }
+    var h by remember { mutableStateOf(hsv[0]) }
+    var sat by remember { mutableStateOf(hsv[1]) }
+    var v by remember { mutableStateOf(hsv[2]) }
+    val argb = android.graphics.Color.HSVToColor(floatArrayOf(h, sat, v)).toLong() and 0xFFFFFFFFL
+    AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
+        title = { Text("Custom colour", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Box(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp)).background(Color(argb)))
+                Text("Hue", color = C.muted, fontSize = 13.sp)
+                androidx.compose.material3.Slider(h, { h = it }, valueRange = 0f..360f)
+                Text("Saturation", color = C.muted, fontSize = 13.sp)
+                androidx.compose.material3.Slider(sat, { sat = it }, valueRange = 0f..1f)
+                Text("Brightness", color = C.muted, fontSize = 13.sp)
+                androidx.compose.material3.Slider(v, { v = it }, valueRange = 0.2f..1f)
+            }
+        },
+        confirmButton = { STextButton({ onPick(argb) }) { Text("Save", color = Color(argb)) } },
+        dismissButton = { STextButton(onDismiss) { Text("Cancel") } },
+    )
 }
