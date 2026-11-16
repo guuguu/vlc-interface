@@ -205,13 +205,13 @@ fun SettingsScreen(nav: Navigator) {
                 }
             }
             var picking by remember { mutableStateOf(false) }
-            Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 (listOf(0xFFFF8A3D, 0xFF4FB3FF, 0xFF7BD88F, 0xFFC792EA) + s.customAccents).forEach { c ->
-                    Box(Modifier.size(40.dp).clip(CircleShape).background(Color(c))
+                    Box(Modifier.size(34.dp).clip(CircleShape).background(Color(c))
                         .border(if (s.accent == c) 3.dp else 0.dp, Color.White, CircleShape).clickable { set(s.copy(accent = c)) })
                 }
                 // Pick any colour; it is kept as the custom one.
-                Box(Modifier.size(40.dp).clip(CircleShape).border(2.dp, C.muted, CircleShape).clickable { picking = true }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size(34.dp).clip(CircleShape).border(2.dp, C.muted, CircleShape).clickable { picking = true }, contentAlignment = Alignment.Center) {
                     Text("+", color = C.text, fontSize = 22.sp)
                 }
             }
