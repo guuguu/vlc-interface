@@ -250,7 +250,7 @@ fun MiniPlayer(nav: Navigator) {
 fun InternalTab(nav: Navigator) {
     val ctx = LocalContext.current
     val st by App.instance.store.state.collectAsState()
-    var folders by remember { mutableStateOf<List<LocalFolder>?>(null) }
+    var folders by remember { mutableStateOf(InternalCache.folders) }      // last list at once, then refreshed
     var busy by remember { mutableStateOf("") }
     var reload by remember { mutableIntStateOf(0) }
     var menuFor by remember { mutableStateOf<LocalFolder?>(null) }
@@ -259,8 +259,9 @@ fun InternalTab(nav: Navigator) {
     var deleteFolder by remember { mutableStateOf<Pair<LocalFolder, List<Entry>>?>(null) }
     var blackFolder by remember { mutableStateOf<LocalFolder?>(null) }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(reload) { folders = InternalSource.folders(ctx) }
-    val scroll = rememberScrollState()
+    LaunchedEffect(reload) { folders = InternalSource.folders(ctx).also { InternalCache.folders = it } }
+    // Same place in the list after going into a folder and back.
+    val scroll = rememberKeptScroll("lib:internal:" + App.instance.store.current.settings.libraryKind, folders != null)
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp)) {
         // "Continue watching" card removed (user request); videos still resume where they were left.
         Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -367,7 +368,7 @@ fun SourcesTab(nav: Navigator, zone: Zone) {
         }
     }
     if (zone == Zone.LAN) LaunchedEffect(Unit) { found = VlcBrowse.discover() }
-    val scroll = rememberScrollState()
+    val scroll = rememberKeptScroll("lib:sources:$zone")
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (zone == Zone.LAN) CardBox(Modifier.clickable { nav.go(Screen.ServerCheck("")) }) {
             Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -560,7 +561,7 @@ fun RadioTab(nav: Navigator) {
         App.instance.player.playStation(name, url)
         nav.go(Screen.Music)
     }
-    val scroll = rememberScrollState()
+    val scroll = rememberKeptScroll("lib:radio")
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(q, { q = it }, Modifier.weight(1f), placeholder = { Text("Search stations by name") }, singleLine = true)
@@ -641,7 +642,7 @@ fun StreamsTab(nav: Navigator) {
     var channels by remember { mutableStateOf<List<Entry>?>(null) }
     var error by remember { mutableStateOf("") }
     val lists = st.sources.filter { it.proto == "m3u" }
-    val scroll = rememberScrollState()
+    val scroll = rememberKeptScroll("lib:streams")
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SectionTitle("Open a link")
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -706,3 +707,7 @@ object ListCache {
     @Synchronized fun get(k: String): List<Entry>? = map[k]
     @Synchronized fun put(k: String, v: List<Entry>) { map[k] = v }
 }
+
+
+/** The phone's folder list as last read: shown at once when coming back (no empty flash, place kept). */
+object InternalCache { @Volatile var folders: List<LocalFolder>? = null }

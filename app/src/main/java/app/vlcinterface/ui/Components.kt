@@ -490,3 +490,28 @@ fun ExitDialogHost() {
         dismissButton = { STextButton({ ExitPrompt.visible = false }) { Text("Cancel") } },
     )
 }
+
+
+/** Scroll positions of the Library lists, kept while the app runs (going into a folder and back keeps the place). */
+object ScrollMemory { val pos = java.util.concurrent.ConcurrentHashMap<String, Int>() }
+
+/**
+ * A scroll state that remembers its place under [key]: restored as soon as the list's content is there ([ready]),
+ * saved while scrolling and when leaving.
+ */
+@Composable
+fun rememberKeptScroll(key: String, ready: Boolean = true): androidx.compose.foundation.ScrollState {
+    val sc = androidx.compose.foundation.rememberScrollState()
+    var restored by androidx.compose.runtime.remember(key) { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(key, ready, sc.maxValue) {
+        if (ready && !restored) {
+            val want = ScrollMemory.pos[key] ?: 0
+            if (want <= 0) { restored = true; return@LaunchedEffect }
+            if (sc.maxValue >= want) { sc.scrollTo(want); restored = true }
+        }
+    }
+    androidx.compose.runtime.LaunchedEffect(key) {
+        androidx.compose.runtime.snapshotFlow { sc.value }.collect { v -> if (restored) ScrollMemory.pos[key] = v }
+    }
+    return sc
+}
