@@ -161,7 +161,7 @@ fun LowBatteryHost() {
         text = { Text(when (n) {
             15 -> "Playback stops at 10 %. Screen-on turns off then too."
             10 -> "Playback stopped (battery 10 %). Screen-on is off. Nothing plays until the phone charges."
-            else -> "Battery 10 % or less: not done. Charge the phone first."
+            else -> "Operations not accepted. Battery is 10% or less. Recharge and comeback."
         }, color = C.text) },
         confirmButton = { STextButton({ g.seen() }) { Text("OK", color = accent()) } },
     )
