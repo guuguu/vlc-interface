@@ -144,10 +144,38 @@ fun SongsTab(nav: Navigator) {
             }
         }
         val state = rememberLazyListState()
+        val songsExporter = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.CreateDocument("audio/x-mpegurl")) { uri ->
+            if (uri != null) SongsIo.export(ctx, uri)
+        }
+        var imported by remember { mutableStateOf<Pair<String, List<SongsIo.Line>>?>(null) }
+        val songsImporter = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) SongsIo.read(ctx, uri)?.let { imported = it }
+        }
+        imported?.let { (name, lines) ->
+            // Ask each time: the songs as a playlist, their folders added to the library, or both.
+            AlertDialog(onDismissRequest = { imported = null }, containerColor = C.panel,
+                title = { Text("Import ${lines.size} songs", color = C.text) },
+                text = { Text("From \"$name\". Make a playlist of them, add their folders to the library (so they show in Songs), or both?", color = C.text) },
+                confirmButton = {
+                    Column(horizontalAlignment = Alignment.End) {
+                        STextButton({ imported = null; scope.launch { SongsIo.apply(ctx, name, lines, playlist = true, folders = true); songs = sorted(SongsCache.all(ctx.applicationContext)) } }) { Text("Both", color = accent()) }
+                        STextButton({ imported = null; scope.launch { SongsIo.apply(ctx, name, lines, playlist = true, folders = false) } }) { Text("Playlist", color = accent()) }
+                        STextButton({ imported = null; scope.launch { SongsIo.apply(ctx, name, lines, playlist = false, folders = true); songs = sorted(SongsCache.all(ctx.applicationContext)) } }) { Text("Add folders to library", color = accent()) }
+                        STextButton({ imported = null }) { Text("Cancel") }
+                    }
+                })
+        }
         // Play the selection straight away (no playlist made), or add it to the end of the current queue.
         // Wraps onto a second line when the buttons don't fit (big button size): never overlapping.
         androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(bottom = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            // Export (the selection, or all songs) / import an M3U list.
+            Pill("⬆ Export") { val l = if (selected.isNotEmpty()) chosen else songs
+                if (l.isEmpty()) android.widget.Toast.makeText(ctx, "No songs to export", android.widget.Toast.LENGTH_SHORT).show()
+                else { SongsIo.pending = l; songsExporter.launch("songs-" + java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date()) + ".m3u8") } }
+            Pill("⬇ Import") { songsImporter.launch(arrayOf("*/*")) }
             if (selected.size < songs.size) Pill("Select all") { selected = songs.map { it.uri }.toSet() }
             if (selected.isNotEmpty()) Pill("Deselect all") { selected = emptySet() }
             if (selected.isNotEmpty()) Pill("▶  Play selected", filled = true) {
@@ -358,4 +386,108 @@ fun songMatches(p: PlayItem, query: String): Boolean {
     val hay = searchNorm("${p.artist} ${p.album} ${p.title} ${p.fileName}")
     val joined = hay.replace(" ", "")
     return words.all { w -> hay.contains(w) || joined.contains(w) }
+}
+
+
+/**
+ * Songs list export / import (M3U8: "#EXTINF:seconds,Artist - Title" + the song's address).
+ * Import offers: a playlist of the songs, adding their folders to the library (LAN folders pinned ★ and indexed,
+ * hidden phone folders shown again), or both.
+ */
+internal object SongsIo {
+    data class Line(val uri: String, val title: String, val secs: Int)
+    var pending: List<PlayItem> = emptyList()
+
+    fun export(ctx: android.content.Context, uri: android.net.Uri) {
+        val l = pending
+        val text = buildString {
+            append("#EXTM3U\n")
+            l.forEach { p ->
+                val label = listOf(p.artist, p.title).filter { it.isNotBlank() }.joinToString(" - ")
+                append("#EXTINF:${(p.durationMs / 1000).coerceAtLeast(-1)},$label\n")
+                if (p.album.isNotBlank()) append("#EXTALB:${p.album}\n")
+                append(p.uri).append('\n')
+            }
+        }
+        val ok = try { ctx.contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) } != null } catch (_: Exception) { false }
+        android.widget.Toast.makeText(ctx, if (ok) "${l.size} songs exported" else "Could not write the file", android.widget.Toast.LENGTH_LONG).show()
+    }
+
+    fun read(ctx: android.content.Context, uri: android.net.Uri): Pair<String, List<Line>>? {
+        val text = try { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } } catch (_: Exception) { null }
+        val name = (try { ctx.contentResolver.query(uri, null, null, null, null)?.use { c ->
+            if (c.moveToFirst()) c.getString(c.getColumnIndexOrThrow(android.provider.OpenableColumns.DISPLAY_NAME)) else null } } catch (_: Exception) { null })
+            ?.substringBeforeLast('.') ?: "Imported"
+        val out = ArrayList<Line>()
+        var title = ""; var secs = -1
+        (text ?: "").lineSequence().map { it.trim().removePrefix("\uFEFF") }.forEach { line ->
+            when {
+                line.startsWith("#EXTINF", true) -> { title = line.substringAfter(',').trim(); secs = line.substringAfter(':').substringBefore(',').trim().toIntOrNull() ?: -1 }
+                line.isEmpty() || line.startsWith("#") -> {}
+                else -> { out += Line(line, title, secs); title = ""; secs = -1 }
+            }
+        }
+        if (out.isEmpty()) { android.widget.Toast.makeText(ctx, "No songs found in that file", android.widget.Toast.LENGTH_LONG).show(); return null }
+        return name to out
+    }
+
+    /** Finds each listed song among the known ones (address, file path, or "Artist - Title"). */
+    private suspend fun match(ctx: android.content.Context, lines: List<Line>): List<Pair<Line, PlayItem?>> {
+        val known = SongsCache.loadPhone(ctx.applicationContext) + app.vlcinterface.sources.NetIndex.songsReachable() + SongsCache.network
+        val byUri = known.associateBy { it.uri }
+        val byName = known.groupBy { it.fileName.lowercase() }
+        val byLabel = known.associateBy { (it.artist + " - " + it.title).lowercase() }
+        return lines.map { l ->
+            val fn = android.net.Uri.decode(l.uri).substringAfterLast('/').substringAfterLast('\\').lowercase()
+            l to (byUri[l.uri] ?: byUri[android.net.Uri.decode(l.uri)] ?: byName[fn]?.firstOrNull() ?: byLabel[l.title.lowercase()])
+        }
+    }
+
+    suspend fun apply(ctx: android.content.Context, name: String, lines: List<Line>, playlist: Boolean, folders: Boolean) {
+        val st = App.instance.store
+        val matched = match(ctx, lines)
+        val notes = ArrayList<String>()
+        if (playlist) {
+            val items = matched.mapNotNull { (l, p) ->
+                p ?: if (l.uri.contains("://")) PlayItem(l.uri, l.title.ifEmpty { android.net.Uri.decode(l.uri).substringAfterLast('/') }, durationMs = if (l.secs > 0) l.secs * 1000L else 0)
+                else null
+            }.distinctBy { it.uri }
+            if (items.isNotEmpty()) {
+                st.update { x -> x.copy(playlists = x.playlists + app.vlcinterface.data.Playlist(name = name, items = items.map { MusicLibrary.toPlEntry(it) })) }
+                notes += "Playlist \"$name\": ${items.size} songs" + if (items.size < lines.size) " (${lines.size - items.size} not found)" else ""
+            } else notes += "No playable songs found for a playlist"
+        }
+        if (folders) {
+            var pinned = 0; var shown = 0; var unknown = 0
+            val hidden = st.current.settings.hiddenUris
+            val toShow = HashSet<String>()
+            matched.forEach { (l, p) ->
+                val u = p?.uri ?: l.uri
+                when {
+                    u.startsWith("smb://", true) -> {
+                        val host = u.substringAfter("://").substringBefore('/').substringAfter('@')
+                        val src = st.current.sources.firstOrNull { it.host.equals(host, true) }
+                        if (src == null) { unknown++; return@forEach }
+                        val folder = "/" + android.net.Uri.decode(u.substringAfter("://").substringAfter('/', "")).substringBeforeLast('/').trimEnd('/')
+                        if (folder !in st.current.sources.first { it.id == src.id }.pins) {
+                            st.update { x -> x.copy(sources = x.sources.map { if (it.id == src.id) it.copy(pins = it.pins + folder) else it }) }
+                            app.vlcinterface.sources.NetIndex.build(st.current.sources.first { it.id == src.id }, folder); pinned++
+                        }
+                    }
+                    p != null && p.folderKey.isNotEmpty() -> {
+                        val k = "local:" + p.folderKey.removePrefix("local:")
+                        if (k in hidden || p.folderKey in hidden || p.uri in hidden) { toShow += k; toShow += p.folderKey; toShow += p.uri }
+                    }
+                    p == null -> unknown++
+                }
+            }
+            if (toShow.isNotEmpty()) {
+                st.update { x -> x.copy(settings = x.settings.copy(hiddenUris = x.settings.hiddenUris - toShow)) }
+                shown = toShow.count { it.startsWith("local:") }
+            }
+            notes += "Library: $pinned LAN folders added (indexing), $shown phone folders shown again" +
+                if (unknown > 0) ", $unknown songs from places not set up in the app" else ""
+        }
+        android.widget.Toast.makeText(ctx, notes.joinToString("\n"), android.widget.Toast.LENGTH_LONG).show()
+    }
 }
