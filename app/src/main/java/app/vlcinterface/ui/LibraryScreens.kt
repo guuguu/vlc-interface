@@ -562,7 +562,67 @@ fun RadioTab(nav: Navigator) {
         nav.go(Screen.Music)
     }
     val scroll = rememberKeptScroll("lib:radio")
+    // Favourites export / import: a standard M3U playlist (name, link, logo, details), readable by other players too.
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val exporter = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("audio/x-mpegurl")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val list = App.instance.store.current.stations
+        val text = buildString {
+            append("#EXTM3U\n")
+            list.forEach { s ->
+                append("#EXTINF:-1")
+                if (s.favicon.isNotBlank()) append(" tvg-logo=\"${s.favicon.replace("\"", "")}\"")
+                if (s.meta.isNotBlank()) append(" group-title=\"${s.meta.replace("\"", "")}\"")
+                append(",${s.name}\n${s.url}\n")
+            }
+        }
+        val ok = try { ctx.contentResolver.openOutputStream(uri, "wt")?.use { it.write(text.toByteArray()) } != null } catch (_: Exception) { false }
+        android.widget.Toast.makeText(ctx, if (ok) "${list.size} stations exported" else "Could not write the file", android.widget.Toast.LENGTH_LONG).show()
+    }
+    val importer = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        val text = try { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } } catch (_: Exception) { null } ?: ""
+        // M3U / M3U8 (#EXTINF names, logos, details) or a plain list of links; stations already there are skipped.
+        val found = ArrayList<app.vlcinterface.data.Station>()
+        var name = ""; var logo = ""; var meta = ""
+        text.lineSequence().map { it.trim().removePrefix("\uFEFF") }.forEach { line ->
+            when {
+                line.startsWith("#EXTINF", true) -> {
+                    name = line.substringAfterLast(',').trim()
+                    logo = Regex("""tvg-logo="([^"]*)"""").find(line)?.groupValues?.get(1) ?: ""
+                    meta = Regex("""group-title="([^"]*)"""").find(line)?.groupValues?.get(1) ?: ""
+                }
+                line.isEmpty() || line.startsWith("#") -> {}
+                line.contains("://") -> {
+                    found += app.vlcinterface.data.Station(name = name.ifEmpty { line.substringAfter("://").substringBefore('/') }, url = line, meta = meta, favicon = logo)
+                    name = ""; logo = ""; meta = ""
+                }
+            }
+        }
+        var added = 0
+        App.instance.store.update { x ->
+            val have = x.stations.map { it.url }.toMutableSet()
+            val fresh = found.filter { have.add(it.url) }
+            added = fresh.size
+            x.copy(stations = x.stations + fresh)
+        }
+        android.widget.Toast.makeText(ctx, when {
+            found.isEmpty() -> "No stations found in that file"
+            added == 0 -> "All ${found.size} stations were already in your favourites"
+            else -> "$added stations added" + if (added < found.size) " (${found.size - added} already there)" else ""
+        }, android.widget.Toast.LENGTH_LONG).show()
+    }
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Pill("⬆  Export favourites", modifier = Modifier.weight(1f)) {
+                if (App.instance.store.current.stations.isEmpty())
+                    android.widget.Toast.makeText(ctx, "No favourite stations to export yet", android.widget.Toast.LENGTH_SHORT).show()
+                else exporter.launch("radio-favourites-" + java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.US).format(java.util.Date()) + ".m3u")
+            }
+            Pill("⬇  Import favourites", modifier = Modifier.weight(1f)) { importer.launch(arrayOf("*/*")) }
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             OutlinedTextField(q, { q = it }, Modifier.weight(1f), placeholder = { Text("Search stations by name") }, singleLine = true)
             SymButton({ run(name = q) }) { SymIcon(Icons.Filled.Search, "Search", tint = C.text) }
