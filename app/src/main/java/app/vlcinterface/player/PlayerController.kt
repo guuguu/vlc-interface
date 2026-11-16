@@ -375,8 +375,8 @@ class PlayerController(private val context: Context, private val store: Store) {
             // Treble acts from 8 kHz up: an S-curve on a log-frequency scale from 0 at 8 kHz to full at 16 kHz
             // (bands below 8 kHz take the 8 kHz value). The curve's shape follows the setting, not just its depth:
             // small settings give a gentle, nearly straight slope; larger ones a deeper, steeper S that keeps the
-            // correction near the top. S(x) = xᵃ / (xᵃ + (1−x)ᵃ), a from 1.2 (±0.5 dB) to 3 (±12 dB).
-            val steep = 1.2 + 1.8 * (kotlin.math.abs(t) / 12.0).coerceIn(0.0, 1.0)
+            // correction near the top. S(x) = xᵃ / (xᵃ + (1−x)ᵃ), a from 1.2 (near 0) to 3 (±5 dB, the maximum).
+            val steep = 1.2 + 1.8 * (kotlin.math.abs(t) / 5.0).coerceIn(0.0, 1.0)
             val highShape = FloatArray(10) { b ->
                 val x = (kotlin.math.ln(Iso226.bands[b] / 8000.0) / kotlin.math.ln(2.0)).coerceIn(0.0, 1.0)
                 val xa = x.pow(steep); val ya = (1 - x).pow(steep)
@@ -387,7 +387,10 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val trebleCut = if (t >= 0f) -t * (1f - highShape[b]) else t * highShape[b]
                 e.setAmp(b, (loudCut + trebleCut).coerceIn(-20f, 0f))
             }
-            e.setPreAmp(preamp)
+            // Treble up lowers everything below 8 kHz (most of the music's level): half of that drop is given back
+            // through the pre-amp. Treble down only cuts the top (little level lost): nothing given back.
+            val trebleMakeup = if (t > 0f) t * 0.5f else 0f
+            e.setPreAmp((preamp + trebleMakeup).coerceIn(-20f, 20f))
             mp.setEqualizer(e)
         } catch (_: Exception) {
         }
@@ -421,7 +424,7 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** Slider moved (live); [done] = finger lifted. Kept as the "last values" too. */
     fun setTone(loud: Float, treble: Float, done: Boolean) {
-        val l = loud.coerceIn(0f, 15f); val t = treble.coerceIn(-12f, 12f)
+        val l = loud.coerceIn(0f, 15f); val t = treble.coerceIn(-5f, 5f)
         _state.value = _state.value.copy(loudDb = l, trebleDb = t)
         applySoundChain()
         toneDirty = true
@@ -443,7 +446,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     /** Back to this song's own saved values (if it has some). */
     fun recallTone() {
         val item = _state.value.item ?: return
-        val v = ToneStore.get(item) ?: return
+        val v = ToneStore.get(item)?.let { it.first to it.second.coerceIn(-5f, 5f) } ?: return
         toneDirty = false
         _state.value = _state.value.copy(loudDb = v.first, trebleDb = v.second)
         applySoundChain()
@@ -462,7 +465,7 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** A song starts: its own saved values at once, else the last values used. */
     private fun toneFor(item: PlayItem): Triple<Float, Float, Boolean> {
-        val v = ToneStore.get(item)
+        val v = ToneStore.get(item)?.let { it.first to it.second.coerceIn(-5f, 5f) }
         val set = store.current.settings
         return if (v != null) Triple(v.first, v.second, true) else Triple(set.toneLoud, set.toneTreble, false)
     }

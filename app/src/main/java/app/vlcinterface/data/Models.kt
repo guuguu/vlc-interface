@@ -239,7 +239,7 @@ data class Settings(
                 radioAccent = o.optLong("radioAccent", 0L),
                 autoLoud = o.optBoolean("autoLoud", false),
                 toneLoud = o.optDouble("toneLoud", 0.0).toFloat().coerceIn(0f, 15f),
-                toneTreble = o.optDouble("toneTreble", 0.0).toFloat().coerceIn(-12f, 12f),
+                toneTreble = o.optDouble("toneTreble", 0.0).toFloat().coerceIn(-5f, 5f),
                 radioPreLast = o.optDouble("radioPreLast", 0.0).toFloat().coerceIn(-12f, 12f),
                 customAccents = ((o.optJSONArray("customAccents")?.let { a -> (0 until a.length()).map { a.getLong(it) } }
                     ?: listOfNotNull(o.optLong("customAccent", 0L).takeIf { it != 0L }))
