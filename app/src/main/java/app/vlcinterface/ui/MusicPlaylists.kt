@@ -400,16 +400,16 @@ private fun SeekBlock(item: PlayItem) {
             // The bubble shows once the finger slides or stays down (not for a short tap).
             drag?.takeIf { moved || held }?.let { f ->
                 val target = (f * len).toLong()
-                val bubbleW = 132.dp
+                val bubbleW = 190.dp
                 val thumbX = 10.dp + (bw - 20.dp) * f
                 androidx.compose.ui.window.Popup(alignment = Alignment.TopStart,
                     offset = with(androidx.compose.ui.platform.LocalDensity.current) {
-                        androidx.compose.ui.unit.IntOffset((thumbX - bubbleW / 2).coerceIn(0.dp, bw - bubbleW).roundToPx(), (-52).dp.roundToPx())
+                        androidx.compose.ui.unit.IntOffset((thumbX - bubbleW / 2).coerceIn(0.dp, bw - bubbleW).roundToPx(), (-96).dp.roundToPx())
                     }) {
-                    Column(Modifier.width(bubbleW).clip(RoundedCornerShape(14.dp)).background(C.popup).border(1.dp, accent(), RoundedCornerShape(14.dp))
-                        .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Always the time from the start of the song.
-                        Text(fmtTime(target), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                    Column(Modifier.width(bubbleW).clip(RoundedCornerShape(14.dp)).background(C.popup).border(2.dp, accent(), RoundedCornerShape(14.dp))
+                        .padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        // Always the time from the start of the song; big, well above the finger.
+                        Text(fmtTime(target), color = C.text, fontSize = 40.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
