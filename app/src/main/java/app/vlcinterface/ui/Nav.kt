@@ -67,8 +67,8 @@ class Navigator {
 @Composable
 fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
     val st by App.instance.store.state.collectAsState()
-    UiPrefs.popupAlpha = st.settings.popupOpacity / 100f
-    UiPrefs.menuAlpha = st.settings.menuOpacity / 100f
+    UiPrefs.popupAlpha = (st.settings.popupOpacity / 100f).coerceIn(0.5f, 1f)     // never below 50 %: always visible
+    UiPrefs.menuAlpha = (st.settings.menuOpacity / 100f).coerceIn(0.5f, 1f)
     UiPrefs.menuFont = st.settings.menuFont
     val accent = Color(st.settings.accent)
     var showOutput by remember { mutableStateOf(false) }
