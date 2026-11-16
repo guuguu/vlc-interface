@@ -421,7 +421,8 @@ private fun SeekBlock(item: PlayItem) {
 
 /**
  * "Jump to" within the song: two small boxes, minutes and seconds. Digits only, no leading 0 on the minutes;
- * a space / . / , / - / : or the keyboard's Next moves to the seconds box; Go jumps.
+ * a space / . / , / - / : or the keyboard's Next moves to the seconds box. The 2nd seconds digit jumps at once;
+ * a time outside the song just closes the window (no error shown).
  */
 @Composable
 private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump: (Long) -> Unit) {
@@ -429,21 +430,16 @@ private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump: (Long) ->
     var sec by remember { mutableStateOf("") }
     val minF = remember { androidx.compose.ui.focus.FocusRequester() }
     val secF = remember { androidx.compose.ui.focus.FocusRequester() }
-    val ms: Long? = if (min.isEmpty() && sec.isEmpty()) null else {
-        val m = min.toIntOrNull() ?: 0; val sc = sec.toIntOrNull() ?: 0
-        if (sc > 59) null else ((m * 60L + sc) * 1000).takeIf { it <= len }
-    }
-    val bad = (min.isNotEmpty() || sec.isNotEmpty()) && ms == null
     LaunchedEffect(Unit) { kotlinx.coroutines.delay(150); try { minF.requestFocus() } catch (_: Exception) {} }
     @Composable
     fun box(v: String, label: String, f: androidx.compose.ui.focus.FocusRequester, last: Boolean, onChange: (String) -> Unit) =
         androidx.compose.material3.OutlinedTextField(
             androidx.compose.ui.text.input.TextFieldValue(v, androidx.compose.ui.text.TextRange(v.length)), { t -> onChange(t.text) },
-            singleLine = true, label = { Text(label) }, isError = bad,
+            singleLine = true, label = { Text(label) },
             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 26.sp, color = C.text, textAlign = TextAlign.Center),
             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                imeAction = if (last) androidx.compose.ui.text.input.ImeAction.Go else androidx.compose.ui.text.input.ImeAction.Next),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onNext = { secF.requestFocus() }, onGo = { ms?.let(onJump) }),
+                imeAction = if (last) androidx.compose.ui.text.input.ImeAction.None else androidx.compose.ui.text.input.ImeAction.Next),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onNext = { secF.requestFocus() }),
             modifier = Modifier.width(96.dp).focusRequester(f))
     AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
         title = { Text("Jump to", color = C.text) },
@@ -455,13 +451,19 @@ private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump: (Long) ->
                         min = t.filter { it.isDigit() }.trimStart('0').take(3)
                     }
                     Text(":", color = C.text, fontSize = 26.sp)
-                    box(sec, "sec", secF, true) { t -> sec = t.filter { it.isDigit() }.take(2) }
+                    box(sec, "sec", secF, true) { t ->
+                        sec = t.filter { it.isDigit() }.take(2)
+                        if (sec.length == 2) {
+                            val m = min.toIntOrNull() ?: 0; val sc = sec.toInt()
+                            val target = (m * 60L + sc) * 1000
+                            if (sc <= 59 && target <= len) onJump(target) else onDismiss()
+                        }
+                    }
                 }
-                Text("0:00 – ${fmtTime(len)}", color = if (bad) C.bad else C.muted, fontSize = 12.sp)
+                Text("0:00 – ${fmtTime(len)}", color = C.muted, fontSize = 12.sp)
             }
         },
-        confirmButton = { STextButton({ ms?.let(onJump) }, enabled = ms != null) { Text("Jump", color = if (ms != null) accent() else C.muted) } },
-        dismissButton = { STextButton(onDismiss) { Text("Cancel") } },
+        confirmButton = { STextButton(onDismiss) { Text("Cancel") } },
     )
 }
 
