@@ -419,30 +419,54 @@ private fun SeekBlock(item: PlayItem) {
     }
 }
 
-/** "Jump to" m:ss within the song: digits only, the ":" goes in by itself (323 → 3:23), no leading 0 on the minutes. */
+/**
+ * "Jump to" m:ss within the song. Digits only; the ":" goes in by itself (323 → 3:23), or where a space / . / , / - / :
+ * is typed (3 23 → 3:23, 3 5 → 3:05). No leading 0 on the minutes.
+ */
 @Composable
 private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump: (Long) -> Unit) {
     var digits by remember { mutableStateOf("") }
-    fun shown(d: String) = if (d.length <= 2) d else d.dropLast(2) + ":" + d.takeLast(2)
-    val ms: Long? = digits.takeIf { it.isNotEmpty() }?.let { d ->
-        val sec = if (d.length <= 2) d.toInt() else d.takeLast(2).toInt()
-        val min = if (d.length <= 2) 0 else d.dropLast(2).toInt()
-        if (d.length >= 3 && sec > 59) null else (min * 60L + sec) * 1000
+    var sep by remember { mutableStateOf<Int?>(null) }      // where a typed separator splits minutes / seconds
+    fun shown(): String = sep?.let { k -> digits.take(k).ifEmpty { "0" } + ":" + digits.drop(k) }
+        ?: if (digits.length <= 2) digits else digits.dropLast(2) + ":" + digits.takeLast(2)
+    val ms: Long? = run {
+        if (digits.isEmpty()) return@run null
+        val k = sep
+        val (min, sec) = when {
+            k != null -> (digits.take(k).toIntOrNull() ?: 0) to (digits.drop(k).toIntOrNull() ?: 0)
+            digits.length <= 2 -> 0 to digits.toInt()
+            else -> digits.dropLast(2).toInt() to digits.takeLast(2).toInt()
+        }
+        if ((k != null || digits.length >= 3) && sec > 59) null else (min * 60L + sec) * 1000
     }?.takeIf { it <= len }
+    fun edit(newText: String) {
+        val old = shown()
+        if (newText.length > old.length) {
+            val ch = newText.last()
+            val k = sep
+            when {
+                ch.isDigit() -> when {
+                    k != null -> if (digits.length - k < 2) digits += ch
+                    digits.isEmpty() && ch == '0' -> {}                 // no leading 0 on the minutes
+                    digits.length < 5 -> digits += ch
+                }
+                ch in " .,-:" && k == null -> sep = digits.length
+            }
+        } else if (newText.length < old.length) {
+            val k = sep
+            if (k != null && k == digits.length) sep = null else digits = digits.dropLast(1)
+        }
+    }
     val focus = remember { androidx.compose.ui.focus.FocusRequester() }
     LaunchedEffect(Unit) { kotlinx.coroutines.delay(150); try { focus.requestFocus() } catch (_: Exception) {} }
     AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
         title = { Text("Jump to", color = C.text) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val tv = shown(digits)
+                val tv = shown()
                 androidx.compose.material3.OutlinedTextField(
                     androidx.compose.ui.text.input.TextFieldValue(tv, androidx.compose.ui.text.TextRange(tv.length)),
-                    { v ->
-                        // Digits only; leading zeros dropped ("03:23" → "3:23"); at most 3 minute digits.
-                        val d = v.text.filter { it.isDigit() }.trimStart('0').take(5)
-                        digits = d
-                    },
+                    { v -> edit(v.text) },
                     singleLine = true, placeholder = { Text("m:ss") },
                     textStyle = androidx.compose.ui.text.TextStyle(fontSize = 24.sp, color = C.text),
                     isError = digits.isNotEmpty() && ms == null,
