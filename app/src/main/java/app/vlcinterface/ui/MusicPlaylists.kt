@@ -1556,8 +1556,8 @@ private fun ToneSliders() {
         row(if (p.loudEffDb != p.loudDb && p.loudDb > 0f) "Loudness (auto %.1f)".format(java.util.Locale.US, p.loudEffDb) else "Loudness",
             p.loudDb, 0f..15f) { x, done -> player.setTone(x, p.trebleDb, done) }
         row("Treble", p.trebleDb, -12f..12f) { x, done -> player.setTone(p.loudDb, x, done) }
-        // Radio has no ReplayGain: a pre-amp (cut only) per station, for stations that are too loud.
-        if (p.item?.isRadio == true) row("Preamp", p.radioPreDb, -12f..0f, recall = false) { x, done -> player.setRadioPre(x, done) }
+        // Radio has no ReplayGain: a pre-amp per station (−12…+12 dB), for stations too loud or too quiet.
+        if (p.item?.isRadio == true) row("Preamp", p.radioPreDb, -12f..12f, recall = false) { x, done -> player.setRadioPre(x, done) }
     }
 }
 

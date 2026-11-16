@@ -101,7 +101,7 @@ data class PlayerState(
     /** Loudness actually applied (Auto loudness may use less of the setting at higher phone volume). */
     val loudEffDb: Float = 0f,
     val trebleDb: Float = 0f,
-    /** Radio: this station's pre-amp cut (−12…0 dB; stations have no ReplayGain). */
+    /** Radio: this station's pre-amp (−12…+12 dB; stations have no ReplayGain). */
     val radioPreDb: Float = 0f,
     /** This song (station) has its own saved loudness / treble (Recall brings them back). */
     val toneSaved: Boolean = false,
@@ -434,7 +434,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     /** Radio pre-amp slider (cut only); kept for the station when the finger is lifted. */
     fun setRadioPre(db: Float, done: Boolean) {
         val item = _state.value.item ?: return
-        val v = db.coerceIn(-12f, 0f)
+        val v = db.coerceIn(-12f, 12f)
         _state.value = _state.value.copy(radioPreDb = v)
         applySoundChain()
         if (done) { ToneStore.putPre(item.uri, v); store.update { it.copy(settings = it.settings.copy(radioPreLast = v)) } }

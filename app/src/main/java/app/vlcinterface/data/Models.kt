@@ -240,7 +240,7 @@ data class Settings(
                 autoLoud = o.optBoolean("autoLoud", false),
                 toneLoud = o.optDouble("toneLoud", 0.0).toFloat().coerceIn(0f, 15f),
                 toneTreble = o.optDouble("toneTreble", 0.0).toFloat().coerceIn(-12f, 12f),
-                radioPreLast = o.optDouble("radioPreLast", 0.0).toFloat().coerceIn(-12f, 0f),
+                radioPreLast = o.optDouble("radioPreLast", 0.0).toFloat().coerceIn(-12f, 12f),
                 customAccents = ((o.optJSONArray("customAccents")?.let { a -> (0 until a.length()).map { a.getLong(it) } }
                     ?: listOfNotNull(o.optLong("customAccent", 0L).takeIf { it != 0L }))
                     // A colour in use from the old preset row (blue / green / purple) stays as a custom one.
