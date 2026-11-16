@@ -1551,6 +1551,17 @@ private fun ToneSliders() {
                 val inset = with(dens) { 16.dp.toPx() }       // padding 6 dp + half the thumb
                 val vNow by rememberUpdatedState(v)
                 val openNow by rememberUpdatedState(open)
+                // Short tap on a locked slider: "Long press to unlock" for 3 s.
+                val hintNow = remember { mutableStateOf(0L) }
+                if (hintNow.value != 0L) {
+                    LaunchedEffect(hintNow.value) { kotlinx.coroutines.delay(3000); hintNow.value = 0L }
+                    androidx.compose.ui.window.Popup(alignment = Alignment.TopCenter,
+                        offset = androidx.compose.ui.unit.IntOffset(0, with(dens) { (-40).dp.roundToPx() })) {
+                        Text("Long press to unlock", color = C.text, fontSize = 13.sp,
+                            modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(C.popup).border(1.dp, accent(), RoundedCornerShape(10.dp))
+                                .padding(horizontal = 12.dp, vertical = 6.dp))
+                    }
+                }
                 val setNow by rememberUpdatedState<(Float, Boolean) -> Unit> { x, d -> set(x, d) }
                 fun valueAt(x: Float, w: Int): Float {
                     val f = ((x - inset) / (w - 2 * inset)).coerceIn(0f, 1f)
@@ -1561,15 +1572,17 @@ private fun ToneSliders() {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         if (!openNow) {
                             // Locked: wait for the long-press (moving or lifting first cancels).
+                            // Returns true for a short tap (lifted without moving), false when the finger moved away.
                             val ended = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis) {
-                                var done = false
-                                while (!done) {
-                                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
-                                    done = c == null || !c.pressed || (c.position - down.position).getDistance() > viewConfiguration.touchSlop
+                                var tap = false
+                                while (true) {
+                                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
+                                    if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) break
+                                    if (!c.pressed) { tap = true; break }
                                 }
-                                true
+                                tap
                             }
-                            if (ended != null) return@awaitEachGesture
+                            if (ended != null) { if (ended) hintNow.value = System.nanoTime(); return@awaitEachGesture }
                             open = true
                         }
                         touched = System.nanoTime()
