@@ -423,6 +423,7 @@ private fun BoxScope.ControlsOverlayBody(
             player.setRate(rates[(i + 1) % rates.size]); onTouch()
         }
         SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
+        ScreenOnSign(Color.White)
         ExitButton(Color.White)
         }
     }

@@ -9,6 +9,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -76,11 +81,25 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
             // Audio or video player on screen: the phone screen stays on (so it doesn't dim and lock) for as long as
             // the player page is shown; any other page lets the screen time out as usual.
             val keepOn = isPlayer || top is Screen.Music
-            androidx.compose.runtime.DisposableEffect(keepOn) {
+            // Also off as soon as the app goes to the background (and back on when it returns to the player).
+            val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+            androidx.compose.runtime.DisposableEffect(keepOn, owner) {
                 val w = act?.window
-                if (keepOn) w?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                else w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                onDispose { w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
+                fun apply(on: Boolean) {
+                    ScreenOn.active.value = on
+                    if (on) w?.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    else w?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                }
+                val obs = androidx.lifecycle.LifecycleEventObserver { _, ev ->
+                    when (ev) {
+                        androidx.lifecycle.Lifecycle.Event.ON_STOP -> apply(false)
+                        androidx.lifecycle.Lifecycle.Event.ON_START -> apply(keepOn)
+                        else -> {}
+                    }
+                }
+                owner.lifecycle.addObserver(obs)
+                apply(keepOn && owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED))
+                onDispose { owner.lifecycle.removeObserver(obs); apply(false) }
             }
             Box(
                 Modifier.fillMaxSize().background(if (isPlayer) Color.Black else C.bg)
@@ -128,3 +147,20 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
 /** The app's orientation outside the video player: follows the phone, or stays upright when auto-rotate is off. */
 fun defaultOrientation(): Int = if (App.instance.store.current.settings.autoRotate)
     android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED else android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+
+
+/** Is the "screen stays on" mode active right now (a player page shown, app in the foreground)? */
+object ScreenOn {
+    val active = kotlinx.coroutines.flow.MutableStateFlow(false)
+}
+
+/** Small sign on the players: the screen is being kept on (tap: what it means). */
+@Composable
+fun ScreenOnSign(tint: Color) {
+    val on by ScreenOn.active.collectAsState()
+    if (!on) return
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    Text("🔆", fontSize = 18.sp, color = tint, modifier = Modifier.clickable {
+        android.widget.Toast.makeText(ctx, "Screen stays on while the player is shown (off in the background)", android.widget.Toast.LENGTH_SHORT).show()
+    }.padding(horizontal = 6.dp))
+}
