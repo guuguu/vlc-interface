@@ -83,7 +83,9 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
             LaunchedEffect(st.settings.autoRotate, isPlayer) { if (!isPlayer) act?.requestedOrientation = defaultOrientation() }
             // Audio or video player on screen: the phone screen stays on (so it doesn't dim and lock) for as long as
             // the player page is shown; any other page lets the screen time out as usual.
-            val keepOn = isPlayer || top is Screen.Music
+            // Not at 10 % battery or less (unless charging).
+            val lowBat by app.vlcinterface.player.BatteryGuard.low.collectAsState()
+            val keepOn = (isPlayer || top is Screen.Music) && !lowBat
             // Also off as soon as the app goes to the background (and back on when it returns to the player).
             val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
             androidx.compose.runtime.DisposableEffect(keepOn, owner) {
@@ -150,6 +152,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 SleepClosedHost()
                 FailAskHost()
                 RgAskHost()
+                LowBatteryHost()
             }
             BackHandler(enabled = true) {
                 if (showOutput) showOutput = false else if (!nav.back()) onFinish()

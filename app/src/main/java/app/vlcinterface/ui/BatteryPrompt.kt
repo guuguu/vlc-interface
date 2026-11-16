@@ -148,3 +148,18 @@ fun RgAskHost() {
         confirmButton = {},
     )
 }
+
+
+/** Low battery pop-ups: the 15 % warning, and "stopped" at 10 %. */
+@Composable
+fun LowBatteryHost() {
+    val n by app.vlcinterface.player.BatteryGuard.notice.collectAsState()
+    if (n == 0) return
+    val g = app.vlcinterface.player.BatteryGuard
+    AlertDialog(onDismissRequest = { g.seen() }, containerColor = C.panel,
+        title = { Text("Battery ${g.level} %", color = C.text) },
+        text = { Text(if (n == 15) "Playback stops at 10 %. Screen-on turns off then too."
+            else "Playback stopped (battery 10 %). Screen-on is off. Press play to go on anyway.", color = C.text) },
+        confirmButton = { STextButton({ g.seen() }) { Text("OK", color = accent()) } },
+    )
+}

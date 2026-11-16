@@ -136,6 +136,9 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         }
     }
     DisposableEffect(Unit) { player.syncPicture(); onDispose { player.detach(videoView); player.syncPicture() } }
+    // Battery at 10 % or less (not charging): the video no longer keeps the screen on either.
+    val lowBat by app.vlcinterface.player.BatteryGuard.low.collectAsState()
+    LaunchedEffect(lowBat) { videoView.keepScreenOn = !lowBat }
     LaunchedEffect(landscape, p.videoW, p.videoH) { kotlinx.coroutines.delay(150); player.refreshSurface() }
     // Entering/leaving picture-in-picture: Android swaps the window surface, so hand libVLC a fresh one
     // (the picture stayed black on the first minimise until going back and forth).

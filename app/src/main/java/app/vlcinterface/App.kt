@@ -27,6 +27,7 @@ class App : Application() {
         ServerLog.init(this)
         TagCache.init(this)
         app.vlcinterface.sources.RgStore.init(this)
+        app.vlcinterface.player.BatteryGuard.init(this)   // 15 % warning, stop at 10 %
         app.vlcinterface.sources.RgScanner.flushPendingSoon(this)   // cached ReplayGain writes left from last time
         app.vlcinterface.sources.CoverArt.init(this)
         app.vlcinterface.sources.NetIndex.init(this)
