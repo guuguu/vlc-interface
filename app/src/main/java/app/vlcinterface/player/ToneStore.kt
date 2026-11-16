@@ -28,8 +28,9 @@ object ToneStore {
     }
 
     /** 64-bit FNV-1a of the song's key (address; CUE tracks also their start). */
-    fun keyOf(item: PlayItem): Long {
-        val k = item.uri.substringBefore('?') + if (item.startMs > 0) "#${item.startMs}" else ""
+    fun keyOf(item: PlayItem): Long = hash(item.uri.substringBefore('?') + if (item.startMs > 0) "#${item.startMs}" else "")
+
+    private fun hash(k: String): Long {
         var h = -0x340d631b7bdddcdbL
         for (c in k) { h = h xor c.code.toLong(); h *= 0x100000001b3L }
         return h
@@ -40,8 +41,13 @@ object ToneStore {
         (v.toInt() shr 8).toByte() / 2f to v.toByte() / 2f
     }
 
-    fun put(item: PlayItem, loud: Float, treble: Float) {
-        val h = keyOf(item)
+    /** Radio station pre-amp (cut, dB) — same file, its own key. */
+    fun getPre(url: String): Float? = synchronized(map) { map[hash("pre|$url")] }?.let { (it.toInt() shr 8).toByte() / 2f }
+    fun putPre(url: String, db: Float) = putRaw(hash("pre|$url"), db, 0f)
+
+    fun put(item: PlayItem, loud: Float, treble: Float) = putRaw(keyOf(item), loud, treble)
+
+    private fun putRaw(h: Long, loud: Float, treble: Float) {
         val v = (((Math.round(loud * 2).coerceIn(-127, 127) and 0xFF) shl 8) or (Math.round(treble * 2).coerceIn(-127, 127) and 0xFF)).toShort()
         synchronized(map) {
             if (map[h] == v) return

@@ -1364,28 +1364,33 @@ private fun RadioPanel(nav: Navigator) {
         SectionTitle("Favourite stations")
         if (st.stations.isEmpty()) Text("No favourites yet: find stations below and tap ☆.", color = C.muted, fontSize = 13.sp)
         else {
+            // Compact one-line rows, no frame: name, then bitrate and codec; tap plays, ⋮ or long-press for the menu.
             val ls = androidx.compose.foundation.lazy.rememberLazyListState()
-            LaunchedEffect(Unit) { st.stations.indexOfFirst { it.url == cur }.takeIf { it > 1 }?.let { ls.scrollToItem(it - 1) } }
-            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp).clip(RoundedCornerShape(10.dp))
-                .border(1.dp, C.line, RoundedCornerShape(10.dp)).scrollbar(ls), state = ls) {
+            LaunchedEffect(Unit) { st.stations.indexOfFirst { it.url == cur }.takeIf { it > 2 }?.let { ls.scrollToItem(it - 2) } }
+            androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp).scrollbar(ls), state = ls) {
                 items(st.stations.size) { i ->
                     val s = st.stations[i]
                     val on = s.url == cur
                     Row(Modifier.fillMaxWidth().background(if (on) accent().copy(alpha = 0.14f) else Color.Transparent)
                         .combinedClickable(onClick = { player.playStation(s.name, s.url) }, onLongClick = { menu = s.id })
-                        .padding(horizontal = 10.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("${i + 1}", color = if (on) accent() else C.muted, fontSize = 13.sp, modifier = Modifier.width(26.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text((if (on) "▶ " else "") + s.name, color = if (on) accent() else C.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (s.meta.isNotEmpty()) Text(s.meta, color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
+                        .padding(start = 6.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text((if (on) "▶ " else "") + s.name, color = if (on) accent() else C.text, fontSize = 15.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text("  " + stationQuality(s.meta), color = C.muted, fontSize = 12.sp, maxLines = 1, softWrap = false)
                         Box {
+                            Text("⋮", color = C.text, fontSize = 20.sp, modifier = Modifier.clickable { menu = s.id }.padding(horizontal = 12.dp, vertical = 6.dp))
                             SDropdownMenu(menu == s.id, { menu = null }) {
                                 SMenuItem({ Text("▶  Play") }, { menu = null; player.playStation(s.name, s.url) })
                                 SMenuItem({ Text("Rename…") }, { menu = null; rename = s })
                                 SMenuItem({ Text("Copy link") }, {
                                     menu = null
                                     ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("station", s.url))
+                                    android.widget.Toast.makeText(ctx, "Link copied", android.widget.Toast.LENGTH_SHORT).show()
+                                })
+                                SMenuItem({ Text("Share link…") }, {
+                                    menu = null
+                                    ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND)
+                                        .setType("text/plain").putExtra(android.content.Intent.EXTRA_SUBJECT, s.name).putExtra(android.content.Intent.EXTRA_TEXT, "${s.name}\n${s.url}"), "Share station"))
                                 })
                                 if (i > 0) SMenuItem({ Text("Move up") }, { menu = null; App.instance.store.update { x -> x.copy(stations = x.stations.toMutableList().also { l -> java.util.Collections.swap(l, i, i - 1) }) } })
                                 if (i < st.stations.size - 1) SMenuItem({ Text("Move down") }, { menu = null; App.instance.store.update { x -> x.copy(stations = x.stations.toMutableList().also { l -> java.util.Collections.swap(l, i, i + 1) }) } })
@@ -1489,7 +1494,7 @@ private fun ToneSliders() {
     val player = App.instance.player
     val p by player.state.collectAsState()
     @Composable
-    fun row(label: String, v: Float, range: ClosedFloatingPointRange<Float>, onSet: (Float, Boolean) -> Unit) {
+    fun row(label: String, v: Float, range: ClosedFloatingPointRange<Float>, recall: Boolean = true, onSet: (Float, Boolean) -> Unit) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             // Reset: 0 = no processing.
             Text("0", color = if (v == 0f) C.muted else C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
@@ -1503,6 +1508,7 @@ private fun ToneSliders() {
                     modifier = Modifier.height(28.dp))
             }
             // Recall: this song's own values (dimmed when it has none).
+            if (!recall) Box(Modifier.size(36.dp)) else
             Text("↺", color = if (p.toneSaved) accent() else C.muted.copy(alpha = 0.5f), fontSize = 20.sp, textAlign = TextAlign.Center,
                 modifier = Modifier.size(36.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
                     .clickable(enabled = p.toneSaved) { player.recallTone() }.wrapContentHeight())
@@ -1511,5 +1517,14 @@ private fun ToneSliders() {
     Column(Modifier.fillMaxWidth()) {
         row("Loudness", p.loudDb, 0f..15f) { x, done -> player.setTone(x, p.trebleDb, done) }
         row("Treble", p.trebleDb, -12f..12f) { x, done -> player.setTone(p.loudDb, x, done) }
+        // Radio has no ReplayGain: a pre-amp (cut only) per station, for stations that are too loud.
+        if (p.item?.isRadio == true) row("Preamp", p.radioPreDb, -12f..0f, recall = false) { x, done -> player.setRadioPre(x, done) }
     }
 }
+
+
+/** "128 kbps MP3" out of a station's details (bitrate and codec only), or "" if unknown. */
+fun stationQuality(meta: String): String =
+    Regex("""(\d{2,4})\s*kbps\s*([A-Za-z0-9+]*)""", RegexOption.IGNORE_CASE).find(meta)?.let { m ->
+        listOf(m.groupValues[1] + " kbps", m.groupValues[2].uppercase()).filter { it.isNotBlank() }.joinToString(" ")
+    } ?: Regex("""\b(MP3|AAC\+?|OGG|OPUS|FLAC)\b""", RegexOption.IGNORE_CASE).find(meta)?.value?.uppercase() ?: ""
