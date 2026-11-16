@@ -109,7 +109,10 @@ private sealed interface Row0 {
     data class Header(val g: AlbumGroup) : Row0
     data class Song(val e: Entry, val multiDisc: Boolean) : Row0
     data class Video(val e: Entry) : Row0
+    data class PlFile(val e: Entry) : Row0
 }
+
+private val PL_FILE_EXT = setOf("m3u", "m3u8", "pls")
 
 /**
  * Library listing: folders, then music grouped by album (disc → track order, never alphabetical, with durations),
@@ -139,6 +142,9 @@ fun MediaList(
     val rows = remember(list) {
         buildList<Row0> {
             list.filter { it.isDir }.forEach { add(Row0.Dir(it)) }
+            // Playlist files (.m3u / .m3u8 / .pls) in the folder: tap to play, long-press for the choices.
+            if (kind != "video") (entries ?: emptyList()).filter { !it.isDir && it.name.substringAfterLast('.', "").lowercase() in PL_FILE_EXT }
+                .forEach { add(Row0.PlFile(it)) }
             groups.forEach { g -> add(Row0.Header(g)); g.entries.forEach { add(Row0.Song(it, g.multiDisc)) } }
             list.filter { it.isVideo }.forEach { add(Row0.Video(it)) }
         }
@@ -153,6 +159,7 @@ fun MediaList(
     var menuFor by remember { mutableStateOf<Entry?>(null) }
     var addTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
     var quickTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
+    var plMenuFor by remember { mutableStateOf<Entry?>(null) }
     var deleteTarget by remember { mutableStateOf<Entry?>(null) }
     var rgTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
     var infoItem by remember { mutableStateOf<PlayItem?>(null) }
@@ -190,6 +197,31 @@ fun MediaList(
 
     fun itemsOfDir(e: Entry): suspend () -> List<PlayItem> = {
         ofKind(if (source != null) MusicLibrary.collectRecursive(source, e.uri) else emptyList())
+    }
+
+    /** The songs / links a playlist file lists (relative paths resolved against this folder on the server). */
+    suspend fun itemsOfPlFile(e: Entry): List<PlayItem> {
+        val bytes = try {
+            if (source != null) readBytes(source, e.uri)
+            else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { ctx.contentResolver.openInputStream(android.net.Uri.parse(e.uri))?.use { it.readBytes() } }
+        } catch (_: Exception) { null } ?: return emptyList()
+        val base = if (source != null) e.uri.substringBeforeLast('/') else ""
+        return app.vlcinterface.sources.PlaylistFiles.parse(app.vlcinterface.sources.Cue.decode(bytes), base).map { (t, u) ->
+            val sameServer = source != null && u.substringAfter("://").substringBefore('/') == e.uri.substringAfter("://").substringBefore('/')
+            MusicLibrary.fromPlEntry(app.vlcinterface.data.PlEntry(u, t, if (sameServer) source!!.id else ""))
+        }
+    }
+
+    fun playPlFile(e: Entry, random: Boolean) {
+        scope.launch {
+            val items = itemsOfPlFile(e)
+            if (items.isEmpty()) {
+                android.widget.Toast.makeText(ctx, "Nothing playable in ${e.name}", android.widget.Toast.LENGTH_SHORT).show(); return@launch
+            }
+            App.instance.player.playQueue(if (random) items.shuffled() else items, 0,
+                app.vlcinterface.player.Origin("single", title = e.name.substringBeforeLast('.')))
+            nav.go(if (items[0].isMusic) Screen.Music else Screen.Player)
+        }
     }
 
     /** Long-press while selecting (like the Songs list): play time of the selection + new playlist. */
@@ -253,6 +285,38 @@ fun MediaList(
             }
             items(rows) { r ->
                 when (r) {
+                    is Row0.PlFile -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(8.dp))
+                        .combinedClickable(onClick = { playPlFile(r.e, false) }, onLongClick = { plMenuFor = r.e }),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) {
+                            Text("≡", color = accent(), fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        }
+                        Column(Modifier.padding(start = 14.dp).weight(1f)) {
+                            Text(r.e.name, color = C.text, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text("Playlist file · tap to play, long-press for more", color = C.muted, fontSize = 12.sp)
+                        }
+                        Box {
+                            SDropdownMenu(plMenuFor == r.e, { plMenuFor = null }) {
+                                SMenuItem({ Text("▶  Play") }, { plMenuFor = null; playPlFile(r.e, false) })
+                                SMenuItem({ Text("Play in random order") }, { plMenuFor = null; playPlFile(r.e, true) })
+                                SMenuItem({ Text("Add to queue") }, {
+                                    plMenuFor = null
+                                    scope.launch { val n = App.instance.player.addToQueue(itemsOfPlFile(r.e))
+                                        android.widget.Toast.makeText(ctx, "$n added to the queue", android.widget.Toast.LENGTH_SHORT).show() }
+                                })
+                                SMenuItem({ Text("Save as a playlist") }, {
+                                    plMenuFor = null
+                                    scope.launch {
+                                        val its = itemsOfPlFile(r.e)
+                                        if (its.isNotEmpty()) App.instance.store.update { st -> st.copy(playlists = st.playlists +
+                                            app.vlcinterface.data.Playlist(name = r.e.name.substringBeforeLast('.'), items = its.map { MusicLibrary.toPlEntry(it) })) }
+                                        android.widget.Toast.makeText(ctx, if (its.isEmpty()) "Nothing playable in ${r.e.name}" else "Saved: ${its.size} items",
+                                            android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                })
+                            }
+                        }
+                    }
                     is Row0.Dir -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(8.dp))
                         .background(if (r.e.uri in selected) accent().copy(alpha = 0.18f) else Color.Transparent)
                         .combinedClickable(onClick = { if (selected.isNotEmpty()) toggle(r.e) else onOpenDir(r.e) }, onLongClick = { if (selected.isNotEmpty()) quickFromSelection() else menuFor = r.e }),
