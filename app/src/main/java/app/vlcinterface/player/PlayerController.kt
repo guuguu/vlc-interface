@@ -147,7 +147,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         rgInUse = rgSignature()
         mp = MediaPlayer(libVlc)
         // Our own audio output: real balance/preamp and stereo levels. Falls back to libVLC's output.
-        if (!NativeAudio.attachTo(libVlc, mp, appOutputWanted()) && appOutputWanted()) {
+        // One more try before giving up on the app's own output (a first attach can fail right after a release).
+        if (!NativeAudio.attachTo(libVlc, mp, appOutputWanted()) && appOutputWanted() && !NativeAudio.attachTo(libVlc, mp, true)) {
             // Could not attach: build the engine again with libVLC doing ReplayGain itself.
             NativeAudio.markFailed(NativeAudio.reason.ifEmpty { "could not attach" })
             mp.release(); libVlc.release()
@@ -223,7 +224,13 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
+    /**
+     * What libVLC itself must know about ReplayGain (a change means a new engine). With the app's own output the app
+     * applies ReplayGain live, so a change never rebuilds the engine — rebuilding is what made the output fail and
+     * drop to libVLC's output when the RGain button was pressed.
+     */
     private fun rgSignature(): String {
+        if (appOutputWanted()) return "app"
         val s = store.current.settings
         return "${s.rgMode}|${s.rgPreampDb}|${s.rgClipProtect}"
     }
@@ -436,6 +443,12 @@ class PlayerController(private val context: Context, private val store: Store) {
         store.update { it.copy(settings = if (on) it.settings.copy(rgMode = "off", rgLastMode = st.rgMode) else it.settings.copy(rgMode = st.rgLastMode)) }
         val s = _state.value
         if (s.item == null) return
+        // App output: on / off applied at once on the playing song, no reload, no new engine.
+        if (NativeAudio.active) {
+            loadReplayGain(s.item, s)
+            if (store.current.settings.rgMode == "off") { _state.value = _state.value.copy(rgInfo = ""); applySoundChain() }
+            return
+        }
         val pos = mp.time
         val playing = mp.isPlaying
         startItem(s.index, pos.coerceAtLeast(0))
