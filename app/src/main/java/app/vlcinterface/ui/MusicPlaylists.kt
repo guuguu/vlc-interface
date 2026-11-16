@@ -1306,17 +1306,23 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
     val (artist, title) = app.vlcinterface.player.splitNowPlaying(p.nowPlaying)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("RADIO STATION", color = accent(), fontSize = 12.sp, letterSpacing = 1.sp)
-        Text(name + if (p.stationName.isNotBlank() && !p.stationName.equals(name, true)) " · ${p.stationName}" else "",
-            color = C.text, fontSize = (16 * tk).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        // Tap the station name or the song title: the station's menu (favourite, playlist, details, link, share).
+        var stMenu by remember { mutableStateOf(false) }
+        Box {
+            Text(name + if (p.stationName.isNotBlank() && !p.stationName.equals(name, true)) " · ${p.stationName}" else "",
+                color = C.text, fontSize = (16 * tk).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.combinedClickable(onClick = { stMenu = true }, onLongClick = { stMenu = true }))
+            StationMenu(item, stMenu) { stMenu = false }
+        }
         Text(item.uri.substringAfter("://").take(60), color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(title.ifEmpty { "Live" }, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp)
+                .combinedClickable(onClick = { stMenu = true }, onLongClick = { stMenu = true }))
         if (artist.isNotEmpty()) Text(artist, color = C.muted, fontSize = (15 * tk).sp, textAlign = TextAlign.Center)
         val details = listOfNotNull((fav?.meta ?: LastStationMeta.of(item.uri)).ifEmpty { null }, p.rgInfo.ifEmpty { null },
             if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else null)
         if (details.isNotEmpty()) Text(details.joinToString(" · "), color = accent(), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(4.dp))
         if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        StationActions(item)
         // Mobile data only: what this station has used so far, live.
         val cell by app.vlcinterface.player.NetGuard.cellular.collectAsState()
         if (cell) {
@@ -1645,23 +1651,25 @@ fun toggleFavourite(name: String, url: String, meta: String, favicon: String) {
     }
 }
 
-/** Under the station header: favourite on / off, add to a playlist, details, share — for any station playing. */
+/** The playing station's menu (from its name or the song title): everything for it, favourite or not. */
 @Composable
-private fun StationActions(item: PlayItem) {
+private fun StationMenu(item: PlayItem, open: Boolean, onClose: () -> Unit) {
     val st by App.instance.store.state.collectAsState()
     val ctx = LocalContext.current
     val fav = st.stations.firstOrNull { it.url == item.uri }
+    val name = fav?.name ?: item.title
     var details by remember { mutableStateOf(false) }
-    // Details of a station not (yet) in favourites: what the search listed for it, if anything.
-    if (details) StationDetailsDialog(fav ?: app.vlcinterface.data.Station(name = item.title, url = item.uri, meta = LastStationMeta.of(item.uri))) { details = false }
-    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp),
-        modifier = Modifier.fillMaxWidth()) {
-        Pill(if (fav != null) "★ Favourite" else "☆ Add to favourites", selected = fav != null) {
-            toggleFavourite(item.title, item.uri, LastStationMeta.of(item.uri), item.artwork)
-        }
-        Pill("+ Playlist") { FileDialogs.addTo = listOf(PlayItem(item.uri, fav?.name ?: item.title, isRadio = true)) }
-        Pill("Details") { details = true }
-        Pill("Share") { shareStation(ctx, fav?.name ?: item.title, item.uri) }
+    var rename by remember { mutableStateOf(false) }
+    if (details) StationDetailsDialog(fav ?: app.vlcinterface.data.Station(name = item.title, url = item.uri, meta = LastStationMeta.of(item.uri), favicon = item.artwork)) { details = false }
+    if (rename && fav != null) StationRenameDialog(fav) { rename = false }
+    SDropdownMenu(open, onClose) {
+        SMenuItem({ Text(if (fav != null) "Remove from favourites" else "Add to favourites") }, {
+            onClose(); toggleFavourite(item.title, item.uri, LastStationMeta.of(item.uri), item.artwork) })
+        if (fav != null) SMenuItem({ Text("Rename…") }, { onClose(); rename = true })
+        SMenuItem({ Text("Add to playlist…") }, { onClose(); FileDialogs.addTo = listOf(PlayItem(item.uri, name, isRadio = true)) })
+        SMenuItem({ Text("Details…") }, { onClose(); details = true })
+        SMenuItem({ Text("Copy link") }, { onClose(); copyStationLink(ctx, item.uri) })
+        SMenuItem({ Text("Share link…") }, { onClose(); shareStation(ctx, name, item.uri) })
     }
 }
 

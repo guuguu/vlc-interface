@@ -864,7 +864,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         val favs = store.current.stations
         val i = favs.indexOfFirst { it.url == url }
         if (i < 0) { playQueue(listOf(PlayItem(url, name, isRadio = true)), 0, Origin("radio", "", url, name), keepOrder = true); return }
-        playQueue(favs.map { PlayItem(it.url, it.name, isRadio = true) }, i, Origin("radio", "", url, "Favourite stations"), keepOrder = true)
+        // The station logo (favicon) is its picture until a song with a known album picture is announced.
+        playQueue(favs.map { PlayItem(it.url, it.name, isRadio = true, artwork = it.favicon) }, i, Origin("radio", "", url, "Favourite stations"), keepOrder = true)
     }
 
     /**
@@ -1745,8 +1746,11 @@ class PlayerController(private val context: Context, private val store: Store) {
                 if (item != null && item.isRadio) {
                     val m = mp.media
                     // The song the station announces (stream tags), and the station's own announced name.
-                    val np = m?.getMeta(IMedia.Meta.NowPlaying, true)?.trim().orEmpty()
-                    val sn = m?.getMeta(IMedia.Meta.Title, true)?.trim().orEmpty().takeIf { !it.contains("://") && it != np } ?: ""
+                    // Some streams put the song into the title field instead: "Artist - Song" there counts as the song.
+                    val title = m?.getMeta(IMedia.Meta.Title, true)?.trim().orEmpty().takeIf { !it.contains("://") } ?: ""
+                    val np0 = m?.getMeta(IMedia.Meta.NowPlaying, true)?.trim().orEmpty()
+                    val np = np0.ifEmpty { if (splitNowPlaying(title).first.isNotEmpty()) title else "" }
+                    val sn = title.takeIf { it != np } ?: ""
                     m?.release()
                     if (np != s.nowPlaying || sn != s.stationName) {
                         _state.value = _state.value.copy(nowPlaying = np, stationName = sn)

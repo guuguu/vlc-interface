@@ -84,6 +84,8 @@ fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayIte
                     url.startsWith("content://") -> ctx.contentResolver.loadThumbnail(Uri.parse(url), Size(512, 512), null)
                     url.startsWith("file://") -> BitmapFactory.decodeFile(Uri.parse(url).path)
                     url.startsWith("/") -> BitmapFactory.decodeFile(url)
+                    // Station logos (web address): kept in the temporary radio pictures folder.
+                    url.startsWith("http") -> app.vlcinterface.sources.CoverArt.webPicture(ctx, url)?.let { BitmapFactory.decodeFile(it.path) }
                     else -> null
                 }
             } catch (_: Exception) { null }

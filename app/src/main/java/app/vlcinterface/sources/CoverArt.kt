@@ -237,6 +237,19 @@ object CoverArt {
 
     /** For the music player: picture from the album folder — or, for songs not in a one-album folder, from the
      *  pictures store — else from the internet (album, then artist), saved back to the same place. */
+    /** A web picture (station logo): downloaded once into the temporary radio pictures folder; Wi-Fi only. */
+    fun webPicture(ctx: Context, url: String): File? {
+        val dir = File(ctx.cacheDir, "radio-pictures").apply { mkdirs() }
+        val f = File(dir, "logo-" + key(url) + ".img")
+        if (f.exists() && f.length() > 100) return f
+        if (onMobile()) return null
+        val b = try { Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null } } catch (_: Exception) { null }
+            ?: return null
+        if (b.size < 100) return null
+        f.writeBytes(b)
+        return f
+    }
+
     /** On mobile data (no Wi-Fi): no picture downloads. */
     fun onMobile() = app.vlcinterface.player.NetGuard.cellular.value
 
