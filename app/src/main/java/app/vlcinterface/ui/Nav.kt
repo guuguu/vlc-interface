@@ -68,6 +68,7 @@ class Navigator {
 fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
     val st by App.instance.store.state.collectAsState()
     UiPrefs.popupAlpha = st.settings.popupOpacity / 100f
+    UiPrefs.menuAlpha = st.settings.menuOpacity / 100f
     UiPrefs.menuFont = st.settings.menuFont
     val accent = Color(st.settings.accent)
     var showOutput by remember { mutableStateOf(false) }

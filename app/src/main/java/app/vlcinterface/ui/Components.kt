@@ -62,11 +62,14 @@ object C {
     val bad = Color(0xFFFF8F8F)
     /** Pop-up windows, search lists and menus: opacity from Settings, never a solid block. */
     val popup: Color get() = Color(0xFF14171C).copy(alpha = UiPrefs.popupAlpha)
+    /** Long-press / ⋮ menus: their own opacity from Settings. */
+    val menu: Color get() = Color(0xFF14171C).copy(alpha = UiPrefs.menuAlpha)
 }
 
 /** Look settings read while drawing (kept in step with Settings by the app's root). */
 object UiPrefs {
     var popupAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
+    var menuAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
     var menuFont by androidx.compose.runtime.mutableStateOf("medium")
     val menuFontSp get() = when (menuFont) { "small" -> 13; "large" -> 19; else -> 15 }
 }
@@ -360,7 +363,7 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
     // A menu never sits over the keyboard: the keyboard is put away when it opens.
     val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     if (expanded) androidx.compose.runtime.LaunchedEffect(Unit) { kb?.hide() }
-    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = 340.dp), containerColor = C.popup) {
+    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = 340.dp), containerColor = C.menu) {
         SMenuItem(text = { Text("‹  Back", color = C.muted) }, onClick = onDismissRequest)
         content()
     }

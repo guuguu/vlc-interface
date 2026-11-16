@@ -197,6 +197,12 @@ fun SettingsScreen(nav: Navigator) {
                         STextButton({ set(s.copy(popupOpacity = 90)) }) { Text("Reset") }
                     }
                     androidx.compose.material3.Slider(s.popupOpacity.toFloat(), { v -> set(s.copy(popupOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Menu opacity", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("${s.menuOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(menuOpacity = 90)) }) { Text("Reset") }
+                    }
+                    androidx.compose.material3.Slider(s.menuOpacity.toFloat(), { v -> set(s.copy(menuOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
                     Text("Menu text", color = C.text, fontSize = 15.sp)
                     Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("small" to "Small", "medium" to "Medium", "large" to "Large").forEach { (k, l) ->
@@ -205,10 +211,10 @@ fun SettingsScreen(nav: Navigator) {
                     }
                 }
             }
-            // Custom colours: up to 3 slots; tap uses one, long-press edits it. "+" adds while a slot is free.
+            // Custom colours: up to 5 slots; tap uses one, long-press edits it. "+" adds while a slot is free.
             var editSlot by remember { mutableStateOf(-1) }      // -1 closed, 0..2 edit that slot, 3 new
             Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                listOf(0xFFFF8A3D, 0xFF4FB3FF, 0xFF7BD88F, 0xFFC792EA).forEach { c ->
+                listOf(0xFFFF8A3D).forEach { c ->
                     Box(Modifier.size(34.dp).clip(CircleShape).background(Color(c))
                         .border(if (s.accent == c) 3.dp else 0.dp, Color.White, CircleShape).clickable { set(s.copy(accent = c)) })
                 }
@@ -221,7 +227,7 @@ fun SettingsScreen(nav: Navigator) {
                         Text("+", color = C.text, fontSize = 22.sp)
                     }
             }
-            var replacing by remember { mutableStateOf<Long?>(null) }   // new colour waiting for a slot (all 3 used)
+            var replacing by remember { mutableStateOf<Long?>(null) }   // new colour waiting for a slot (all 5 used)
             if (editSlot >= 0) {
                 val slot = editSlot
                 val existing = slot < s.customAccents.size
@@ -236,22 +242,22 @@ fun SettingsScreen(nav: Navigator) {
                     val list = s.customAccents.toMutableList()
                     when {
                         existing -> { list[slot] = c; set(s.copy(customAccents = list, accent = c)) }
-                        list.size < 3 -> { list += c; set(s.copy(customAccents = list, accent = c)) }
+                        list.size < 5 -> { list += c; set(s.copy(customAccents = list, accent = c)) }
                         else -> replacing = c
                     }
                 }
             }
-            // All 3 slots used: tap the one to overwrite, or drop one first.
+            // All 5 slots used: tap the one to overwrite, or drop one first.
             replacing?.let { c ->
                 AlertDialog(onDismissRequest = { replacing = null }, containerColor = C.panel,
                     title = { Text("Overwrite which?", color = C.text) },
                     text = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(40.dp).clip(CircleShape).background(Color(c)))
-                            Text("→", color = C.muted, fontSize = 20.sp)
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(Modifier.size(40.dp).clip(CircleShape).background(Color(c)))
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                             s.customAccents.forEachIndexed { i, old ->
                                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Box(Modifier.size(40.dp).clip(CircleShape).background(Color(old)).border(2.dp, Color.White, CircleShape).clickable {
+                                    Box(Modifier.size(34.dp).clip(CircleShape).background(Color(old)).border(2.dp, Color.White, CircleShape).clickable {
                                         replacing = null
                                         set(s.copy(customAccents = s.customAccents.toMutableList().also { it[i] = c }, accent = c))
                                     })
@@ -260,6 +266,7 @@ fun SettingsScreen(nav: Navigator) {
                                     })
                                 }
                             }
+                        }
                         }
                     },
                     confirmButton = { STextButton({ replacing = null }) { Text("Cancel") } },
