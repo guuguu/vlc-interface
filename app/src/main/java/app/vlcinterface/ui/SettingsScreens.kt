@@ -206,7 +206,7 @@ fun SettingsScreen(nav: Navigator) {
             }
             var picking by remember { mutableStateOf(false) }
             Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                (listOf(0xFFFF8A3D, 0xFF4FB3FF, 0xFF7BD88F, 0xFFC792EA) + listOfNotNull(s.customAccent.takeIf { it != 0L })).forEach { c ->
+                (listOf(0xFFFF8A3D, 0xFF4FB3FF, 0xFF7BD88F, 0xFFC792EA) + s.customAccents).forEach { c ->
                     Box(Modifier.size(40.dp).clip(CircleShape).background(Color(c))
                         .border(if (s.accent == c) 3.dp else 0.dp, Color.White, CircleShape).clickable { set(s.copy(accent = c)) })
                 }
@@ -215,8 +215,9 @@ fun SettingsScreen(nav: Navigator) {
                     Text("+", color = C.text, fontSize = 22.sp)
                 }
             }
-            if (picking) ColorPickDialog(if (s.customAccent != 0L) s.customAccent else s.accent, onDismiss = { picking = false }) { c ->
-                picking = false; set(s.copy(customAccent = c, accent = c))
+            // Up to 3 picked colours are kept; a new one pushes out the oldest.
+            if (picking) ColorPickDialog(s.customAccents.firstOrNull() ?: s.accent, onDismiss = { picking = false }) { c ->
+                picking = false; set(s.copy(customAccents = (listOf(c) + s.customAccents.filter { it != c }).take(3), accent = c))
             }
             Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
         }
