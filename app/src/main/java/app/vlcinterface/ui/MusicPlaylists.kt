@@ -147,7 +147,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         // No page title: the song name is already shown in the middle of the player.
         BackHeader("", nav, afterHome = {
             // Shortcut to the sound settings (preamp, balance per device, ReplayGain, sound engine).
-            SymButton({ nav.go(Screen.SoundSettings) }) { SymIcon(Icons.Filled.Settings, "Sound settings", tint = C.text) }
+            // The full Settings page (all sections, Sound included).
+            SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.text) }
             // Jump to a song: search the queue and the Library; plays it (added after the current song if new).
             SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
         }) { ScreenOnSign(C.text); OutputPill(openOutput); ExitButton() }
