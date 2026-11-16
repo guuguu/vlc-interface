@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * Low battery while not charging:
  *  - 15 %: a pop-up warns that playback stops at 10 %;
  *  - 10 %: playback stops (paused, the queue and place are kept), the "screen stays on" is switched off, and a
- *    pop-up says why. Both come again only after charging.
+ *    pop-up says why; from then on nothing is played or started (scans, indexing) until the phone charges.
  */
 object BatteryGuard {
     /** 0 = nothing to show, 15 = the warning, 10 = "stopped". */
@@ -54,6 +54,15 @@ object BatteryGuard {
             low.value = false
             if (!warned) { warned = true; if (playing) notice.value = 15 }
         }
+    }
+
+    /**
+     * At 10 % or less (not charging) nothing new is started: true = refused (and, unless [silent], a pop-up says why).
+     */
+    fun blocked(silent: Boolean = false): Boolean {
+        if (!low.value) return false
+        if (!silent) notice.value = 11
+        return true
     }
 
     fun seen() { notice.value = 0 }

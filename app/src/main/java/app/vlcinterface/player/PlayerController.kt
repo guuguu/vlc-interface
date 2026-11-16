@@ -625,7 +625,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 AudioManager.AUDIOFOCUS_LOSS -> { resumeOnGain = false; pause() }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> { if (mp.isPlaying) { resumeOnGain = true; mp.pause() } }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> { ducked = true; mp.setVolume(30) }
-                AudioManager.AUDIOFOCUS_GAIN -> { ducked = false; mp.setVolume((100 * fadeK).toInt()); if (resumeOnGain) { resumeOnGain = false; mp.play() } }
+                AudioManager.AUDIOFOCUS_GAIN -> { ducked = false; mp.setVolume((100 * fadeK).toInt()); if (resumeOnGain) { resumeOnGain = false; if (!BatteryGuard.blocked(silent = true)) mp.play() } }
             }
         }, main)
         .build()
@@ -999,6 +999,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     // ---------- playback ----------
 
     private fun startItem(i0: Int, startAt: Long) {
+        if (BatteryGuard.blocked()) return              // battery 10 % or less: nothing is played
         saveProgress()
         // ReplayGain values waiting for a file the player had open: written now that it moves on.
         app.vlcinterface.sources.RgScanner.flushPendingSoon(context)
@@ -1182,9 +1183,9 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     fun togglePause() {
         if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() }
-        else { _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() }
+        else { if (BatteryGuard.blocked()) return; _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() }
     }
-    fun resume() { if (!mp.isPlaying && _state.value.item != null) { _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() } }
+    fun resume() { if (!mp.isPlaying && _state.value.item != null && !BatteryGuard.blocked()) { _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() } }
     fun pause() { if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() } }
     /**
      * Set when the sleep timer closed the player. Kept across the app being closed, so the pop-up shows when the app

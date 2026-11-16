@@ -88,6 +88,7 @@ object NetIndex {
     private val building = java.util.Collections.synchronizedSet(HashSet<String>())
 
     fun build(src: Source, pin: String) {
+        if (app.vlcinterface.player.BatteryGuard.blocked(silent = true)) return   // battery 10 % or less: no indexing
         val k = key(src, pin)
         if (!building.add(k)) return                     // already queued / running
         scope.launch {
