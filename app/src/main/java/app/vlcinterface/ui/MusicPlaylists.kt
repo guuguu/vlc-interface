@@ -1312,10 +1312,11 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
         Text(title.ifEmpty { "Live" }, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
             maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
         if (artist.isNotEmpty()) Text(artist, color = C.muted, fontSize = (15 * tk).sp, textAlign = TextAlign.Center)
-        val details = listOfNotNull(fav?.meta?.ifEmpty { null }, p.rgInfo.ifEmpty { null },
+        val details = listOfNotNull((fav?.meta ?: LastStationMeta.of(item.uri)).ifEmpty { null }, p.rgInfo.ifEmpty { null },
             if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else null)
         if (details.isNotEmpty()) Text(details.joinToString(" · "), color = accent(), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(4.dp))
         if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        StationActions(item)
         // Mobile data only: what this station has used so far, live.
         val cell by app.vlcinterface.player.NetGuard.cellular.collectAsState()
         if (cell) {
@@ -1396,6 +1397,7 @@ private fun RadioPanel(nav: Navigator) {
                                     ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND)
                                         .setType("text/plain").putExtra(android.content.Intent.EXTRA_SUBJECT, s.name).putExtra(android.content.Intent.EXTRA_TEXT, "${s.name}\n${s.url}"), "Share station"))
                                 })
+                                SMenuItem({ Text("Add to playlist…") }, { menu = null; FileDialogs.addTo = listOf(PlayItem(s.url, s.name, isRadio = true)) })
                                 SMenuItem({ Text("Details…") }, { menu = null; details = s })
                                 SMenuItem({ Text("Remove from favourites", color = C.bad) }, { menu = null; App.instance.store.update { x -> x.copy(stations = x.stations.filterNot { it.id == s.id }) } })
                             }
@@ -1424,6 +1426,7 @@ fun StationSearch() {
     var results by remember { mutableStateOf<List<app.vlcinterface.sources.RadioStation>?>(emptyList()) }
     var error by remember { mutableStateOf("") }
     var open by remember { mutableStateOf("") }
+    val ctxS = LocalContext.current
     fun run() {
         scope.launch {
             results = null; error = ""
@@ -1470,17 +1473,30 @@ fun StationSearch() {
             error.isNotEmpty() -> Text(error, color = C.bad, fontSize = 13.sp)
             else -> results!!.forEach { r ->
                 val fav = st.stations.any { it.url == r.url }
-                Row(Modifier.fillMaxWidth().clickable { player.playStation(r.name, r.url) }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                LastStationMeta.put(r.url, r.meta)
+                var rMenu by remember(r.url) { mutableStateOf(false) }
+                var rDetails by remember(r.url) { mutableStateOf(false) }
+                if (rDetails) StationDetailsDialog(app.vlcinterface.data.Station(name = r.name, url = r.url, meta = r.meta, favicon = r.favicon)) { rDetails = false }
+                Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.playStation(r.name, r.url) }, onLongClick = { rMenu = true })
+                    .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(r.name, color = C.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (r.meta.isNotEmpty()) Text(r.meta, color = if (r.isFlac) C.bad.copy(alpha = 0.8f) else C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text(if (fav) "★" else "☆", color = accent(), fontSize = 22.sp, modifier = Modifier.clickable {
-                        App.instance.store.update { x ->
-                            if (fav) x.copy(stations = x.stations.filterNot { it.url == r.url })
-                            else x.copy(stations = x.stations + app.vlcinterface.data.Station(name = r.name, url = r.url, meta = r.meta, favicon = r.favicon))
-                        }
+                        toggleFavourite(r.name, r.url, r.meta, r.favicon)
                     }.padding(horizontal = 8.dp))
+                    Box {
+                        Text("⋮", color = C.text, fontSize = 20.sp, modifier = Modifier.clickable { rMenu = true }.padding(horizontal = 10.dp, vertical = 4.dp))
+                        SDropdownMenu(rMenu, { rMenu = false }) {
+                            SMenuItem({ Text("▶  Play") }, { rMenu = false; player.playStation(r.name, r.url) })
+                            SMenuItem({ Text(if (fav) "Remove from favourites" else "Add to favourites") }, { rMenu = false; toggleFavourite(r.name, r.url, r.meta, r.favicon) })
+                            SMenuItem({ Text("Add to playlist…") }, { rMenu = false; FileDialogs.addTo = listOf(PlayItem(r.url, r.name, isRadio = true)) })
+                            SMenuItem({ Text("Details…") }, { rMenu = false; rDetails = true })
+                            SMenuItem({ Text("Copy link") }, { rMenu = false; copyStationLink(ctxS, r.url) })
+                            SMenuItem({ Text("Share link…") }, { rMenu = false; shareStation(ctxS, r.name, r.url) })
+                        }
+                    }
                 }
             }
         }
@@ -1609,4 +1625,49 @@ fun StationDetailsDialog(station: app.vlcinterface.data.Station, onDone: () -> U
         confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
         dismissButton = { STextButton({ copy(report(), "Details") }) { Text("Copy all") } },
     )
+}
+
+
+/** Copy / share a station's link. */
+fun copyStationLink(ctx: android.content.Context, url: String) {
+    ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("station", url))
+    android.widget.Toast.makeText(ctx, "Link copied", android.widget.Toast.LENGTH_SHORT).show()
+}
+fun shareStation(ctx: android.content.Context, name: String, url: String) {
+    ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND)
+        .setType("text/plain").putExtra(android.content.Intent.EXTRA_SUBJECT, name).putExtra(android.content.Intent.EXTRA_TEXT, "$name\n$url"), "Share station")
+        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+fun toggleFavourite(name: String, url: String, meta: String, favicon: String) {
+    App.instance.store.update { x ->
+        if (x.stations.any { it.url == url }) x.copy(stations = x.stations.filterNot { it.url == url })
+        else x.copy(stations = x.stations + app.vlcinterface.data.Station(name = name, url = url, meta = meta, favicon = favicon))
+    }
+}
+
+/** Under the station header: favourite on / off, add to a playlist, details, share — for any station playing. */
+@Composable
+private fun StationActions(item: PlayItem) {
+    val st by App.instance.store.state.collectAsState()
+    val ctx = LocalContext.current
+    val fav = st.stations.firstOrNull { it.url == item.uri }
+    var details by remember { mutableStateOf(false) }
+    // Details of a station not (yet) in favourites: what the search listed for it, if anything.
+    if (details) StationDetailsDialog(fav ?: app.vlcinterface.data.Station(name = item.title, url = item.uri, meta = LastStationMeta.of(item.uri))) { details = false }
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth()) {
+        Pill(if (fav != null) "★ Favourite" else "☆ Add to favourites", selected = fav != null) {
+            toggleFavourite(item.title, item.uri, LastStationMeta.of(item.uri), item.artwork)
+        }
+        Pill("+ Playlist") { FileDialogs.addTo = listOf(PlayItem(item.uri, fav?.name ?: item.title, isRadio = true)) }
+        Pill("Details") { details = true }
+        Pill("Share") { shareStation(ctx, fav?.name ?: item.title, item.uri) }
+    }
+}
+
+/** Details the search listed for stations (bitrate, codec, style, country), so a played search result keeps them. */
+object LastStationMeta {
+    private val m = java.util.concurrent.ConcurrentHashMap<String, String>()
+    fun put(url: String, meta: String) { if (meta.isNotBlank()) m[url] = meta }
+    fun of(url: String) = m[url] ?: ""
 }
