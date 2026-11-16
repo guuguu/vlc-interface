@@ -29,8 +29,10 @@ object InternalSource {
                 ctx.contentResolver.query(coll, proj, null, null, null)?.use { c ->
                     while (c.moveToNext()) {
                         val rel = c.getString(0) ?: continue
+                        if (Ignore.dotPath(rel)) continue                      // hidden folders (".something")
                         val vol = c.getString(1) ?: MediaStore.VOLUME_EXTERNAL_PRIMARY
                         val id = "$vol:$rel"
+                        if (Ignore.blacklisted("local:$id")) continue          // folder taken out of the lists
                         val prev = map[id]
                         val name = rel.trimEnd('/').substringAfterLast('/').ifEmpty { rel } +
                             if (vol != MediaStore.VOLUME_EXTERNAL_PRIMARY) " (SD card)" else ""
@@ -87,7 +89,8 @@ object InternalSource {
             }
         } catch (_: SecurityException) {
         }
-        out.filter { isPlayable(it.name) }
+        // Hidden (".name" files, files inside ".folders") and blacklisted files never come back.
+        out.filter { isPlayable(it.name) && !Ignore.dotName(it.name) && !Ignore.dotPath(it.meta) && !Ignore.blacklisted(it.uri) }
     }
 
     /** Asks Android to re-index one folder (manual rescan). */

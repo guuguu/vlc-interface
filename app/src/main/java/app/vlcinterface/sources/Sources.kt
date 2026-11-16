@@ -156,6 +156,18 @@ object VlcBrowse {
     }
 }
 
+/**
+ * Never shown, played, indexed or added: names starting with a dot (hidden files and folders, e.g. macOS "._song.flac")
+ * and anything the user took out with "Remove from lists" (blacklist kept in the settings; the files themselves stay).
+ */
+object Ignore {
+    fun dotName(name: String) = name.trimStart().startsWith(".")
+    /** A path with any hidden part ("Music/.thumbnails/x.mp3"). */
+    fun dotPath(path: String) = android.net.Uri.decode(path).split('/').any { it.startsWith(".") }
+    fun blacklisted(uri: String) = uri in app.vlcinterface.App.instance.store.current.settings.hiddenUris
+    fun entry(e: Entry) = dotName(e.name) || blacklisted(e.uri)
+}
+
 /** Browses any saved source with the right backend. */
 object Browse {
     /** Raw listing (all files); used for subtitles, covers, .cue lookups. */
@@ -187,5 +199,5 @@ object Browse {
 
     /** Library listing: folders plus audio and video files only. */
     suspend fun list(s: Source, uri: String, action: String = "browse"): Result<List<Entry>> =
-        listAll(s, uri, action).map { l -> l.filter { it.isDir || isPlayable(it.name) } }
+        listAll(s, uri, action).map { l -> l.filter { (it.isDir || isPlayable(it.name)) && !Ignore.entry(it) } }
 }

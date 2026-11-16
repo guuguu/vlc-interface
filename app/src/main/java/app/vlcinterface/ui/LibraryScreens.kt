@@ -292,7 +292,8 @@ fun InternalTab(nav: Navigator) {
                             onQueue = { scope.launch { App.instance.player.addToQueue(ofKind(MusicLibrary.collectLocal(ctx, f, true))) } },
                             onAddPlaylist = { addFolder = f },
                             onRgScan = if (st.settings.libraryKind == "audio") ({ rgFolder = f }) else null,
-                            onDelete = null)   // deleting files: only from Settings → Delete a file
+                            onDelete = null,   // deleting files: only from Settings → Delete a file
+                            onRemove = { HiddenFiles.hide("local:${f.id}"); reload++ })
                     }
                     SymButton({
                         scope.launch {

@@ -267,6 +267,7 @@ fun MediaList(
                             onQueue = { scope.launch { App.instance.player.addToQueue(itemsOfDir(r.e)()) } },
                             onAddPlaylist = { addTarget = itemsOfDir(r.e) }, onDelete = null,
                             onQuickPlaylist = { quickTarget = itemsOfDir(r.e) },
+                            onRemove = { HiddenFiles.hide(r.e.uri) },
                             onSelect = { toggle(r.e) },
                             onRgScan = if (App.instance.store.current.settings.libraryKind == "audio") ({ rgTarget = itemsOfDir(r.e) }) else null) }
                     }
@@ -345,6 +346,7 @@ fun EntryMenu(
     onPlayNext: () -> Unit, onQueue: () -> Unit, onAddPlaylist: () -> Unit, onDelete: (() -> Unit)?,
     onSelect: (() -> Unit)? = null, onRgScan: (() -> Unit)? = null, onInfo: (() -> Unit)? = null,
     onQuickPlaylist: (() -> Unit)? = null,
+    onRemove: (() -> Unit)? = null,
 ) {
     SDropdownMenu(expanded = true, onDismissRequest = onDismiss) {
         if (onSelect != null) SMenuItem(text = { Text("Select…") }, onClick = { onSelect(); onDismiss() })
@@ -354,6 +356,8 @@ fun EntryMenu(
         if (onQuickPlaylist != null) SMenuItem(text = { Text("New playlist from this folder & play…") }, onClick = { onQuickPlaylist(); onDismiss() })
         if (onInfo != null) SMenuItem(text = { Text("Tags & ReplayGain…") }, onClick = { onInfo(); onDismiss() })
         if (onRgScan != null) SMenuItem(text = { Text(if (isDir) "ReplayGain scan (with subfolders)…" else "ReplayGain scan…") }, onClick = { onRgScan(); onDismiss() })
+        if (onRemove != null) SMenuItem(text = { Text(if (isDir) "Remove folder from lists (never re-added)" else "Remove from lists (never re-added)", color = C.bad) },
+            onClick = { onRemove(); onDismiss() })
         if (onDelete != null) SMenuItem(text = { Text("Delete…", color = C.bad) }, onClick = { onDelete(); onDismiss() })
     }
 }

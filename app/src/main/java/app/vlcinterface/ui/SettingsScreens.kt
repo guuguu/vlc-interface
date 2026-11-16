@@ -155,7 +155,7 @@ fun SettingsScreen(nav: Navigator) {
             }
             // Files taken out of lists with "Remove from this list" (never deleted): put them back.
             if (s.hiddenUris.isNotEmpty()) CardBox {
-                ValueRow("Removed from lists", "${s.hiddenUris.size} file${if (s.hiddenUris.size == 1) "" else "s"} hidden from folders and the Songs list (not deleted)",
+                ValueRow("Removed from lists", "${s.hiddenUris.size} file${if (s.hiddenUris.size == 1) "" else "s"} taken out of the lists and never re-added — files and folders (not deleted)",
                     "Show again") { HiddenFiles.showAll() }
             }
             CardBox {

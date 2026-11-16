@@ -81,7 +81,8 @@ internal object SongsCache {
     suspend fun all(ctx: android.content.Context): List<PlayItem> {
         val hidden = App.instance.store.current.settings.hiddenUris
         return app.vlcinterface.sources.NetIndex.preferLocal(loadPhone(ctx) + app.vlcinterface.sources.NetIndex.songsReachable() + network)
-            .filter { it.uri !in hidden }
+            .filter { it.uri !in hidden && it.folderKey !in hidden && "local:" + it.folderKey.removePrefix("local:") !in hidden &&
+                !app.vlcinterface.sources.Ignore.dotName(it.fileName) && !app.vlcinterface.sources.Ignore.dotPath(it.uri.substringAfter("://")) }
     }
 }
 

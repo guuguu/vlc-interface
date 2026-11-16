@@ -36,7 +36,7 @@ class FileMenuExtras(
     val onSelect: (() -> Unit)? = null,
     val onMoveUp: (() -> Unit)? = null,
     val onMoveDown: (() -> Unit)? = null,
-    val removeLabel: String = "Remove from this list",
+    val removeLabel: String = "Remove from lists (never re-added)",
     val onRemove: (() -> Unit)? = null,
     val onDelete: (() -> Unit)? = null,
 )
