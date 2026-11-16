@@ -27,6 +27,7 @@ class App : Application() {
         ServerLog.init(this)
         TagCache.init(this)
         app.vlcinterface.sources.RgStore.init(this)
+        app.vlcinterface.sources.RgScanner.flushPendingSoon(this)   // cached ReplayGain writes left from last time
         app.vlcinterface.sources.CoverArt.init(this)
         app.vlcinterface.sources.NetIndex.init(this)
         app.vlcinterface.sources.NetIndex.buildMissing()      // pinned LAN folders not indexed yet: in the background

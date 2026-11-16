@@ -11,6 +11,7 @@ import app.vlcinterface.App
 import app.vlcinterface.data.ServerLog
 import app.vlcinterface.data.TagCache
 import app.vlcinterface.data.Source
+import app.vlcinterface.data.PlEntry
 import app.vlcinterface.player.PlayItem
 import jcifs.smb.SmbFile
 import jcifs.smb.SmbRandomAccessFile
@@ -436,13 +437,12 @@ object RgScanner {
                 if (tmp.length() > 512 * 1024) java.io.RandomAccessFile(tmp, "r").use { r -> r.seek(tmp.length() - 65536); ByteArray(65536).also { r.readFully(it) } } else ByteArray(0))
             if (check.trackGain == null) throw IllegalStateException("tag check failed")
             try { upload(ctx, item, src, tmp) } catch (e: Exception) {
-                // The playing file is locked by the server while open: let go of it for the write, then play on.
-                val m = (e.message ?: "") + " " + (e.cause?.message ?: "")
-                if (!m.contains("used by another process", true) && !m.contains("SHARING_VIOLATION", true) && !m.contains("locked", true)) throw e
-                App.instance.player.releasingFile(item.uri) {
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { upload(ctx, item, src, tmp) }
-                }
-                ServerLog.log(item.uri, "replaygain", item.uri.substringBefore("://").uppercase(), item.user, true, "${item.title}: file was in use by the player — released for the write, playback resumed")
+                if (!inUse(e)) throw e
+                // The server refuses while the player has the file open: the tagged copy is cached and written
+                // as soon as the player is done with that file. Until then the app uses the values itself.
+                RgStore.put(item.uri, values)
+                addPending(ctx, item, tmp)
+                return "cached — written to the file once it is no longer playing"
             }
             RgStore.remove(item.uri)       // the file now holds the newest values
             "written to the file"
@@ -469,12 +469,13 @@ object RgScanner {
 
     /** Copies with progress on the scan page (big files over the network take a while). */
     private fun copy(i: java.io.InputStream, o: java.io.OutputStream, what: String, total: Long = -1) {
+        val quiet = quietCopy.get() == true
         val buf = ByteArray(256 * 1024); var n = 0L; var last = 0L
         while (true) {
             val r = i.read(buf); if (r < 0) break
             o.write(buf, 0, r); n += r
             val now = System.currentTimeMillis()
-            if (now - last > 500) { last = now; update { s -> s.copy(phase = "$what " + if (total > 0) "${n * 100 / total}%" else "${n / 1_000_000} MB") } }
+            if (!quiet && now - last > 500) { last = now; update { s -> s.copy(phase = "$what " + if (total > 0) "${n * 100 / total}%" else "${n / 1_000_000} MB") } }
         }
     }
 
@@ -493,7 +494,7 @@ object RgScanner {
                 val t = SmbFile(Uri.decode(u) + ".rgtmp", cx)
                 t.outputStream.use { o -> tmp.inputStream().use { copy(it, o, "Saving to the server", tmp.length()) } }
                 if (t.length() != tmp.length()) { t.delete(); throw IllegalStateException("copy on the server is incomplete") }
-                orig.delete()
+                try { orig.delete() } catch (e: Exception) { try { t.delete() } catch (_: Exception) {}; throw e }
                 t.renameTo(SmbFile(Uri.decode(u), cx))
             }
             u.startsWith("http") && src?.proto == "webdav" -> {
@@ -502,6 +503,74 @@ object RgScanner {
                     .execute().use { r -> if (!r.isSuccessful) throw IllegalStateException("server refused (HTTP ${r.code})") }
             }
             else -> throw IllegalStateException("this source is read-only")
+        }
+    }
+    // ---------- cached writes (file was in use) ----------
+
+    private val quietCopy = ThreadLocal<Boolean>()
+    private fun inUse(e: Throwable): Boolean {
+        val m = (e.message ?: "") + " " + (e.cause?.message ?: "")
+        return m.contains("used by another process", true) || m.contains("SHARING_VIOLATION", true)
+    }
+    private fun pendingDir(ctx: Context) = File(ctx.filesDir, "rg-pending").apply { mkdirs() }
+    private fun pendingIndex(ctx: Context) = File(pendingDir(ctx), "index.json")
+
+    /** Tagged copies waiting to be written: cached file name → song (+ how often it was tried). */
+    @Synchronized private fun readPending(ctx: Context): org.json.JSONArray =
+        try { org.json.JSONArray(pendingIndex(ctx).readText()) } catch (_: Exception) { org.json.JSONArray() }
+    @Synchronized private fun writePending(ctx: Context, a: org.json.JSONArray) { try { pendingIndex(ctx).writeText(a.toString()) } catch (_: Exception) {} }
+
+    @Synchronized private fun addPending(ctx: Context, item: PlayItem, tmp: File) {
+        val a = readPending(ctx)
+        // A newer copy for the same file replaces the older one.
+        val keep = org.json.JSONArray()
+        for (k in 0 until a.length()) { val o = a.getJSONObject(k)
+            if (o.optJSONObject("e")?.optString("uri") == item.uri) File(pendingDir(ctx), o.optString("f")).delete() else keep.put(o) }
+        val name = "${java.util.UUID.randomUUID()}.${item.ext.lowercase().ifEmpty { "bin" }}"
+        if (!tmp.renameTo(File(pendingDir(ctx), name))) { tmp.copyTo(File(pendingDir(ctx), name), true); tmp.delete() }
+        keep.put(org.json.JSONObject().put("f", name).put("e", MusicLibrary.toPlEntry(item).toJson()).put("tries", 0))
+        writePending(ctx, keep)
+        ServerLog.log(item.uri, "replaygain", item.uri.substringBefore("://").uppercase(), item.user, true,
+            "${item.title}: file in use by the player — tagged copy cached, written when it is no longer playing")
+    }
+
+    private val flushing = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /** Writes the cached copies whose files the player is not using (a moment after a song change / stop). */
+    fun flushPendingSoon(ctx: Context) {
+        val app = ctx.applicationContext
+        if (readPending(app).length() == 0 || !flushing.compareAndSet(false, true)) return
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+            try {
+                kotlinx.coroutines.delay(1500)          // the player has really let go of the previous file
+                val playing = App.instance.player.state.value.item?.uri
+                val a = readPending(app); val keep = org.json.JSONArray()
+                for (k in 0 until a.length()) {
+                    val o = a.getJSONObject(k)
+                    val f = File(pendingDir(app), o.optString("f"))
+                    val item = MusicLibrary.fromPlEntry(PlEntry.fromJson(o.getJSONObject("e")))
+                    if (!f.exists()) continue
+                    if (item.uri == playing) { keep.put(o); continue }
+                    try {
+                        quietCopy.set(true)
+                        upload(app, item, App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }, f)
+                        RgStore.remove(item.uri); f.delete()
+                        ServerLog.log(item.uri, "replaygain", item.uri.substringBefore("://").uppercase(), item.user, true,
+                            "${item.title}: cached ReplayGain written to the file")
+                    } catch (e: Exception) {
+                        val tries = o.optInt("tries") + 1
+                        // Values stay in the app either way; give up on the file after many tries.
+                        if (tries >= 20) { f.delete()
+                            ServerLog.log(item.uri, "replaygain", item.uri.substringBefore("://").uppercase(), item.user, false,
+                                "${item.title}: cached ReplayGain could not be written (${e.message}) — kept in the app")
+                        } else keep.put(o.put("tries", tries))
+                    } finally { quietCopy.set(false) }
+                }
+                // Copies added while this ran are kept too.
+                val now = readPending(app); val seen = (0 until a.length()).map { a.getJSONObject(it).optString("f") }.toSet()
+                for (k in 0 until now.length()) now.getJSONObject(k).let { if (it.optString("f") !in seen) keep.put(it) }
+                writePending(app, keep)
+            } finally { flushing.set(false) }
         }
     }
 }

@@ -981,6 +981,8 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     private fun startItem(i0: Int, startAt: Long) {
         saveProgress()
+        // ReplayGain values waiting for a file the player had open: written now that it moves on.
+        app.vlcinterface.sources.RgScanner.flushPendingSoon(context)
         var i = i0
         // Today's list: the song being left was heard whole, or skipped (then it's taken out).
         _state.value.let { pv -> if (pv.item != null && pv.queue.getOrNull(i0) !== pv.item) sessionLeaving(pv.item, pv.time, pv.length) }
@@ -1194,38 +1196,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         main.postDelayed({ app.vlcinterface.ui.exitApp(keepNotice = true) }, 250)
     }
 
-    /**
-     * The file being played is held open, and a server (Windows / NAS share) then refuses to have it rewritten
-     * ("used by another process"). This lets go of it for the write (about a second), then plays on from the same
-     * place, playing or paused as before. Any other file: just runs [block].
-     */
-    suspend fun <T> releasingFile(uri: String, block: suspend () -> T): T {
-        val M = kotlinx.coroutines.Dispatchers.Main
-        val held = kotlinx.coroutines.withContext(M) {
-            val s = _state.value
-            val cur = s.item
-            if (cur == null || (cur.uri != uri && s.queue.getOrNull(s.index)?.uri != uri)) null
-            else Triple(s.index, mp.time, mp.isPlaying).also {
-                stopping = true; endHandled = true
-                mp.stop()
-                currentPfd?.close(); currentPfd = null
-            }
-        } ?: return block()
-        kotlinx.coroutines.delay(400)       // the server sees the file closed
-        try { return block() } finally {
-            kotlinx.coroutines.withContext(M + kotlinx.coroutines.NonCancellable) {
-                val (idx, pos, playing) = held
-                // Only if nothing else was chosen meanwhile.
-                if (_state.value.item != null && _state.value.index == idx) {
-                    startItem(idx, pos)
-                    if (!playing) main.postDelayed({ pause() }, 400)
-                } else stopping = false
-            }
-        }
-    }
-
     fun stop() {
         stopping = true; endHandled = true
+        app.vlcinterface.sources.RgScanner.flushPendingSoon(context)
         saveProgress()
         syncPicture()
         mp.stop()
