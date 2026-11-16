@@ -96,6 +96,11 @@ data class PlayerState(
     val metaArtist: String = "",
     val metaAlbum: String = "",
     val artworkUrl: String = "",
+    /** Loudness (0…+12 dB) and treble (−12…+12 dB) in use; 0 / 0 = no processing. */
+    val loudDb: Float = 0f,
+    val trebleDb: Float = 0f,
+    /** This song (station) has its own saved loudness / treble (Recall brings them back). */
+    val toneSaved: Boolean = false,
     /** Radio: the name the station announces about itself (ICY name), if any. */
     val stationName: String = "",
     val buffering: Float = 100f,
@@ -328,6 +333,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (NativeAudio.active) {
             fun lin(db: Float) = if (db <= -60f) 0f else 10f.pow(db / 20f)
             NativeAudio.gains(lin(left), lin(right), total > 0f)
+            applyTone(0f)
             return
         }
         val d = dp
@@ -336,17 +342,74 @@ class PlayerController(private val context: Context, private val store: Store) {
                 d.setInputGainbyChannel(0, left)
                 d.setInputGainbyChannel(1, right)
                 d.setLimiterAllChannelsTo(DynamicsProcessing.Limiter(true, total > 0f, 0, 1f, 60f, 10f, -1f, 0f))
+                applyTone(0f)
                 return
             } catch (_: Exception) {
             }
         }
         // Fallback without balance: libVLC's equalizer pre-amplifier.
+        applyTone(total.coerceIn(-20f, 20f))
+    }
+
+    /**
+     * Loudness and treble through libVLC's 10-band equalizer (60 Hz … 16 kHz). Loudness lifts lows and highs
+     * (the classic contour), treble tilts the top bands. Both at 0 (and no pre-amp needed): no equalizer at all.
+     */
+    private fun applyTone(preamp: Float) {
+        val s = _state.value
+        val l = s.loudDb; val t = s.trebleDb
         try {
+            if (l == 0f && t == 0f && preamp == 0f) { mp.setEqualizer(null); return }
             val e = eq ?: MediaPlayer.Equalizer.create().also { eq = it }
-            e.setPreAmp(total.coerceIn(-20f, 20f))
+            val loudShape = floatArrayOf(1f, 0.7f, 0.35f, 0.1f, 0f, 0f, 0.1f, 0.3f, 0.5f, 0.6f)
+            val trebleShape = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0.15f, 0.4f, 0.8f, 1f, 1f)
+            var top = 0f
+            for (b in 0 until 10) {
+                val g = (l * loudShape[b] + t * trebleShape[b]).coerceIn(-20f, 20f)
+                e.setAmp(b, g); if (g > top) top = g
+            }
+            // Some headroom against distortion when boosting.
+            e.setPreAmp((preamp - top / 3f).coerceIn(-20f, 20f))
             mp.setEqualizer(e)
         } catch (_: Exception) {
         }
+    }
+
+    // ---------- loudness / treble per song ----------
+    private var toneDirty = false
+
+    /** Slider moved (live); [done] = finger lifted. Kept as the "last values" too. */
+    fun setTone(loud: Float, treble: Float, done: Boolean) {
+        val l = loud.coerceIn(0f, 12f); val t = treble.coerceIn(-12f, 12f)
+        _state.value = _state.value.copy(loudDb = l, trebleDb = t)
+        applySoundChain()
+        toneDirty = true
+        if (done) store.update { it.copy(settings = it.settings.copy(toneLoud = l, toneTreble = t)) }
+    }
+
+    /** Back to this song's own saved values (if it has some). */
+    fun recallTone() {
+        val item = _state.value.item ?: return
+        val v = ToneStore.get(item) ?: return
+        toneDirty = false
+        _state.value = _state.value.copy(loudDb = v.first, trebleDb = v.second)
+        applySoundChain()
+        store.update { it.copy(settings = it.settings.copy(toneLoud = v.first, toneTreble = v.second)) }
+    }
+
+    /** Leaving a song: values changed during it are saved with it. */
+    private fun toneLeaving() {
+        val s = _state.value
+        val item = s.item ?: return
+        if (toneDirty) ToneStore.put(item, s.loudDb, s.trebleDb)
+        toneDirty = false
+    }
+
+    /** A song starts: its own saved values at once, else the last values used. */
+    private fun toneFor(item: PlayItem): Triple<Float, Float, Boolean> {
+        val v = ToneStore.get(item)
+        val set = store.current.settings
+        return if (v != null) Triple(v.first, v.second, true) else Triple(set.toneLoud, set.toneTreble, false)
     }
 
     /**
@@ -1022,6 +1085,7 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     private fun startItem(i0: Int, startAt: Long) {
         if (BatteryGuard.blocked()) return              // battery 10 % or less: nothing is played
+        toneLeaving()                                   // loudness / treble changed during the last song: kept with it
         saveProgress()
         // ReplayGain values waiting for a file the player had open: written now that it moves on.
         app.vlcinterface.sources.RgScanner.flushPendingSoon(context)
@@ -1101,6 +1165,9 @@ class PlayerController(private val context: Context, private val store: Store) {
             audioTracks = emptyList(), spuTracks = emptyList(), audioDelayMs = 0, spuDelayMs = 0, rate = 1f, nowPlaying = "",
             metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, buffering = 0f, error = "", ended = false,
             rgInfo = "", userPaused = false, songOver = false)
+        // Loudness / treble: the song's (station's) own values at once, else the last ones; videos: none.
+        val tone = if (item.isMusic || item.isRadio) toneFor(item) else Triple(0f, 0f, false)
+        _state.value = _state.value.copy(loudDb = tone.first, trebleDb = tone.second, toneSaved = tone.third)
         loadReplayGain(item, _state.value)
         // No picture in the file: looked up here too (folder, pictures store, online), so the notification and lock
         // screen get it even while the app is in the background.
@@ -1245,6 +1312,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     fun stop() {
+        toneLeaving()
         stopping = true; endHandled = true
         app.vlcinterface.sources.RgScanner.flushPendingSoon(context)
         saveProgress()

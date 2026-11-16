@@ -28,6 +28,7 @@ class App : Application() {
         TagCache.init(this)
         app.vlcinterface.sources.RgStore.init(this)
         app.vlcinterface.player.BatteryGuard.init(this)   // 15 % warning, stop at 10 %
+        app.vlcinterface.player.ToneStore.init(this)      // loudness / treble per song
         app.vlcinterface.player.NetGuard.init(this)       // radio: Wi-Fi lost → ask; mobile data counter
         app.vlcinterface.sources.RgScanner.flushPendingSoon(this)   // cached ReplayGain writes left from last time
         app.vlcinterface.sources.CoverArt.init(this)

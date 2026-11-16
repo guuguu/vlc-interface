@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -223,6 +224,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     Text(if (radio) "Next\nstation" else "Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
+            // Loudness and treble, right under the player buttons.
+            ToneSliders()
             // Prominent shortcut: where the music is playing from (playlist or Library folder).
             val fromLabel = when {
                 radio && p.origin.kind == "radio" -> "Favourites: ${p.queue.size} station" + if (p.queue.size == 1) "" else "s"
@@ -1473,5 +1476,40 @@ fun StationSearch() {
                 }
             }
         }
+    }
+}
+
+
+/**
+ * Loudness and treble: reset to 0 (no processing) on the left, recall (this song's own saved values) on the right.
+ * Values changed during a song are kept with it; songs without their own values use the last ones.
+ */
+@Composable
+private fun ToneSliders() {
+    val player = App.instance.player
+    val p by player.state.collectAsState()
+    @Composable
+    fun row(label: String, v: Float, range: ClosedFloatingPointRange<Float>, onSet: (Float, Boolean) -> Unit) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            // Reset: 0 = no processing.
+            Text("0", color = if (v == 0f) C.muted else C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center, modifier = Modifier.size(36.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
+                    .clickable { onSet(0f, true) }.wrapContentHeight())
+            Column(Modifier.weight(1f).padding(horizontal = 6.dp)) {
+                Text("$label  " + (if (v == 0f) "off" else "%+.1f dB".format(java.util.Locale.US, v)), color = C.muted, fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 8.dp))
+                Slider(v, { x -> onSet(Math.round(x * 2) / 2f, false) }, valueRange = range, onValueChangeFinished = { onSet(v, true) },
+                    colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line),
+                    modifier = Modifier.height(28.dp))
+            }
+            // Recall: this song's own values (dimmed when it has none).
+            Text("↺", color = if (p.toneSaved) accent() else C.muted.copy(alpha = 0.5f), fontSize = 20.sp, textAlign = TextAlign.Center,
+                modifier = Modifier.size(36.dp).clip(CircleShape).border(1.dp, C.line, CircleShape)
+                    .clickable(enabled = p.toneSaved) { player.recallTone() }.wrapContentHeight())
+        }
+    }
+    Column(Modifier.fillMaxWidth()) {
+        row("Loudness", p.loudDb, 0f..12f) { x, done -> player.setTone(x, p.trebleDb, done) }
+        row("Treble", p.trebleDb, -12f..12f) { x, done -> player.setTone(p.loudDb, x, done) }
     }
 }
