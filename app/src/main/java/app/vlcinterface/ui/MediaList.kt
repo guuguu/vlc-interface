@@ -147,7 +147,20 @@ fun MediaList(
             list.filter { it.isVideo }.forEach { add(Row0.Video(it)) }
         }
     }
-    val state = rememberLazyListState()
+    // Each folder remembers where it was scrolled to (kept while the app runs): coming back from a sub-folder, the
+    // player or another page shows the same place again, also when the folder's list has to be read again first.
+    val memKey = "folder:$folderKey:$kind"
+    val state = rememberLazyListState(ScrollMemory.pos[memKey] ?: 0, ScrollMemory.pos["$memKey#o"] ?: 0)
+    var placed by remember(memKey) { mutableStateOf((ScrollMemory.pos[memKey] ?: 0) == 0) }
+    LaunchedEffect(memKey, rows.size) {
+        val want = ScrollMemory.pos[memKey] ?: 0
+        if (!placed && rows.size > want) { state.scrollToItem(want, ScrollMemory.pos["$memKey#o"] ?: 0); placed = true }
+    }
+    LaunchedEffect(memKey) {
+        androidx.compose.runtime.snapshotFlow { state.firstVisibleItemIndex to state.firstVisibleItemScrollOffset }.collect { (i, o) ->
+            if (placed && rows.isNotEmpty()) { ScrollMemory.pos[memKey] = i; ScrollMemory.pos["$memKey#o"] = o }
+        }
+    }
     // Jump to the marked song once; coming back to this page later keeps the place you scrolled to.
     var highlightDone by androidx.compose.runtime.saveable.rememberSaveable(highlightUri) { mutableStateOf(false) }
     LaunchedEffect(highlightUri, rows.size) {
