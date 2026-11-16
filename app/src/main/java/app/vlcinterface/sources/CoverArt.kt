@@ -46,7 +46,16 @@ object CoverArt {
         override fun sizeOf(key: String, value: Bitmap) = value.allocationByteCount
     }
 
+    /**
+     * Pictures for songs that are NOT in a folder holding one whole album (a folder mixing albums, loose files):
+     * kept here as "Artist - Album.jpg" / "Artist.jpg" — the album folder can't hold them, one cover.jpg would be
+     * wrong for the other albums there. Phone storage of the app, no permission needed.
+     */
+    lateinit var store: File
+        private set
+
     fun init(ctx: Context) {
+        store = (ctx.getExternalFilesDir("pictures") ?: File(ctx.filesDir, "pictures")).apply { mkdirs() }
         miss = File(ctx.filesDir, "covers").apply { mkdirs() }
         // Pictures are no longer kept in the app (user rule): remove any stored by an earlier version.
         miss.listFiles { f -> f.name.endsWith(".jpg") }?.forEach { it.delete() }
@@ -155,23 +164,57 @@ object CoverArt {
 
     /** Folder picture only (no internet): for Library album headers. */
     suspend fun folderOnly(ctx: Context, item: PlayItem): Bitmap? = withContext(Dispatchers.IO) {
-        val pl = place(ctx, item) ?: return@withContext null
-        mem.get(pl.key) ?: readFolder(ctx, pl)?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.also { mem.put(pl.key, it) }
+        val pl = place(ctx, item)
+        if (!inAlbumFolder(ctx, item, pl)) {
+            val f = listOf(storeAlbum(item.artist, item.album), storeArtist(item.artist)).firstOrNull { it.exists() } ?: return@withContext null
+            return@withContext mem.get("store:" + f.name) ?: BitmapFactory.decodeFile(f.path)?.also { mem.put("store:" + f.name, it) }
+        }
+        mem.get(pl!!.key) ?: readFolder(ctx, pl)?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.also { mem.put(pl.key, it) }
     }
 
-    /** For the music player: folder picture, else internet (album, then artist), saved into the album folder. */
+    // ---------- one-album folder or not ----------
+
+    private val wholeAlbum = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+
+    /** Does the song's folder hold one album only (all songs there share one album tag)? Remembered per folder. */
+    private suspend fun inAlbumFolder(ctx: Context, item: PlayItem, pl: Place?): Boolean {
+        if (pl == null) return false
+        wholeAlbum[pl.key]?.let { return it }
+        val songs = try { MusicLibrary.folderOf(ctx, item).filter { it.isMusic } } catch (_: Exception) { emptyList() }
+        val albums = songs.map { it.album.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+        val one = songs.isNotEmpty() && albums.size <= 1
+        wholeAlbum[pl.key] = one
+        return one
+    }
+
+    private fun fileSafe(s: String) = s.replace(Regex("""[\\/:*?"<>|\u0000-\u001f]"""), "_").trim().take(120)
+    private fun storeAlbum(artist: String, album: String) = File(store, fileSafe("${artist.ifBlank { "Unknown artist" }} - ${album.ifBlank { "Unknown album" }}") + ".jpg")
+    private fun storeArtist(artist: String) = File(store, fileSafe(artist.ifBlank { "Unknown artist" }) + ".jpg")
+
+    /** For the music player: picture from the album folder — or, for songs not in a one-album folder, from the
+     *  pictures store — else from the internet (album, then artist), saved back to the same place. */
     suspend fun forPlayer(ctx: Context, item: PlayItem, artist: String, album: String, online: Boolean, force: Boolean = false): Result = withContext(Dispatchers.IO) {
         val pl = place(ctx, item)
-        val memKey = pl?.key ?: item.uri
+        val inFolder = inAlbumFolder(ctx, item, pl)
+        val memKey = if (inFolder) pl!!.key else "store:" + storeAlbum(artist, album).name
         if (!force) mem.get(memKey)?.let { mem.put(item.uri, it); return@withContext Result(it, "") }
-        pl?.let { readFolder(ctx, it) }?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.let { mem.put(memKey, it); mem.put(item.uri, it); return@withContext Result(it, "") }
+        val local = if (inFolder) readFolder(ctx, pl!!)
+            else listOf(storeAlbum(artist, album), storeArtist(artist)).firstOrNull { it.exists() }?.readBytes()
+        local?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.let { mem.put(memKey, it); mem.put(item.uri, it); return@withContext Result(it, "") }
         if (!online) return@withContext Result(null, "")
         val (bytes, name) = albumPicture(artist, album, force)?.let { it to "cover.jpg" } ?: artistPicture(artist, force)?.let { it to "artist.jpg" }
             ?: return@withContext Result(null, if (force) "No picture found online for \"$album\"" + if (artist.isNotBlank()) " by $artist" else "" else "")
         val (bmp, jpeg) = resize(bytes) ?: return@withContext Result(null, "")
         mem.put(memKey, bmp); mem.put(item.uri, bmp)
-        val why = if (pl == null) "not saved — no album folder for this source" else saveFolder(ctx, pl, name, jpeg)
-        Result(bmp, if (why.isEmpty()) "${if (name == "artist.jpg") "Artist photo" else "Album picture"} saved in the album folder ($name)" else why)
+        val isArtist = name == "artist.jpg"
+        val what = if (isArtist) "Artist photo" else "Album picture"
+        if (!inFolder) {
+            val f = if (isArtist) storeArtist(artist) else storeAlbum(artist, album)
+            val ok = try { f.writeBytes(jpeg); true } catch (_: Exception) { false }
+            return@withContext Result(bmp, if (ok) "$what saved in the pictures folder (${f.name}) — this folder mixes albums" else "not saved")
+        }
+        val why = saveFolder(ctx, pl!!, name, jpeg)
+        Result(bmp, if (why.isEmpty()) "$what saved in the album folder ($name)" else why)
     }
 
     private fun key(s: String) = s.trim().lowercase().hashCode().toUInt().toString(16)
@@ -327,8 +370,15 @@ object CoverArt {
             ?: return@withContext Result(null, "Couldn't download that picture")
         val (bmp, jpeg) = resize(bytes) ?: return@withContext Result(null, "Couldn't read that picture")
         val pl = place(ctx, item)
-        mem.put(pl?.key ?: item.uri, bmp); mem.put(item.uri, bmp)
-        val why = if (pl == null) "not saved — no album folder for this source" else saveFolder(ctx, pl, "cover.jpg", jpeg)
+        if (!inAlbumFolder(ctx, item, pl)) {
+            // Not a one-album folder: the chosen picture goes to the pictures store, named after the album.
+            val f = storeAlbum(item.artist, item.album)
+            mem.put("store:" + f.name, bmp); mem.put(item.uri, bmp)
+            val ok = try { f.writeBytes(jpeg); true } catch (_: Exception) { false }
+            return@withContext Result(bmp, if (ok) "Album picture saved in the pictures folder (${f.name})" else "not saved")
+        }
+        mem.put(pl!!.key, bmp); mem.put(item.uri, bmp)
+        val why = saveFolder(ctx, pl, "cover.jpg", jpeg)
         Result(bmp, if (why.isEmpty()) "Album picture saved in the album folder (cover.jpg)" else why)
     }
 
