@@ -193,7 +193,7 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                         app.vlcinterface.data.ServerLog.log(app.vlcinterface.data.ServerLog.DELETED, "delete", "phone", "", true, "Deleted $path", f.uri)
                     }
                 }
-            f.uri.startsWith("smb://") -> androidx.compose.material3.AlertDialog(onDismissRequest = { pick = null }, containerColor = C.panel,
+            f.uri.startsWith("smb://") -> AlertDialog(onDismissRequest = { pick = null }, containerColor = C.panel,
                 title = { Text("Delete from the NAS?", color = C.bad) },
                 text = { Text("This file will be deleted for good:\n\n$pickPath", color = C.text) },
                 confirmButton = { STextButton({
@@ -266,7 +266,7 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     }
     // Confirmation of what was deleted, with its full path.
     done?.let { path ->
-        androidx.compose.material3.AlertDialog(onDismissRequest = { done = null }, containerColor = C.panel,
+        AlertDialog(onDismissRequest = { done = null }, containerColor = C.panel,
             title = { Text("File deleted", color = C.text) },
             text = { Text("Deleted for good:\n\n$path", color = C.text) },
             confirmButton = { STextButton({ done = null }) { Text("OK", color = accent()) } })
@@ -298,7 +298,7 @@ fun FolderContentConfirm(title: String, folderPath: String, danger: Boolean, con
     var list by remember { mutableStateOf<List<String>?>(null) }
     androidx.compose.runtime.LaunchedEffect(Unit) { list = try { collect().sorted() } catch (_: Exception) { emptyList() } }
     val l = list
-    androidx.compose.material3.AlertDialog(onDismissRequest = onCancel, containerColor = C.panel,
+    AlertDialog(onDismissRequest = onCancel, containerColor = C.panel,
         title = { Text(title, color = if (danger) C.bad else C.text) },
         text = {
             androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

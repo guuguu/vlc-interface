@@ -723,7 +723,7 @@ private fun DownloadPanel(p: PlayerState, onBack: () -> Unit) {
         Text("Saved with the video's name next to the video when possible; fine-tune timing with Sync.", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
     }
     pending?.let { (bytes, ext, name) ->
-        androidx.compose.material3.AlertDialog(
+        AlertDialog(
             onDismissRequest = { pending = null },
             title = { Text("Replace the existing subtitle?") },
             text = { Text("$name already exists next to the video and will be overwritten.") },

@@ -403,7 +403,7 @@ object ExitPrompt { var visible by androidx.compose.runtime.mutableStateOf(false
 
 @Composable
 fun ExitDialogHost() {
-    if (ExitPrompt.visible) androidx.compose.material3.AlertDialog(onDismissRequest = { ExitPrompt.visible = false }, containerColor = C.panel,
+    if (ExitPrompt.visible) AlertDialog(onDismissRequest = { ExitPrompt.visible = false }, containerColor = C.panel,
         title = { Text("Exit or restart?", color = C.text) },
         text = {
             Text("Exit closes the app completely (playback stops, notifications go away).\n" +

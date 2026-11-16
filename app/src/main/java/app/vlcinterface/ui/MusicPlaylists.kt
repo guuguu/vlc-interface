@@ -32,7 +32,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -229,7 +228,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             val sleepScope = rememberCoroutineScope()
             if (sleepAsk.isNotEmpty()) {
                 var num by remember(sleepAsk) { mutableStateOf("") }
-                androidx.compose.material3.AlertDialog(onDismissRequest = { sleepAsk = "" }, containerColor = C.panel,
+                AlertDialog(onDismissRequest = { sleepAsk = "" }, containerColor = C.panel,
                     title = { Text(if (sleepAsk == "songs") "Sleep after how many songs?" else "Sleep after how many minutes?", color = C.text) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -255,7 +254,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             val rgScope = rememberCoroutineScope()
             val ctxRg = LocalContext.current
             rgAsk?.let { rg ->
-                androidx.compose.material3.AlertDialog(onDismissRequest = { rgAsk = null }, containerColor = C.panel,
+                AlertDialog(onDismissRequest = { rgAsk = null }, containerColor = C.panel,
                     title = { Text("Which ReplayGain?", color = C.text) },
                     text = {
                         Text("This song has both values. Album gain keeps the album's own loud and quiet songs as they are; " +
@@ -1123,7 +1122,7 @@ fun OriginPickDialog(fromLabel: String, onOpen: () -> Unit, onDismiss: () -> Uni
     val st by App.instance.store.state.collectAsState()
     val player = App.instance.player
     val curId = player.state.value.origin.let { if (it.kind == "playlist") it.playlistId else null }
-    androidx.compose.material3.AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
+    AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
         title = { Text("Playing from", color = C.text) },
         text = {
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
