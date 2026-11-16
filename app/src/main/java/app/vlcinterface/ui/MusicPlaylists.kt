@@ -1360,6 +1360,8 @@ private fun RadioPanel(nav: Navigator) {
     var menu by remember { mutableStateOf<String?>(null) }
     var rename by remember { mutableStateOf<app.vlcinterface.data.Station?>(null) }
     rename?.let { s -> StationRenameDialog(s) { rename = null } }
+    var details by remember { mutableStateOf<app.vlcinterface.data.Station?>(null) }
+    details?.let { s -> StationDetailsDialog(s) { details = null } }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         SectionTitle("Favourite stations")
         if (st.stations.isEmpty()) Text("No favourites yet: find stations below and tap ☆.", color = C.muted, fontSize = 13.sp)
@@ -1392,8 +1394,7 @@ private fun RadioPanel(nav: Navigator) {
                                     ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND)
                                         .setType("text/plain").putExtra(android.content.Intent.EXTRA_SUBJECT, s.name).putExtra(android.content.Intent.EXTRA_TEXT, "${s.name}\n${s.url}"), "Share station"))
                                 })
-                                if (i > 0) SMenuItem({ Text("Move up") }, { menu = null; App.instance.store.update { x -> x.copy(stations = x.stations.toMutableList().also { l -> java.util.Collections.swap(l, i, i - 1) }) } })
-                                if (i < st.stations.size - 1) SMenuItem({ Text("Move down") }, { menu = null; App.instance.store.update { x -> x.copy(stations = x.stations.toMutableList().also { l -> java.util.Collections.swap(l, i, i + 1) }) } })
+                                SMenuItem({ Text("Details…") }, { menu = null; details = s })
                                 SMenuItem({ Text("Remove from favourites", color = C.bad) }, { menu = null; App.instance.store.update { x -> x.copy(stations = x.stations.filterNot { it.id == s.id }) } })
                             }
                         }
@@ -1528,3 +1529,48 @@ fun stationQuality(meta: String): String =
     Regex("""(\d{2,4})\s*kbps\s*([A-Za-z0-9+]*)""", RegexOption.IGNORE_CASE).find(meta)?.let { m ->
         listOf(m.groupValues[1] + " kbps", m.groupValues[2].uppercase()).filter { it.isNotBlank() }.joinToString(" ")
     } ?: Regex("""\b(MP3|AAC\+?|OGG|OPUS|FLAC)\b""", RegexOption.IGNORE_CASE).find(meta)?.value?.uppercase() ?: ""
+
+
+/** A station's details: name, link, style, bitrate, codec, country, what it announces now, its pre-amp. */
+@Composable
+fun StationDetailsDialog(station: app.vlcinterface.data.Station, onDone: () -> Unit) {
+    val p by App.instance.player.state.collectAsState()
+    val ctx = LocalContext.current
+    val parts = station.meta.split(" · ").map { it.trim() }.filter { it.isNotEmpty() }
+    val q = stationQuality(station.meta)
+    val style = parts.firstOrNull { !it.contains("kbps", true) && it.length > 2 && it != parts.lastOrNull() } ?: ""
+    val country = parts.lastOrNull()?.takeIf { it.length == 2 } ?: ""
+    val playing = p.item?.uri == station.url
+    val rows = listOfNotNull(
+        "Name" to station.name,
+        if (playing && p.stationName.isNotBlank()) "Announces itself as" to p.stationName else null,
+        "Link" to station.url,
+        if (style.isNotEmpty()) "Style" to style else null,
+        if (q.isNotEmpty()) "Bitrate / codec" to q else null,
+        if (country.isNotEmpty()) "Country" to country else null,
+        if (playing && p.nowPlaying.isNotBlank()) "Playing now" to p.nowPlaying else null,
+        "Preamp" to ((app.vlcinterface.player.ToneStore.getPre(station.url) ?: 0f).let { if (it == 0f) "0 dB (none)" else "%.1f dB".format(java.util.Locale.US, it) }),
+        app.vlcinterface.player.ToneStore.get(app.vlcinterface.player.PlayItem(station.url, station.name, isRadio = true))?.let { (l, t) ->
+            "Loudness / treble" to "%+.1f / %+.1f dB".format(java.util.Locale.US, l, t) },
+    )
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("Station details", color = C.text) },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                rows.forEach { (k, v) ->
+                    Column {
+                        Text(k, color = C.muted, fontSize = 12.sp)
+                        Text(v, color = C.text, fontSize = 14.sp)
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
+        dismissButton = {
+            STextButton({
+                ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("station", station.url))
+                android.widget.Toast.makeText(ctx, "Link copied", android.widget.Toast.LENGTH_SHORT).show()
+            }) { Text("Copy link") }
+        },
+    )
+}
