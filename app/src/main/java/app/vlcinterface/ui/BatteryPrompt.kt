@@ -12,6 +12,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.clickable
 import app.vlcinterface.App
 
 /** Battery "Unrestricted" for this app, so Android doesn't stop playback while the app is in the background. */
@@ -84,6 +87,52 @@ fun FailAskHost() {
                 STextButton({ App.instance.player.failAnswer("keep") }) { Text("Keep trying the next songs", color = accent()) }
                 STextButton({ App.instance.player.failAnswer("skip") }) { Text("Skip everything from there", color = accent()) }
                 STextButton({ App.instance.player.failAnswer("stop") }) { Text("Stop") }
+            }
+        },
+        confirmButton = {},
+    )
+}
+
+
+/**
+ * A song without ReplayGain started: scan it now? Or its whole folder (each album gets its album gain), with the
+ * choice to leave files that already have ReplayGain as they are. Written into the files. Asked once per folder
+ * while the app runs.
+ */
+@Composable
+fun RgAskHost() {
+    val item by App.instance.player.rgAsk.collectAsState()
+    val it0 = item ?: return
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var skipTagged by androidx.compose.runtime.remember(it0.uri) { androidx.compose.runtime.mutableStateOf(true) }
+    fun close() { App.instance.player.rgAsk.value = null }
+    fun start(items: List<app.vlcinterface.player.PlayItem>, mode: app.vlcinterface.sources.RgMode, title: String) {
+        val music = items.filter { it.isMusic }
+        if (music.isEmpty()) return
+        app.vlcinterface.sources.RgScanner.start(ctx.applicationContext, music, mode, app.vlcinterface.sources.RgTarget.FILES,
+            rescanTagged = !skipTagged, confirmTitle = title)
+        android.widget.Toast.makeText(ctx, "ReplayGain scan started: ${music.size} file${if (music.size == 1) "" else "s"}", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    AlertDialog(onDismissRequest = { close() }, containerColor = C.panel,
+        title = { Text("No ReplayGain", color = C.text) },
+        text = {
+            androidx.compose.foundation.layout.Column {
+                Text("\"${it0.title}\" has no ReplayGain values (it plays 5 dB lower for now). Scan it?", color = C.text)
+                androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.clickable { skipTagged = !skipTagged },
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    SCheckbox(skipTagged, { skipTagged = it })
+                    Text("Folder: skip files that already have ReplayGain", color = C.text, fontSize = 14.sp)
+                }
+                STextButton({ close(); start(listOf(it0), app.vlcinterface.sources.RgMode.TRACK, it0.title) }) { Text("Scan this song", color = accent()) }
+                STextButton({
+                    close()
+                    scope.launch {
+                        val folder = app.vlcinterface.sources.MusicLibrary.folderOf(ctx.applicationContext, it0).ifEmpty { listOf(it0) }
+                        start(folder, app.vlcinterface.sources.RgMode.ALBUMS_BY_TAGS, it0.album.ifEmpty { "this folder" })
+                    }
+                }) { Text("Scan the whole folder", color = accent()) }
+                STextButton({ close() }) { Text("Not now") }
             }
         },
         confirmButton = {},

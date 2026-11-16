@@ -183,6 +183,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val album = m == "album"
                 val g = if (album) rg?.albumGain ?: rg?.trackGain else rg?.trackGain ?: rg?.albumGain
                 val used = if (g == null) "" else if (album && rg?.albumGain != null || !album && rg?.trackGain == null) "album" else "track"
+                if (rg == null || g == null) askRgScan(item)
                 _state.value = _state.value.copy(rgInfo = when {
                     rg == null || g == null -> "No RG · plays −5.00 dB (libVLC)"
                     else -> "RG $used " + (if (g >= 0) "+" else "−") + "%.2f".format(java.util.Locale.US, kotlin.math.abs(g)) + " dB (libVLC)"
@@ -204,6 +205,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             var limited = false
             if (gain != null && set.rgClipProtect && peak != null && peak > 0f) { val cap = -20f * log10(peak); if (cap < db) { db = cap; limited = true } }
             rgDb = db
+            if (gain == null) askRgScan(item)
             fun f(v: Float) = (if (v >= 0) "+" else "−") + "%.2f".format(java.util.Locale.US, kotlin.math.abs(v)) + " dB"
             // Shows the song's own value (exactly as in its tags / the scan: track or album). When what is played
             // differs — preamp added, or lowered so the loudest peak can't clip — that is said separately.
@@ -703,6 +705,21 @@ class PlayerController(private val context: Context, private val store: Store) {
             orderedQueue = o.toMutableList().also { it.addAll(if (at >= 0) at + 1 else it.size, items) }
         }
         _state.value = s.copy(queue = q)
+    }
+
+    // ---------- songs without ReplayGain ----------
+
+    /** A playing song without ReplayGain: the pop-up asking to scan it (or its folder). */
+    val rgAsk = kotlinx.coroutines.flow.MutableStateFlow<PlayItem?>(null)
+    /** Folders already asked about while the app runs (answered or not): not asked again until the next start. */
+    private val rgAsked = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    private fun askRgScan(item: PlayItem) {
+        if (!item.isMusic) return
+        val key = item.folderKey.ifEmpty { item.uri.substringBeforeLast('/') }
+        if (!rgAsked.add(key)) return
+        if (app.vlcinterface.sources.RgScanner.state.value.running) return
+        rgAsk.value = item
     }
 
     // ---------- today's listening session ----------

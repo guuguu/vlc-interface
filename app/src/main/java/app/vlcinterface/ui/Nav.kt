@@ -115,6 +115,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 BatteryPromptHost()
                 SleepClosedHost()
                 FailAskHost()
+                RgAskHost()
             }
             BackHandler(enabled = true) {
                 if (showOutput) showOutput = false else if (!nav.back()) onFinish()
