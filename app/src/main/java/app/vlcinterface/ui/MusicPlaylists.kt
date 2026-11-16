@@ -4,6 +4,7 @@ import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -364,9 +365,30 @@ private fun SeekBlock(item: PlayItem) {
         val len = if (item.endMs > 0) item.endMs - item.startMs else p.length
         val base = if (item.startMs > 0) item.startMs else 0
         val pos = (p.time - base).coerceAtLeast(0)
-        Slider(drag ?: if (len > 0) (pos.toFloat() / len).coerceIn(0f, 1f) else 0f, { drag = it },
-            onValueChangeFinished = { drag?.let { player.seekFraction(it) }; drag = null }, enabled = len > 0 || p.item != null,
-            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
+        // Touch / slide: a bubble over the thumb shows the time it points at, following the finger; the song keeps
+        // playing and only jumps there when the finger is lifted.
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val bw = maxWidth
+            Slider(drag ?: if (len > 0) (pos.toFloat() / len).coerceIn(0f, 1f) else 0f, { drag = it },
+                onValueChangeFinished = { drag?.let { player.seekFraction(it) }; drag = null }, enabled = len > 0 || p.item != null,
+                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
+            drag?.let { f ->
+                val target = (f * len).toLong()
+                val bubbleW = 132.dp
+                val thumbX = 10.dp + (bw - 20.dp) * f
+                androidx.compose.ui.window.Popup(alignment = Alignment.TopStart,
+                    offset = with(androidx.compose.ui.platform.LocalDensity.current) {
+                        androidx.compose.ui.unit.IntOffset((thumbX - bubbleW / 2).coerceIn(0.dp, bw - bubbleW).roundToPx(), (-64).dp.roundToPx())
+                    }) {
+                    Column(Modifier.width(bubbleW).clip(RoundedCornerShape(14.dp)).background(C.popup).border(1.dp, accent(), RoundedCornerShape(14.dp))
+                        .padding(vertical = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(fmtTime(target), color = C.text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                        val d = (target - pos) / 1000
+                        Text((if (d >= 0) "+" else "−") + fmtTime(kotlin.math.abs(d) * 1000), color = C.muted, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
         Row { Text(fmtTime(pos), color = C.muted, fontSize = 13.sp); Grow(); Text("-" + fmtTime((len - pos).coerceAtLeast(0)), color = C.muted, fontSize = 13.sp) }
     }
 }
