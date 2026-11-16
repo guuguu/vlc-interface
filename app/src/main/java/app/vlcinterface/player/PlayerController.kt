@@ -1082,6 +1082,12 @@ class PlayerController(private val context: Context, private val store: Store) {
             metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, buffering = 0f, error = "", ended = false,
             rgInfo = "", userPaused = false, songOver = false)
         loadReplayGain(item, _state.value)
+        // No picture in the file: looked up here too (folder, pictures store, online), so the notification and lock
+        // screen get it even while the app is in the background.
+        if (item.isMusic && !item.artwork.startsWith("/") && !item.artwork.startsWith("file://") && !item.artwork.startsWith("content://")) bg.launch {
+            val r = try { app.vlcinterface.sources.CoverArt.forPlayer(context, item, item.artist, item.album, store.current.settings.coverDownload) } catch (_: Exception) { null }
+            if (r?.bitmap != null) useDownloadedArtwork(item, "mem:" + item.uri)
+        }
         NativeAudio.deepBuffer(item.isMusic || item.isRadio)
         am.requestAudioFocus(focusRequest)
         endHandled = false; lastTick = 0L
@@ -1398,7 +1404,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun handleEnd(s: PlayerState) {
         if (endHandled) return
         endHandled = true
-        _state.value = _state.value.copy(songOver = true)
+        // The ended song's picture goes at once — in the app and in the notification / lock screen, also in the background.
+        _state.value = _state.value.copy(songOver = true, artworkUrl = "")
         if (s.sleepEndOfTrack) { sleepStop(); return }
         s.item?.let { item -> store.update { st -> st.copy(recent = st.recent.filterNot { it.uri == item.uri }) } }
         // Sleep after a number of songs: count down; when the queue / playlist runs out first, go on from its beginning.
