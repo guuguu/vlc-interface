@@ -1556,8 +1556,9 @@ private fun ToneSliders() {
                 if (hintNow.value != 0L) {
                     LaunchedEffect(hintNow.value) { kotlinx.coroutines.delay(3000); hintNow.value = 0L }
                     androidx.compose.ui.window.Popup(alignment = Alignment.TopCenter,
-                        offset = androidx.compose.ui.unit.IntOffset(0, with(dens) { (-40).dp.roundToPx() })) {
-                        Text("Long press to unlock", color = C.text, fontSize = 13.sp,
+                        // Well above the slider, so the finger that tapped doesn't cover it.
+                        offset = androidx.compose.ui.unit.IntOffset(0, with(dens) { (-110).dp.roundToPx() })) {
+                        Text("Long press to unlock", color = C.text, fontSize = 15.sp,
                             modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(C.popup).border(1.dp, accent(), RoundedCornerShape(10.dp))
                                 .padding(horizontal = 12.dp, vertical = 6.dp))
                     }
