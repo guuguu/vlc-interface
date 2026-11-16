@@ -36,6 +36,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -196,12 +197,14 @@ fun SettingsScreen(nav: Navigator) {
                         Text("${s.popupOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(popupOpacity = 90)) }) { Text("Reset") }
                     }
+                    OpacityPreview(s.popupOpacity / 100f, "Pop-up window", 15)
                     androidx.compose.material3.Slider(s.popupOpacity.toFloat(), { v -> set(s.copy(popupOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Menu opacity", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         Text("${s.menuOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(menuOpacity = 90)) }) { Text("Reset") }
                     }
+                    OpacityPreview(s.menuOpacity / 100f, "Menu entry", when (s.menuFont) { "small" -> 13; "large" -> 19; else -> 15 })
                     androidx.compose.material3.Slider(s.menuOpacity.toFloat(), { v -> set(s.copy(menuOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
                     Text("Menu text", color = C.text, fontSize = 15.sp)
                     Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -521,4 +524,27 @@ fun ColorPickDialog(start: Long, onDismiss: () -> Unit, onRemove: (() -> Unit)? 
             }
         },
     )
+}
+
+
+/** Live sample: a panel at the chosen opacity over a striped background, so what shows through is visible. */
+@Composable
+fun OpacityPreview(alpha: Float, label: String, fontSp: Int) {
+    val a = accent()
+    Box(Modifier.padding(top = 6.dp).fillMaxWidth().height(56.dp).clip(RoundedCornerShape(12.dp))
+        .drawBehind {
+            val w = 18.dp.toPx()
+            var x = -size.height
+            var k = 0
+            while (x < size.width) {
+                drawLine(if (k % 2 == 0) a else Color.White, androidx.compose.ui.geometry.Offset(x, size.height),
+                    androidx.compose.ui.geometry.Offset(x + size.height, 0f), strokeWidth = w)
+                x += w; k++
+            }
+        }, contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth(0.8f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF14171C).copy(alpha = alpha))
+            .padding(horizontal = 14.dp, vertical = 8.dp)) {
+            Text(label, color = C.text, fontSize = fontSp.sp)
+        }
+    }
 }
