@@ -233,7 +233,7 @@ data class Settings(
                 menuOpacity = o.optInt("menuOpacity", 90).coerceIn(50, 100),
                 upNextCount = o.optInt("upNextCount", 2).coerceIn(0, 20),
                 radioAccent = o.optLong("radioAccent", 0L),
-                toneLoud = o.optDouble("toneLoud", 0.0).toFloat().coerceIn(0f, 12f),
+                toneLoud = o.optDouble("toneLoud", 0.0).toFloat().coerceIn(0f, 15f),
                 toneTreble = o.optDouble("toneTreble", 0.0).toFloat().coerceIn(-12f, 12f),
                 customAccents = ((o.optJSONArray("customAccents")?.let { a -> (0 until a.length()).map { a.getLong(it) } }
                     ?: listOfNotNull(o.optLong("customAccent", 0L).takeIf { it != 0L }))

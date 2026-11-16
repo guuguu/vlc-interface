@@ -96,7 +96,7 @@ data class PlayerState(
     val metaArtist: String = "",
     val metaAlbum: String = "",
     val artworkUrl: String = "",
-    /** Loudness (0…+12 dB) and treble (−12…+12 dB) in use; 0 / 0 = no processing. */
+    /** Loudness (0…15 dB of ISO 226 compensation at 60 Hz) and treble (−12…+12 dB) in use; 0 / 0 = no processing. */
     val loudDb: Float = 0f,
     val trebleDb: Float = 0f,
     /** This song (station) has its own saved loudness / treble (Recall brings them back). */
@@ -354,7 +354,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     /**
      * Loudness and treble through libVLC's 10-band equalizer (60 Hz … 16 kHz), cutting only — nothing is ever
      * amplified, and the top frequencies stay at their starting level:
-     *  - loudness: the middle is lowered (lows and highs stay), the classic contour without boosting;
+     *  - loudness: the ISO 226:2003 equal-loudness compensation (see [Iso226]), applied as cuts;
      *  - treble up: everything below the highs is lowered; treble down: the highs are lowered.
      * Both at 0 (and no pre-amp needed): no equalizer at all.
      */
@@ -364,10 +364,10 @@ class PlayerController(private val context: Context, private val store: Store) {
         try {
             if (l == 0f && t == 0f && preamp == 0f) { mp.setEqualizer(null); return }
             val e = eq ?: MediaPlayer.Equalizer.create().also { eq = it }
-            val midShape = floatArrayOf(0f, 0.3f, 0.65f, 0.9f, 1f, 1f, 0.85f, 0.55f, 0.25f, 0f)
+            val loud = Iso226.cuts(l)              // ISO 226:2003 equal-loudness compensation, as cuts
             val highShape = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0.15f, 0.4f, 0.8f, 1f, 1f)
             for (b in 0 until 10) {
-                val loudCut = -l * midShape[b]
+                val loudCut = loud[b]
                 val trebleCut = if (t >= 0f) -t * (1f - highShape[b]) else t * highShape[b]
                 e.setAmp(b, (loudCut + trebleCut).coerceIn(-20f, 0f))
             }
@@ -382,7 +382,7 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** Slider moved (live); [done] = finger lifted. Kept as the "last values" too. */
     fun setTone(loud: Float, treble: Float, done: Boolean) {
-        val l = loud.coerceIn(0f, 12f); val t = treble.coerceIn(-12f, 12f)
+        val l = loud.coerceIn(0f, 15f); val t = treble.coerceIn(-12f, 12f)
         _state.value = _state.value.copy(loudDb = l, trebleDb = t)
         applySoundChain()
         toneDirty = true

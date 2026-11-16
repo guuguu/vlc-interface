@@ -1509,7 +1509,7 @@ private fun ToneSliders() {
         }
     }
     Column(Modifier.fillMaxWidth()) {
-        row("Loudness", p.loudDb, 0f..12f) { x, done -> player.setTone(x, p.trebleDb, done) }
+        row("Loudness", p.loudDb, 0f..15f) { x, done -> player.setTone(x, p.trebleDb, done) }
         row("Treble", p.trebleDb, -12f..12f) { x, done -> player.setTone(p.loudDb, x, done) }
     }
 }
