@@ -221,3 +221,17 @@ fun WifiLostHost() {
         dismissButton = { STextButton({ g.ask.value = false; exitApp() }) { Text("Exit") } },
     )
 }
+
+
+/** The sound output stayed on libVLC after the app tried twice to bring its own output back. */
+@Composable
+fun OutputFallbackHost() {
+    val player = App.instance.player
+    val why by player.fallbackNotice.collectAsState()
+    if (why.isEmpty()) return
+    AlertDialog(onDismissRequest = { player.fallbackNotice.value = "" }, containerColor = C.panel,
+        title = { Text("Sound output", color = C.text) },
+        text = { Text("The output is set on libVLC because: $why", color = C.text) },
+        confirmButton = { STextButton({ player.fallbackNotice.value = "" }) { Text("OK", color = accent()) } },
+    )
+}

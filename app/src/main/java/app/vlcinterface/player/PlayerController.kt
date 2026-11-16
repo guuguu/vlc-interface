@@ -167,6 +167,8 @@ class PlayerController(private val context: Context, private val store: Store) {
             mp.release(); libVlc.release()
             libVlc = LibVLC(context, buildOptions(style))
             mp = MediaPlayer(libVlc)
+            val why = NativeAudio.reason
+            main.post { outputFellBack(why) }
         }
         mp.setEventListener { ev -> onEvent(ev) }
         installDialogs()
@@ -548,8 +550,34 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val pos = mp.time
                 recreateEngine(store.current.subStyle)
                 startItem(s.index, pos)
-            }
+                outputFellBack(problem)
+            } else appRetries = 0                                  // the app's own output plays fine
         }, 4000)
+    }
+
+    // ---------- fallback to libVLC's output: tried back twice, then left with a pop-up ----------
+    private var appRetries = 0
+    /** Reason shown in the pop-up when the output stays on libVLC ("" = nothing to show). */
+    val fallbackNotice = kotlinx.coroutines.flow.MutableStateFlow("")
+
+    /**
+     * The app's own output just failed and libVLC's took over: wait 1 s, then rebuild the sound stack with the app's
+     * output again (the song goes on from where it is). Twice; if it still fails, it stays on libVLC and a pop-up
+     * says why.
+     */
+    private fun outputFellBack(reason: String) {
+        if (store.current.settings.soundEngine == "libvlc") return       // libVLC chosen on purpose: nothing to undo
+        if (appRetries >= 2) {
+            appRetries = 0
+            fallbackNotice.value = reason
+            ServerLog.log("sound-engine", "sound", "AAudio", "", false, "Output left on libVLC after 2 retries: $reason")
+            return
+        }
+        appRetries++
+        ServerLog.log("sound-engine", "sound", "AAudio", "", true, "Bringing the app output back (try $appRetries of 2) after: $reason")
+        main.postDelayed({
+            if (store.current.settings.soundEngine != "libvlc" && !NativeAudio.active) applySoundEngine()
+        }, 1000)
     }
 
     // ---------- picture colour ----------

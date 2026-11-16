@@ -162,6 +162,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 RgAskHost()
                 LowBatteryHost()
                 WifiLostHost()
+                OutputFallbackHost()
                 FileDialogsHost(nav)   // windows from file menus (Tags & ReplayGain, ReplayGain scan, Add to playlist)
             }
             BackHandler(enabled = true) {
