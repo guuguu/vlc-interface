@@ -1614,8 +1614,8 @@ private fun ToneSliders() {
             }
         }
     }
-    // One slider per row, centred, narrower than the page (about three quarters of it).
-    Column(Modifier.fillMaxWidth(0.78f)) {
+    // One slider per row, centred, almost the full width (longer sliders, finer control).
+    Column(Modifier.fillMaxWidth(0.94f)) {
         // Auto loudness on: the label also shows how much is used at the phone's current volume.
         row(if (p.loudEffDb != p.loudDb && p.loudDb > 0f) "Loudness (auto %.1f)".format(java.util.Locale.US, p.loudEffDb) else "Loudness",
             p.loudDb, 0f..15f) { x, done -> player.setTone(x, p.trebleDb, done) }
