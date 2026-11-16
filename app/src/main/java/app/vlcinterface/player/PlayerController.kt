@@ -169,7 +169,26 @@ class PlayerController(private val context: Context, private val store: Store) {
     private val bg = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
     private var rgJob: kotlinx.coroutines.Job? = null
 
+    /**
+     * A scan just measured the playing song: its value is used at once, for this song only (until its file is
+     * written back). The next song loads its own value as usual.
+     */
+    @Volatile private var scannedRg: Pair<String, app.vlcinterface.sources.Rg>? = null
+    fun applyScannedRg(uri: String, values: Map<String, String>) {
+        fun f(k: String) = values[k]?.replace("dB", "")?.trim()?.toFloatOrNull()
+        val rg = app.vlcinterface.sources.Rg(f("REPLAYGAIN_TRACK_GAIN"), f("REPLAYGAIN_TRACK_PEAK"), f("REPLAYGAIN_ALBUM_GAIN"), f("REPLAYGAIN_ALBUM_PEAK"))
+        main.post {
+            val s = _state.value; val item = s.item ?: return@post
+            if (item.uri != uri) return@post
+            scannedRg = uri to rg
+            loadReplayGain(item, s)
+        }
+    }
+    private suspend fun rgFor(item: PlayItem) = scannedRg?.takeIf { it.first == item.uri }?.second
+        ?: app.vlcinterface.sources.ReplayGain.read(context, item.uri, item.user, item.password, item.domain, item.smbVersion)
+
     private fun loadReplayGain(item: PlayItem, s: PlayerState) {
+        if (scannedRg?.first != item.uri) scannedRg = null      // next song: back to its own value
         rgDb = 0f
         rgJob?.cancel()
         val set = store.current.settings
@@ -179,7 +198,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             val m = rgModeFor(s)
             _state.value = _state.value.copy(rgInfo = "RG $m (libVLC)")
             rgJob = bg.launch {
-                val rg = app.vlcinterface.sources.ReplayGain.read(context, item.uri, item.user, item.password, item.domain, item.smbVersion)
+                val rg = rgFor(item)
                 if (_state.value.item !== item) return@launch
                 val album = m == "album"
                 val g = if (album) rg?.albumGain ?: rg?.trackGain else rg?.trackGain ?: rg?.albumGain
@@ -194,7 +213,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
         val mode = rgModeFor(s)
         rgJob = bg.launch {
-            val rg = app.vlcinterface.sources.ReplayGain.read(context, item.uri, item.user, item.password, item.domain, item.smbVersion)
+            val rg = rgFor(item)
             if (_state.value.item !== item) return@launch
             val album = mode == "album"
             val gain = if (album) rg?.albumGain ?: rg?.trackGain else rg?.trackGain ?: rg?.albumGain

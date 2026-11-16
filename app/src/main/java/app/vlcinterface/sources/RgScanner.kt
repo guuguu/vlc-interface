@@ -274,6 +274,8 @@ object RgScanner {
                     values["REPLAYGAIN_ALBUM_PEAK"] = "%.6f".format(java.util.Locale.US, albumPeak)
                 }
                 writes += it to values
+                // The playing song: its new value is used at once (only for the rest of this song).
+                App.instance.player.applyScannedRg(it.uri, values)
             }
         }
         parallel(writes, writes.size.coerceIn(1, 4)) { (it, values) ->
@@ -436,6 +438,12 @@ object RgScanner {
             val check = ReplayGain.parse(tmp.inputStream().use { s -> ByteArray(512 * 1024).let { b -> val n = s.read(b); b.copyOf(maxOf(n, 0)) } } +
                 if (tmp.length() > 512 * 1024) java.io.RandomAccessFile(tmp, "r").use { r -> r.seek(tmp.length() - 65536); ByteArray(65536).also { r.readFully(it) } } else ByteArray(0))
             if (check.trackGain == null) throw IllegalStateException("tag check failed")
+            // The file the player has open is never rewritten under it: the tagged copy waits until the song is over.
+            if (App.instance.player.state.value.item?.uri == item.uri) {
+                RgStore.put(item.uri, values)
+                addPending(ctx, item, tmp)
+                return "cached — written to the file after this song"
+            }
             try { upload(ctx, item, src, tmp) } catch (e: Exception) {
                 if (!inUse(e)) throw e
                 // The server refuses while the player has the file open: the tagged copy is cached and written
