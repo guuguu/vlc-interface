@@ -78,7 +78,8 @@ fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayIte
     val online = download && App.instance.store.current.settings.coverDownload
     val bmp by produceState<Bitmap?>(null, url, item?.uri, online, retry, refresh) {
         value = withContext(Dispatchers.IO) {
-            val own = try {
+            // A picture chosen by hand (refresh) wins over the one inside the file.
+            val own = if (refresh > 0) null else try {
                 when {
                     url.startsWith("content://") -> ctx.contentResolver.loadThumbnail(Uri.parse(url), Size(512, 512), null)
                     url.startsWith("file://") -> BitmapFactory.decodeFile(Uri.parse(url).path)

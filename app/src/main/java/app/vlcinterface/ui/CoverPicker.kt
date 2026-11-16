@@ -58,7 +58,6 @@ fun CoverPicker(item: PlayItem, onNone: () -> Unit, onDone: (note: String, chang
         val l = CoverArt.candidates(item.artist, item.album)
         when (l.size) {
             0 -> onNone()
-            1 -> use(l[0])
             else -> list = l
         }
     }
