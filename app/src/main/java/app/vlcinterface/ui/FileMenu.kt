@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -102,7 +103,18 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     var note by remember { mutableStateOf("") }
     var done by remember { mutableStateOf<String?>(null) }          // full path of the file just deleted
     var pickPath by remember { mutableStateOf("") }
+    // Songs, or whole folders (phone folders + LAN folders known from the index / bookmarks).
+    var folders by remember { mutableStateOf(false) }
+    var folderList by remember { mutableStateOf<List<FolderHit>?>(null) }
+    var pickFolder by remember { mutableStateOf<FolderHit?>(null) }
+    var phoneDelete by remember { mutableStateOf<Pair<FolderHit, List<String>>?>(null) }
     androidx.compose.runtime.LaunchedEffect(Unit) { library = SongsCache.all(ctx.applicationContext) }
+    androidx.compose.runtime.LaunchedEffect(folders) { if (folders && folderList == null) folderList = allFolders(ctx.applicationContext) }
+    val folderHits = remember(query, folderList) {
+        val words = searchNorm(query).split(' ').filter { it.isNotEmpty() }
+        if (query.trim().length < 2 || words.isEmpty()) emptyList()
+        else (folderList ?: emptyList()).filter { f -> val h = searchNorm(f.path); words.all { h.contains(it) } }.take(60)
+    }
     androidx.compose.runtime.LaunchedEffect(pick) { pickPath = pick?.let { fullPathOf(ctx, it) } ?: "" }
     val hits = remember(query, library) {
         val q = query.trim()
@@ -125,20 +137,36 @@ fun DeleteFileDialog(onDone: () -> Unit) {
             contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
             androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.panel).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Delete a file", color = C.bad, fontSize = 22.sp)
-                Text("The file is removed from the phone or the NAS for good.", color = C.muted, fontSize = 12.sp)
+                Text(if (folders) "Delete a folder" else "Delete a file", color = C.bad, fontSize = 22.sp)
+                Text(if (folders) "The folder and everything in it is removed for good — you see the full content first."
+                    else "The file is removed from the phone or the NAS for good.", color = C.muted, fontSize = 12.sp)
+                androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Pill("Songs", selected = !folders) { folders = false }
+                    Pill("Folders", selected = folders) { folders = true }
+                }
                 androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true, modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
-                    placeholder = { Text("Artist, album or song", fontSize = 13.sp) }, textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = C.text))
+                    placeholder = { Text(if (folders) "Folder name or path" else "Artist, album or song", fontSize = 13.sp) },
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = C.text))
                 Text(when {
-                    library == null -> "Reading the Library…"
+                    folders && folderList == null -> "Reading the folders…"
+                    !folders && library == null -> "Reading the Library…"
                     query.trim().length < 2 -> "Type at least 2 letters"
+                    folders -> "${folderHits.size}${if (folderHits.size == 60) "+" else ""} found"
                     else -> "${hits.size}${if (hits.size == 60) "+" else ""} found"
                 }, color = C.muted, fontSize = 12.sp)
                 if (note.isNotEmpty()) Text(note, color = C.bad, fontSize = 13.sp)
                 val st = androidx.compose.foundation.lazy.rememberLazyListState()
                 androidx.compose.foundation.lazy.LazyColumn(androidx.compose.ui.Modifier.weight(1f, fill = false).scrollbar(st), state = st,
                     verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    items(hits.size) { k ->
+                    if (folders) items(folderHits.size) { k ->
+                        val f = folderHits[k]
+                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(C.card2)
+                            .clickable { note = ""; pickFolder = f }.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                            Text("▤ " + f.path.trimEnd('/').substringAfterLast('/'), color = C.text, fontSize = 14.sp, maxLines = 1)
+                            Text(f.path + " · " + (if (f.src != null) "LAN" else "phone"), color = C.muted, fontSize = 12.sp, maxLines = 2)
+                        }
+                    }
+                    else items(hits.size) { k ->
                         val h = hits[k]
                         androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(C.card2)
                             .clickable { note = ""; pick = h }.padding(horizontal = 8.dp, vertical = 6.dp)) {
@@ -193,6 +221,49 @@ fun DeleteFileDialog(onDone: () -> Unit) {
             else -> { note = "This kind of location can't be deleted from here"; pick = null }
         }
     }
+    // Folder: full content listed first (hidden files included), then deleted for good.
+    pickFolder?.let { f ->
+        FolderContentConfirm("Delete this folder for good?", f.path, true, "Delete everything",
+            { if (f.src != null) lanFolderFiles(f.src, f.uri) else phoneFolderFiles(ctx, f.phone!!).map { it.second } },
+            onCancel = { pickFolder = null },
+            onConfirm = { _ ->
+                pickFolder = null
+                if (f.src != null) scope.launch {
+                    val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        try {
+                            jcifs.smb.SmbFile(Uri.decode(f.uri).trimEnd('/') + "/", app.vlcinterface.sources.SmbProbe.fileContext(f.src.smbVersion, f.src.user, f.src.password, f.src.domain))
+                                .use { it.delete() }; null
+                        } catch (e: Exception) { e.message ?: e.javaClass.simpleName }
+                    }
+                    val L = app.vlcinterface.data.ServerLog
+                    if (ok == null) {
+                        (library ?: emptyList()).filter { it.uri.startsWith(f.uri.trimEnd('/') + "/") }.forEach { forget(it.uri) }
+                        library = library?.filterNot { it.uri.startsWith(f.uri.trimEnd('/') + "/") }
+                        folderList = folderList?.filterNot { it.uri.startsWith(f.uri.trimEnd('/')) }
+                        L.log(L.DELETED, "delete folder", "SMB", f.src.user, true, "Deleted folder ${f.path}", f.uri)
+                        done = f.path
+                    } else {
+                        note = "Not deleted: $ok"
+                        L.log(L.DELETED, "delete folder", "SMB", f.src.user, false, "Not deleted folder ${f.path}: $ok", f.uri)
+                    }
+                } else scope.launch {
+                    val uris = phoneFolderFiles(ctx, f.phone!!).map { it.first }
+                    if (uris.isEmpty()) note = "Nothing in that folder that Android lets the app delete" else phoneDelete = f to uris
+                }
+            })
+    }
+    phoneDelete?.let { (f, uris) ->
+        DeleteDialog(uris, f.path, 0, uris.size) { deleted ->
+            phoneDelete = null
+            if (deleted) {
+                uris.forEach { forget(it) }
+                folderList = folderList?.filterNot { it.path == f.path }
+                val L = app.vlcinterface.data.ServerLog
+                L.log(L.DELETED, "delete folder", "phone", "", true, "Deleted folder ${f.path} (${uris.size} files)", f.path)
+                done = f.path
+            }
+        }
+    }
     // Confirmation of what was deleted, with its full path.
     done?.let { path ->
         androidx.compose.material3.AlertDialog(onDismissRequest = { done = null }, containerColor = C.panel,
@@ -215,4 +286,85 @@ private suspend fun fullPathOf(ctx: android.content.Context, item: PlayItem): St
             root + rel + name
         }
     } catch (_: Exception) { null } ?: (item.fileName.ifEmpty { item.title })
+}
+
+/**
+ * Before a whole folder is taken out of the lists or deleted for good: its entire content is listed (full paths),
+ * then the action is confirmed (or not).
+ */
+@Composable
+fun FolderContentConfirm(title: String, folderPath: String, danger: Boolean, confirmLabel: String,
+                         collect: suspend () -> List<String>, onConfirm: (count: Int) -> Unit, onCancel: () -> Unit) {
+    var list by remember { mutableStateOf<List<String>?>(null) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { list = try { collect().sorted() } catch (_: Exception) { emptyList() } }
+    val l = list
+    androidx.compose.material3.AlertDialog(onDismissRequest = onCancel, containerColor = C.panel,
+        title = { Text(title, color = if (danger) C.bad else C.text) },
+        text = {
+            androidx.compose.foundation.layout.Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(folderPath, color = C.text, fontSize = 13.sp)
+                if (l == null) {
+                    androidx.compose.material3.CircularProgressIndicator(color = accent())
+                    Text("Listing everything inside (subfolders included)…", color = C.muted, fontSize = 12.sp)
+                } else {
+                    val hidden = l.count { p -> p.split('/').any { it.startsWith(".") } }
+                    Text("${l.size} file${if (l.size == 1) "" else "s"} inside" + (if (hidden > 0) " ($hidden hidden)" else "") + ":", color = C.muted, fontSize = 12.sp)
+                    val st = androidx.compose.foundation.lazy.rememberLazyListState()
+                    androidx.compose.foundation.lazy.LazyColumn(androidx.compose.ui.Modifier.heightIn(max = 360.dp).scrollbar(st), state = st) {
+                        // Hidden files (".name", or inside a ".folder") are listed too, marked "hidden".
+                        items(l.size) { k ->
+                            val hid = l[k].split('/').any { it.startsWith(".") }
+                            Text(l[k] + if (hid) "   · hidden" else "", color = if (hid) C.muted else C.text, fontSize = 12.sp,
+                                modifier = androidx.compose.ui.Modifier.padding(vertical = 2.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { if (l != null) STextButton({ onConfirm(l.size) }) { Text(confirmLabel, color = if (danger) C.bad else accent()) } },
+        dismissButton = { STextButton(onCancel) { Text("Cancel") } })
+}
+
+/** Full paths of every file inside a LAN folder, subfolders included (all files, not only songs). */
+suspend fun lanFolderFiles(src: app.vlcinterface.data.Source, uri: String, depth: Int = 0): List<String> {
+    if (depth > 15) return emptyList()
+    val l = app.vlcinterface.sources.Browse.listAll(src, uri, "list").getOrElse { return emptyList() }
+    return l.filter { !it.isDir }.map { Uri.decode(it.uri) } + l.filter { it.isDir }.flatMap { lanFolderFiles(src, it.uri, depth + 1) }
+}
+
+/** Phone folder: its media files (content URIs) and their full paths, subfolders included. */
+suspend fun phoneFolderFiles(ctx: android.content.Context, f: app.vlcinterface.sources.LocalFolder): List<Pair<String, String>> {
+    val root = if (f.volume == android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY) "/storage/emulated/0/" else "/storage/${f.volume.uppercase()}/"
+    return app.vlcinterface.sources.InternalSource.files(ctx, f, true, includeHidden = true).map { it.uri to (root + it.meta + it.name) }
+}
+
+
+/** A folder that can be deleted from Settings: on the phone ([phone]) or on a LAN server ([src] + [uri]). */
+class FolderHit(val path: String, val uri: String, val phone: app.vlcinterface.sources.LocalFolder? = null, val src: app.vlcinterface.data.Source? = null)
+
+/** Phone folders + LAN folders known from the index and the bookmarks (with their parent folders). */
+private suspend fun allFolders(ctx: android.content.Context): List<FolderHit> {
+    val out = ArrayList<FolderHit>()
+    app.vlcinterface.sources.InternalSource.folders(ctx).forEach { f ->
+        val root = if (f.volume == android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY) "/storage/emulated/0/" else "/storage/${f.volume.uppercase()}/"
+        out += FolderHit(root + f.relativePath, "local:${f.id}", phone = f)
+    }
+    val sources = App.instance.store.current.sources
+    val lan = HashMap<String, FolderHit>()
+    fun addChain(src: app.vlcinterface.data.Source, folderUri: String, stopAt: String) {
+        var u = folderUri.trimEnd('/')
+        while (u.length > stopAt.trimEnd('/').length && u.contains("://")) {
+            lan.getOrPut(u) { FolderHit(Uri.decode(u), u, src = src) }
+            u = u.substringBeforeLast('/')
+        }
+    }
+    app.vlcinterface.sources.NetIndex.songs().forEach { s ->
+        val src = sources.firstOrNull { it.id == s.sourceId } ?: return@forEach
+        if (s.folderKey.contains("://")) addChain(src, s.folderKey, app.vlcinterface.sources.Urls.forSource(src.copy(path = "")))
+    }
+    sources.forEach { src -> src.pins.forEach { pin ->
+        val u = app.vlcinterface.sources.Urls.forSource(src.copy(path = ""), pin)
+        lan.getOrPut(u.trimEnd('/')) { FolderHit(Uri.decode(u.trimEnd('/')), u.trimEnd('/'), src = src) }
+    } }
+    return out + lan.values.filter { it.src?.proto == "smb" }.sortedBy { it.path.lowercase() }
 }

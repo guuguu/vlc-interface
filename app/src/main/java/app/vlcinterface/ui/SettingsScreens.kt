@@ -148,8 +148,8 @@ fun SettingsScreen(nav: Navigator) {
             CardBox {
                 Row(Modifier.fillMaxWidth().clickable { deleteFile = true }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Delete a file…", color = C.bad, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Search for a song and delete it from the phone or the NAS for good", color = C.bad.copy(alpha = 0.8f), fontSize = 13.sp)
+                        Text("Delete a file or folder…", color = C.bad, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Search for a song or a folder and delete it from the phone or the NAS for good (folders: full content shown first)", color = C.bad.copy(alpha = 0.8f), fontSize = 13.sp)
                     }
                 }
             }

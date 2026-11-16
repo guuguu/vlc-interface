@@ -154,6 +154,7 @@ fun MediaList(
     var menuFor by remember { mutableStateOf<Entry?>(null) }
     var addTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
     var quickTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
+    var blackDir by remember { mutableStateOf<Entry?>(null) }
     var deleteTarget by remember { mutableStateOf<Entry?>(null) }
     var rgTarget by remember { mutableStateOf<(suspend () -> List<PlayItem>)?>(null) }
     var infoItem by remember { mutableStateOf<PlayItem?>(null) }
@@ -267,7 +268,7 @@ fun MediaList(
                             onQueue = { scope.launch { App.instance.player.addToQueue(itemsOfDir(r.e)()) } },
                             onAddPlaylist = { addTarget = itemsOfDir(r.e) }, onDelete = null,
                             onQuickPlaylist = { quickTarget = itemsOfDir(r.e) },
-                            onRemove = { HiddenFiles.hide(r.e.uri) },
+                            onRemove = { blackDir = r.e },
                             onSelect = { toggle(r.e) },
                             onRgScan = if (App.instance.store.current.settings.libraryKind == "audio") ({ rgTarget = itemsOfDir(r.e) }) else null) }
                     }
@@ -332,6 +333,12 @@ fun MediaList(
 
     addTarget?.let { t -> AddToPlaylistDialog(t) { addTarget = null; selected = emptySet() } }
     quickTarget?.let { t -> QuickPlaylistDialog(nav, t) { made -> quickTarget = null; if (made) selected = emptySet() } }
+    // Folder out of the lists: everything inside is listed first, then confirmed.
+    blackDir?.let { d ->
+        FolderContentConfirm("Remove folder from lists?", Uri.decode(d.uri) + "\nNever re-added (indexing, rescans, adds). Nothing is deleted.", false,
+            "Remove from lists", { if (source != null) lanFolderFiles(source, d.uri) else itemsOfDir(d)().map { Uri.decode(it.uri) } },
+            onConfirm = { HiddenFiles.hide(d.uri); blackDir = null }, onCancel = { blackDir = null })
+    }
     rgTarget?.let { t -> RgScanDialog(nav, t) { rgTarget = null; selected = emptySet() } }
     infoItem?.let { it0 -> TagInfoDialog(it0) { infoItem = null } }
     rgAlbum?.let { (name, songs) -> RgScanDialog(nav, { songs }, RgModeSingle, "ReplayGain: $name") { rgAlbum = null } }

@@ -255,6 +255,7 @@ fun InternalTab(nav: Navigator) {
     var addFolder by remember { mutableStateOf<LocalFolder?>(null) }
     var rgFolder by remember { mutableStateOf<LocalFolder?>(null) }
     var deleteFolder by remember { mutableStateOf<Pair<LocalFolder, List<Entry>>?>(null) }
+    var blackFolder by remember { mutableStateOf<LocalFolder?>(null) }
     val scope = rememberCoroutineScope()
     LaunchedEffect(reload) { folders = InternalSource.folders(ctx) }
     val scroll = rememberScrollState()
@@ -293,7 +294,7 @@ fun InternalTab(nav: Navigator) {
                             onAddPlaylist = { addFolder = f },
                             onRgScan = if (st.settings.libraryKind == "audio") ({ rgFolder = f }) else null,
                             onDelete = null,   // deleting files: only from Settings → Delete a file
-                            onRemove = { HiddenFiles.hide("local:${f.id}"); reload++ })
+                            onRemove = { blackFolder = f })
                     }
                     SymButton({
                         scope.launch {
@@ -314,6 +315,11 @@ fun InternalTab(nav: Navigator) {
     }
     addFolder?.let { f -> AddToPlaylistDialog({ ofKind(MusicLibrary.collectLocal(ctx, f, true)) }) { addFolder = null } }
     rgFolder?.let { f -> RgScanDialog(nav, { MusicLibrary.collectLocal(ctx, f, true) }) { rgFolder = null } }
+    blackFolder?.let { f ->
+        FolderContentConfirm("Remove folder from lists?", f.relativePath + "\nNever re-added (rescans, adds). Nothing is deleted.", false, "Remove from lists",
+            { phoneFolderFiles(ctx, f).map { it.second } },
+            onConfirm = { HiddenFiles.hide("local:${f.id}"); blackFolder = null; reload++ }, onCancel = { blackFolder = null })
+    }
     deleteFolder?.let { (f, files) ->
         if (files.isEmpty()) deleteFolder = null
         else DeleteDialog(files.map { it.uri }, f.name, files.sumOf { it.size.coerceAtLeast(0) }, files.size) { deleteFolder = null; reload++ }

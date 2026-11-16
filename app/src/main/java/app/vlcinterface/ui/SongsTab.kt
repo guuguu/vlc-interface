@@ -327,7 +327,7 @@ fun QuickPlaylistDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, o
 
 
 /** Lowercase, accents and punctuation dropped: "AC/DC" → "acdc", "You´ve" → "youve", "Béla" → "bela". */
-private fun searchNorm(t: String): String =
+internal fun searchNorm(t: String): String =
     java.text.Normalizer.normalize(t.lowercase(), java.text.Normalizer.Form.NFD)
         .replace(Regex("\\p{M}+"), "")                     // accents
         .replace(Regex("[´`’‘ʼ'/.\\-]"), "")                // joined marks: ac/dc, you've, a-ha

@@ -46,7 +46,8 @@ object InternalSource {
         map.values.sortedBy { it.name.lowercase() }
     }
 
-    suspend fun files(ctx: Context, folder: LocalFolder, recursive: Boolean = false): List<Entry> = withContext(Dispatchers.IO) {
+    /** [includeHidden]: also ".name" files / files in ".folders" (only for listing a folder before removing / deleting it). */
+    suspend fun files(ctx: Context, folder: LocalFolder, recursive: Boolean = false, includeHidden: Boolean = false): List<Entry> = withContext(Dispatchers.IO) {
         val out = ArrayList<Entry>()
         val sel = if (recursive) "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND ${MediaStore.MediaColumns.VOLUME_NAME}=?"
             else "${MediaStore.MediaColumns.RELATIVE_PATH}=? AND ${MediaStore.MediaColumns.VOLUME_NAME}=?"
@@ -90,7 +91,8 @@ object InternalSource {
         } catch (_: SecurityException) {
         }
         // Hidden (".name" files, files inside ".folders") and blacklisted files never come back.
-        out.filter { isPlayable(it.name) && !Ignore.dotName(it.name) && !Ignore.dotPath(it.meta) && !Ignore.blacklisted(it.uri) }
+        if (includeHidden) out.filter { isPlayable(it.name) }
+        else out.filter { isPlayable(it.name) && !Ignore.dotName(it.name) && !Ignore.dotPath(it.meta) && !Ignore.blacklisted(it.uri) }
     }
 
     /** Asks Android to re-index one folder (manual rescan). */
