@@ -100,7 +100,10 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     var query by remember { mutableStateOf("") }
     var pick by remember { mutableStateOf<PlayItem?>(null) }
     var note by remember { mutableStateOf("") }
+    var done by remember { mutableStateOf<String?>(null) }          // full path of the file just deleted
+    var pickPath by remember { mutableStateOf("") }
     androidx.compose.runtime.LaunchedEffect(Unit) { library = SongsCache.all(ctx.applicationContext) }
+    androidx.compose.runtime.LaunchedEffect(pick) { pickPath = pick?.let { fullPathOf(ctx, it) } ?: "" }
     val hits = remember(query, library) {
         val q = query.trim()
         if (q.length < 2) emptyList() else (library ?: emptyList()).filter { songMatches(it, q) }.take(60)
@@ -154,13 +157,14 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     pick?.let { f ->
         when {
             f.uri.startsWith("content://") ->
-                DeleteDialog(listOf(f.uri), f.fileName.ifEmpty { f.title }, 0, 1) { deleted ->
+                DeleteDialog(listOf(f.uri), pickPath.ifEmpty { f.fileName.ifEmpty { f.title } }, 0, 1) { deleted ->
+                    val path = pickPath
                     pick = null
-                    if (deleted) { forget(f.uri); note = ""; library = library?.filterNot { it.uri == f.uri } }
+                    if (deleted) { forget(f.uri); note = ""; library = library?.filterNot { it.uri == f.uri }; done = path }
                 }
             f.uri.startsWith("smb://") -> androidx.compose.material3.AlertDialog(onDismissRequest = { pick = null }, containerColor = C.panel,
                 title = { Text("Delete from the NAS?", color = C.bad) },
-                text = { Text("${f.fileName.ifEmpty { f.title }}\n${Uri.decode(f.uri.substringBeforeLast('/'))}", color = C.text) },
+                text = { Text("This file will be deleted for good:\n\n$pickPath", color = C.text) },
                 confirmButton = { STextButton({
                     val target = f; pick = null
                     scope.launch {
@@ -170,11 +174,33 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                                     .use { it.delete() }; true
                             } catch (e: Exception) { note = "Not deleted: ${e.message ?: e.javaClass.simpleName}"; false }
                         }
-                        if (ok) { forget(target.uri); library = library?.filterNot { it.uri == target.uri } }
+                        if (ok) { forget(target.uri); library = library?.filterNot { it.uri == target.uri }; done = Uri.decode(target.uri) }
                     }
                 }) { Text("Delete", color = C.bad) } },
                 dismissButton = { STextButton({ pick = null }) { Text("Cancel") } })
             else -> { note = "This kind of location can't be deleted from here"; pick = null }
         }
     }
+    // Confirmation of what was deleted, with its full path.
+    done?.let { path ->
+        androidx.compose.material3.AlertDialog(onDismissRequest = { done = null }, containerColor = C.panel,
+            title = { Text("File deleted", color = C.text) },
+            text = { Text("Deleted for good:\n\n$path", color = C.text) },
+            confirmButton = { STextButton({ done = null }) { Text("OK", color = accent()) } })
+    }
+}
+
+/** The file's full path as shown to the user: "/storage/emulated/0/Music/…/song.flac" or "smb://nas/share/…/song.flac". */
+private suspend fun fullPathOf(ctx: android.content.Context, item: PlayItem): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    val u = item.uri
+    if (!u.startsWith("content://")) return@withContext Uri.decode(u)
+    try {
+        ctx.contentResolver.query(Uri.parse(u), arrayOf(android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
+            android.provider.MediaStore.MediaColumns.DISPLAY_NAME, android.provider.MediaStore.MediaColumns.VOLUME_NAME), null, null, null)?.use { c ->
+            if (!c.moveToFirst()) return@use null
+            val rel = c.getString(0).orEmpty(); val name = c.getString(1).orEmpty(); val vol = c.getString(2).orEmpty()
+            val root = if (vol.isEmpty() || vol == android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY) "/storage/emulated/0/" else "/storage/${vol.uppercase()}/"
+            root + rel + name
+        }
+    } catch (_: Exception) { null } ?: (item.fileName.ifEmpty { item.title })
 }

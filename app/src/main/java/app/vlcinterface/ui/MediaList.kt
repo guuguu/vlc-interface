@@ -423,7 +423,8 @@ fun DeleteDialog(uris: List<String>, name: String, totalBytes: Long, count: Int,
     AlertDialog(
         onDismissRequest = { onDone(false) },
         title = { Text("Delete from the phone?") },
-        text = { Text(if (count == 1) "$name\n${"%.1f".format(totalBytes / 1e6)} MB" else "$name\n$count files · ${"%.1f".format(totalBytes / 1e6)} MB") },
+        text = { Text(if (count == 1) "This file will be deleted for good:\n\n$name" + (if (totalBytes > 0) "\n${"%.1f".format(totalBytes / 1e6)} MB" else "")
+            else "$name\n$count files · ${"%.1f".format(totalBytes / 1e6)} MB") },
         confirmButton = {
             STextButton({
                 try {
