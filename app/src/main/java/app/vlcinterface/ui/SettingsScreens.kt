@@ -188,6 +188,22 @@ fun SettingsScreen(nav: Navigator) {
                     Text("0 = rows stay still · 100 % = normal (slow) · 300 % = three times faster", color = C.muted, fontSize = 12.sp)
                 }
             }
+            CardBox {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Pop-up opacity", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("${s.popupOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(popupOpacity = 90)) }) { Text("Reset") }
+                    }
+                    androidx.compose.material3.Slider(s.popupOpacity.toFloat(), { v -> set(s.copy(popupOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
+                    Text("Menu text", color = C.text, fontSize = 15.sp)
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf("small" to "Small", "medium" to "Medium", "large" to "Large").forEach { (k, l) ->
+                            Pill(l, selected = s.menuFont == k) { set(s.copy(menuFont = k)) }
+                        }
+                    }
+                }
+            }
             Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf(0xFFFF8A3D, 0xFF4FB3FF, 0xFF7BD88F, 0xFFC792EA).forEach { c ->
                     Box(Modifier.size(40.dp).clip(CircleShape).background(Color(c))
