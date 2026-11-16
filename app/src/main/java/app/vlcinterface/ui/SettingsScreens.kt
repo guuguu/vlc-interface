@@ -191,6 +191,15 @@ fun SettingsScreen(nav: Navigator) {
                 }
             }
             CardBox {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Up next songs on the player", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    Pill("−") { set(s.copy(upNextCount = (s.upNextCount - 1).coerceAtLeast(0))) }
+                    Text("${s.upNextCount}", color = accent(), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.width(40.dp))
+                    Pill("+") { set(s.copy(upNextCount = (s.upNextCount + 1).coerceAtMost(20))) }
+                }
+            }
+            CardBox {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Pop-up opacity", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))

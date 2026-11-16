@@ -308,7 +308,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     }
                 }
             }
-            val next0 = p.upNext
+            val next0 = if (p.index >= 0) p.queue.drop(p.index + 1).take(st.settings.upNextCount) else emptyList()
             val next = if (!landscape || upNextYpx < 0 || rightHpx <= 0) next0 else {
                 val free = with(dens) { (rightHpx - upNextYpx).toDp().value } - 34f      // minus the "Up next" heading
                 next0.take((free / 30f).toInt().coerceIn(1, maxOf(1, next0.size)))
