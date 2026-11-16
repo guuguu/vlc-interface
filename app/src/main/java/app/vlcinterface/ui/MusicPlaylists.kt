@@ -420,61 +420,44 @@ private fun SeekBlock(item: PlayItem) {
 }
 
 /**
- * "Jump to" m:ss within the song. Digits only; the ":" goes in by itself (323 → 3:23), or where a space / . / , / - / :
- * is typed (3 23 → 3:23, 3 5 → 3:05). No leading 0 on the minutes.
+ * "Jump to" within the song: two small boxes, minutes and seconds. Digits only, no leading 0 on the minutes;
+ * a space / . / , / - / : or the keyboard's Next moves to the seconds box; Go jumps.
  */
 @Composable
 private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump: (Long) -> Unit) {
-    var digits by remember { mutableStateOf("") }
-    var sep by remember { mutableStateOf<Int?>(null) }      // where a typed separator splits minutes / seconds
-    fun shown(): String = sep?.let { k -> digits.take(k).ifEmpty { "0" } + ":" + digits.drop(k) }
-        ?: if (digits.length <= 2) digits else digits.dropLast(2) + ":" + digits.takeLast(2)
-    val ms: Long? = run {
-        if (digits.isEmpty()) return@run null
-        val k = sep
-        val (min, sec) = when {
-            k != null -> (digits.take(k).toIntOrNull() ?: 0) to (digits.drop(k).toIntOrNull() ?: 0)
-            digits.length <= 2 -> 0 to digits.toInt()
-            else -> digits.dropLast(2).toInt() to digits.takeLast(2).toInt()
-        }
-        if ((k != null || digits.length >= 3) && sec > 59) null else (min * 60L + sec) * 1000
-    }?.takeIf { it <= len }
-    fun edit(newText: String) {
-        val old = shown()
-        if (newText.length > old.length) {
-            val ch = newText.last()
-            val k = sep
-            when {
-                ch.isDigit() -> when {
-                    k != null -> if (digits.length - k < 2) digits += ch
-                    digits.isEmpty() && ch == '0' -> {}                 // no leading 0 on the minutes
-                    digits.length < 5 -> digits += ch
-                }
-                ch in " .,-:" && k == null -> sep = digits.length
-            }
-        } else if (newText.length < old.length) {
-            val k = sep
-            if (k != null && k == digits.length) sep = null else digits = digits.dropLast(1)
-        }
+    var min by remember { mutableStateOf("") }
+    var sec by remember { mutableStateOf("") }
+    val minF = remember { androidx.compose.ui.focus.FocusRequester() }
+    val secF = remember { androidx.compose.ui.focus.FocusRequester() }
+    val ms: Long? = if (min.isEmpty() && sec.isEmpty()) null else {
+        val m = min.toIntOrNull() ?: 0; val sc = sec.toIntOrNull() ?: 0
+        if (sc > 59) null else ((m * 60L + sc) * 1000).takeIf { it <= len }
     }
-    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(Unit) { kotlinx.coroutines.delay(150); try { focus.requestFocus() } catch (_: Exception) {} }
+    val bad = (min.isNotEmpty() || sec.isNotEmpty()) && ms == null
+    LaunchedEffect(Unit) { kotlinx.coroutines.delay(150); try { minF.requestFocus() } catch (_: Exception) {} }
+    @Composable
+    fun box(v: String, label: String, f: androidx.compose.ui.focus.FocusRequester, last: Boolean, onChange: (String) -> Unit) =
+        androidx.compose.material3.OutlinedTextField(
+            androidx.compose.ui.text.input.TextFieldValue(v, androidx.compose.ui.text.TextRange(v.length)), { t -> onChange(t.text) },
+            singleLine = true, label = { Text(label) }, isError = bad,
+            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 26.sp, color = C.text, textAlign = TextAlign.Center),
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                imeAction = if (last) androidx.compose.ui.text.input.ImeAction.Go else androidx.compose.ui.text.input.ImeAction.Next),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onNext = { secF.requestFocus() }, onGo = { ms?.let(onJump) }),
+            modifier = Modifier.width(96.dp).focusRequester(f))
     AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
         title = { Text("Jump to", color = C.text) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                val tv = shown()
-                androidx.compose.material3.OutlinedTextField(
-                    androidx.compose.ui.text.input.TextFieldValue(tv, androidx.compose.ui.text.TextRange(tv.length)),
-                    { v -> edit(v.text) },
-                    singleLine = true, placeholder = { Text("m:ss") },
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 24.sp, color = C.text),
-                    isError = digits.isNotEmpty() && ms == null,
-                    keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                        imeAction = androidx.compose.ui.text.input.ImeAction.Go),
-                    keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { ms?.let(onJump) }),
-                    modifier = Modifier.fillMaxWidth().focusRequester(focus))
-                Text("0:00 – ${fmtTime(len)}", color = if (digits.isNotEmpty() && ms == null) C.bad else C.muted, fontSize = 12.sp)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    box(min, "min", minF, false) { t ->
+                        if (t.any { it in " .,-:" }) secF.requestFocus()
+                        min = t.filter { it.isDigit() }.trimStart('0').take(3)
+                    }
+                    Text(":", color = C.text, fontSize = 26.sp)
+                    box(sec, "sec", secF, true) { t -> sec = t.filter { it.isDigit() }.take(2) }
+                }
+                Text("0:00 – ${fmtTime(len)}", color = if (bad) C.bad else C.muted, fontSize = 12.sp)
             }
         },
         confirmButton = { STextButton({ ms?.let(onJump) }, enabled = ms != null) { Text("Jump", color = if (ms != null) accent() else C.muted) } },
