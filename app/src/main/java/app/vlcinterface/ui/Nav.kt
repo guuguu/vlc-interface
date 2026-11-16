@@ -70,7 +70,10 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
     UiPrefs.popupAlpha = (st.settings.popupOpacity / 100f).coerceIn(0.5f, 1f)     // never below 50 %: always visible
     UiPrefs.menuAlpha = (st.settings.menuOpacity / 100f).coerceIn(0.5f, 1f)
     UiPrefs.menuFont = st.settings.menuFont
-    val accent = Color(st.settings.accent)
+    // Battery 15 % or less (not charging): every accent-coloured item turns bright red as a warning.
+    val lowColour by app.vlcinterface.player.BatteryGuard.warnColour.collectAsState()
+    UiPrefs.lowBattery = lowColour
+    val accent = if (lowColour) LOW_BATTERY_RED else Color(st.settings.accent)
     var showOutput by remember { mutableStateOf(false) }
     val openOutput = { showOutput = true }
 

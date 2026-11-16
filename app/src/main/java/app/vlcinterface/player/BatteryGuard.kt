@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 object BatteryGuard {
     /** 0 = nothing to show, 15 = the warning, 10 = "stopped". */
     val notice = MutableStateFlow(0)
+    /** At or below 15 % and not charging: the app's colours turn bright red. */
+    val warnColour = MutableStateFlow(false)
     /** At or below 10 % and not charging: no keeping the screen on. */
     val low = MutableStateFlow(false)
     var level = 100
@@ -41,6 +43,7 @@ object BatteryGuard {
 
     private fun update(pct: Int, charging: Boolean) {
         level = pct
+        warnColour.value = !charging && pct <= 15
         if (charging || pct > 15) { warned = false; stopped = false; low.value = false; if (charging && notice.value != 0) notice.value = 0; return }
         val player = App.instance.player
         val playing = player.state.value.item != null && player.state.value.isPlaying

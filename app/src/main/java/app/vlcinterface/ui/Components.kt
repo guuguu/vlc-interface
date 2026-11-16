@@ -61,7 +61,7 @@ object C {
     val line = Color(0xFF2C3038)
     val text = Color(0xFFECEDEF)
     val muted = Color(0xFFA3A8B1)
-    val ok = Color(0xFF7BD88F)
+    val ok: Color get() = if (UiPrefs.lowBattery) LOW_BATTERY_RED else Color(0xFF7BD88F)
     val bad = Color(0xFFFF8F8F)
     /** Pop-up windows, search lists and menus: opacity from Settings, never a solid block. */
     val popup: Color get() = Color(0xFF14171C).copy(alpha = UiPrefs.popupAlpha)
@@ -75,6 +75,8 @@ object C {
 object UiPrefs {
     var popupAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
     var menuAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
+    /** Battery 15 % or less (not charging): coloured items turn bright red. */
+    var lowBattery by androidx.compose.runtime.mutableStateOf(false)
     var menuFont by androidx.compose.runtime.mutableStateOf("medium")
     /** 4 menu text sizes; the biggest still fits a menu (max 340 dp wide, long entries wrap). */
     val menuSizes = listOf("small" to "S", "medium" to "M", "large" to "L", "xlarge" to "XL")
@@ -83,6 +85,8 @@ object UiPrefs {
     /** Long-press on any menu entry: the size choice shows at the top of that menu. */
     var sizePick by androidx.compose.runtime.mutableStateOf(false)
 }
+
+val LOW_BATTERY_RED = Color(0xFFFF1A1A)
 
 val LocalAccent = staticCompositionLocalOf { Color(0xFFFF8A3D) }
 
