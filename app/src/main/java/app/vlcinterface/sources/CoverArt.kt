@@ -237,7 +237,14 @@ object CoverArt {
 
     /** For the music player: picture from the album folder — or, for songs not in a one-album folder, from the
      *  pictures store — else from the internet (album, then artist), saved back to the same place. */
-    suspend fun forPlayer(ctx: Context, item: PlayItem, artist: String, album: String, online: Boolean, force: Boolean = false): Result = withContext(Dispatchers.IO) {
+    /** "Beatles, The" → "The Beatles" (library-sorted names don't match online catalogues). */
+    fun canonicalArtist(a: String): String {
+        val m = Regex("""^(.+?),\s*(the|a|an|die|der|das|les|los|las|la|le|il|el)$""", RegexOption.IGNORE_CASE).find(a.trim()) ?: return a.trim()
+        return m.groupValues[2].replaceFirstChar { it.uppercase() } + " " + m.groupValues[1]
+    }
+
+    suspend fun forPlayer(ctx: Context, item: PlayItem, artist0: String, album: String, online: Boolean, force: Boolean = false): Result = withContext(Dispatchers.IO) {
+        val artist = canonicalArtist(artist0)
         val pl = place(ctx, item)
         val inFolder = inAlbumFolder(ctx, item, pl)
         val memKey = if (inFolder) pl!!.key else "store:" + item.uri
@@ -301,6 +308,9 @@ object CoverArt {
         val t = tag.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim(); val c = credit.lowercase().replace(Regex("[^a-z0-9 ]"), "").trim()
         if (t.isEmpty() || c.isEmpty()) return true
         if (t == c || c.contains(t) || t.contains(c)) return true
+        // "beatles the" = "the beatles": same words, any order, articles ignored.
+        fun words(x: String) = x.split(' ').filter { it.isNotEmpty() && it !in setOf("the", "a", "an") }.toSet()
+        if (words(t).isNotEmpty() && words(t) == words(c)) return true
         val initials = c.split(' ').filter { it.isNotEmpty() && it !in setOf("the", "and", "of") }.joinToString("") { it.take(1) }
         return t.replace(" ", "") == initials
     }
@@ -312,7 +322,7 @@ object CoverArt {
      */
     private suspend fun albumPicture(artist: String, album: String, force: Boolean = false): ByteArray? {
         if (album.isBlank()) return null
-        val k = "al" + key("$artist|$album"); if (!force && missed(k)) return null
+        val k = "al2" + key("$artist|$album"); if (!force && missed(k)) return null
         return lock.withLock {
             try {
                 fun q(s: String) = s.replace("\"", "")
@@ -345,9 +355,59 @@ object CoverArt {
                         .filter { it.optInt("score") >= 80 && artistFits(artist, credit(it)) && norm(it.optString("title")) == want }.map { it.getString("id") }.take(4)
                     ids.firstNotNullOfOrNull { id -> get("https://coverartarchive.org/$kind/$id/front-500") }?.let { return@withLock it }
                 }
+                // Not in MusicBrainz / Cover Art Archive: the big shops' catalogues (iTunes, Deezer).
+                webAlbums(artist, album).firstOrNull()?.let { (big, _) -> get(big)?.let { return@withLock it } }
                 markMissed(k); null
             } catch (_: Exception) { null }
         }
+    }
+
+    private fun json(url: String): JSONObject? = try {
+        Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) JSONObject(r.body!!.string()) else null }
+    } catch (_: Exception) { null }
+
+    /**
+     * Album covers from iTunes and Deezer (no key needed): (big picture URL, small preview URL, title, artist).
+     * Title must match one of the album's title variants, the artist must fit.
+     */
+    private fun webAlbumsFull(artist: String, album: String): List<List<String>> {
+        if (album.isBlank()) return emptyList()
+        val wants = albumVariants(album).map { norm(it) }.toSet()
+        val out = ArrayList<List<String>>()
+        fun fits(title: String, who: String) = norm(title).let { t -> wants.any { w -> t == w || t.startsWith("$w ") } } && artistFits(artist, who)
+        for (title in albumVariants(album).reversed().take(3)) {   // plainest title first
+            val term = URLEncoder.encode((if (usableArtist(artist)) "$artist " else "") + title, "UTF-8")
+            json("https://itunes.apple.com/search?media=music&entity=album&limit=15&term=$term")?.optJSONArray("results")?.let { a ->
+                for (i in 0 until a.length()) { val o = a.getJSONObject(i)
+                    val art = o.optString("artworkUrl100"); if (art.isBlank()) continue
+                    if (fits(o.optString("collectionName"), o.optString("artistName")))
+                        out += listOf(art.replace("100x100bb", "1000x1000bb"), art.replace("100x100bb", "250x250bb"), o.optString("collectionName"), o.optString("artistName"), "iTunes")
+                }
+            }
+            json("https://api.deezer.com/search/album?limit=15&q=$term")?.optJSONArray("data")?.let { a ->
+                for (i in 0 until a.length()) { val o = a.getJSONObject(i)
+                    val big = o.optString("cover_xl"); if (big.isBlank() || "/cover//" in big) continue
+                    val who = o.optJSONObject("artist")?.optString("name") ?: ""
+                    if (fits(o.optString("title"), who)) out += listOf(big, o.optString("cover_medium").ifBlank { big }, o.optString("title"), who, "Deezer")
+                }
+            }
+            if (out.isNotEmpty()) break
+        }
+        return out.distinctBy { it[0] }
+    }
+    private fun webAlbums(artist: String, album: String) = webAlbumsFull(artist, album).map { it[0] to it[1] }
+
+    /** Artist photo from Deezer (name must fit; Deezer's empty placeholder is skipped). */
+    private fun deezerArtist(artist: String): Pair<String, String>? {
+        if (!usableArtist(artist)) return null
+        val a = json("https://api.deezer.com/search/artist?limit=5&q=" + URLEncoder.encode(artist, "UTF-8"))?.optJSONArray("data") ?: return null
+        for (i in 0 until a.length()) { val o = a.getJSONObject(i)
+            val big = o.optString("picture_xl")
+            if (big.isBlank() || "/artist//" in big) continue
+            if (norm(o.optString("name")).let { n -> n == norm(artist) || artistFits(artist, o.optString("name")) && n.isNotEmpty() })
+                return big to o.optString("picture_medium").ifBlank { big }
+        }
+        return null
     }
 
     // ---------- choosing among several pictures ----------
@@ -367,8 +427,9 @@ object CoverArt {
      * Every album picture that fits this album and artist (different editions often have different covers),
      * with a small preview each. Same searches as the automatic one, but all fitting results are kept.
      */
-    suspend fun candidates(artist: String, album: String): List<Candidate> = withContext(Dispatchers.IO) {
-        if (album.isBlank()) return@withContext emptyList()
+    suspend fun candidates(artist0: String, album: String): List<Candidate> = withContext(Dispatchers.IO) {
+        val artist = canonicalArtist(artist0)
+        if (album.isBlank() && artist.isBlank()) return@withContext emptyList()
         val hits = LinkedHashMap<String, Triple<String, String, JSONObject>>()   // id → (kind, id, json)
         lock.withLock {
             try {
@@ -399,17 +460,32 @@ object CoverArt {
         }
         // Previews (Cover Art Archive, small size); entries without a picture drop out, identical pictures shown once.
         val seen = HashSet<Int>()
-        hits.values.take(16).mapNotNull { (kind, id, o) ->
+        val mbList = hits.values.take(16).mapNotNull { (kind, id, o) ->
             val b = try { get("https://coverartarchive.org/$kind/$id/front-250") } catch (_: Exception) { null } ?: return@mapNotNull null
             if (!seen.add(b.contentHashCode())) return@mapNotNull null
             val bmp = BitmapFactory.decodeByteArray(b, 0, b.size) ?: return@mapNotNull null
             Candidate(kind, id, o.optString("title"), creditOf(o), infoOf(kind, o), bmp)
         }
+        // Shops' catalogues too (iTunes, Deezer): kind "web", id = the full-size picture's address.
+        val web = webAlbumsFull(artist, album).take(8).mapNotNull { (big, small, title, who, from) ->
+            val b = get(small) ?: return@mapNotNull null
+            if (!seen.add(b.contentHashCode())) return@mapNotNull null
+            Candidate("web", big, title, who, from, BitmapFactory.decodeByteArray(b, 0, b.size) ?: return@mapNotNull null)
+        }
+        val all = mbList + web
+        if (all.isNotEmpty()) return@withContext all
+        // No album cover anywhere: the artist's photo(s) instead.
+        listOfNotNull(deezerArtist(artist)?.let { (big, small) ->
+            get(small)?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size)?.let { Candidate("web", big, artist, artist, "Artist photo · Deezer", it) } }
+        })
     }
 
     /** The chosen picture: downloaded at full size, resized for the phone and saved as cover.jpg in the album folder. */
     suspend fun useCandidate(ctx: Context, item: PlayItem, c: Candidate): Result = withContext(Dispatchers.IO) {
-        val bytes = try { get("https://coverartarchive.org/${c.kind}/${c.id}/front-1200") ?: get("https://coverartarchive.org/${c.kind}/${c.id}/front-500") } catch (_: Exception) { null }
+        val bytes = try {
+            if (c.kind == "web") get(c.id)
+            else get("https://coverartarchive.org/${c.kind}/${c.id}/front-1200") ?: get("https://coverartarchive.org/${c.kind}/${c.id}/front-500")
+        } catch (_: Exception) { null }
             ?: return@withContext Result(null, "Couldn't download that picture")
         val (bmp, jpeg) = resize(bytes) ?: return@withContext Result(null, "Couldn't read that picture")
         val pl = place(ctx, item)
@@ -431,11 +507,12 @@ object CoverArt {
 
     private suspend fun artistPicture(artist: String, force: Boolean = false): ByteArray? {
         if (!usableArtist(artist)) return null
-        val k = "ar" + key(artist); if (!force && missed(k)) return null
+        val k = "ar2" + key(artist); if (!force && missed(k)) return null
         return lock.withLock {
             try {
-                val found = mb("https://musicbrainz.org/ws/2/artist/?fmt=json&limit=3&query=" + URLEncoder.encode("artist:\"${artist.replace("\"", "")}\"", "UTF-8"))
-                val id = found?.optJSONArray("artists")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) } }?.firstOrNull { it.optInt("score") >= 95 }?.getString("id")
+                val found = mb("https://musicbrainz.org/ws/2/artist/?fmt=json&limit=5&query=" + URLEncoder.encode("artist:\"${artist.replace("\"", "")}\"", "UTF-8"))
+                val id = found?.optJSONArray("artists")?.let { a -> (0 until a.length()).map { a.getJSONObject(it) } }
+                    ?.firstOrNull { it.optInt("score") >= 90 && artistFits(artist, it.optString("name")) }?.getString("id")
                 var file: String? = null
                 if (id != null) {
                     val rels = mb("https://musicbrainz.org/ws/2/artist/$id?fmt=json&inc=url-rels")?.optJSONArray("relations")
@@ -453,7 +530,7 @@ object CoverArt {
                 file?.let { f ->
                     val name = java.net.URLDecoder.decode(f, "UTF-8").replace(' ', '_')
                     get("https://commons.wikimedia.org/wiki/Special:FilePath/" + URLEncoder.encode(name, "UTF-8").replace("+", "%20") + "?width=$MAX")
-                } ?: null.also { markMissed(k) }
+                } ?: deezerArtist(artist)?.let { get(it.first) } ?: null.also { markMissed(k) }
             } catch (_: Exception) { null }
         }
     }
