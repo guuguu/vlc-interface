@@ -118,7 +118,7 @@ fun RgAskHost() {
         title = { Text("No ReplayGain", color = C.text) },
         text = {
             androidx.compose.foundation.layout.Column {
-                Text("\"${it0.title}\" has no ReplayGain values (it plays 5 dB lower for now). Scan it?", color = C.text)
+                Text("\"${it0.title}\" has no ReplayGain values (it plays as it is for now). Scan it?", color = C.text)
                 androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.clickable { skipTagged = !skipTagged },
                     verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     SCheckbox(skipTagged, { skipTagged = it })
