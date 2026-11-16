@@ -1842,10 +1842,11 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** Announced song on a station: its album picture (temporary radio pictures folder), else back to the station's own. */
     private fun radioSongChanged(item: PlayItem, np: String) {
-        val (artist, title) = splitNowPlaying(np)
-        if (title.isEmpty() || artist.isEmpty()) { _state.value = _state.value.copy(artworkUrl = item.artwork); return }
+        // Whatever form the station announces it in (with or without "Artist - Title"), it is looked up.
+        if (np.isBlank()) { _state.value = _state.value.copy(artworkUrl = item.artwork); return }
         bg.launch {
-            val f = try { app.vlcinterface.sources.CoverArt.radioSong(context, artist, title) } catch (_: Exception) { null }
+            val f = try { app.vlcinterface.sources.CoverArt.radioSong(context, np) } catch (e: Exception) {
+                ServerLog.log("radio-pictures", "picture", "web", "", false, "Picture lookup failed for \"$np\": ${e.message}"); null }
             val s = _state.value
             if (s.item === item && s.nowPlaying == np) _state.value = s.copy(artworkUrl = f?.absolutePath ?: item.artwork)
         }
