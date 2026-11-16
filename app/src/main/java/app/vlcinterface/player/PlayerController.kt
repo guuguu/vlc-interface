@@ -699,6 +699,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val have = s.queue.map { qKey(it) }.toHashSet()
         val items = items0.filter { have.add(qKey(it)) }
         if (items.isEmpty()) return
+        session(null, items)
         val q = s.queue.toMutableList(); q.addAll(s.index + 1, items)
         orderedQueue?.let { o ->
             val at = o.indexOfFirst { it === s.queue.getOrNull(s.index) }
@@ -729,39 +730,59 @@ class PlayerController(private val context: Context, private val store: Store) {
      * automatically: named YY_MM_dd_<first hour>_<last hour>_session (hours only, the last one kept up to date),
      * songs in the order first played (no repeats), radio stations always at the end. Videos aren't counted.
      */
-    private fun recordSession(item: PlayItem?) {
-        if (item == null || (!item.isMusic && !item.isRadio)) return
+    /** Songs (no repeats) in first-played order, radio stations always last. */
+    private fun sessionMerge(old: List<app.vlcinterface.data.PlEntry>, add: List<app.vlcinterface.data.PlEntry>): List<app.vlcinterface.data.PlEntry> {
+        val mark = app.vlcinterface.sources.MusicLibrary.RADIO_MARK
+        val songs = old.filter { it.sourceId != mark }.toMutableList()
+        val radios = old.filter { it.sourceId == mark }.toMutableList()
+        add.forEach { e ->
+            if (e.sourceId == mark) { if (radios.none { it.uri == e.uri }) radios += e }
+            else if (songs.none { it.uri == e.uri && it.startMs == e.startMs }) songs += e
+        }
+        return songs + radios
+    }
+
+    /**
+     * Today's session playlist — a log, never played by itself (only if you load it). Everything played today is
+     * noted from the start of the day. The list itself is made the first time something is added (queue, play next,
+     * jump to, files or folders loaded) or something is played that isn't a saved playlist as it is; it then holds
+     * everything played today so far, and keeps getting what's played and added. One per day, never two.
+     */
+    private fun session(played: PlayItem?, added: List<PlayItem>) {
+        val add = added.filter { it.isMusic || it.isRadio }
+        if ((played == null || (!played.isMusic && !played.isRadio)) && add.isEmpty()) return
         val st0 = _state.value
         val set0 = store.current.settings
-        // Playing a saved playlist as it is adds nothing new: no session list is made (or changed) for it.
-        // Songs added to it (queue, play next…) still count.
-        if (st0.origin.kind == "playlist" && st0.origin.playlistId != set0.sessionPlaylistId &&
-            store.current.playlists.firstOrNull { it.id == st0.origin.playlistId }?.items?.any { it.uri == item.uri } == true) return
+        // A saved playlist played as it is: noted in today's log, but makes no list by itself.
+        val asIs = played != null && add.isEmpty() && st0.origin.kind == "playlist" && st0.origin.playlistId != set0.sessionPlaylistId &&
+            store.current.playlists.firstOrNull { it.id == st0.origin.playlistId }?.items?.any { it.uri == played.uri } == true
         val c = java.util.Calendar.getInstance()
         val day = "%04d-%02d-%02d".format(c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH) + 1, c.get(java.util.Calendar.DAY_OF_MONTH))
         val hour = c.get(java.util.Calendar.HOUR_OF_DAY)
+        val playedE = played?.takeIf { it.isMusic || it.isRadio }?.let { listOf(app.vlcinterface.sources.MusicLibrary.toPlEntry(it)) } ?: emptyList()
+        val addE = add.map { app.vlcinterface.sources.MusicLibrary.toPlEntry(it) }
         store.update { st ->
             val set = st.settings
-            val cur = if (set.sessionDay == day) st.playlists.firstOrNull { it.id == set.sessionPlaylistId } else null
-            val startH = if (cur != null) set.sessionStartHour else hour
+            val newDay = set.sessionDay != day
+            val log = sessionMerge(if (newDay) emptyList() else set.sessionLog, playedE)
+            val startH = if (newDay) hour else set.sessionStartHour
+            val cur = if (newDay) null else st.playlists.firstOrNull { it.id == set.sessionPlaylistId }
             val name = "%02d_%02d_%02d_%02d_%02d_session".format(c.get(java.util.Calendar.YEAR) % 100, c.get(java.util.Calendar.MONTH) + 1,
                 c.get(java.util.Calendar.DAY_OF_MONTH), startH, hour)
-            val old = cur?.items ?: emptyList()
-            val radioMark = app.vlcinterface.sources.MusicLibrary.RADIO_MARK
-            var songs = old.filter { it.sourceId != radioMark }
-            var radios = old.filter { it.sourceId == radioMark }
-            run {
-                val e = app.vlcinterface.sources.MusicLibrary.toPlEntry(item)
-                if (item.isRadio) { if (radios.none { it.uri == e.uri }) radios = radios + e }
-                else if (songs.none { it.uri == e.uri && it.startMs == e.startMs }) songs = songs + e
+            val baseSet = set.copy(sessionDay = day, sessionLog = log, sessionStartHour = startH,
+                sessionPlaylistId = if (newDay) "" else set.sessionPlaylistId)
+            when {
+                cur != null -> {
+                    val items = sessionMerge(cur.items, playedE + addE)
+                    st.copy(settings = baseSet, playlists = if (cur.name == name && cur.items == items) st.playlists
+                        else st.playlists.map { if (it.id == cur.id) it.copy(name = name, items = items) else it })
+                }
+                asIs || (addE.isEmpty() && playedE.isEmpty()) -> st.copy(settings = baseSet)
+                else -> {
+                    val pl = app.vlcinterface.data.Playlist(name = name, items = sessionMerge(log, addE))
+                    st.copy(playlists = st.playlists + pl, settings = baseSet.copy(sessionPlaylistId = pl.id))
+                }
             }
-            val items = songs + radios                       // radio stations always last
-            if (cur == null) {
-                val pl = app.vlcinterface.data.Playlist(name = name, items = items)
-                st.copy(playlists = st.playlists + pl,
-                    settings = set.copy(sessionDay = day, sessionPlaylistId = pl.id, sessionStartHour = startH))
-            } else if (cur.name == name && cur.items == items) st
-            else st.copy(playlists = st.playlists.map { if (it.id == cur.id) it.copy(name = name, items = items) else it })
         }
     }
 
@@ -772,6 +793,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val have = s.queue.map { qKey(it) }.toHashSet()
         val items = items0.filter { have.add(qKey(it)) }
         if (items.isEmpty()) return 0
+        session(null, items)                                     // an addition: today's session list gets it
         orderedQueue = orderedQueue?.plus(items)
         _state.value = s.copy(queue = s.queue + items)
         return items.size
@@ -824,6 +846,7 @@ class PlayerController(private val context: Context, private val store: Store) {
      */
     fun queueNext(item: PlayItem) {
         val s = _state.value
+        session(null, listOf(item))
         if (s.item == null) { playQueue(listOf(item), 0, Origin("single")); return }
         val q = s.queue.toMutableList()
         var idx = s.index
@@ -842,6 +865,7 @@ class PlayerController(private val context: Context, private val store: Store) {
      */
     fun jumpToSong(item: PlayItem) {
         val s = _state.value
+        if (s.queue.none { qKey(it) == qKey(item) }) session(null, listOf(item))
         val at = s.queue.indexOfFirst { qKey(it) == qKey(item) }
         if (at >= 0) { startItem(at, -1); return }
         if (s.item == null) { playQueue(listOf(item), 0, Origin("single")); return }
@@ -924,7 +948,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
         val s0 = _state.value
         val item = s0.queue.getOrNull(i) ?: return
-        recordSession(item)
+        session(item, emptyList())
         loadPictureForFile(item)
         val wanted = store.current.subStyle
         if (wanted != styleInUse || rgSignature() != rgInUse) recreateEngine(wanted)

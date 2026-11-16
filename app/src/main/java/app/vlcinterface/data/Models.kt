@@ -150,6 +150,8 @@ data class Settings(
     val sessionDay: String = "",
     val sessionPlaylistId: String = "",
     val sessionStartHour: Int = 0,
+    /** Everything played today (the day in [sessionDay]), kept even before today's session list exists. */
+    val sessionLog: List<PlEntry> = emptyList(),
     /** Files taken out of the Library lists ("Remove from this list"); the files themselves are untouched. */
     val hiddenUris: Set<String> = emptySet(),
 ) {
@@ -167,7 +169,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("hiddenUris", org.json.JSONArray(hiddenUris.toList()))
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList()))
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -206,6 +208,7 @@ data class Settings(
                 o.optInt("songsScrollSpeed", 100).coerceIn(0, 300),
                 o.optBoolean("autoRotate", false),
                 o.optString("sessionDay", ""), o.optString("sessionPlaylistId", ""), o.optInt("sessionStartHour", 0),
+                o.optJSONArray("sessionLog")?.let { a -> (0 until a.length()).map { PlEntry.fromJson(a.getJSONObject(it)) } } ?: emptyList(),
                 o.optJSONArray("hiddenUris")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() } ?: emptySet(),
             )
         }
