@@ -352,8 +352,11 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     /**
-     * Loudness and treble through libVLC's 10-band equalizer (60 Hz … 16 kHz). Loudness lifts lows and highs
-     * (the classic contour), treble tilts the top bands. Both at 0 (and no pre-amp needed): no equalizer at all.
+     * Loudness and treble through libVLC's 10-band equalizer (60 Hz … 16 kHz), cutting only — nothing is ever
+     * amplified, and the top frequencies stay at their starting level:
+     *  - loudness: the middle is lowered (lows and highs stay), the classic contour without boosting;
+     *  - treble up: everything below the highs is lowered; treble down: the highs are lowered.
+     * Both at 0 (and no pre-amp needed): no equalizer at all.
      */
     private fun applyTone(preamp: Float) {
         val s = _state.value
@@ -361,15 +364,14 @@ class PlayerController(private val context: Context, private val store: Store) {
         try {
             if (l == 0f && t == 0f && preamp == 0f) { mp.setEqualizer(null); return }
             val e = eq ?: MediaPlayer.Equalizer.create().also { eq = it }
-            val loudShape = floatArrayOf(1f, 0.7f, 0.35f, 0.1f, 0f, 0f, 0.1f, 0.3f, 0.5f, 0.6f)
-            val trebleShape = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0.15f, 0.4f, 0.8f, 1f, 1f)
-            var top = 0f
+            val midShape = floatArrayOf(0f, 0.3f, 0.65f, 0.9f, 1f, 1f, 0.85f, 0.55f, 0.25f, 0f)
+            val highShape = floatArrayOf(0f, 0f, 0f, 0f, 0f, 0.15f, 0.4f, 0.8f, 1f, 1f)
             for (b in 0 until 10) {
-                val g = (l * loudShape[b] + t * trebleShape[b]).coerceIn(-20f, 20f)
-                e.setAmp(b, g); if (g > top) top = g
+                val loudCut = -l * midShape[b]
+                val trebleCut = if (t >= 0f) -t * (1f - highShape[b]) else t * highShape[b]
+                e.setAmp(b, (loudCut + trebleCut).coerceIn(-20f, 0f))
             }
-            // Some headroom against distortion when boosting.
-            e.setPreAmp((preamp - top / 3f).coerceIn(-20f, 20f))
+            e.setPreAmp(preamp)
             mp.setEqualizer(e)
         } catch (_: Exception) {
         }
