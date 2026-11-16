@@ -437,7 +437,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val v = db.coerceIn(-12f, 0f)
         _state.value = _state.value.copy(radioPreDb = v)
         applySoundChain()
-        if (done) ToneStore.putPre(item.uri, v)
+        if (done) { ToneStore.putPre(item.uri, v); store.update { it.copy(settings = it.settings.copy(radioPreLast = v)) } }
     }
 
     /** Back to this song's own saved values (if it has some). */
@@ -454,7 +454,9 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun toneLeaving() {
         val s = _state.value
         val item = s.item ?: return
-        if (toneDirty) ToneStore.put(item, s.loudDb, s.trebleDb)
+        // Radio: every station played keeps its settings (loudness, treble, pre-amp), changed or not.
+        if (item.isRadio) { ToneStore.put(item, s.loudDb, s.trebleDb); ToneStore.putPre(item.uri, s.radioPreDb) }
+        else if (toneDirty) ToneStore.put(item, s.loudDb, s.trebleDb)
         toneDirty = false
     }
 
@@ -1257,7 +1259,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         // Loudness / treble: the song's (station's) own values at once, else the last ones; videos: none.
         val tone = if (item.isMusic || item.isRadio) toneFor(item) else Triple(0f, 0f, false)
         _state.value = _state.value.copy(loudDb = tone.first, trebleDb = tone.second, toneSaved = tone.third,
-            radioPreDb = if (item.isRadio) ToneStore.getPre(item.uri) ?: 0f else 0f)
+            radioPreDb = if (item.isRadio) ToneStore.getPre(item.uri) ?: store.current.settings.radioPreLast else 0f)
         loadReplayGain(item, _state.value)
         // No picture in the file: looked up here too (folder, pictures store, online), so the notification and lock
         // screen get it even while the app is in the background.
