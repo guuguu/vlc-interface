@@ -47,7 +47,8 @@ import kotlin.math.sqrt
  */
 object RadioCapture {
     data class Mark(val title: String, val offset: Long, val at: Long)
-    data class Pending(val title: String, val start: Long, val partialStart: Boolean, val station: String)
+    data class Pending(val title: String, val start: Long, val partialStart: Boolean, val station: String,
+                       val at: Long = System.currentTimeMillis(), val format: String = "")
     data class Status(
         val url: String = "", val running: Boolean = false, val format: String = "", val message: String = "",
         val pending: Pending? = null, val busy: String = "", val title: String = "", val titleStartKnown: Boolean = false,
@@ -87,7 +88,9 @@ object RadioCapture {
     }
 
     fun init(ctx: Context) {
+        // App ended last time in the middle of a song: its recording and any half-made save are simply dropped.
         dir = File(ctx.cacheDir, "radiocap").apply { deleteRecursively(); mkdirs() }
+        scope.launch { cleanLeftovers(ctx) }
         val player = App.instance.player
         // Follows the player and the network: on while a station plays and the setting allows it.
         scope.launch {
@@ -240,7 +243,7 @@ object RadioCapture {
             if (m.title.isBlank()) return "The station announces no song now"
             val first = segs.firstOrNull()?.start ?: 0
             val partial = !s.titleStartKnown || m.offset < first
-            status.value = s.copy(pending = Pending(m.title, maxOf(m.offset, first), partial, station))
+            status.value = s.copy(pending = Pending(m.title, maxOf(m.offset, first), partial, station, m.at, s.format))
             return if (partial) "“${m.title}” began before recording started: it is saved from the part recorded, when it ends"
             else "“${m.title}” will be saved when it ends"
         }
@@ -282,7 +285,7 @@ object RadioCapture {
             kotlinx.coroutines.withContext(saver) { status.value = status.value.copy(busy = "Saving “${p.title}”…"); try {
                 val where = save(App.instance, p, data, (p.start - from).toInt(), (end - from).toInt().coerceAtMost(data.size), partialEnd)
                 ServerLog.log("saved-songs", "save", "radio", "", true, p.title, "From ${p.station} → $where" + (if (p.partialStart) " · beginning missing" else "") + (if (partialEnd) " · end missing" else ""))
-                toast("Saved: ${p.title}")
+                toast((if (App.instance.store.current.settings.saveFormat == "original") "Saved: " else "Encoding ended: ") + where.substringAfterLast('/'), long = false)
             } catch (e: Throwable) {
                 ServerLog.log("saved-songs", "save", "radio", "", false, p.title, e.message ?: e.javaClass.simpleName)
                 toast("Saving “${p.title}” failed: ${e.message ?: e.javaClass.simpleName}")
@@ -290,7 +293,37 @@ object RadioCapture {
         }
     }
 
-    private fun toast(s: String) = Handler(Looper.getMainLooper()).post { Toast.makeText(App.instance, s, Toast.LENGTH_LONG).show() }
+    private fun toast(s: String, long: Boolean = true) = Handler(Looper.getMainLooper()).post {
+        Toast.makeText(App.instance, s, if (long) Toast.LENGTH_LONG else Toast.LENGTH_SHORT).show() }
+
+    /**
+     * Start-up clean-up after the app ended mid-save: files Android still holds as unfinished (ours) and
+     * "….part" files in the chosen folder's raw / mp3 are deleted.
+     */
+    private fun cleanLeftovers(ctx: Context) {
+        try {
+            val args = android.os.Bundle().apply {
+                putInt(MediaStore.QUERY_ARG_MATCH_PENDING, MediaStore.MATCH_ONLY)
+                putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, "${MediaStore.MediaColumns.OWNER_PACKAGE_NAME} = ?")
+                putStringArray(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, arrayOf(ctx.packageName))
+            }
+            val coll = MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+            ctx.contentResolver.query(coll, arrayOf(MediaStore.MediaColumns._ID), args, null)?.use { c ->
+                while (c.moveToNext()) try { ctx.contentResolver.delete(android.content.ContentUris.withAppendedId(coll, c.getLong(0)), null, null) } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
+        val tree = App.instance.store.current.settings.saveFolder
+        if (tree.isNotEmpty()) for (sub in listOf("raw", "mp3")) try {
+            val t = Uri.parse(tree)
+            val d = findDir(ctx, t, sub) ?: continue
+            val did = DocumentsContract.getDocumentId(d)
+            ctx.contentResolver.query(DocumentsContract.buildChildDocumentsUriUsingTree(t, did),
+                arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)?.use { c ->
+                while (c.moveToNext()) if (c.getString(1).endsWith(".part"))
+                    try { DocumentsContract.deleteDocument(ctx.contentResolver, DocumentsContract.buildDocumentUriUsingTree(t, c.getString(0))) } catch (_: Exception) {}
+            }
+        } catch (_: Exception) {}
+    }
 
     /** One audio frame of the stream. */
     private class Frame(val pos: Int, val len: Int, val samples: Int, val rate: Int, val channels: Int)
@@ -392,7 +425,7 @@ object RadioCapture {
     }
 
     private fun save(ctx: Context, p: Pending, data: ByteArray, startByte: Int, endByte: Int, partialEnd: Boolean): String {
-        val fmt = status.value.format.takeIf { it == "mp3" || it == "aac" } ?: throw Exception("format not supported")
+        val fmt = p.format.takeIf { it == "mp3" || it == "aac" } ?: throw Exception("format not supported")
         val fr = frames(data, fmt)
         if (fr.size < 20) throw Exception("too little audio recorded")
         val clean = File(dir, "clip.${if (fmt == "mp3") "mp3" else "aac"}")
@@ -429,22 +462,40 @@ object RadioCapture {
         val s = App.instance.store.current.settings
         val reencode = s.saveFormat != "original"
         val outExt = if (reencode || fmt == "mp3") "mp3" else "m4a"
-        val out = File(dir, "out.$outExt"); out.delete()
-        var lufs: Double; var peak: Float
-        if (reencode) {
-            val r = encodeMp3(clean, cutStart, cutEnd, out); lufs = r.first; peak = r.second
-        } else {
-            val i0 = t.indexOfFirst { it >= cutStart - 1e-6 }.coerceIn(0, fr.size - 1)
-            val i1 = t.indexOfFirst { it >= cutEnd - 1e-6 }.let { if (it < 0) fr.size else it }.coerceIn(i0 + 1, fr.size)
-            val part = File(dir, "part.${clean.extension}")
-            part.outputStream().use { o -> for (i in i0 until i1) o.write(data, fr[i].pos, fr[i].len) }
-            val m = measure(part); lufs = m.first; peak = m.second
-            if (fmt == "mp3") part.copyTo(out, true) else remuxAdts(part, out)
-            part.delete()
+        val out = File(dir, "out.$outExt")
+        var lufs = 0.0; var peak = 0f
+        fun produce() {
+            out.delete()
+            if (reencode) {
+                val r = encodeMp3(clean, cutStart, cutEnd, out); lufs = r.first; peak = r.second
+            } else {
+                val i0 = t.indexOfFirst { it >= cutStart - 1e-6 }.coerceIn(0, fr.size - 1)
+                val i1 = t.indexOfFirst { it >= cutEnd - 1e-6 }.let { if (it < 0) fr.size else it }.coerceIn(i0 + 1, fr.size)
+                val part = File(dir, "part.${clean.extension}")
+                part.outputStream().use { o -> for (i in i0 until i1) o.write(data, fr[i].pos, fr[i].len) }
+                val m = measure(part); lufs = m.first; peak = m.second
+                if (fmt == "mp3") part.copyTo(out, true) else remuxAdts(part, out)
+                part.delete()
+            }
+        }
+        // Low priority only makes it slower, never different — and it's checked anyway before it's saved: the file
+        // must read back whole (its length = the cut). If not, made again once at normal priority; a file that
+        // still fails is never saved.
+        val want = cutEnd - cutStart
+        produce()
+        if (!readsBack(out, want)) {
+            val tid = android.os.Process.myTid()
+            android.os.Process.setThreadPriority(tid, android.os.Process.THREAD_PRIORITY_DEFAULT)
+            try { produce() } finally { android.os.Process.setThreadPriority(tid, android.os.Process.THREAD_PRIORITY_LOWEST) }
+            if (!readsBack(out, want)) { out.delete(); clean.delete(); throw Exception("the made file did not check out — not saved") }
         }
         clean.delete()
         writeTags(out, p, artist, title, info, lufs, peak)
-        val name = safeName(listOf(info?.artist ?: artist, info?.title ?: title).filter { it.isNotBlank() }.joinToString(" - ").ifBlank { p.title }) + ".$outExt"
+        // No proper song name (nothing announced, the station's own name, "Live", ads …): YY_MM_DD_hr_min.
+        val nice = listOf(info?.artist ?: artist, info?.title ?: title).filter { it.isNotBlank() }.joinToString(" - ").ifBlank { p.title }.trim()
+        val proper = Regex("\\p{L}").containsMatchIn(nice) && !nice.equals(p.station, true) && !nice.contains("http", true) &&
+            !Regex("^(live|unknown|untitled|advert|advertisement|ad|ads|commercial|news|jingle|station id|n/a)$", RegexOption.IGNORE_CASE).matches(nice)
+        val name = (if (proper) safeName(nice) else java.text.SimpleDateFormat("yy_MM_dd_HH_mm", java.util.Locale.US).format(java.util.Date(p.at))) + ".$outExt"
         val (where, uri) = store(ctx, out, name, if (outExt == "mp3") "audio/mpeg" else "audio/mp4")
         out.delete()
         // Into today's session playlist.
@@ -453,6 +504,19 @@ object RadioCapture {
         Handler(Looper.getMainLooper()).post { try { App.instance.player.addToSession(listOf(item)) } catch (_: Exception) {} }
         return where
     }
+
+    /** The file opens and its length matches [wantSec] (±1.5 s or 2 %). */
+    private fun readsBack(f: File, wantSec: Double): Boolean = try {
+        if (!f.exists() || f.length() < 1000) false else {
+            val ex = MediaExtractor()
+            try {
+                ex.setDataSource(f.path)
+                val fm = if (ex.trackCount > 0) ex.getTrackFormat(0) else null
+                val us = if (fm != null && fm.containsKey(MediaFormat.KEY_DURATION)) fm.getLong(MediaFormat.KEY_DURATION) else -1L
+                us > 0 && abs(us / 1e6 - wantSec) <= maxOf(1.5, wantSec * 0.02)
+            } finally { ex.release() }
+        }
+    } catch (_: Exception) { false }
 
     private fun measure(f: File): Pair<Double, Float> {
         var meter: Loudness? = null
@@ -587,6 +651,17 @@ object RadioCapture {
         return vol to prefix.ifEmpty { "Music/" }
     }
 
+    private fun findDir(ctx: Context, tree: Uri, name: String): Uri? {
+        val parentId = DocumentsContract.getTreeDocumentId(tree)
+        ctx.contentResolver.query(DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId),
+            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE),
+            null, null, null)?.use { c ->
+            while (c.moveToNext()) if (c.getString(1) == name && c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR)
+                return DocumentsContract.buildDocumentUriUsingTree(tree, c.getString(0))
+        }
+        return null
+    }
+
     /** The sub-folder [name] of a chosen folder (Android folder access), made when missing. */
     private fun subDir(ctx: Context, tree: Uri, name: String): Uri {
         val parentId = DocumentsContract.getTreeDocumentId(tree)
@@ -610,9 +685,12 @@ object RadioCapture {
         val tree = App.instance.store.current.settings.saveFolder
         if (tree.isNotEmpty()) try {
             val dir = subDir(ctx, Uri.parse(tree), sub)
-            val doc = DocumentsContract.createDocument(ctx.contentResolver, dir, mime, name.substringBeforeLast('.'))
+            // Written as "<name>.part" and renamed when complete: an app ended mid-copy leaves only a .part (cleaned up).
+            val tmp = DocumentsContract.createDocument(ctx.contentResolver, dir, "application/octet-stream", "$name.part")
                 ?: throw Exception("folder refused the file")
-            ctx.contentResolver.openOutputStream(doc)!!.use { o -> f.inputStream().use { it.copyTo(o) } }
+            try { ctx.contentResolver.openOutputStream(tmp)!!.use { o -> f.inputStream().use { it.copyTo(o) } } }
+            catch (e: Exception) { try { DocumentsContract.deleteDocument(ctx.contentResolver, tmp) } catch (_: Exception) {}; throw e }
+            val doc = DocumentsContract.renameDocument(ctx.contentResolver, tmp, name) ?: tmp
             return (Uri.decode(tree).substringAfterLast(':').ifEmpty { "chosen folder" } + "/$sub/" + name) to doc.toString()
         } catch (e: Exception) {
             ServerLog.log("saved-songs", "folder", "local", "", false, "Chosen saved-songs folder not writable — saved next to the library", e.message ?: "")
