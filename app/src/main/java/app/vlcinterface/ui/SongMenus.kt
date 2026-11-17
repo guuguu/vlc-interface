@@ -1,6 +1,7 @@
 package app.vlcinterface.ui
 
 import android.content.ClipData
+import kotlinx.coroutines.launch
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -357,5 +358,91 @@ fun SaveEndQuestionHost() {
         },
         confirmButton = { STextButton({ say(RadioCapture.answerStop()) }) { Text("Stop and save", color = accent(), fontWeight = FontWeight.Bold) } },
         dismissButton = { STextButton({ RadioCapture.answerDiscard(); say("Discarded") }) { Text("Discard everything", color = C.bad) } },
+    )
+}
+
+/**
+ * "Saved songs": every song saved from the radio, newest first — tap to play, tick to choose, delete the chosen
+ * ones or all of them (after a confirmation). Deleted songs also leave the playlists and the queue.
+ */
+@Composable
+fun SavedSongsDialog(onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    val list by app.vlcinterface.sources.SavedSongs.list.collectAsState()
+    var chosen by remember { mutableStateOf(setOf<String>()) }
+    var confirm by remember { mutableStateOf<List<app.vlcinterface.sources.SavedSongs.Entry>?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var pendingAsk by remember { mutableStateOf<List<app.vlcinterface.sources.SavedSongs.Entry>>(emptyList()) }
+    // Files Android wants confirmed (saved before into the media library by another way): its own question.
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()) { r ->
+        val items = pendingAsk; pendingAsk = emptyList()
+        if (r.resultCode == android.app.Activity.RESULT_OK) scope.launch(kotlinx.coroutines.Dispatchers.IO) { app.vlcinterface.sources.SavedSongs.forgetDeleted(ctx, items) }
+    }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            app.vlcinterface.sources.SavedSongs.prune(ctx); app.vlcinterface.sources.SavedSongs.discover(ctx)
+        }
+    }
+    fun delete(items: List<app.vlcinterface.sources.SavedSongs.Entry>) {
+        busy = true
+        scope.launch {
+            val n = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { app.vlcinterface.sources.SavedSongs.delete(ctx, items) }
+            val left = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { items.filter { app.vlcinterface.sources.SavedSongs.exists(ctx, it) } }
+            busy = false; chosen = emptySet()
+            val uris = app.vlcinterface.sources.SavedSongs.needsConfirm(ctx, left)
+            if (uris.isNotEmpty()) {
+                pendingAsk = left
+                try { ask.launch(androidx.activity.result.IntentSenderRequest.Builder(MediaStore.createDeleteRequest(ctx.contentResolver, uris).intentSender).build()) }
+                catch (_: Exception) {}
+            }
+            if (n > 0) Toast.makeText(ctx, "$n deleted", Toast.LENGTH_SHORT).show()
+        }
+    }
+    confirm?.let { items ->
+        AlertDialog(onDismissRequest = { confirm = null }, containerColor = C.panel,
+            title = { Text("Delete ${items.size} saved song${if (items.size == 1) "" else "s"}?", color = C.text) },
+            text = { Text("The files are deleted for good, and taken out of the playlists.", color = C.muted, fontSize = 13.sp) },
+            confirmButton = { STextButton({ confirm = null; delete(items) }) { Text("Delete", color = C.bad, fontWeight = FontWeight.Bold) } },
+            dismissButton = { STextButton({ confirm = null }) { Text("Cancel") } })
+    }
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("Saved songs (${list.size})", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (list.isEmpty()) Text("No songs saved from the radio yet.", color = C.muted, fontSize = 13.sp)
+                else {
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (chosen.size < list.size) Pill("Select all") { chosen = list.map { it.uri }.toSet() }
+                        if (chosen.isNotEmpty()) Pill("Deselect all") { chosen = emptySet() }
+                        if (chosen.isNotEmpty()) Pill("Delete ${chosen.size}", filled = true) { confirm = list.filter { it.uri in chosen } }
+                        Pill("Delete all") { confirm = list }
+                    }
+                    if (busy) Text("Deleting…", color = accent(), fontSize = 12.sp)
+                    val ls = androidx.compose.foundation.lazy.rememberLazyListState()
+                    androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 440.dp).scrollbar(ls), state = ls) {
+                        items(list.size) { k ->
+                            val e = list[k]
+                            val on = e.uri in chosen
+                            Row(Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                                .background(if (on) accent().copy(alpha = 0.2f) else androidx.compose.ui.graphics.Color.Transparent)
+                                .clickable {
+                                    // Tap: play it (with songs ticked: tick / untick).
+                                    if (chosen.isNotEmpty()) chosen = if (on) chosen - e.uri else chosen + e.uri
+                                    else { app.vlcinterface.App.instance.player.play(PlayItem(e.uri, e.name.substringBeforeLast('.'), fileName = e.name, folderKey = e.folderKey)); onDone() }
+                                }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                SCheckbox(on, { chosen = if (it) chosen + e.uri else chosen - e.uri })
+                                Column(Modifier.weight(1f)) {
+                                    Text(e.name, color = C.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(listOfNotNull(e.station.ifEmpty { null }, java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(e.at)),
+                                        e.path.substringBeforeLast('/').ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
     )
 }

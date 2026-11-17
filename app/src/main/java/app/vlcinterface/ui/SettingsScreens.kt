@@ -126,6 +126,10 @@ fun SettingsScreen(nav: Navigator) {
                     set(s.copy(radioCapture = when (s.radioCapture) { "wifi" -> "always"; "always" -> "off"; else -> "wifi" }))
                 }
                 Divider()
+                var savedList by remember { mutableStateOf(false) }
+                if (savedList) SavedSongsDialog { savedList = false }
+                ValueRow("Saved songs", "Play or delete the songs saved from the radio", "Open") { savedList = true }
+                Divider()
                 ValueRow("Saved songs log", "Each song saved, or why not", "Open") { nav.go(Screen.LogPage("saved-songs")) }
                 Divider()
                 ValueRow("MP3 encoder", "LAME ${app.vlcinterface.sources.Mp3Encoder.version} — LGPL, bundled unchanged as libmp3lame.so (lame.sourceforge.io)", "") {}

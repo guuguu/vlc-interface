@@ -945,6 +945,8 @@ object RadioCapture {
             album = info?.album ?: "", trackNo = info?.trackNo ?: 0, durationMs = ((cutEnd - cutStart) * 1000).toLong(), fileName = name,
             folderKey = lastFolderKey)
         Handler(Looper.getMainLooper()).post { try { App.instance.player.addToSession(listOf(item)) } catch (_: Exception) {} }
+        // Listed in "Saved songs" (play, delete).
+        SavedSongs.add(SavedSongs.Entry(name, where, uri, lastDocUri, p.station, System.currentTimeMillis(), lastFolderKey))
         return where
     }
 
@@ -1141,9 +1143,11 @@ object RadioCapture {
      */
     /** Folder key of the saved file for the Library ("local:<volume>:<relative path>"), to open its folder. */
     @Volatile private var lastFolderKey = ""
+    /** Folder-access address of the saved file (chosen folders), to delete it later. */
+    @Volatile private var lastDocUri = ""
 
     private fun store(ctx: Context, f: File, name: String, mime: String, out: String): Pair<String, String> {
-        lastFolderKey = ""
+        lastFolderKey = ""; lastDocUri = ""
         val sub = if (out == "original") "raw" else "mp3"
         val tree = App.instance.store.current.settings.saveFolder
         if (tree.isNotEmpty()) try {
@@ -1163,6 +1167,7 @@ object RadioCapture {
                 lastFolderKey = "local:$v:$dirRel/"
             }
             val media = path?.let { mediaUri(ctx, it) }
+            lastDocUri = doc.toString()
             return (path ?: (Uri.decode(tree).substringAfterLast(':').ifEmpty { "chosen folder" } + "/$sub/" + name)) to (media ?: doc.toString())
         } catch (e: Exception) {
             ServerLog.log("saved-songs", "folder", "local", "", false, "Chosen saved-songs folder not writable — saved next to the library", e.message ?: "")
