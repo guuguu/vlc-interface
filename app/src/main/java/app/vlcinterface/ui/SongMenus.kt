@@ -32,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -559,19 +560,33 @@ fun VpnQuestionsHost() {
 
 
 /**
- * Small Shazam launcher for the players' header: opens Shazam (it can listen to this app's sound directly —
- * pick this app when it asks). Only a plain search mark and the name, no Shazam logo.
+ * Small Shazam launcher for the players' header: Shazam's own app icon, taken from the installed Shazam app (as
+ * launchers and share menus show it) in a small circle. Not installed: a search mark and the name. Opens Shazam
+ * (it can listen to this app's sound directly — pick this app when it asks).
  */
 @Composable
 fun ShazamButton(tint: androidx.compose.ui.graphics.Color = C.text) {
     val ctx = LocalContext.current
-    androidx.compose.foundation.layout.Row(
-        Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
-            .border(1.dp, tint.copy(alpha = 0.45f), androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
-            .clickable { openShazam(ctx) }.padding(start = 5.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Search, "Open Shazam", tint = tint,
-            modifier = Modifier.size(16.dp))
-        Text("Shazam", color = tint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+    val icon = remember {
+        try {
+            val d = ctx.packageManager.getApplicationIcon("com.shazam.android")
+            val bmp = android.graphics.Bitmap.createBitmap(96, 96, android.graphics.Bitmap.Config.ARGB_8888)
+            val c = android.graphics.Canvas(bmp); d.setBounds(0, 0, 96, 96); d.draw(c)
+            bmp.asImageBitmap()
+        } catch (_: Exception) { null }
+    }
+    if (icon != null) {
+        androidx.compose.foundation.Image(icon, "Open Shazam",
+            Modifier.size(28.dp).clip(androidx.compose.foundation.shape.CircleShape).clickable { openShazam(ctx) })
+    } else {
+        androidx.compose.foundation.layout.Row(
+            Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                .border(1.dp, tint.copy(alpha = 0.45f), androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+                .clickable { openShazam(ctx) }.padding(start = 5.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Search, "Open Shazam", tint = tint,
+                modifier = Modifier.size(16.dp))
+            Text("Shazam", color = tint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        }
     }
 }
