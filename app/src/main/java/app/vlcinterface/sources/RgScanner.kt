@@ -441,6 +441,8 @@ object RgScanner {
         if (target == RgTarget.APP || (item.uri.startsWith("content://") && !phoneAllowed)) {
             RgStore.put(item.uri, values); return "kept in the app"
         }
+        // Read-only share: kept in the app straight away (counts as saved, nothing is sent to the share).
+        if (WriteGuard.isReadOnly(item)) { RgStore.put(item.uri, values); return "kept in the app (share is read-only)" }
         val src = App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }
         val ext = item.ext.lowercase()
         val tmp = File(ctx.cacheDir, "rgscan-${java.util.UUID.randomUUID()}.${ext.ifEmpty { "bin" }}")
@@ -469,7 +471,9 @@ object RgScanner {
             "written to the file"
         } catch (e: Exception) {
             RgStore.put(item.uri, values)
-            "not written (${e.message ?: e.javaClass.simpleName}) — kept in the app"
+            // Refused for good (read-only share): marked, and this song's values count as kept in the app.
+            if (WriteGuard.isDenied(e)) { WriteGuard.markReadOnly(item.sourceId, item.uri, e.message ?: "refused"); "kept in the app (share is read-only)" }
+            else "not written (${e.message ?: e.javaClass.simpleName}) — kept in the app"
         } finally { tmp.delete() }
     }
 
@@ -572,6 +576,8 @@ object RgScanner {
                     val item = MusicLibrary.fromPlEntry(PlEntry.fromJson(o.getJSONObject("e")))
                     if (!f.exists()) continue
                     if (item.uri == playing) { keep.put(o); continue }
+                    // Share read-only meanwhile: the values stay in the app, the waiting copy is dropped.
+                    if (WriteGuard.isReadOnly(item)) { f.delete(); continue }
                     try {
                         quietCopy.set(true)
                         upload(app, item, App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }, f)

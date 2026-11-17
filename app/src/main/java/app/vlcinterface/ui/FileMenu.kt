@@ -211,11 +211,17 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                 confirmButton = { STextButton({
                     val target = f; pick = null
                     scope.launch {
+                        // Read-only share: nothing is sent; the file can still be hidden from the lists.
+                        if (app.vlcinterface.sources.WriteGuard.isReadOnly(target)) {
+                            note = "Not deleted: the share is read-only. Use Hide in the file's menu to take it out of the lists (\"Check write access\" on the server tests the share again)."
+                            return@launch
+                        }
                         val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                             try {
                                 jcifs.smb.SmbFile(Uri.decode(target.uri), app.vlcinterface.sources.SmbProbe.fileContext(target.smbVersion, target.user, target.password, target.domain))
                                     .use { it.delete() }; true
                             } catch (e: Exception) {
+                                if (app.vlcinterface.sources.WriteGuard.isDenied(e)) app.vlcinterface.sources.WriteGuard.markReadOnly(target.sourceId, target.uri, e.message ?: "refused")
                                 note = "Not deleted: ${e.message ?: e.javaClass.simpleName}"
                                 app.vlcinterface.data.ServerLog.log(app.vlcinterface.data.ServerLog.DELETED, "delete", "SMB", target.user, false,
                                     "Not deleted ${Uri.decode(target.uri)}: ${e.message ?: e.javaClass.simpleName}", target.uri)

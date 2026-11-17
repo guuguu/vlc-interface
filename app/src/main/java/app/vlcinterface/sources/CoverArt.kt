@@ -265,7 +265,8 @@ object CoverArt {
         val inFolder = inAlbumFolder(ctx, item, pl)
         val memKey = if (inFolder) pl!!.key else "store:" + item.uri
         if (!force) mem.get(memKey)?.let { mem.put(item.uri, it); return@withContext Result(it, "") }
-        val local = if (inFolder) readFolder(ctx, pl!!)
+        // A one-album folder on a read-only share keeps its picture in the pictures folder: looked for there too.
+        val local = if (inFolder) readFolder(ctx, pl!!) ?: storeFind(item, artist, album)?.readBytes()
             else storeFind(item, artist, album)?.readBytes()
         local?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.let { mem.put(memKey, it); mem.put(item.uri, it); return@withContext Result(it, "") }
         if (!online) return@withContext Result(null, "")
@@ -281,7 +282,18 @@ object CoverArt {
             val f = storeSave(item, artist, album, isArtist, jpeg)
             return@withContext Result(bmp, if (f != null) "$what saved in the pictures folder (${f.name}) — this folder mixes albums" else "not saved")
         }
+        // Read-only share (marked, or refusing now): the picture goes to the app's pictures folder instead.
+        val roItem = (pl as? Smb)?.item ?: (pl as? Web)?.item
+        if (roItem != null && WriteGuard.isReadOnly(roItem)) {
+            val f = storeSave(item, artist, album, isArtist, jpeg)
+            return@withContext Result(bmp, if (f != null) "$what saved in the pictures folder (${f.name}) — the share is read-only" else "not saved")
+        }
         val why = saveFolder(ctx, pl!!, name, jpeg)
+        if (why.isNotEmpty() && roItem != null && why.contains("denied", true)) {
+            WriteGuard.markReadOnly(roItem.sourceId, roItem.uri, why)
+            val f = storeSave(item, artist, album, isArtist, jpeg)
+            return@withContext Result(bmp, if (f != null) "$what saved in the pictures folder (${f.name}) — the share is read-only" else why)
+        }
         Result(bmp, if (why.isEmpty()) "$what saved in the album folder ($name)" else why)
     }
 
@@ -597,7 +609,18 @@ object CoverArt {
             return@withContext Result(bmp, if (f != null) "Album picture saved in the pictures folder (${f.name})" else "not saved")
         }
         mem.put(pl!!.key, bmp); mem.put(item.uri, bmp)
+        // Read-only share: into the app's pictures folder instead.
+        val roItem = (pl as? Smb)?.item ?: (pl as? Web)?.item
+        if (roItem != null && WriteGuard.isReadOnly(roItem)) {
+            val f = storeSave(item, item.artist, item.album, false, jpeg)
+            return@withContext Result(bmp, if (f != null) "Album picture saved in the pictures folder (${f.name}) — the share is read-only" else "not saved")
+        }
         val why = saveFolder(ctx, pl, "cover.jpg", jpeg)
+        if (why.isNotEmpty() && roItem != null && why.contains("denied", true)) {
+            WriteGuard.markReadOnly(roItem.sourceId, roItem.uri, why)
+            val f = storeSave(item, item.artist, item.album, false, jpeg)
+            return@withContext Result(bmp, if (f != null) "Album picture saved in the pictures folder (${f.name}) — the share is read-only" else why)
+        }
         Result(bmp, if (why.isEmpty()) "Album picture saved in the album folder (cover.jpg)" else why)
     }
 

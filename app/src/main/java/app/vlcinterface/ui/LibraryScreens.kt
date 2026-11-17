@@ -470,6 +470,7 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
                 nav.go(Screen.Browse(s.id, Urls.forSource(s), s.name, highlight = "\u0000rescan"))
             }.padding(horizontal = 12.dp, vertical = 7.dp)) { Text("↻ Rescan", color = a, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
         }
+        if (s.proto == "smb") WriteAccessRow(s)
     }
 }
 
@@ -771,3 +772,27 @@ object ListCache {
 
 /** The phone's folder list as last read: shown at once when coming back (no empty flash, place kept). */
 object InternalCache { @Volatile var folders: List<LocalFolder>? = null }
+
+
+/** Read-only marks of a server's shares, and "Check write access" to test them again (and use them r/w if writable). */
+@Composable
+private fun WriteAccessRow(s: Source) {
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var result by remember { mutableStateOf("") }
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (s.readOnly.isEmpty()) "Write access: read / write" else "Read-only: " + s.readOnly.joinToString(", ") { if (it == "*") "whole server" else it },
+                color = if (s.readOnly.isEmpty()) C.muted else C.bad, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable(enabled = !busy) {
+                busy = true; result = ""
+                scope.launch { result = app.vlcinterface.sources.WriteGuard.check(s).joinToString("\n"); busy = false }
+            }.padding(horizontal = 10.dp, vertical = 6.dp)) {
+                if (busy) CircularProgressIndicator(color = accent(), strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                else Text("Check write access", color = accent(), fontSize = 12.sp)
+            }
+        }
+        if (result.isNotEmpty()) Text(result, color = C.text, fontSize = 12.sp)
+        if (s.readOnly.isNotEmpty()) Text("ReplayGain values and pictures for these shares are kept in the app.", color = C.muted, fontSize = 11.sp)
+    }
+}

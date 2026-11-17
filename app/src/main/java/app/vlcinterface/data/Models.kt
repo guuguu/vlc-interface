@@ -22,6 +22,8 @@ data class Source(
     val pins: List<String> = emptyList(),
     val smbVersion: String = "",
     val lastScan: Long = 0L,
+    /** Shares found read-only (writes to them are kept in the app); "*" = the whole server. */
+    val readOnly: List<String> = emptyList(),
 ) {
     val defaultPort: Int
         get() = when (proto) {
@@ -35,7 +37,7 @@ data class Source(
         .put("host", host).put("port", port).put("path", path).put("user", user)
         .put("password", passwordTransform(password)).put("domain", domain)
         .put("wifiOnly", wifiOnly).put("pins", JSONArray(pins)).put("smbVersion", smbVersion)
-        .put("lastScan", lastScan)
+        .put("lastScan", lastScan).put("readOnly", JSONArray(readOnly))
 
     companion object {
         fun fromJson(o: JSONObject, passwordTransform: (String) -> String) = Source(
@@ -53,6 +55,7 @@ data class Source(
             pins = o.optJSONArray("pins").strings(),
             smbVersion = o.optString("smbVersion"),
             lastScan = o.optLong("lastScan", 0L),
+            readOnly = o.optJSONArray("readOnly").strings(),
         )
     }
 }
