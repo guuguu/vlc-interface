@@ -48,7 +48,13 @@ static f_clock p_clock;
 static void *g_mp;                 /* libvlc_media_player_t* we are attached to */
 static pthread_mutex_t g_lock = PTHREAD_MUTEX_INITIALIZER;
 static AAudioStream *g_stream;
-static unsigned g_rate = 48000;
+static unsigned g_rate = 48000;   /* rate the device plays at */
+/* Rate libVLC sends (agreed in setup). When the output reopens by itself (headphones, Bluetooth, device switch)
+   Android may give another rate: the sound is then converted here, so it never plays faster/slower or off pitch. */
+static unsigned g_src = 0;
+static double g_rsPh = 0.0;          /* resampler: next output position, in input frames */
+static float g_rsHist[3 * 2];        /* resampler: last 3 input frames (L,R) */
+static unsigned g_rsFrom = 0, g_rsTo = 0;
 static atomic_int g_device;        /* output device chosen in the app (0 = Android's default routing) */
 static atomic_bool g_disconnected;
 static bool g_started;
@@ -121,7 +127,8 @@ static bool open_stream(void) {
     if (AAudio_createStreamBuilder(&b) != AAUDIO_OK) return false;
     AAudioStreamBuilder_setFormat(b, AAUDIO_FORMAT_PCM_FLOAT);
     AAudioStreamBuilder_setChannelCount(b, 2);
-    AAudioStreamBuilder_setSampleRate(b, (int32_t)g_rate);
+    /* Always ask for the song's rate; Android may still give another one (then converted in cb_play). */
+    AAudioStreamBuilder_setSampleRate(b, (int32_t)(g_src ? g_src : g_rate));
     AAudioStreamBuilder_setUsage(b, AAUDIO_USAGE_MEDIA);
     AAudioStreamBuilder_setContentType(b, AAUDIO_CONTENT_TYPE_MUSIC);
     AAudioStreamBuilder_setPerformanceMode(b, AAUDIO_PERFORMANCE_MODE_NONE);
@@ -205,7 +212,7 @@ static bool g_eqActive;
 static float g_prevL = 1.f, g_prevR = 1.f;    /* overall gains of the previous buffer (ramp start) */
 
 static void eq_design(int b, float db) {
-    float fs = (float)g_rate, f = EQ_F[b];
+    float fs = (float)(g_src ? g_src : g_rate), f = EQ_F[b];   /* the EQ works on the song's samples */
     if (f > fs * 0.45f) f = fs * 0.45f;
     float A = powf(10.f, db / 40.f), w0 = 2.f * (float)M_PI * f / fs, cw = cosf(w0), al = sinf(w0) / (2.f * EQ_Q[b]);
     float a0 = 1.f + al / A;
@@ -241,6 +248,44 @@ static inline float eq_run(float x, int ch) {
     return x;
 }
 
+/*
+ * Rate conversion (only when the device reopened at another rate than libVLC sends): cubic Hermite interpolation
+ * with 3 frames kept between buffers, so blocks join without clicks. in: n frames (L,R) at g_src;
+ * out: frames at g_rate. Returns the number of output frames.
+ */
+static float g_rsExt[(4096 + 3) * 2];
+static float g_rsOut[(4096 * 24 + 64) * 2];
+static unsigned resample(const float *in, unsigned n) {
+    if (g_rsFrom != g_src || g_rsTo != g_rate) {      /* new pair of rates: start clean */
+        g_rsFrom = g_src; g_rsTo = g_rate; g_rsPh = 0.0;
+        memset(g_rsHist, 0, sizeof g_rsHist);
+    }
+    double step = (double)g_src / (double)g_rate;
+    memcpy(g_rsExt, g_rsHist, sizeof g_rsHist);
+    memcpy(g_rsExt + 6, in, (size_t)n * 2 * sizeof(float));
+    unsigned o = 0, cap = sizeof g_rsOut / sizeof(float) / 2;
+    /* ext index of input frame k is k + 3 (frames -3..-1 are the history). */
+    while (o < cap) {
+        long i = (long)floor(g_rsPh);
+        if (i > (long)n - 3) break;                       /* needs frames i-1 .. i+2 */
+        float t = (float)(g_rsPh - (double)i);
+        for (int c = 0; c < 2; c++) {
+            float y0 = g_rsExt[(i + 2) * 2 + c], y1 = g_rsExt[(i + 3) * 2 + c];
+            float y2 = g_rsExt[(i + 4) * 2 + c], y3 = g_rsExt[(i + 5) * 2 + c];
+            float a = -0.5f * y0 + 1.5f * y1 - 1.5f * y2 + 0.5f * y3;
+            float b = y0 - 2.5f * y1 + 2.f * y2 - 0.5f * y3;
+            float cc = -0.5f * y0 + 0.5f * y2;
+            g_rsOut[o * 2 + c] = ((a * t + b) * t + cc) * t + y1;
+        }
+        o++; g_rsPh += step;
+    }
+    g_rsPh -= (double)n;
+    /* Keep the last 3 input frames for the next block. */
+    if (n >= 3) memcpy(g_rsHist, in + (n - 3) * 2, sizeof g_rsHist);
+    else { memmove(g_rsHist, g_rsHist + n * 2, (3 - n) * 2 * sizeof(float)); memcpy(g_rsHist + (3 - n) * 2, in, n * 2 * sizeof(float)); }
+    return o;
+}
+
 /* libVLC's audio thread feeding our output: raised once to Android's "urgent audio" priority (-19), the level
  * the system's own audio threads use, so other work on the phone doesn't make the sound stutter. */
 static __thread int t_prio_done = 0;
@@ -258,7 +303,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
         open_stream();
     }
     atomic_fetch_add(&st_play, 1);
-    if (!g_stream) { pthread_mutex_unlock(&g_lock); usleep((useconds_t)((int64_t)count * 1000000 / g_rate)); return; }
+    if (!g_stream) { pthread_mutex_unlock(&g_lock); usleep((useconds_t)((int64_t)count * 1000000 / (g_src ? g_src : g_rate))); return; }
     if (!g_started) ensure_started();
 
     /* Wait until it is time to hand this buffer to the device (keeps lip sync).
@@ -302,7 +347,9 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
             if (al > pl) pl = al;
             if (ar > pr) pr = ar;
         }
-        int32_t w = AAudioStream_write(g_stream, buf, (int32_t)n, 1000000000LL);
+        const float *outp = buf; int32_t outN = (int32_t)n;
+        if (g_src && g_src != g_rate) { outN = (int32_t)resample(buf, n); outp = g_rsOut; }
+        int32_t w = outN > 0 ? AAudioStream_write(g_stream, outp, outN, 1000000000LL) : 0;
         atomic_store(&st_lastWrite, w);
         if (w < 0) { atomic_store(&g_disconnected, true); break; }
         if (w == 0 && !g_started) ensure_started();
@@ -368,14 +415,16 @@ static int cb_setup(void **opaque, char *format, unsigned *rate, unsigned *chann
     *channels = 2;
     if (*rate < 8000 || *rate > 192000) *rate = 48000;
     pthread_mutex_lock(&g_lock);
-    if (!g_stream || g_rate != *rate) {
-        g_rate = *rate;
+    if (!g_stream || g_src != *rate) {
+        g_src = *rate;
         if (!open_stream()) {
             /* Some devices refuse the file's rate: try the usual 48 kHz and let libVLC resample. */
-            g_rate = 48000;
+            g_src = 48000;
             if (!open_stream()) { pthread_mutex_unlock(&g_lock); atomic_store(&st_setupRes, -1); return -1; }
         }
-        *rate = g_rate; /* device may have picked another rate: libVLC resamples */
+        *rate = g_rate; /* device may have picked another rate: libVLC resamples to it */
+        g_src = g_rate;
+        g_eqRateChanged = true;
     }
     atomic_store(&st_rate, g_rate);
     pthread_mutex_unlock(&g_lock);
