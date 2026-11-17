@@ -162,7 +162,7 @@ object ParallelFetch {
                     val h = handles.getOrPut(lane) { smbLane(p, targetUri, lane).openRandomAccess("rw") as SmbRandomAccessFile }
                     synchronized(h) { h.seek(pos); h.write(buf, 0, len) }
                 }
-                override fun close() { handles.forEach { try { it.close() } catch (_: Exception) {} } }
+                override fun close() { handles.values.forEach { try { it.close() } catch (_: Exception) {} } }
             }
             try {
                 val t0 = System.currentTimeMillis()
