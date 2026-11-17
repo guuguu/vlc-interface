@@ -358,7 +358,7 @@ fun SaveEndQuestionHost() {
                 Text("No end of " + (title?.let { "“$it”" } ?: "the song") + " was detected in 10 minutes. Recording goes on.", color = C.text, fontSize = 14.sp)
                 Text("Continue for", color = C.muted, fontSize = 13.sp)
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(2, 5, 10, 15).forEach { m -> Pill("$m min") { say(RadioCapture.answerContinue(m)) } }
+                    listOf(3, 5).forEach { m -> Pill("$m min") { say(RadioCapture.answerContinue(m)) } }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     androidx.compose.material3.OutlinedTextField(custom, { v -> custom = v.filter { it.isDigit() }.take(3) }, singleLine = true,
