@@ -358,8 +358,10 @@ object RgScanner {
         val net = toMeasure.filter { (it.uri.startsWith("smb://") || it.uri.startsWith("http")) && Prefetch.localFor(it.uri) == null }
         net.forEach { ready[it.uri] = kotlinx.coroutines.CompletableDeferred() }
         measuredCopies.clear(); reserved.set(0)
-        val dlWorkers = net.size.coerceIn(0, 2)
-        copyThreads = maxOf(2, 8 / maxOf(1, dlWorkers))
+        // One file downloading at a time: small servers (router USB shares) slow down badly — even refuse —
+        // with many connections; its connection count is still tuned (more only when it really is faster).
+        val dlWorkers = net.size.coerceIn(0, 1)
+        copyThreads = 8
         val dl = if (net.isEmpty()) null else scope.launch {
             val next = java.util.concurrent.atomic.AtomicInteger(0)
             kotlinx.coroutines.coroutineScope {
@@ -489,8 +491,8 @@ object RgScanner {
             // kept for the tag update that follows. A cached copy (next song) is used as it is.
             // Copied ahead by the download workers (waits for it if still coming), else copied here.
             val pending = ready[uri]
-            val local = if (pending != null) kotlinx.coroutines.runBlocking { pending.await() }      // copy from the download workers
-                else netCopy(ctx, item, copyThreads) { f -> onProgress(f * 0.5f) }
+            val local = (if (pending != null) kotlinx.coroutines.runBlocking { pending.await() } else null)   // copy from the download worker
+                ?: netCopy(ctx, item, copyThreads) { f -> onProgress(f * 0.5f) }                             // none: one more try here
             val base = if (local != null && (uri.startsWith("smb://") || uri.startsWith("http"))) 0.5f else 0f
             when {
                 local != null -> ex.setDataSource(local.path)
