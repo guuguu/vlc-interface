@@ -270,9 +270,11 @@ object RadioCapture {
             // ~22 minutes kept; under 100 GB free, at most 30 % of the free space (announced once).
             val b = budget()
             val keepSegs = if (b == Long.MAX_VALUE) 44 else (b / segBytes).toInt().coerceIn(0, 44)
-            if (keepSegs < 2) { status.value = status.value.copy(format = "unsupported", running = false,
-                message = "Not enough free space to record (${gb(freeBytes())} free)"); return null }
-            if (b != Long.MAX_VALUE && !reconnect) toast("Free space ${gb(freeBytes())}: recording limited to 30 % (${gb(b)})" +
+            if (keepSegs < 2) {
+                val m = "Not enough free space to record: ${gb(freeBytes())} free, recordings may use ${pct()} % (${gb(b)})"
+                status.value = status.value.copy(format = "unsupported", running = false, message = m); spaceNote(m); return null
+            }
+            if (b != Long.MAX_VALUE && !reconnect) spaceNote("Free space ${gb(freeBytes())}: recording limited to ${pct()} % (${gb(b)})" +
                 (if (keepSegs < 44) " — ${keepSegs / 2} min kept" else ""), long = false)
             synchronized(lock) {
                 // A new connection continues nothing: what was recorded before has a hole after it, so a song in
@@ -370,8 +372,18 @@ object RadioCapture {
     private const val GB = 1024L * 1024 * 1024
     /** Free bytes where recordings go (the phone's shared storage; the kept minutes are on the same storage). */
     private fun freeBytes(): Long = try { android.os.StatFs(android.os.Environment.getExternalStorageDirectory().path).availableBytes } catch (_: Exception) { Long.MAX_VALUE }
-    /** Under 100 GB free: recording may use at most 30 % of it; otherwise no limit. */
-    private fun budget(): Long = freeBytes().let { f -> if (f < 100 * GB) (f * 0.3).toLong() else Long.MAX_VALUE }
+    /** Under the set free space (Settings → Saved songs; 100 GB), recording may use the set share of it (30 %). */
+    private fun budget(): Long {
+        val s = App.instance.store.current.settings
+        return freeBytes().let { f -> if (s.spaceUnderGb > 0 && f < s.spaceUnderGb * GB) (f * s.spacePercent / 100.0).toLong() else Long.MAX_VALUE }
+    }
+    private fun pct() = App.instance.store.current.settings.spacePercent
+    /** Every space decision is said (pop-up) and written in the Saved songs log, with the free space. */
+    private fun spaceNote(msg: String, long: Boolean = true) {
+        toast(msg, long)
+        ServerLog.log("saved-songs", "space", "radio", "", false, msg,
+            "free ${gb(freeBytes())} · limit: under ${App.instance.store.current.settings.spaceUnderGb} GB free, ${pct()} % of it")
+    }
     private fun gb(b: Long) = "%.1f GB".format(java.util.Locale.US, b / GB.toDouble())
 
     /** Bytes a save of [sec] seconds needs (MP3 V0 ≈ 40 kB/s at most, else as the station sends it). */
@@ -381,7 +393,10 @@ object RadioCapture {
     private fun spaceFor(sec: Double): String? {
         val b = budget(); if (b == Long.MAX_VALUE) return null
         val need = estimate(sec)
-        return if (need > b) "Not enough free space: ${gb(freeBytes())} free, recordings may use 30 % (${gb(b)}); this needs about ${gb(need)}" else null
+        if (need <= b) return null
+        val m = "Not enough free space: ${gb(freeBytes())} free, recordings may use ${pct()} % (${gb(b)}); this needs about ${gb(need)} — Settings → Saved songs to change the limit"
+        ServerLog.log("saved-songs", "space", "radio", "", false, m)
+        return m
     }
 
     fun saveCurrent(name: String = ""): String {
@@ -473,7 +488,7 @@ object RadioCapture {
         if (b != Long.MAX_VALUE && estimate((System.currentTimeMillis() - p.at) / 1000.0) >= b) synchronized(lock) {
             if (status.value.pending === p) {
                 status.value = status.value.copy(pending = null); finishLater(p, total, partialEnd = false)
-                toast("Free space limit reached (30 % of ${gb(freeBytes())}): recording stopped and saved")
+                spaceNote("Free space limit reached (${pct()} % of ${gb(freeBytes())} free): recording stopped and saved")
             }
             return
         }

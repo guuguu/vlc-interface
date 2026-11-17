@@ -126,6 +126,19 @@ fun SettingsScreen(nav: Navigator) {
                     set(s.copy(radioCapture = when (s.radioCapture) { "wifi" -> "always"; "always" -> "off"; else -> "wifi" }))
                 }
                 Divider()
+                // Free space: under X GB free, recordings may use Y % of it (every decision is said and logged).
+                ValueRow("Free space limit", if (s.spaceUnderGb == 0) "Off: recordings use any free space"
+                    else "When under ${s.spaceUnderGb} GB free, recordings use at most ${s.spacePercent} % of it",
+                    if (s.spaceUnderGb == 0) "Off" else "< ${s.spaceUnderGb} GB") {
+                    val opts = listOf(100, 200, 50, 25, 10, 0); set(s.copy(spaceUnderGb = opts[(opts.indexOf(s.spaceUnderGb) + 1).mod(opts.size)]))
+                }
+                if (s.spaceUnderGb > 0) {
+                    Divider()
+                    ValueRow("Share of free space", "Recordings (kept minutes and saves) may use", "${s.spacePercent} %") {
+                        val opts = listOf(30, 40, 50, 60, 70, 80, 10, 20); set(s.copy(spacePercent = opts[(opts.indexOf(s.spacePercent) + 1).mod(opts.size)]))
+                    }
+                }
+                Divider()
                 var savedList by remember { mutableStateOf(false) }
                 if (savedList) SavedSongsDialog { savedList = false }
                 ValueRow("Saved songs", "Play or delete the songs saved from the radio", "Open") { savedList = true }

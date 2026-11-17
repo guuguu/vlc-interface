@@ -187,6 +187,9 @@ data class Settings(
     val radioCapture: String = "wifi",
     /** Width of the lists' scroll bar in pixels (4–9); drag it to scroll fast. */
     val scrollbarPx: Int = 6,
+    /** Radio recording and free space: under [spaceUnderGb] GB free (0 = never), at most [spacePercent] % of it. */
+    val spaceUnderGb: Int = 100,
+    val spacePercent: Int = 30,
     /** Colours picked by hand in Settings (up to 5). */
     val customAccents: List<Long> = emptyList(),
 ) {
@@ -204,7 +207,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccents", org.json.JSONArray(customAccents)).put("menuOpacity", menuOpacity).put("upNextCount", upNextCount).put("radioAccent", radioAccent).put("autoLoud", autoLoud).put("toneSliders", toneSliders).put("toneLoud", toneLoud.toDouble()).put("toneTreble", toneTreble.toDouble()).put("radioPreLast", radioPreLast.toDouble()).put("songPreLast", songPreLast.toDouble()).put("saveFolder", saveFolder).put("saveFormat", saveFormat).put("radioCapture", radioCapture).put("scrollbarPx", scrollbarPx)
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccents", org.json.JSONArray(customAccents)).put("menuOpacity", menuOpacity).put("upNextCount", upNextCount).put("radioAccent", radioAccent).put("autoLoud", autoLoud).put("toneSliders", toneSliders).put("toneLoud", toneLoud.toDouble()).put("toneTreble", toneTreble.toDouble()).put("radioPreLast", radioPreLast.toDouble()).put("songPreLast", songPreLast.toDouble()).put("saveFolder", saveFolder).put("saveFormat", saveFormat).put("radioCapture", radioCapture).put("scrollbarPx", scrollbarPx).put("spaceUnderGb", spaceUnderGb).put("spacePercent", spacePercent)
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -261,6 +264,8 @@ data class Settings(
                 saveFormat = o.optString("saveFormat", "mp3").let { if (it == "original") it else "mp3" },
                 radioCapture = o.optString("radioCapture", "wifi").let { if (it in setOf("wifi", "always", "off")) it else "wifi" },
                 scrollbarPx = o.optInt("scrollbarPx", 6).coerceIn(4, 9),
+                spaceUnderGb = o.optInt("spaceUnderGb", 100).coerceIn(0, 4096),
+                spacePercent = o.optInt("spacePercent", 30).coerceIn(5, 90),
                 customAccents = ((o.optJSONArray("customAccents")?.let { a -> (0 until a.length()).map { a.getLong(it) } }
                     ?: listOfNotNull(o.optLong("customAccent", 0L).takeIf { it != 0L }))
                     // A colour in use from the old preset row (blue / green / purple) stays as a custom one.
