@@ -1318,23 +1318,28 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
     val name = fav?.name ?: item.title
     val (artist, title) = app.vlcinterface.player.splitNowPlaying(p.nowPlaying)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text("RADIO STATION", color = accent(), fontSize = 12.sp, letterSpacing = 1.sp)
-        // Tap the station name or the song title: the station's menu (favourite, playlist, details, link, share).
+        // Station rows (label, name, address, details): the station's menu. Song rows (title, artist): the song's menu.
         var stMenu by remember { mutableStateOf(false) }
+        var songMenu by remember { mutableStateOf(false) }
+        val station = Modifier.combinedClickable(onClick = { stMenu = true }, onLongClick = { stMenu = true })
+        val song = Modifier.combinedClickable(onClick = { songMenu = true }, onLongClick = { songMenu = true })
+        Text("RADIO STATION", color = accent(), fontSize = 12.sp, letterSpacing = 1.sp, modifier = station)
         Box {
             Text(name + if (p.stationName.isNotBlank() && !p.stationName.equals(name, true)) " · ${p.stationName}" else "",
                 color = C.text, fontSize = (16 * tk).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.combinedClickable(onClick = { stMenu = true }, onLongClick = { stMenu = true }))
-            StationMenu(item, stMenu) { stMenu = false }
+                modifier = station)
+            StationMenu(item, stMenu, "station") { stMenu = false }
         }
-        Text(item.uri.substringAfter("://").take(60), color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        Text(title.ifEmpty { "Live" }, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp)
-                .combinedClickable(onClick = { stMenu = true }, onLongClick = { stMenu = true }))
-        if (artist.isNotEmpty()) Text(artist, color = C.muted, fontSize = (15 * tk).sp, textAlign = TextAlign.Center)
+        Text(item.uri.substringAfter("://").take(60), color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = station)
+        Box {
+            Text(title.ifEmpty { "Live" }, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp).then(song))
+            StationMenu(item, songMenu, "song") { songMenu = false }
+        }
+        if (artist.isNotEmpty()) Text(artist, color = C.muted, fontSize = (15 * tk).sp, textAlign = TextAlign.Center, modifier = song)
         val details = listOfNotNull((fav?.meta ?: LastStationMeta.of(item.uri)).ifEmpty { null }, p.rgInfo.ifEmpty { null },
             if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else null)
-        if (details.isNotEmpty()) Text(details.joinToString(" · "), color = accent(), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(4.dp))
+        if (details.isNotEmpty()) Text(details.joinToString(" · "), color = accent(), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = station.padding(4.dp))
         if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
         // Mobile data only: what this station has used so far, live.
         val cell by app.vlcinterface.player.NetGuard.cellular.collectAsState()
@@ -1764,7 +1769,7 @@ fun toggleFavourite(name: String, url: String, meta: String, favicon: String) {
 
 /** The playing station's menu (from its name or the song title): everything for it, favourite or not. */
 @Composable
-private fun StationMenu(item: PlayItem, open: Boolean, onClose: () -> Unit) {
+private fun StationMenu(item: PlayItem, open: Boolean, part: String = "all", onClose: () -> Unit) {
     val st by App.instance.store.state.collectAsState()
     val ctx = LocalContext.current
     val fav = st.stations.firstOrNull { it.url == item.uri }
@@ -1784,10 +1789,14 @@ private fun StationMenu(item: PlayItem, open: Boolean, onClose: () -> Unit) {
     if (links) SongLinksDialog(npArtist, npTitle, 0, "", null) { links = false }
     val cap by app.vlcinterface.sources.RadioCapture.status.collectAsState()
     SDropdownMenu(open, onClose) {
+      // "song": the song now playing · "station": the station · "all": both.
+      if (part != "station") {
         SMenuItem({ Text(if (cap.pending != null) "Saving… (stop / extend)" else "Save this song…") }, { onClose(); saveSong = true })
         if (npTitle.isNotBlank()) SMenuItem({ Text(if (st.settings.spotifyId.isNotBlank()) "YouTube / Spotify links…" else "YouTube link…") }, { onClose(); links = true })
         SMenuItem({ Text("Saved songs…") }, { onClose(); savedList = true })
         SMenuItem({ Text("Open Shazam") }, { onClose(); openShazam(ctx) })
+      }
+      if (part != "song") {
         SMenuItem({ Text(if (fav != null) "Remove from favourites" else "Add to favourites") }, {
             onClose(); toggleFavourite(item.title, item.uri, LastStationMeta.of(item.uri), item.artwork) })
         if (fav != null) SMenuItem({ Text("Rename…") }, { onClose(); rename = true })
@@ -1795,6 +1804,7 @@ private fun StationMenu(item: PlayItem, open: Boolean, onClose: () -> Unit) {
         SMenuItem({ Text("Details…") }, { onClose(); details = true })
         SMenuItem({ Text("Copy link") }, { onClose(); copyStationLink(ctx, item.uri) })
         SMenuItem({ Text("Share link…") }, { onClose(); shareStation(ctx, name, item.uri) })
+      }
     }
 }
 
