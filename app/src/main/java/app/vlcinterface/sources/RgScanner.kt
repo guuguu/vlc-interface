@@ -91,6 +91,15 @@ object RgScanner {
 
     /** Stops the scan running now; the queued ones follow. */
     private fun cancelled() = job?.isActive == false
+
+    /** A NAS song away from home: waits until VPN-NAS is unlocked with "Wi-Fi" (or you're home). */
+    private fun waitNasWifi(it: PlayItem) {
+        var shown = false
+        while (VpnLink.heavyBlocked(it.uri) && !cancelled()) {
+            if (!shown) { shown = true; update { s -> s.copy(current = it.title, phase = "Waiting: VPN-NAS on mobile data (answer Wi-Fi to go on)") } }
+            Thread.sleep(2000)
+        }
+    }
     fun cancel() { job?.cancel(); _state.value = _state.value.copy(running = false, finished = true, phase = "Cancelled") }
     /** Stops the scan running now and drops the queue. */
     fun cancelAll() { queue.clear(); queued.value = emptyList(); cancel() }
@@ -295,6 +304,7 @@ object RgScanner {
         val toMeasure = synchronized(todo) { todo.toList() }.flatten()
         parallel(toMeasure, workers) { it ->
             fracs[it.uri] = 0f
+            waitNasWifi(it)
             update { s -> s.copy(current = it.title, phase = "Measuring" + if (workers > 1) " ($workers at a time)" else "") }
             // A refused / dropped network connection is tried again (after 1 s, then 3 s) before it counts as a problem.
             var m: Loudness? = null
@@ -338,6 +348,7 @@ object RgScanner {
         }
         parallel(writes, writes.size.coerceIn(1, 4)) { (it, values) ->
             val summary = "track ${values["REPLAYGAIN_TRACK_GAIN"]}" + if (albumMode) " · album ${values["REPLAYGAIN_ALBUM_GAIN"]}" else ""
+            waitNasWifi(it)
             update { s -> s.copy(current = it.title, phase = "Writing") }
             val where = save(ctx, it, values, target)
             addResult(RgResult(it.title, "$summary — $where", !where.startsWith("not")))

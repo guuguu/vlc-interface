@@ -395,3 +395,17 @@ fun OutputFallbackHost() {
         confirmButton = { STextButton({ player.fallbackNotice.value = "" }) { Text("OK", color = accent()) } },
     )
 }
+
+
+/** VPN-NAS switched on by hand: Wi-Fi (caching ahead and ReplayGain allowed) or mobile data (playback only)? */
+@Composable
+fun NasLinkQuestionHost() {
+    val v = app.vlcinterface.sources.VpnLink
+    val ask by v.askLink.collectAsState()
+    if (!ask) return
+    AlertDialog(onDismissRequest = {}, containerColor = C.panel,
+        title = { Text("Wi-Fi or mobile data?", color = C.text) },
+        text = { Text("Wi-Fi: songs cached ahead and ReplayGain scans/updates on the NAS too. Mobile data: the NAS only plays.", color = C.text, fontSize = 14.sp) },
+        confirmButton = { STextButton({ v.answerLink(true) }) { Text("Wi-Fi", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) } },
+        dismissButton = { STextButton({ v.answerLink(false) }) { Text("Mobile data") } })
+}

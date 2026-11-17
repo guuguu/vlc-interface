@@ -254,9 +254,26 @@ object VpnLink {
     /** Away from home and this NAS not chosen with "Use NAS": its songs wait for the button. */
     fun waitsForUse(uri: String): Boolean { val s = serverOfUri(uri) ?: return false; return !atHome(s) && (s.id !in useNas.value || !vpnUp.value) }   // away: only chosen, and only with the VPN on
 
+    /**
+     * VPN-NAS switched on by hand: are you on Wi-Fi or mobile data? Wi-Fi unlocks the heavy work on the NAS away
+     * from home (caching ahead, ReplayGain scans and updates); mobile data: playback only. null = not answered yet.
+     */
+    @Volatile var nasOnWifi: Boolean? = null
+    val askLink = MutableStateFlow(false)
+
+    /** Heavy transfer (caching ahead, ReplayGain) on a NAS away from home, not unlocked with "Wi-Fi". */
+    fun heavyBlocked(uri: String): Boolean { val s = serverOfUri(uri) ?: return false; return !atHome(s) && nasOnWifi != true }
+
+    fun answerLink(wifi: Boolean) {
+        askLink.value = false; nasOnWifi = wifi
+        ServerLog.log("vpn", "link", "smb", "", true, if (wifi) "VPN-NAS on Wi-Fi: caching ahead and ReplayGain allowed" else "VPN-NAS on mobile data: playback only")
+        if (wifi) Prefetch.kick()
+    }
+
     /** "Use NAS" with these servers (empty: stop using them). Also allows mobile data for the session. */
     fun setUse(ids: Set<String>) {
         useNas.value = ids; askUse.value = false
+        if (ids.isEmpty()) { nasOnWifi = null; askLink.value = false }
         try { App.instance.player.pruneNas() } catch (_: Exception) {}
         if (ids.isNotEmpty()) { lastUsed = ids; ignoreSession = false; autoFind(ids)
             if (vpnUp.value) try { App.instance.player.restoreNas() } catch (_: Exception) {} }

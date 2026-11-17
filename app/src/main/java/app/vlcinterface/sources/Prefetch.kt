@@ -83,7 +83,7 @@ object Prefetch {
 
     private fun allowed(p: PlayItem): Boolean = try {
         !(app.vlcinterface.player.NetGuard.blocked() && app.vlcinterface.player.NetGuard.needsInternet(p.uri)) &&
-            !VpnLink.waitsForUse(p.uri) && !VpnLink.ignored(p.uri) &&
+            !VpnLink.waitsForUse(p.uri) && !VpnLink.ignored(p.uri) && !VpnLink.heavyBlocked(p.uri) &&
             !app.vlcinterface.player.BatteryGuard.busyBlocked(silent = true)
     } catch (_: Exception) { false }
 
@@ -141,6 +141,9 @@ object Prefetch {
             return gen == g && !paused() && (size <= 0 || tmp.length() == size)
         }
     }
+
+    /** Look again now (e.g. VPN-NAS unlocked on Wi-Fi). */
+    fun kick() { if (::dir.isInitialized) scope.launch { update() } }
 
     /** Exit: copies removed. */
     fun clear() { job?.cancel(); target = ""; done.clear(); if (::dir.isInitialized) dir.listFiles()?.forEach { it.delete() } }

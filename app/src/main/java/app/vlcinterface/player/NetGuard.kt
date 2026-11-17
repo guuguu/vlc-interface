@@ -171,6 +171,7 @@ object NetGuard {
         val v = app.vlcinterface.sources.VpnLink
         if (ids.isEmpty()) { v.setUse(emptySet()); mobileOk = false; return }
         v.setUse(ids); useNas(ctx)
+        v.askLink.value = true                          // Wi-Fi or mobile data? (unlocks caching and ReplayGain)
     }
 
     /** Error shown on a song that waits for "Use NAS". */
