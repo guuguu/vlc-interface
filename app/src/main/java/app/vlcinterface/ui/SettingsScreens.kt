@@ -128,9 +128,9 @@ fun SettingsScreen(nav: Navigator) {
                 Divider()
                 // Free space: under X GB free, recordings may use Y % of it (every decision is said and logged).
                 ValueRow("Free space limit", (if (s.spaceUnderGb == 0) "Off: recordings use any free space"
-                    else "When under ${s.spaceUnderGb} GB free, recordings use at most ${s.spacePercent} % of it") + " · never any recording under 10 GB free",
+                    else "When under ${s.spaceUnderGb} GB free, recordings use at most ${s.spacePercent} % of it") + " · never any recording under 2 GB free",
                     if (s.spaceUnderGb == 0) "Off" else "< ${s.spaceUnderGb} GB") {
-                    val opts = listOf(100, 200, 50, 25, 0); set(s.copy(spaceUnderGb = opts[(opts.indexOf(s.spaceUnderGb) + 1).mod(opts.size)]))
+                    val opts = listOf(100, 200, 50, 25, 10, 0); set(s.copy(spaceUnderGb = opts[(opts.indexOf(s.spaceUnderGb) + 1).mod(opts.size)]))
                 }
                 if (s.spaceUnderGb > 0) {
                     Divider()

@@ -267,7 +267,7 @@ object RadioCapture {
             r.header("icy-br")?.substringBefore(',')?.trim()?.toIntOrNull()?.takeIf { it in 8..1000 }?.let { bytesPerSec = it * 125.0 }
             val metaint = r.header("icy-metaint")?.toIntOrNull() ?: 0
             val segBytes = (bytesPerSec * 30).toLong().coerceIn(64_000, 4_000_000)
-            // Under 10 GB free: no recording at all.
+            // Under 2 GB free: no recording at all.
             if (belowFloor()) {
                 val m = floorMsg()
                 status.value = status.value.copy(format = "unsupported", running = false, message = m); spaceNote(m); return null
@@ -383,8 +383,8 @@ object RadioCapture {
         return freeBytes().let { f -> if (s.spaceUnderGb > 0 && f < s.spaceUnderGb * GB) (f * s.spacePercent / 100.0).toLong() else Long.MAX_VALUE }
     }
     private fun pct() = App.instance.store.current.settings.spacePercent
-    /** Never any recording under 10 GB free (whatever the settings). */
-    private const val FLOOR_GB = 10
+    /** Never any recording under 2 GB free (whatever the settings). */
+    private const val FLOOR_GB = 2
     private fun belowFloor() = freeBytes() < FLOOR_GB * GB
     private fun floorMsg() = "No recording: only ${gb(freeBytes())} free (never under $FLOOR_GB GB)"
     private var floorCheckedAt = 0L
@@ -489,7 +489,7 @@ object RadioCapture {
 
     /** Timed saves end by themselves (checked every second); song saves ask after 10 min without an end. */
     private fun tick() {
-        // Every 30 s while recording: free space under 10 GB → recording stops (a song being saved: saved with
+        // Every 30 s while recording: free space under 2 GB → recording stops (a song being saved: saved with
         // what's recorded; the kept minutes are deleted).
         val nowT = System.currentTimeMillis()
         if (status.value.running && nowT - floorCheckedAt > 30_000) {
