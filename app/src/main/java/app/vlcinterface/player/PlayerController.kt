@@ -886,11 +886,33 @@ class PlayerController(private val context: Context, private val store: Store) {
         playQueue(items, 0, origin, random = false)
     }
 
+    /** A NAS song that can't be used now (away without "Use NAS", VPN off, or skipped this session). */
+    private fun nasOff(it: PlayItem) = app.vlcinterface.sources.VpnLink.waitsForUse(it.uri) || app.vlcinterface.sources.VpnLink.ignored(it.uri)
+
+    /** "NAS offline", 3 s, nothing logged (a song picked by hand). */
+    private fun nasOfflineToast() = main.post {
+        val t = android.widget.Toast.makeText(context, "NAS offline", android.widget.Toast.LENGTH_LONG); t.show()
+        main.postDelayed({ t.cancel() }, 3_000)
+    }
+
+    /** NAS not usable: its songs leave the queue (the playing one stays); only local files go on. */
+    fun pruneNas() = main.post {
+        val s = _state.value
+        if (s.queue.none { nasOff(it) }) return@post
+        val cur = s.queue.getOrNull(s.index)
+        val q = s.queue.filter { it === cur || !nasOff(it) }
+        orderedQueue = orderedQueue?.filter { it === cur || !nasOff(it) }
+        _state.value = s.copy(queue = q, index = q.indexOfFirst { it === cur }.coerceAtLeast(0))
+    }
+
     fun playQueue(items0: List<PlayItem>, index0: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null, keepOrder: Boolean = false) {
         if (items0.isEmpty()) return
         // Duplicates are left out (first one kept); the item that was tapped stays the one that starts.
         val tapped = items0.getOrNull(index0.coerceIn(0, items0.size - 1))
-        val items = items0.distinctBy { qKey(it) }
+        // NAS not usable: a NAS song picked by hand doesn't start ("NAS offline"); lists keep only local songs.
+        if (tapped != null && nasOff(tapped) && (index0 > 0 || items0.size == 1 || items0.all { nasOff(it) })) { nasOfflineToast(); return }
+        val items = items0.filterNot { nasOff(it) }.distinctBy { qKey(it) }
+        if (items.isEmpty()) { nasOfflineToast(); return }
         val index = tapped?.let { t -> items.indexOfFirst { qKey(it) == qKey(t) } }?.takeIf { it >= 0 } ?: 0
         if (random != null && random != store.current.settings.shuffle) store.update { it.copy(settings = it.settings.copy(shuffle = random)) }
         var i = index.coerceIn(0, items.size - 1)
@@ -988,7 +1010,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (s.item == null) { playQueue(items0, 0, Origin("single")); return }
         // Songs already in the queue aren't added twice.
         val have = s.queue.map { qKey(it) }.toHashSet()
-        val items = items0.filter { have.add(qKey(it)) }
+        if (items0.isNotEmpty() && items0.all { nasOff(it) }) { nasOfflineToast(); return }
+        val items = items0.filter { !nasOff(it) && have.add(qKey(it)) }
         if (items.isEmpty()) return
         session(null, items)
         val q = s.queue.toMutableList(); q.addAll(s.index + 1, items)
@@ -1110,7 +1133,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         val s = _state.value
         if (s.item == null) { playQueue(items0, 0, Origin("single")); return items0.distinctBy { qKey(it) }.size }
         val have = s.queue.map { qKey(it) }.toHashSet()
-        val items = items0.filter { have.add(qKey(it)) }
+        if (items0.isNotEmpty() && items0.all { nasOff(it) }) { nasOfflineToast(); return 0 }
+        val items = items0.filter { !nasOff(it) && have.add(qKey(it)) }
         if (items.isEmpty()) return 0
         session(null, items)                                     // an addition: today's session list gets it
         orderedQueue = orderedQueue?.plus(items)
@@ -1126,7 +1150,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = s.copy(queue = q, index = if (i < s.index) s.index - 1 else s.index)
     }
 
-    fun jumpTo(i: Int) { if (i in _state.value.queue.indices) { sessionManualChoice(); startItem(i, -1) } }
+    fun jumpTo(i: Int) { if (i in _state.value.queue.indices && nasOff(_state.value.queue[i])) { nasOfflineToast(); return }
+        if (i in _state.value.queue.indices) { sessionManualChoice(); startItem(i, -1) } }
 
     /** Moves a queue entry one place up (-1) or down (+1); the playing song keeps playing. */
     fun moveInQueue(i: Int, dir: Int) {

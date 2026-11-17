@@ -255,6 +255,7 @@ object VpnLink {
     /** "Use NAS" with these servers (empty: stop using them). Also allows mobile data for the session. */
     fun setUse(ids: Set<String>) {
         useNas.value = ids; askUse.value = false
+        try { App.instance.player.pruneNas() } catch (_: Exception) {}
         if (ids.isNotEmpty()) { lastUsed = ids; ignoreSession = false }
         ServerLog.log("vpn", "use-nas", "smb", "", true, if (ids.isEmpty()) "NAS not used (away from home)"
             else "NAS used this session: " + lanServers().filter { it.id in ids }.joinToString { it.name.ifBlank { it.host } })
@@ -275,6 +276,7 @@ object VpnLink {
      * the VPN is suggested — Start the VPN / Retry in N s (time to start it; Settings → VPN) / Not this session.
      */
     private fun checkNeedVpn() {
+        try { App.instance.player.pruneNas() } catch (_: Exception) {}      // NAS not usable: its songs leave the queue
         val st = App.instance.store.current
         val servers = st.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" && isIpLiteral(it.host) }
         val away = servers.filter { !nearby(it) }
@@ -314,6 +316,7 @@ object VpnLink {
     /** "Not this session": network songs skipped until the phone is near a server again. */
     fun skipSession() {
         askStart.value = null; ignoreSession = true
+        try { App.instance.player.pruneNas() } catch (_: Exception) {}
         ServerLog.log("vpn", "session", "smb", "", true, "Network songs skipped for this session (no VPN)")
     }
 
