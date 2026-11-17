@@ -71,8 +71,8 @@ object NetGuard {
         if (u.startsWith("content://") || u.startsWith("file://") || u.startsWith("/")) return false
         if (Regex("^(https?|ftps?|dav|davs|mms|rtsp|rtmp)://").containsMatchIn(u)) return true
         val host = android.net.Uri.parse(uri).host ?: return false
-        // A home server reached through the VPN (away from home) goes over the internet / mobile data.
-        if (app.vlcinterface.sources.VpnLink.routeHost(host) != host) return true
+        // A home server reached through the VPN counts as internet only on mobile data (on any Wi-Fi it doesn't).
+        if (cellular.value && app.vlcinterface.sources.VpnLink.routeHost(host) != host) return true
         return !(Regex("^(10\\.|192\\.168\\.|172\\.(1[6-9]|2\\d|3[01])\\.|127\\.|169\\.254\\.)").containsMatchIn(host) ||
             host.endsWith(".local") || host.endsWith(".lan") || host.endsWith(".home") || !host.contains('.'))
     }
