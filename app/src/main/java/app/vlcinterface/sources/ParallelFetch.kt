@@ -126,6 +126,7 @@ object ParallelFetch {
      * is used if given).
      */
     fun download(p: PlayItem, dst: File, maxBytes: Long = 0, keepGoing: () -> Boolean = { true }, what: String = "copy",
+                 full: Boolean = false,
                  progress: (Long, Long) -> Unit = { _, _ -> }, fallback: (() -> Boolean)? = null): Boolean {
         val r = try { remote(p) } catch (e: Exception) { null }
         if (r == null) return fallback?.invoke() ?: false
@@ -137,10 +138,55 @@ object ParallelFetch {
                 override fun close() {}
             }
             val t0 = System.currentTimeMillis()
-            return run(hostOf(p.uri), r.size, { lane -> r.reader(lane) }, w, keepGoing, progress, "Copied ${p.title}")
-                .also { record(hostOf(p.uri), what, r.size, System.currentTimeMillis() - t0, it) }
+            var ok = run(hostOf(p.uri), r.size, { lane -> r.reader(lane) }, w, keepGoing, progress, "Copied ${p.title}")
+            if (ok) out.fd.sync()                                   // on the storage before it's checked and used
+            // Integrity: size, then the content checked against the server (whole file when it will be written
+            // back, sampled pieces otherwise). A copy that doesn't match is never used.
+            if (ok) ok = dst.length() == r.size && (if (full) sameAsRemote(p, p.uri, dst) else samplesMatch(r, dst))
+            if (!ok && dst.length() == r.size) ServerLog.log(hostOf(p.uri), "integrity", "", "", false, "Copy of ${p.title} didn't match the server — dropped")
+            record(hostOf(p.uri), what, r.size, System.currentTimeMillis() - t0, ok)
+            return ok
         }
     }
+
+    /** SHA-256 of a stream. */
+    private fun sha(i: java.io.InputStream): ByteArray {
+        val md = java.security.MessageDigest.getInstance("SHA-256"); val b = ByteArray(1 shl 20)
+        while (true) { val n = i.read(b); if (n < 0) break; md.update(b, 0, n) }
+        return md.digest()
+    }
+
+    /** The whole file read again from the server (one plain stream) and compared with [local] (SHA-256). */
+    fun sameAsRemote(p: PlayItem, uri: String, local: File): Boolean = try {
+        val remote = when {
+            uri.startsWith("smb://") -> smbFile(p, uri).inputStream.use { sha(it) }
+            uri.startsWith("http") -> Net.http.newCall(Request.Builder().url(uri)
+                .apply { if (p.user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(p.user, p.password)) }.build())
+                .execute().use { r -> if (!r.isSuccessful) return false; sha(r.body!!.byteStream()) }
+            else -> return false
+        }
+        java.security.MessageDigest.isEqual(remote, local.inputStream().use { sha(it) })
+    } catch (_: Exception) { false }
+
+    /** First, last and about 1 in 20 pieces (at least 3) read again from the server and compared byte for byte. */
+    private fun samplesMatch(r: Remote, local: File): Boolean = try {
+        val pieces = ((r.size + PIECE - 1) / PIECE).toInt()
+        val pick = (setOf(0, pieces - 1) + (0 until maxOf(3, pieces / 20)).map { (Math.random() * pieces).toInt() }).filter { it in 0 until pieces }
+        val a = ByteArray(PIECE); val b = ByteArray(PIECE)
+        r.reader(0).use { rd -> RandomAccessFile(local, "r").use { f ->
+            pick.all { i ->
+                val pos = i.toLong() * PIECE; val len = minOf(PIECE.toLong(), r.size - pos).toInt()
+                var n = 0
+                while (n < len) {
+                    val k = rd.readAt(pos + n, a, len - n); if (k <= 0) break
+                    System.arraycopy(a, 0, b, n, k); n += k
+                }
+                if (n != len) return@all false
+                val c = ByteArray(len); f.seek(pos); f.readFully(c)
+                java.util.Arrays.equals(c, b.copyOf(len))
+            }
+        } }
+    } catch (_: Exception) { false }
 
     /**
      * Writes [src] over the network file [targetUri] (SMB) in pieces with tuned parallel connections. Returns false
@@ -169,7 +215,11 @@ object ParallelFetch {
             }
             try {
                 val t0 = System.currentTimeMillis()
-                val ok = run(hostOf(targetUri), src.length(), reader, w, { true }, progress, "Sent ${p.title}")
+                var ok = run(hostOf(targetUri), src.length(), reader, w, { true }, progress, "Sent ${p.title}")
+                w.close()
+                // Integrity: the copy on the server read back whole and compared (SHA-256) before it's used.
+                if (ok) ok = sameAsRemote(p, targetUri, src)
+                if (!ok) ServerLog.log(hostOf(targetUri), "integrity", "", "", false, "Copy of ${p.title} on the server didn't match — not used")
                 record(hostOf(targetUri), "ReplayGain update", src.length(), System.currentTimeMillis() - t0, ok)
                 if (!ok) throw IllegalStateException("copy to the server stopped")
             } finally { w.close() }
@@ -183,6 +233,7 @@ object ParallelFetch {
         val pieces = ((size + PIECE - 1) / PIECE).toInt()
         if (pieces == 0) return true
         val nextPiece = AtomicInteger(0)
+        val written = java.util.BitSet(pieces)                       // every piece accounted for, not just a byte count
         val doneBytes = AtomicLong(0)
         val failed = AtomicInteger(0)
         val allowed = AtomicInteger(best[host] ?: 1)
@@ -216,6 +267,7 @@ object ParallelFetch {
                         }
                         if (n < len) throw IllegalStateException("short read")
                         w.writeAt(lane, pos, buf, len)
+                        synchronized(written) { written.set(i) }
                     } catch (e: Exception) {
                         retry += i
                         if (failed.incrementAndGet() > pieces / 4 + 8) { stopF.set(true) }
@@ -299,7 +351,7 @@ object ParallelFetch {
         }
         synchronized(threads) { threads.toList() }.forEach { it.join(3000) }
         if (tuning && best[host] == null) best[host] = allowed.get()
-        val complete = doneBytes.get() >= size && !stopF.get()
+        val complete = !stopF.get() && synchronized(written) { written.cardinality() == pieces }
         return complete
     }
 

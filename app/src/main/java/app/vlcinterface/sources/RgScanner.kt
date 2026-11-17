@@ -557,11 +557,16 @@ object RgScanner {
 
     private fun download(ctx: Context, item: PlayItem, dst: File) {
         val u = item.uri
-        // Already copied for the scan (or cached ahead): taken from the phone.
+        val net = u.startsWith("smb://") || u.startsWith("http")
+        // This copy is tagged and written back over the original: it must be exactly the file on the server —
+        // checked whole (SHA-256 against a fresh read) whichever way it was made.
+        // Already copied for the scan (or cached ahead): taken from the phone once it's checked.
         (lastCopy?.takeIf { it.first == u && it.second.isFile }?.second ?: Prefetch.localFor(u))?.let { c ->
-            c.copyTo(dst, true); lastCopy?.let { if (it.first == u) { it.second.delete(); lastCopy = null } }; return
+            val ok = !net || ParallelFetch.sameAsRemote(item, u, c)
+            lastCopy?.let { if (it.first == u) { if (!ok) it.second.delete(); lastCopy = null } }
+            if (ok) { c.copyTo(dst, true); return }
         }
-        if ((u.startsWith("smb://") || u.startsWith("http")) && ParallelFetch.download(item, dst, what = "ReplayGain read")) return
+        if (net && ParallelFetch.download(item, dst, what = "ReplayGain read", full = true)) return
         val input = when {
             u.startsWith("content://") -> ctx.contentResolver.openInputStream(Uri.parse(u))
             u.startsWith("file://") -> File(Uri.parse(u).path!!).inputStream()
@@ -572,7 +577,8 @@ object RgScanner {
                 .execute().let { r -> if (!r.isSuccessful) { r.close(); throw IllegalStateException("HTTP ${r.code}") }; r.body!!.byteStream() }
             else -> null
         } ?: throw IllegalStateException("can't read the file")
-        input.use { i -> dst.outputStream().use { o -> copy(i, o, "Reading the file") } }
+        input.use { i -> dst.outputStream().use { o -> copy(i, o, "Reading the file"); o.fd.sync() } }
+        if (net && !ParallelFetch.sameAsRemote(item, u, dst)) { dst.delete(); throw IllegalStateException("the copy read from the server didn't match it — nothing changed") }
     }
 
     /** Copies with progress on the scan page (big files over the network take a while). */
@@ -604,13 +610,32 @@ object RgScanner {
                 val par = try { ParallelFetch.uploadSmb(item, tmp, u + ".rgtmp") } catch (_: Exception) { false }
                 if (!par) t.outputStream.use { o -> tmp.inputStream().use { copy(it, o, "Saving to the server", tmp.length()) } }
                 if (t.length() != tmp.length()) { t.delete(); throw IllegalStateException("copy on the server is incomplete") }
-                try { orig.delete() } catch (e: Exception) { try { t.delete() } catch (_: Exception) {}; throw e }
-                t.renameTo(SmbFile(VpnLink.route(Uri.decode(u)), cx))
+                // The tagged copy on the server read back whole and compared before it replaces anything.
+                if (!par && !ParallelFetch.sameAsRemote(item, u + ".rgtmp", tmp)) { t.delete(); throw IllegalStateException("copy on the server didn't match — original kept") }
+                // Swap without a moment where the song is gone: original → .rgold, copy → original, then .rgold
+                // removed; any failure puts the original back.
+                val old = SmbFile(VpnLink.route(Uri.decode(u) + ".rgold"), cx)
+                try { if (old.exists()) old.delete() } catch (_: Exception) {}
+                orig.renameTo(old)
+                try { t.renameTo(SmbFile(VpnLink.route(Uri.decode(u)), cx)) } catch (e: Exception) {
+                    try { old.renameTo(SmbFile(VpnLink.route(Uri.decode(u)), cx)) } catch (_: Exception) {}
+                    try { t.delete() } catch (_: Exception) {}
+                    throw IllegalStateException("couldn't swap in the tagged copy — original kept")
+                }
+                try { old.delete() } catch (_: Exception) {}
             }
             u.startsWith("http") && src?.proto == "webdav" -> {
-                Net.http.newCall(Request.Builder().url(u).put(tmp.asRequestBody("application/octet-stream".toMediaType()))
-                    .apply { if (item.user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(item.user, item.password)) }.build())
+                // Sent next to the file, read back and compared, then moved over it (the original is never half-written).
+                fun auth(b: Request.Builder) = b.apply { if (item.user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(item.user, item.password)) }
+                val t = "$u.rgtmp"
+                Net.http.newCall(auth(Request.Builder().url(t).put(tmp.asRequestBody("application/octet-stream".toMediaType()))).build())
                     .execute().use { r -> if (!r.isSuccessful) throw IllegalStateException("server refused (HTTP ${r.code})") }
+                if (!ParallelFetch.sameAsRemote(item, t, tmp)) {
+                    try { Net.http.newCall(auth(Request.Builder().url(t).delete()).build()).execute().close() } catch (_: Exception) {}
+                    throw IllegalStateException("copy on the server didn't match — original kept")
+                }
+                Net.http.newCall(auth(Request.Builder().url(t).method("MOVE", null).header("Destination", u).header("Overwrite", "T")).build())
+                    .execute().use { r -> if (!r.isSuccessful) throw IllegalStateException("server refused the swap (HTTP ${r.code}) — original kept") }
             }
             else -> throw IllegalStateException("this source is read-only")
         }
