@@ -243,14 +243,14 @@ object VpnLink {
     fun atHome(s: Source): Boolean = onLan(s.host) || s.altHosts.any { it != s.vpnHost && isIpLiteral(it) && onLan(it) }
 
     /** The LAN server a song address belongs to (LAN address or any stored one). */
-    fun sourceOf(uri: String): Source? {
+    fun serverOfUri(uri: String): Source? {
         if (!uri.startsWith("smb://")) return null
         val host = android.net.Uri.parse(uri).host ?: return null
         return lanServers().firstOrNull { it.host.equals(host, true) || it.altHosts.any { a -> a.equals(host, true) } || it.vpnHost.equals(host, true) }
     }
 
     /** Away from home and this NAS not chosen with "Use NAS": its songs wait for the button. */
-    fun waitsForUse(uri: String): Boolean { val s = sourceOf(uri) ?: return false; return !atHome(s) && (s.id !in useNas.value || !vpnUp.value) }   // away: only chosen, and only with the VPN on
+    fun waitsForUse(uri: String): Boolean { val s = serverOfUri(uri) ?: return false; return !atHome(s) && (s.id !in useNas.value || !vpnUp.value) }   // away: only chosen, and only with the VPN on
 
     /** "Use NAS" with these servers (empty: stop using them). Also allows mobile data for the session. */
     fun setUse(ids: Set<String>) {
