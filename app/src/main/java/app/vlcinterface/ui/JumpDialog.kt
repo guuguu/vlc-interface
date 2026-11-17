@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.OutlinedTextField
@@ -88,7 +89,7 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
                 }, color = C.muted, fontSize = 12.sp)
                 if (indexing.isNotEmpty()) Text("★ $indexing — LAN songs appear when done", color = accent(), fontSize = 12.sp)
                 LazyColumn(Modifier.weight(1f, fill = false).scrollbar(st), state = st, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    androidx.compose.foundation.lazy.itemsIndexed(hits) { idx, h ->
+                    itemsIndexed(hits) { idx, h ->
                         val queued = "${h.uri}#${h.startMs}" in inQueue
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (idx == at) accent().copy(alpha = 0.25f) else C.tile)
                             .clickable { if (playNext) player.queueNext(h) else player.jumpToSong(h); onDone() }.padding(horizontal = 8.dp, vertical = 6.dp)) {
