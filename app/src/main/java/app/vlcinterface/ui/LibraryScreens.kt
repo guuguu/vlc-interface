@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -126,6 +128,23 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
                 s.tab == 2 && s.sub == 0 -> SymButton({ nav.go(Screen.EditSource(Zone.INTERNET)) }) { SymIcon(Icons.Filled.Add, "Add internet storage", tint = C.text) }
                 else -> {}
             }
+            // Open the player that goes with what this tab shows: Radio → radio, Songs / Audio → audio, Video and
+            // Streams & IPTV → video.
+            val libKind = App.instance.store.state.collectAsState().value.settings.libraryKind
+            val (pLabel, pScreen) = when {
+                s.tab == 4 -> "Radio" to Screen.Music
+                s.tab == 3 -> "Audio" to Screen.Music
+                s.tab == 2 && s.sub == 2 -> "Video" to Screen.Player
+                libKind == "video" -> "Video" to Screen.Player
+                else -> "Audio" to Screen.Music
+            }
+            Row(Modifier.clip(RoundedCornerShape(16.dp)).border(1.dp, accent().copy(alpha = 0.7f), RoundedCornerShape(16.dp))
+                .clickable { nav.go(pScreen) }.padding(start = 6.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                SymIcon(Icons.Filled.PlayArrow, "Open the $pLabel player", tint = accent())
+                Text(pLabel, color = accent(), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.width(4.dp))
             ExitButton()
             // Library menu.
             var libMenu by remember { mutableStateOf(false) }
