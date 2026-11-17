@@ -52,7 +52,9 @@ object RadioCapture {
                        /** Saved by hand: "start" = Start / Stop saving, "last" = the last X minutes, "timed" = for X minutes
                         *  from now (ends at [untilAt]); "" = the announced song (ends with it, or after [songsLeft] songs). */
                        val manual: String = "", val name: String = "",
-                       val untilAt: Long = 0, val songsLeft: Int = 1, val extraAfterSongMs: Long = 0)
+                       val untilAt: Long = 0, val songsLeft: Int = 1, val extraAfterSongMs: Long = 0,
+                       /** Format chosen when saving was asked: "original" or "mp3" (kept even if changed later). */
+                       val out: String = App.instance.store.current.settings.saveFormat)
     data class Status(
         val url: String = "", val running: Boolean = false, val format: String = "", val message: String = "",
         val pending: Pending? = null, val busy: String = "", val title: String = "", val titleStartKnown: Boolean = false,
@@ -373,7 +375,7 @@ object RadioCapture {
             val p = status.value.pending ?: return "Nothing is being saved"
             status.value = status.value.copy(pending = when (p.manual) {
                 "timed" -> p.copy(untilAt = maxOf(p.untilAt, System.currentTimeMillis()) + ms)
-                "" -> p.copy(extraAfterSongMs = p.extraAfterSongMs + ms)
+                "", "gap" -> p.copy(extraAfterSongMs = p.extraAfterSongMs + ms)
                 else -> return "Saving goes on until you stop it"
             })
             return "Extended by ${ms / 60_000} min"
@@ -383,7 +385,7 @@ object RadioCapture {
     /** The announced song: the next one too. */
     fun addSong(): String {
         synchronized(lock) {
-            val p = status.value.pending?.takeIf { it.manual.isEmpty() } ?: return "Only when saving to the end of a song"
+            val p = status.value.pending?.takeIf { it.manual.isEmpty() || it.manual == "gap" } ?: return "Only when saving to the end of a song"
             status.value = status.value.copy(pending = p.copy(songsLeft = p.songsLeft + 1))
             return "The next song is saved too"
         }
@@ -478,7 +480,7 @@ object RadioCapture {
             kotlinx.coroutines.withContext(saver) { status.value = status.value.copy(busy = "Saving “${p.title}”…"); saveStartedAt = System.currentTimeMillis(); saveProgress.value = 0f; try {
                 val where = save(App.instance, p, data, (p.start - from).toInt(), (end - from).toInt().coerceAtMost(data.size), partialEnd, from)
                 ServerLog.log("saved-songs", "save", "radio", "", true, p.title, "From ${p.station} → $where" + (if (p.partialStart) " · beginning missing" else "") + (if (partialEnd) " · end missing" else ""))
-                toast((if (App.instance.store.current.settings.saveFormat == "original") "Saved: " else "Encoding ended: ") + where.substringAfterLast('/'), long = false)
+                toast((if (p.out == "original") "Saved: " else "Encoding ended: ") + where.substringAfterLast('/'), long = false)
             } catch (e: Throwable) {
                 ServerLog.log("saved-songs", "save", "radio", "", false, p.title.ifBlank { p.name.ifBlank { "(no title)" } },
                     (e.message ?: e.javaClass.simpleName) + (if (diag.isNotEmpty()) " — $diag" else ""))
@@ -573,7 +575,7 @@ object RadioCapture {
     }
 
     /** Decodes a raw MP3 / ADTS file; [onPcm] gets 16-bit interleaved samples. Returns (rate, channels). */
-    private fun decode(file: File, onPcm: (ShortArray, Int, Int, Int) -> Unit): Pair<Int, Int> {
+    private fun decode(file: File, progress: Boolean = true, onPcm: (ShortArray, Int, Int, Int) -> Unit): Pair<Int, Int> {
         val ex = MediaExtractor(); ex.setDataSource(file.path)
         val fmt = ex.getTrackFormat(0); ex.selectTrack(0)
         val codec = MediaCodec.createDecoderByType(fmt.getString(MediaFormat.KEY_MIME)!!)
@@ -601,7 +603,7 @@ object RadioCapture {
                             val sa = ShortArray(info.size / 2); bb.asShortBuffer().get(sa)
                             onPcm(sa, sa.size / ch, rate, ch)
                             doneSec += sa.size.toDouble() / ch / rate
-                            saveProgress.value = stageBase + stageSpan * (doneSec / stageSec).toFloat().coerceIn(0f, 1f)
+                            if (progress) saveProgress.value = stageBase + stageSpan * (doneSec / stageSec).toFloat().coerceIn(0f, 1f)
                             breathe()
                         }
                         codec.releaseOutputBuffer(oi, false)
@@ -611,6 +613,127 @@ object RadioCapture {
             }
         } finally { try { codec.stop() } catch (_: Exception) {}; codec.release(); ex.release() }
         return rate to ch
+    }
+
+    private const val STEP = 0.05
+
+    /** Loudness (RMS) every 50 ms of a file. */
+    private fun rmsOf(f: File, progress: Boolean = true): FloatArray {
+        val rmsList = ArrayList<Float>()
+        var acc = 0.0; var cnt = 0; var stepFrames = 0
+        decode(f, progress) { pcm, frames, rate, ch ->
+            if (stepFrames == 0) stepFrames = (rate * STEP).toInt()
+            for (fr in 0 until frames) {
+                var s = 0.0; for (c in 0 until ch) { val x = pcm[fr * ch + c] / 32768.0; s += x * x }
+                acc += s / ch; cnt++
+                if (cnt >= stepFrames) { rmsList += sqrt(acc / cnt).toFloat(); acc = 0.0; cnt = 0 }
+            }
+        }
+        return rmsList.toFloatArray()
+    }
+
+    /** The gaps between songs: centres (seconds) of runs of 300 ms windows below -38 dBFS. */
+    private fun gaps(rms: FloatArray): List<Double> {
+        val out = ArrayList<Double>()
+        var runStart = -1
+        for (i in 0..rms.size - 6) {
+            val quiet = 20 * log10((i until i + 6).maxOf { rms[it] }.toDouble().coerceAtLeast(1e-9)) < -38
+            if (quiet && runStart < 0) runStart = i
+            if (!quiet && runStart >= 0) { out += ((runStart + i - 1) / 2.0 + 3) * STEP; runStart = -1 }
+        }
+        if (runStart >= 0) out += ((runStart + rms.size - 6) / 2.0 + 3) * STEP
+        return out
+    }
+
+    // ---------------------------------------------------------------- the whole song, found by the gaps
+
+    /** Low-priority thread that looks for the song's start and end while it plays. */
+    private val finder = java.util.concurrent.Executors.newSingleThreadExecutor { r ->
+        Thread({ android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_LOWEST); r.run() }, "song-finder").apply { priority = Thread.MIN_PRIORITY }
+    }.asCoroutineDispatcher()
+
+    /** Decodes [from, to) and returns (gap byte offsets, their times from [from]). */
+    private fun gapsIn(p: Pending, from: Long, to: Long): List<Pair<Long, Double>> {
+        val data = readRange(from, to)
+        val clip = clipOf(p.copy(start = from), data, from)
+        val f = File(dir, "scan.${clip.cleanExt}")
+        try {
+            clip.write(0, clip.n, f)
+            val rms = rmsOf(f, progress = false)
+            return gaps(rms).map { g -> (from + clip.pos[clip.indexOfTime(g).coerceAtMost(clip.n - 1)]) to g }
+        } finally { f.delete() }
+    }
+
+    /**
+     * "This song" without announced titles: its start is the last gap before now (up to 10 min back, else the
+     * start of the recording); its end, the first gap at least a minute after the start — watched every 10 s,
+     * at most 15 min. Can be extended (+ minutes, + next song), stopped or cancelled like the others.
+     */
+    fun saveWholeSong(name: String): String {
+        val p: Pending
+        synchronized(lock) {
+            val s = status.value
+            if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
+            if (s.pending != null) return "Already saving"
+            p = Pending(marks.lastOrNull()?.title ?: "", total, false, station, System.currentTimeMillis(), s.format, "gap", name.trim())
+            status.value = s.copy(pending = p)
+        }
+        scope.launch(finder) { findSong(p) }
+        return "Finding where this song began and where it ends…"
+    }
+
+    private suspend fun findSong(p0: Pending) {
+        var p = p0
+        val req = p0.start
+        fun same() = status.value.pending?.let { it.manual == "gap" && it.at == p.at } == true
+        try {
+            // Start: the last gap before now.
+            val first = synchronized(lock) { segs.firstOrNull()?.start ?: req }
+            val from = maxOf(first, req - (bytesPerSec * 600).toLong())
+            val before = if (req - from > bytesPerSec * 3) gapsIn(p, from, req) else emptyList()
+            val start = before.lastOrNull { it.first < req - (bytesPerSec * 1).toLong() }
+            synchronized(lock) {
+                if (!same()) return
+                p = p.copy(start = start?.first ?: from, partialStart = start == null,
+                    at = System.currentTimeMillis() - (((req - (start?.first ?: from)) / bytesPerSec) * 1000).toLong())
+                status.value = status.value.copy(pending = p)
+            }
+            // End: the first gap at least a minute into the song.
+            var scanFrom = maxOf(p.start, req - (bytesPerSec * 2).toLong())
+            var minEnd = p.start + (bytesPerSec * 60).toLong()
+            while (true) {
+                delay(10_000)
+                if (!same()) return
+                val to = synchronized(lock) { total }
+                val cur = status.value.pending ?: return
+                if (System.currentTimeMillis() - p0.at > 15 * 60_000L) {
+                    synchronized(lock) { if (same()) { status.value = status.value.copy(pending = null); finishLater(cur, to, partialEnd = false) } }
+                    ServerLog.log("saved-songs", "end", "radio", "", false, "No gap found within 15 min: saved up to now")
+                    return
+                }
+                if (to - scanFrom < bytesPerSec * 6) continue
+                val end = gapsIn(p, scanFrom, to).firstOrNull { it.first >= minEnd }
+                scanFrom = to - (bytesPerSec * 2).toLong()
+                if (end == null) continue
+                synchronized(lock) {
+                    val c = status.value.pending ?: return
+                    if (!same()) return
+                    when {
+                        c.songsLeft > 1 -> {      // + next song: go on to the next gap
+                            p = c.copy(songsLeft = c.songsLeft - 1); status.value = status.value.copy(pending = p)
+                            minEnd = end.first + (bytesPerSec * 60).toLong()
+                        }
+                        c.extraAfterSongMs > 0 -> status.value = status.value.copy(pending = c.copy(manual = "timed",
+                            untilAt = System.currentTimeMillis() + c.extraAfterSongMs, extraAfterSongMs = 0))
+                        else -> { status.value = status.value.copy(pending = null); finishLater(c, end.first, partialEnd = false) }
+                    }
+                }
+                if (status.value.pending?.manual != "gap") return
+            }
+        } catch (e: Exception) {
+            ServerLog.log("saved-songs", "find", "radio", "", false, "Could not find the song's start / end", e.message ?: e.javaClass.simpleName)
+            synchronized(lock) { if (same()) status.value = status.value.copy(pending = null) }
+        }
     }
 
     /** The quietest 50 ms step within [from, to] seconds (null when nothing there is quiet enough to be a gap). */
@@ -701,18 +824,8 @@ object RadioCapture {
 
         // Pass 1: loudness every 50 ms, to find the gaps between songs.
         stage(0f, 0.35f, t.last())
-        val step = 0.05
-        val rmsList = ArrayList<Float>()
-        var acc = 0.0; var cnt = 0; var stepFrames = 0
-        decode(clean) { pcm, frames, rate, ch ->
-            if (stepFrames == 0) stepFrames = (rate * step).toInt()
-            for (f in 0 until frames) {
-                var s = 0.0; for (c in 0 until ch) { val x = pcm[f * ch + c] / 32768.0; s += x * x }
-                acc += s / ch; cnt++
-                if (cnt >= stepFrames) { rmsList += sqrt(acc / cnt).toFloat(); acc = 0.0; cnt = 0 }
-            }
-        }
-        val rms = rmsList.toFloatArray()
+        val step = STEP
+        val rms = rmsOf(clean)
         val decodedSec = rms.size * step
         diag += " · decoded ${"%.1f".format(java.util.Locale.US, decodedSec)} s"
         if (decodedSec < 1) throw Exception("the recorded audio could not be decoded (${clip.cleanExt})")
@@ -741,7 +854,7 @@ object RadioCapture {
         if (cutEnd - cutStart < 1) throw Exception("nothing recorded between the song's start and end")
 
         val s = App.instance.store.current.settings
-        val reencode = s.saveFormat != "original"
+        val reencode = p.out != "original"
         val outExt = if (reencode) "mp3" else clip.origExt
         val out = File(dir, "out.$outExt")
         var lufs = 0.0; var peak = 0f
@@ -784,7 +897,7 @@ object RadioCapture {
         val proper = Regex("\\p{L}").containsMatchIn(nice) && !nice.equals(p.station, true) && !nice.contains("http", true) &&
             !Regex("^(live|unknown|untitled|advert|advertisement|ad|ads|commercial|news|jingle|station id|n/a)$", RegexOption.IGNORE_CASE).matches(nice)
         val name = (if (proper) safeName(nice) else java.text.SimpleDateFormat("yy_MM_dd_HH_mm", java.util.Locale.US).format(java.util.Date(p.at))) + ".$outExt"
-        val (where, uri) = store(ctx, out, name, if (reencode) "audio/mpeg" else clip.origMime)
+        val (where, uri) = store(ctx, out, name, if (reencode) "audio/mpeg" else clip.origMime, p.out)
         out.delete()
         // Into today's session playlist.
         val item = app.vlcinterface.player.PlayItem(uri, info?.title ?: title.ifBlank { name.substringBeforeLast('.') }, artist = info?.artist ?: artist,
@@ -889,7 +1002,7 @@ object RadioCapture {
         val date = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date())
         set(org.jaudiotagger.tag.FieldKey.COMMENT, "Recorded from ${p.station} on $date" +
             (if (p.partialStart) " (beginning missing)" else ""))
-        set(org.jaudiotagger.tag.FieldKey.ENCODER, if (f.extension == "mp3" && App.instance.store.current.settings.saveFormat != "original") "LAME ${Mp3Encoder.version} V0 (vlc interface)" else "vlc interface (stream copy)")
+        set(org.jaudiotagger.tag.FieldKey.ENCODER, if (f.extension == "mp3" && p.out != "original") "LAME ${Mp3Encoder.version} V0 (vlc interface)" else "vlc interface (stream copy)")
         // Picture: the album's from the catalogue, else the radio picture shown on the player.
         val pic = if (app.vlcinterface.player.NetGuard.blocked()) null else info?.artworkUrl?.takeIf { it.isNotEmpty() }?.let { fetch(it) }
             ?: App.instance.player.state.value.artworkUrl.takeIf { it.startsWith("http") }?.let { fetch(it) }
@@ -968,8 +1081,8 @@ object RadioCapture {
      * Into <library root>/raw (original) or <library root>/mp3 (re-encoded) — next to the phone library, or in the
      * folder chosen in Settings (its raw / mp3 sub-folders). Returns (where, file address).
      */
-    private fun store(ctx: Context, f: File, name: String, mime: String): Pair<String, String> {
-        val sub = if (App.instance.store.current.settings.saveFormat == "original") "raw" else "mp3"
+    private fun store(ctx: Context, f: File, name: String, mime: String, out: String): Pair<String, String> {
+        val sub = if (out == "original") "raw" else "mp3"
         val tree = App.instance.store.current.settings.saveFolder
         if (tree.isNotEmpty()) try {
             val dir = subDir(ctx, Uri.parse(tree), sub)

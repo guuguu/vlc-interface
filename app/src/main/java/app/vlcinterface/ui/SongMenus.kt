@@ -208,6 +208,9 @@ fun SaveSongDialog(onDone: () -> Unit) {
                     val ends = when (pend.manual) {
                         "timed" -> "Ends in ${fmtTime((pend.untilAt - now).coerceAtLeast(0))}"
                         "start" -> "Ends when you stop it"
+                        "gap" -> (if (pend.partialStart) "Began before the recording · " else "") + "Ends at the next gap between songs" +
+                            (if (pend.songsLeft > 1) " + ${pend.songsLeft - 1} more" else "") +
+                            (if (pend.extraAfterSongMs > 0) " + ${pend.extraAfterSongMs / 60_000} min" else "")
                         else -> "Ends with the song" + (if (pend.songsLeft > 1) " + ${pend.songsLeft - 1} more" else "") +
                             (if (pend.extraAfterSongMs > 0) " + ${pend.extraAfterSongMs / 60_000} min" else "")
                     }
@@ -217,7 +220,7 @@ fun SaveSongDialog(onDone: () -> Unit) {
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Pill("+1 min") { say(RadioCapture.extend(60_000)) }
                             Pill("+5 min") { say(RadioCapture.extend(300_000)) }
-                            if (pend.manual.isEmpty()) Pill("+ next song") { say(RadioCapture.addSong()) }
+                            if (pend.manual.isEmpty() || pend.manual == "gap") Pill("+ next song") { say(RadioCapture.addSong()) }
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -233,11 +236,20 @@ fun SaveSongDialog(onDone: () -> Unit) {
                         Pill("Shazam") { shazamAt = System.currentTimeMillis(); openShazam(ctx) }
                         Pill("Paste") { clipSong(ctx)?.let { name = it } ?: say("Nothing to paste") }
                     }
-                    label("Stop at the end of the song", C.text)
-                    if (s.title.isNotBlank()) {
-                        if (!s.titleStartKnown) Text("Recording began during this song: saved from then on.", color = C.muted, fontSize = 12.sp)
-                        Pill("End of this song", filled = true) { say(RadioCapture.saveCurrent()) }
-                    } else Text("The station announces no song titles — use minutes.", color = C.muted, fontSize = 12.sp)
+                    // Format of this save (also the default in Settings → Saved songs).
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Format", color = C.text, fontSize = 13.sp)
+                        val orig = st.settings.saveFormat == "original"
+                        Pill("Original", selected = orig) { app.vlcinterface.App.instance.store.update { it.copy(settings = it.settings.copy(saveFormat = "original")) } }
+                        Pill("MP3 V0", selected = !orig) { app.vlcinterface.App.instance.store.update { it.copy(settings = it.settings.copy(saveFormat = "mp3")) } }
+                    }
+                    label("The whole song", C.text)
+                    // Announced titles (and their start recorded): song start / end from them; otherwise from the
+                    // gaps between songs (start: the last gap before now; end: the next gap).
+                    val byTitles = s.title.isNotBlank() && s.titleStartKnown
+                    Pill("This whole song", filled = true) { say(if (byTitles) RadioCapture.saveCurrent() else RadioCapture.saveWholeSong(name)) }
+                    Text(if (byTitles) "From the station's song titles, cut at the gaps." else "Found by the gaps between songs: from where this song began to where it ends.",
+                        color = C.muted, fontSize = 12.sp)
                     label("Or save for … minutes from now", C.text)
                     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(3, 5, 10, 15, 20, 30).forEach { m -> Pill("$m") { say(RadioCapture.saveFor(m, name)) } }
