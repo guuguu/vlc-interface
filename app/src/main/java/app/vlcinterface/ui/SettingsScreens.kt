@@ -231,11 +231,21 @@ fun SettingsScreen(nav: Navigator) {
                     else if (up && s.vpnNas) Pill("Search the VPN now") { vl.discover() }
                     val kept = st.sources.filter { it.vpnHost.isNotBlank() }
                     if (kept.isEmpty()) Text("None yet — found by themselves when the VPN starts", color = C.muted, fontSize = 12.sp)
+                    var editing by remember { mutableStateOf<app.vlcinterface.data.Source?>(null) }
                     kept.forEach { src ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("${src.name.ifBlank { src.host }}: LAN ${src.host} · VPN ${src.vpnHost}", color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            STextButton({ editing = src }) { Text("Modify") }
                             STextButton({ vl.forget(src) }) { Text("Forget") }
                         }
+                    }
+                    editing?.let { src ->
+                        var ip by remember(src.id) { mutableStateOf(src.vpnHost) }
+                        AlertDialog(onDismissRequest = { editing = null }, containerColor = C.panel,
+                            title = { Text("${src.name.ifBlank { src.host }}: VPN address", color = C.text) },
+                            text = { androidx.compose.material3.OutlinedTextField(ip, { ip = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), label = { Text("VPN address") }) },
+                            confirmButton = { STextButton({ vl.setVpnHost(src, ip); editing = null }, enabled = ip.isNotBlank()) { Text("Save", color = accent()) } },
+                            dismissButton = { STextButton({ editing = null }) { Text("Cancel") } })
                     }
                 }
                 Divider()

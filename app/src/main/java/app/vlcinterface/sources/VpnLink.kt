@@ -345,6 +345,21 @@ object VpnLink {
         }
     }
 
+    /** "Modify": the address (and the LAN device it belongs to) as corrected by hand. */
+    fun answerWith(sourceId: String, ip: String) {
+        val (_, f) = ask.value ?: return
+        val s = App.instance.store.current.sources.firstOrNull { it.id == sourceId } ?: return
+        ask.value = s to f.copy(ip = ip.trim())
+        answer(true)
+    }
+
+    /** Settings → VPN: a kept VPN address changed by hand. */
+    fun setVpnHost(s: Source, ip: String) {
+        App.instance.store.update { x -> x.copy(sources = x.sources.map { if (it.id == s.id) it.copy(vpnHost = ip.trim()) else it }) }
+        ServerLog.log("vpn", "profile", "smb", "", true, "${s.name.ifBlank { s.host }}: VPN address set by hand to ${ip.trim()}")
+        usingVpn.remove(s.id)
+    }
+
     fun answer(yes: Boolean) {
         val (s, f) = ask.value ?: return
         ask.value = null

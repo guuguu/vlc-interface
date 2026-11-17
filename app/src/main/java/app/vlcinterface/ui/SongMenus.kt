@@ -493,22 +493,48 @@ fun VpnQuestionsHost() {
     val ctx = LocalContext.current
     val same by v.ask.collectAsState()
     same?.let { (s, f) ->
+        // Yes / No / Modify: the detected address and the LAN device it's added to can be corrected.
+        var modify by remember(f.ip) { mutableStateOf(false) }
+        var ip by remember(f.ip) { mutableStateOf(f.ip) }
+        var target by remember(f.ip) { mutableStateOf(s.id) }
+        val lan = app.vlcinterface.App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN }
+        val ipOk = Regex("^\\d{1,3}(\\.\\d{1,3}){3}$").matches(ip.trim()) || Regex("^[A-Za-z0-9.-]+$").matches(ip.trim())
         AlertDialog(onDismissRequest = {}, containerColor = C.panel,
-            title = { Text("Same server?", color = C.text) },
+            title = { Text(if (modify) "Modify" else "Same server?", color = C.text) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("A server was found on the VPN at ${f.ip}" + (if (f.nbName.isNotEmpty()) " (${f.nbName})" else "") + ".", color = C.text, fontSize = 14.sp)
-                    Text("Is it the same as “${s.name.ifBlank { s.host }} - ${s.host}”?", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text(when {
-                        f.guid.isNotEmpty() && f.guid == s.smbGuid -> "Same server ID (SMB GUID)."
-                        f.mac.isNotEmpty() && f.mac == s.mac -> "Same network card (MAC)."
-                        f.nbName.isNotEmpty() && f.nbName.equals(s.nbName, true) -> "Same network name."
-                        else -> "Similar name."
-                    } + " Yes: away from home with the VPN on, the app uses ${f.ip}; on its Wi-Fi again, ${s.host}.", color = C.muted, fontSize = 12.sp)
+                    if (!modify) {
+                        Text("Is it the same as “${s.name.ifBlank { s.host }} - ${s.host}”?", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text(when {
+                            f.guid.isNotEmpty() && f.guid == s.smbGuid -> "Same server ID (SMB GUID)."
+                            f.mac.isNotEmpty() && f.mac == s.mac -> "Same network card (MAC)."
+                            f.nbName.isNotEmpty() && f.nbName.equals(s.nbName, true) -> "Same network name."
+                            else -> "Similar name."
+                        } + " Yes: away from home with the VPN on, the app uses ${f.ip}; on its Wi-Fi again, ${s.host}.", color = C.muted, fontSize = 12.sp)
+                    } else {
+                        androidx.compose.material3.OutlinedTextField(ip, { ip = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                            label = { Text("VPN address") }, isError = !ipOk,
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri))
+                        Text("Add it to", color = C.muted, fontSize = 12.sp)
+                        lan.forEach { d ->
+                            Row(Modifier.fillMaxWidth().clickable { target = d.id }, verticalAlignment = Alignment.CenterVertically) {
+                                androidx.compose.material3.RadioButton(target == d.id, { target = d.id })
+                                Text("${d.name.ifBlank { d.host }} - ${d.host}", color = C.text, fontSize = 14.sp)
+                            }
+                        }
+                    }
                 }
             },
-            confirmButton = { STextButton({ v.answer(true) }) { Text("Yes, same", color = accent(), fontWeight = FontWeight.Bold) } },
-            dismissButton = { STextButton({ v.answer(false) }) { Text("No") } })
+            confirmButton = {
+                Row {
+                    if (!modify) {
+                        STextButton({ modify = true }) { Text("Modify") }
+                        STextButton({ v.answer(true) }) { Text("Yes", color = accent(), fontWeight = FontWeight.Bold) }
+                    } else STextButton({ v.answerWith(target, ip) }, enabled = ipOk) { Text("Save", color = if (ipOk) accent() else C.muted, fontWeight = FontWeight.Bold) }
+                }
+            },
+            dismissButton = { STextButton({ if (modify) modify = false else v.answer(false) }) { Text(if (modify) "Back" else "No") } })
     }
     val start by v.askStart.collectAsState()
     start?.let { s ->
