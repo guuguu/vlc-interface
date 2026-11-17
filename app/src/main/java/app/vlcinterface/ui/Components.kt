@@ -401,7 +401,13 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
     // A menu never sits over the keyboard: the keyboard is put away when it opens.
     val kb = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     if (expanded) androidx.compose.runtime.LaunchedEffect(Unit) { kb?.hide() }
-    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = 340.dp), containerColor = C.menu) {
+    // Never over the status bar or the navigation / gesture bar: at most the space between them (the menu scrolls),
+    // and Android's menu keeps 48 dp from the screen's top and bottom edges, beyond those bars.
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    val bars = androidx.compose.foundation.layout.WindowInsets.systemBars
+    val freeH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp -
+        with(dens) { (bars.getTop(dens) + bars.getBottom(dens)).toDp() } - 104.dp
+    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = 340.dp).heightIn(max = freeH.coerceAtLeast(160.dp)), containerColor = C.menu) {
         if (!expanded) UiPrefs.sizePick = false
         if (UiPrefs.sizePick) {
             // Quick menu text size check (same setting as in Settings); the menu stays open to see the result.

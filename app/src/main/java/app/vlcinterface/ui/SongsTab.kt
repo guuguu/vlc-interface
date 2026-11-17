@@ -211,7 +211,9 @@ fun SongsTab(nav: Navigator) {
         val imeBottom = WindowInsets.ime.getBottom(dens)
         val winH = with(dens) { androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp.toPx() } +
             WindowInsets.navigationBars.getBottom(dens) + WindowInsets.statusBars.getTop(dens)
-        val popMax = with(dens) { ((winH - imeBottom - fieldBottom - 12f).coerceAtLeast(120f)).toDp() }.coerceAtMost(340.dp)
+        // …and above the navigation / gesture bar when the keyboard is closed.
+        val bottomBar = maxOf(imeBottom, WindowInsets.navigationBars.getBottom(dens))
+        val popMax = with(dens) { ((winH - bottomBar - fieldBottom - 12f).coerceAtLeast(120f)).toDp() }.coerceAtMost(340.dp)
         Box {
             androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true,
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).onGloballyPositioned { fieldH = it.size.height; fieldBottom = it.positionInWindow().y + it.size.height },
