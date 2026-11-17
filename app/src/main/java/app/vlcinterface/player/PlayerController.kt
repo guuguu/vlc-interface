@@ -142,6 +142,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     private var eq: MediaPlayer.Equalizer? = null
     /** The queue in its original order while it is shown/played in random order (null = queue is in order). */
     private var orderedQueue: List<PlayItem>? = null
+    /** The list as loaded (NAS songs included), in its order: brought back when the NAS is usable again. */
+    @Volatile private var fullList: List<PlayItem> = emptyList()
 
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state
@@ -895,6 +897,34 @@ class PlayerController(private val context: Context, private val store: Store) {
         main.postDelayed({ t.cancel() }, 3_000)
     }
 
+    /**
+     * VPN-NAS on (NAS usable again): the loaded list comes back whole — its NAS songs return to their places; the
+     * playing song goes on, the list continues from it (shuffle: the rest shuffled again).
+     */
+    fun restoreNas() = main.post {
+        val s = _state.value
+        val full = fullList.filterNot { nasOff(it) }
+        if (full.isEmpty() || s.item?.isRadio == true) return@post
+        val have = s.queue.map { qKey(it) }.toHashSet()
+        if (full.all { qKey(it) in have }) return@post
+        val cur = s.queue.getOrNull(s.index)
+        // Songs added to the queue later (not in the list) are kept at the end.
+        val fullKeys = full.map { qKey(it) }.toHashSet()
+        val extra = s.queue.filter { qKey(it) !in fullKeys }
+        val ordered = (full.map { f -> s.queue.firstOrNull { qKey(it) == qKey(f) } ?: f }) + extra
+        if (store.current.settings.shuffle && orderedQueue != null && cur != null) {
+            orderedQueue = ordered
+            val played = s.queue.take(s.index + 1)
+            val playedKeys = played.map { qKey(it) }.toHashSet()
+            val q = played + ordered.filter { qKey(it) !in playedKeys }.shuffled()
+            _state.value = s.copy(queue = q, index = s.index)
+        } else {
+            val idx = cur?.let { c -> ordered.indexOfFirst { it === c } }?.takeIf { it >= 0 } ?: 0
+            _state.value = s.copy(queue = ordered, index = idx)
+        }
+        app.vlcinterface.data.ServerLog.log("player", "nas-back", "", "", true, "NAS usable: list reloaded with its NAS songs (${ordered.size})")
+    }
+
     /** NAS not usable: its songs leave the queue (the playing one stays); only local files go on. */
     fun pruneNas() = main.post {
         val s = _state.value
@@ -911,6 +941,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val tapped = items0.getOrNull(index0.coerceIn(0, items0.size - 1))
         // NAS not usable: a NAS song picked by hand doesn't start ("NAS offline"); lists keep only local songs.
         if (tapped != null && nasOff(tapped) && (index0 > 0 || items0.size == 1 || items0.all { nasOff(it) })) { nasOfflineToast(); return }
+        fullList = items0.filter { !it.isRadio }.distinctBy { qKey(it) }
         val items = items0.filterNot { nasOff(it) }.distinctBy { qKey(it) }
         if (items.isEmpty()) { nasOfflineToast(); return }
         val index = tapped?.let { t -> items.indexOfFirst { qKey(it) == qKey(t) } }?.takeIf { it >= 0 } ?: 0

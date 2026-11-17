@@ -130,6 +130,7 @@ object VpnLink {
             if (vpnUp.value && !wasUp) {
                 ServerLog.log("vpn", "up", "vpn", "", true, "VPN / tunnel up: " + self.joinToString { ipStr(it) })
                 if (on() || autoFor.isNotEmpty()) discover()
+                if (useNas.value.isNotEmpty()) try { App.instance.player.restoreNas() } catch (_: Exception) {}
             }
             if (!vpnUp.value && wasUp) ServerLog.log("vpn", "down", "vpn", "", true, "VPN / tunnel down")
             checkNeedVpn()
@@ -256,7 +257,8 @@ object VpnLink {
     fun setUse(ids: Set<String>) {
         useNas.value = ids; askUse.value = false
         try { App.instance.player.pruneNas() } catch (_: Exception) {}
-        if (ids.isNotEmpty()) { lastUsed = ids; ignoreSession = false; autoFind(ids) }
+        if (ids.isNotEmpty()) { lastUsed = ids; ignoreSession = false; autoFind(ids)
+            if (vpnUp.value) try { App.instance.player.restoreNas() } catch (_: Exception) {} }
         ServerLog.log("vpn", "use-nas", "smb", "", true, if (ids.isEmpty()) "NAS not used (away from home)"
             else "NAS used this session: " + lanServers().filter { it.id in ids }.joinToString { it.name.ifBlank { it.host } })
     }
