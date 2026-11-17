@@ -412,6 +412,14 @@ fun SettingsScreen(nav: Navigator) {
                     }
                     OpacityPreview(s.popupOpacity / 100f, "Pop-up window", 15)
                     androidx.compose.material3.Slider(s.popupOpacity.toFloat(), { v -> set(s.copy(popupOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
+                    // Players: faint shadow on buttons and slider knobs (knobs ringed in grey).
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { set(s.copy(controlShadow = !s.controlShadow)) }) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Shadow on player buttons", color = C.text, fontSize = 15.sp)
+                            Text("Audio and radio players: faint grey shadow on buttons and slider knobs, knobs ringed in grey", color = C.muted, fontSize = 12.sp)
+                        }
+                        androidx.compose.material3.Switch(s.controlShadow, { set(s.copy(controlShadow = it)) })
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Menu opacity (menus and search results, own setting)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         Text("${s.menuOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)

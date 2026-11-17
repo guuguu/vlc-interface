@@ -192,6 +192,8 @@ data class Settings(
     val vpnRetrySec: Int = 40,
     /** Loudness / Treble / Preamp sliders on the players: shown and applied (off = gone and no processing). */
     val toneSliders: Boolean = true,
+    /** Players: faint light-grey shadow (down-right) on buttons and slider knobs, knobs ringed in grey. */
+    val controlShadow: Boolean = true,
     /** Auto loudness: Loudness follows the phone's media volume (full up to each device's start %, then flattening). */
     val autoLoud: Boolean = false,
     /** Loudness / treble last used (kept for songs without their own values, also after a restart). */
@@ -237,7 +239,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccents", org.json.JSONArray(customAccents)).put("menuOpacity", menuOpacity).put("menuGap", menuGap).put("vpnNas", vpnNas).put("vpnAskStart", vpnAskStart).put("vpnApp", vpnApp).put("vpnRetrySec", vpnRetrySec).put("upNextCount", upNextCount).put("radioAccent", radioAccent).put("autoLoud", autoLoud).put("toneSliders", toneSliders).put("toneLoud", toneLoud.toDouble()).put("toneTreble", toneTreble.toDouble()).put("radioPreLast", radioPreLast.toDouble()).put("songPreLast", songPreLast.toDouble()).put("saveFolder", saveFolder).put("saveFormat", saveFormat).put("radioCapture", radioCapture).put("scrollbarPx", scrollbarPx).put("spaceUnderGb", spaceUnderGb).put("radioBufferMin", radioBufferMin).put("spotifyId", spotifyId).put("spotifySecret", spotifySecret).put("spacePercent", spacePercent)
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccents", org.json.JSONArray(customAccents)).put("menuOpacity", menuOpacity).put("menuGap", menuGap).put("vpnNas", vpnNas).put("vpnAskStart", vpnAskStart).put("vpnApp", vpnApp).put("vpnRetrySec", vpnRetrySec).put("upNextCount", upNextCount).put("radioAccent", radioAccent).put("autoLoud", autoLoud).put("toneSliders", toneSliders).put("controlShadow", controlShadow).put("toneLoud", toneLoud.toDouble()).put("toneTreble", toneTreble.toDouble()).put("radioPreLast", radioPreLast.toDouble()).put("songPreLast", songPreLast.toDouble()).put("saveFolder", saveFolder).put("saveFormat", saveFormat).put("radioCapture", radioCapture).put("scrollbarPx", scrollbarPx).put("spaceUnderGb", spaceUnderGb).put("radioBufferMin", radioBufferMin).put("spotifyId", spotifyId).put("spotifySecret", spotifySecret).put("spacePercent", spacePercent)
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -291,6 +293,7 @@ data class Settings(
                 radioAccent = o.optLong("radioAccent", 0L),
                 autoLoud = o.optBoolean("autoLoud", false),
                 toneSliders = o.optBoolean("toneSliders", true),
+                controlShadow = o.optBoolean("controlShadow", true),
                 toneLoud = o.optDouble("toneLoud", 0.0).toFloat().coerceIn(0f, 15f),
                 toneTreble = o.optDouble("toneTreble", 0.0).toFloat().coerceIn(-5f, 5f),
                 radioPreLast = o.optDouble("radioPreLast", 0.0).toFloat().coerceIn(-12f, 12f),

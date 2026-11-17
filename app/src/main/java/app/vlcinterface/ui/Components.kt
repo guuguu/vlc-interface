@@ -1,5 +1,11 @@
 package app.vlcinterface.ui
 
+import androidx.compose.ui.graphics.drawOutline
+
+import androidx.compose.ui.graphics.drawscope.translate
+
+import androidx.compose.ui.draw.drawBehind
+
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.launch
@@ -80,6 +86,8 @@ object C {
 
 /** Look settings read while drawing (kept in step with Settings by the app's root). */
 object UiPrefs {
+    /** Players: shadow on buttons / knobs (Settings → look). */
+    var controlShadow by androidx.compose.runtime.mutableStateOf(true)
     var popupAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
     var menuAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
     /** Space above and below each menu row (dp), from Settings. */
@@ -256,6 +264,27 @@ fun CardBox(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -
     Column(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.card), content = content)
 }
 
+/** Players' background: 90 % black. */
+val PLAYER_BG = Color(0xFF1A1A1A)
+/** Inside a player: buttons and pills get the faint shadow. */
+val LocalInPlayer = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/**
+ * Faint light-grey shadow 45° down-right ([offset] dp) drawn behind a control of [shape] — put it before clip().
+ * Only in the players, and only when switched on in Settings.
+ */
+@Composable
+fun Modifier.liteShadow(shape: androidx.compose.ui.graphics.Shape, offset: Float = 1f): Modifier {
+    if (!UiPrefs.controlShadow || !LocalInPlayer.current) return this
+    return this.drawBehind {
+        val o = offset.dp.toPx()
+        val outline = shape.createOutline(size, layoutDirection, this)
+        // Two passes: a soft edge (1 px blur look) around the offset shape.
+        translate(o + 0.5f, o + 0.5f) { drawOutline(outline, Color(0x29CDCDD2)) }
+        translate(o, o) { drawOutline(outline, Color(0x3DCDCDD2)) }
+    }
+}
+
 @Composable
 fun Pill(
     text: String,
@@ -275,6 +304,7 @@ private fun PillBody(text: String, selected: Boolean, modifier: Modifier, filled
     Box(
         modifier
             .heightIn(min = 36.dp)
+            .liteShadow(RoundedCornerShape(18.dp))
             .clip(RoundedCornerShape(18.dp))
             .background(bg)
             .border(1.dp, if (selected || filled) a else C.line, RoundedCornerShape(18.dp))

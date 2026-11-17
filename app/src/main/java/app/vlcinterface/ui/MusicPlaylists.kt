@@ -145,7 +145,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     var upNextYpx by remember { mutableIntStateOf(-1) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val vuK = if (landscape) (conf.screenHeightDp.toFloat() / conf.screenWidthDp).coerceIn(0.35f, 1f) else 1f
-    Box(Modifier.fillMaxSize()) {
+    androidx.compose.runtime.CompositionLocalProvider(LocalInPlayer provides true) {
+    Box(Modifier.fillMaxSize().background(PLAYER_BG)) {   // players: 90 % black
     Column(Modifier.fillMaxSize().padding(end = if (meters) (21 * vuK).dp else 0.dp)) {
         // No page title: the song name is already shown in the middle of the player.
         BackHeader("", nav, afterHome = {
@@ -234,7 +235,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     Text(if (radio) "Prev\nstation" else "Prev in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
                 if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("−${st.settings.doubleTapSeekSec}", 44) { player.seekBy(-st.settings.doubleTapSeekSec * 1000L) } }
-                Box(Modifier.size((76 * btnScale()).dp).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size((76 * btnScale()).dp).liteShadow(CircleShape).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
                     Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (26 * btnScale()).sp, fontWeight = FontWeight.Bold)
                 }
                 if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("+${st.settings.doubleTapSeekSec}", 44) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) } }
@@ -389,6 +390,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     // Stereo level meters: right edge, full height of the player.
     if (meters) StereoVu(Modifier.align(Alignment.CenterEnd).padding(end = (4 * vuK).dp).fillMaxHeight().width((15 * vuK).dp))
     }
+    }
 }
 
 /**
@@ -432,7 +434,8 @@ private fun SeekBlock(item: PlayItem) {
                     if (tapped) { if (len > 0) askTime = true } else drag?.let { player.seekFraction(it) }
                     drag = null
                 }, enabled = len > 0 || p.item != null,
-                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
+                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line),
+                thumb = { KnobThumb(Color.White) })
             // The bubble shows once the finger slides or stays down (not for a short tap).
             drag?.takeIf { moved || held }?.let { f ->
                 val target = (f * len).toLong()
@@ -591,7 +594,7 @@ fun StereoVu(modifier: Modifier) {
 @Composable
 private fun CtlBtn(t: String, size: Int, onClick: () -> Unit) {
     val k = btnScale()
-    Box(Modifier.size((size * k).dp).clip(CircleShape).background(C.card2).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size((size * k).dp).liteShadow(CircleShape).clip(CircleShape).background(if (LocalInPlayer.current) Color(0xFF303035) else C.card2).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Text(t, color = C.text, fontSize = (16 * k).sp, fontWeight = FontWeight.SemiBold)
     }
 }
@@ -1659,7 +1662,14 @@ private fun ToneSliders() {
                         drawLine(line, androidx.compose.ui.geometry.Offset(x0, y), androidx.compose.ui.geometry.Offset(x1, y), th, cap = androidx.compose.ui.graphics.StrokeCap.Round)
                         if (xv != zero) drawLine(active, androidx.compose.ui.geometry.Offset(minOf(zero, xv), y), androidx.compose.ui.geometry.Offset(maxOf(zero, xv), y), th, cap = androidx.compose.ui.graphics.StrokeCap.Round)
                         if (range.start < 0f) drawCircle(line, 2.5.dp.toPx(), androidx.compose.ui.geometry.Offset(zero, y))
+                        if (UiPrefs.controlShadow) {
+                            // Faint light-grey shadow 2 dp down-right, and a 1 dp grey ring round the knob.
+                            val o = 2.dp.toPx()
+                            drawCircle(Color(0x29CDCDD2), 8.dp.toPx() + 0.5f, androidx.compose.ui.geometry.Offset(xv + o + 0.5f, y + o + 0.5f))
+                            drawCircle(Color(0x3DCDCDD2), 8.dp.toPx(), androidx.compose.ui.geometry.Offset(xv + o, y + o))
+                        }
                         drawCircle(knob, 8.dp.toPx(), androidx.compose.ui.geometry.Offset(xv, y))
+                        if (UiPrefs.controlShadow) drawCircle(Color(0xFF8A8A8F), 8.dp.toPx(), androidx.compose.ui.geometry.Offset(xv, y), style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
                     }
                 }
                 // Recall: this song's own values (dimmed when it has none).
@@ -1820,4 +1830,15 @@ object LastStationMeta {
     private val m = java.util.concurrent.ConcurrentHashMap<String, String>()
     fun put(url: String, meta: String) { if (meta.isNotBlank()) m[url] = meta }
     fun of(url: String) = m[url] ?: ""
+}
+
+
+/** Slider knob of the players: with the shadow setting, a 1 dp grey ring and a faint shadow 2 dp down-right. */
+@Composable
+fun KnobThumb(color: Color) {
+    val shadow = UiPrefs.controlShadow
+    Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(16.dp).then(if (shadow) Modifier.liteShadow(CircleShape, 2f) else Modifier).clip(CircleShape).background(color)
+            .then(if (shadow) Modifier.border(1.dp, Color(0xFF8A8A8F), CircleShape) else Modifier))
+    }
 }
