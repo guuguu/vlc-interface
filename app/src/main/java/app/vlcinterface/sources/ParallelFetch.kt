@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicLong
  * 1.5 s while that gives clearly more speed (+15 %), one less if it gave less; the best count per server is
  * remembered for the session. Playback stays first: the copy runs at background priority, and while the playing
  * song comes from the network the copy keeps to ¾ of the measured speed and gives up a connection when playback
- * buffers.
+ * buffers. Over SMB every connection is a real one: its own login and TCP connection to the server.
  */
 object ParallelFetch {
     private const val PIECE = 1 shl 20
@@ -28,13 +28,15 @@ object ParallelFetch {
     /** Best connection count found per server (this session). */
     private val best = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
-    private interface Remote { val size: Long; fun reader(): Reader }
+    private interface Remote { val size: Long; fun reader(lane: Int): Reader }
     private interface Reader : AutoCloseable { fun readAt(pos: Long, buf: ByteArray, len: Int): Int }
-    private interface Writer : AutoCloseable { fun writeAt(pos: Long, buf: ByteArray, len: Int) }
+    private interface Writer : AutoCloseable { fun writeAt(lane: Int, pos: Long, buf: ByteArray, len: Int) }
 
     private fun hostOf(uri: String) = try { Uri.parse(uri).host ?: "" } catch (_: Exception) { "" }
 
     private fun smbFile(p: PlayItem, uri: String = p.uri) = SmbFile(VpnLink.route(Uri.decode(uri)), SmbProbe.fileContext(p.smbVersion, p.user, p.password, p.domain))
+    /** The same file through lane [lane]'s own connection. */
+    private fun smbLane(p: PlayItem, uri: String, lane: Int) = SmbFile(VpnLink.route(Uri.decode(uri)), SmbProbe.laneContext(p.smbVersion, p.user, p.password, p.domain, lane))
 
     private fun remote(p: PlayItem): Remote? {
         val u = p.uri
@@ -43,8 +45,8 @@ object ParallelFetch {
                 val f = smbFile(p); val len = f.length()
                 object : Remote {
                     override val size = len
-                    override fun reader() = object : Reader {
-                        val raf = f.openRandomAccess("r") as SmbRandomAccessFile
+                    override fun reader(lane: Int) = object : Reader {
+                        val raf = smbLane(p, u, lane).openRandomAccess("r") as SmbRandomAccessFile
                         override fun readAt(pos: Long, buf: ByteArray, len: Int): Int { raf.seek(pos); return raf.read(buf, 0, len) }
                         override fun close() { try { raf.close() } catch (_: Exception) {} }
                     }
@@ -62,7 +64,7 @@ object ParallelFetch {
                 }
                 object : Remote {
                     override val size = len
-                    override fun reader() = object : Reader {
+                    override fun reader(lane: Int) = object : Reader {
                         override fun readAt(pos: Long, buf: ByteArray, len: Int): Int =
                             Net.http.newCall(req("bytes=$pos-${pos + len - 1}")).execute().use { r ->
                                 if (r.code != 206) throw IllegalStateException("HTTP ${r.code}")
@@ -102,10 +104,10 @@ object ParallelFetch {
         RandomAccessFile(dst, "rw").use { out ->
             out.setLength(r.size)
             val w = object : Writer {
-                override fun writeAt(pos: Long, buf: ByteArray, len: Int) = synchronized(out) { out.seek(pos); out.write(buf, 0, len) }
+                override fun writeAt(lane: Int, pos: Long, buf: ByteArray, len: Int) = synchronized(out) { out.seek(pos); out.write(buf, 0, len) }
                 override fun close() {}
             }
-            return run(hostOf(p.uri), r.size, { r.reader() }, w, keepGoing, progress, "Copied ${p.title}")
+            return run(hostOf(p.uri), r.size, { lane -> r.reader(lane) }, w, keepGoing, progress, "Copied ${p.title}")
         }
     }
 
@@ -119,19 +121,18 @@ object ParallelFetch {
         if (!f.exists()) f.createNewFile()
         (f.openRandomAccess("rw") as SmbRandomAccessFile).use { it.setLength(src.length()) }
         RandomAccessFile(src, "r").use { input ->
-            val reader = {
+            val reader = { _: Int ->
                 object : Reader {
                     override fun readAt(pos: Long, buf: ByteArray, len: Int): Int = synchronized(input) { input.seek(pos); input.read(buf, 0, len) }
                     override fun close() {}
                 }
             }
-            // Each connection writes through its own handle.
-            val handles = java.util.concurrent.ConcurrentLinkedQueue<SmbRandomAccessFile>()
-            val tl = ThreadLocal<SmbRandomAccessFile>()
+            // Each lane writes through its own connection and handle.
+            val handles = java.util.concurrent.ConcurrentHashMap<Int, SmbRandomAccessFile>()
             val w = object : Writer {
-                override fun writeAt(pos: Long, buf: ByteArray, len: Int) {
-                    val h = tl.get() ?: (f.openRandomAccess("rw") as SmbRandomAccessFile).also { tl.set(it); handles += it }
-                    h.seek(pos); h.write(buf, 0, len)
+                override fun writeAt(lane: Int, pos: Long, buf: ByteArray, len: Int) {
+                    val h = handles.getOrPut(lane) { smbLane(p, targetUri, lane).openRandomAccess("rw") as SmbRandomAccessFile }
+                    synchronized(h) { h.seek(pos); h.write(buf, 0, len) }
                 }
                 override fun close() { handles.forEach { try { it.close() } catch (_: Exception) {} } }
             }
@@ -143,7 +144,7 @@ object ParallelFetch {
     }
 
     /** The piece workers, their count tuned while they run. */
-    private fun run(host: String, size: Long, newReader: () -> Reader, w: Writer, keepGoing: () -> Boolean,
+    private fun run(host: String, size: Long, newReader: (Int) -> Reader, w: Writer, keepGoing: () -> Boolean,
                     progress: (Long, Long) -> Unit, what: String): Boolean {
         val pieces = ((size + PIECE - 1) / PIECE).toInt()
         if (pieces == 0) return true
@@ -158,9 +159,13 @@ object ParallelFetch {
         val limit = AtomicLong(0)
         val windowStart = AtomicLong(System.currentTimeMillis()); val windowBytes = AtomicLong(0)
 
+        // Lanes: each worker its own connection (SMB: own login and TCP connection), handed back when it stops.
+        val freeLanes = java.util.concurrent.ConcurrentLinkedQueue((0 until MAX_THREADS).toList())
         fun worker() {
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
-            val rd = try { newReader() } catch (e: Exception) { failed.incrementAndGet(); running.decrementAndGet(); return }
+            val lane: Int = freeLanes.poll() ?: -1
+            if (lane < 0) { running.decrementAndGet(); return }
+            val rd = try { newReader(lane) } catch (e: Exception) { failed.incrementAndGet(); freeLanes += lane; running.decrementAndGet(); return }
             val buf = ByteArray(PIECE)
             try {
                 while (!stopF.get()) {
@@ -176,7 +181,7 @@ object ParallelFetch {
                             System.arraycopy(tmp, 0, buf, n, k); n += k
                         }
                         if (n < len) throw IllegalStateException("short read")
-                        w.writeAt(pos, buf, len)
+                        w.writeAt(lane, pos, buf, len)
                     } catch (e: Exception) {
                         retry += i
                         if (failed.incrementAndGet() > pieces / 4 + 8) { stopF.set(true) }
@@ -192,7 +197,7 @@ object ParallelFetch {
                         if (ahead > 0) Thread.sleep(minOf(ahead, 2000))
                     }
                 }
-            } finally { try { rd.close() } catch (_: Exception) {}; running.decrementAndGet() }
+            } finally { try { rd.close() } catch (_: Exception) {}; freeLanes += lane; running.decrementAndGet() }
         }
 
         val threads = java.util.Collections.synchronizedList(ArrayList<Thread>())

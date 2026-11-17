@@ -180,6 +180,17 @@ object SmbProbe {
      * (small NAS / router shares especially) refused more — "Failed to connect: 0.0.0.0<00>/…".
      */
     private val shared = java.util.concurrent.ConcurrentHashMap<String, CIFSContext>()
+    private val lanes = java.util.concurrent.ConcurrentHashMap<String, CIFSContext>()
+
+    /**
+     * A context of its own for parallel copies: each lane has its own connection pool, so each opens its own TCP
+     * connection (and login) to the server — real parallel connections, not requests sharing one.
+     */
+    fun laneContext(version: String, user: String, pass: String, domain: String, lane: Int): CIFSContext {
+        val v = version.ifEmpty { "SMB311" }
+        return lanes.getOrPut("$v|$domain|$user|$pass|$lane") { context(v, user, pass, domain, user.isEmpty()) }
+    }
+
     fun fileContext(version: String, user: String, pass: String, domain: String): CIFSContext {
         val v = version.ifEmpty { "SMB311" }
         return shared.getOrPut("$v|$domain|$user|$pass") { context(v, user, pass, domain, user.isEmpty()) }
