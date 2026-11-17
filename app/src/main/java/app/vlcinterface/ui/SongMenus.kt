@@ -538,11 +538,16 @@ fun VpnQuestionsHost() {
     }
     val start by v.askStart.collectAsState()
     start?.let { s ->
-        AlertDialog(onDismissRequest = { v.askStart.value = null }, containerColor = C.panel,
+        AlertDialog(onDismissRequest = { v.retryLater() }, containerColor = C.panel,
             title = { Text("${s.name.ifBlank { s.host }} not reachable", color = C.text) },
-            text = { Text("You're not on its home network and the VPN is off. Start the VPN to reach it at ${s.vpnHost}?", color = C.text, fontSize = 14.sp) },
-            confirmButton = { STextButton({ v.askStart.value = null; Toast.makeText(ctx, v.startVpn(ctx), Toast.LENGTH_LONG).show() }) {
-                Text("Start the VPN", color = accent(), fontWeight = FontWeight.Bold) } },
-            dismissButton = { STextButton({ v.askStart.value = null }) { Text("Not now") } })
+            text = { Column {
+                Text("This phone isn't on the network of any address stored for it (${(listOf(s.host) + s.altHosts).distinct().joinToString()}). Start the VPN to reach it?", color = C.text, fontSize = 14.sp)
+                val sec = app.vlcinterface.App.instance.store.current.settings.vpnRetrySec
+                STextButton({ Toast.makeText(ctx, v.startVpn(ctx), Toast.LENGTH_LONG).show(); v.retryLater() }) {
+                    Text("Start the VPN", color = accent(), fontWeight = FontWeight.Bold) }
+                STextButton({ v.retryLater(); Toast.makeText(ctx, "Checking again in $sec s", Toast.LENGTH_SHORT).show() }) { Text("Retry in $sec s") }
+                STextButton({ v.skipSession(); Toast.makeText(ctx, "Network songs skipped for this session", Toast.LENGTH_SHORT).show() }) { Text("Cancel — skip network songs this session") }
+            } },
+            confirmButton = {}, dismissButton = {})
     }
 }

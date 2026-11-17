@@ -218,7 +218,17 @@ fun SettingsScreen(nav: Navigator) {
                 Divider()
                 ToggleRow("Home NAS through the VPN", "Away from home with the VPN on, your LAN servers are reached through it — at home, directly", s.vpnNas) { set(s.copy(vpnNas = it)) }
                 Divider()
-                ToggleRow("Ask to start the VPN", "Away from home with the VPN off, when a home server can't be reached", s.vpnAskStart) { set(s.copy(vpnAskStart = it)) }
+                ToggleRow("Ask to start the VPN", "Away from home with the VPN off, when the phone isn't on the subnet of any address stored for a home server", s.vpnAskStart) { set(s.copy(vpnAskStart = it)) }
+                if (s.vpnAskStart) {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("“Retry in” delay (time to start the VPN)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                            Text("${s.vpnRetrySec} s", color = accent(), fontWeight = FontWeight.SemiBold)
+                            STextButton({ set(s.copy(vpnRetrySec = 40)) }) { Text("Reset") }
+                        }
+                        androidx.compose.material3.Slider(s.vpnRetrySec.toFloat(), { v -> set(s.copy(vpnRetrySec = (Math.round(v / 5f) * 5).coerceIn(10, 120))) }, valueRange = 10f..120f)
+                    }
+                }
                 Divider()
                 ValueRow("VPN app", "Opened by “Start the VPN” (its saved login is used)",
                     when (s.vpnApp) { "zerotier" -> "ZeroTier"; "tailscale" -> "Tailscale"; "settings" -> "Android settings"; else -> "Auto" }) {

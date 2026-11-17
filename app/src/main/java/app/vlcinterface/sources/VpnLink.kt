@@ -219,16 +219,56 @@ object VpnLink {
         }
     }
 
-    /** Away from home, VPN off, a server with a VPN address can't be reached: ask to start the VPN (once per change). */
+    /** "Not this session": network songs (LAN servers) are skipped until the phone is on their network again. */
+    @Volatile var ignoreSession = false; private set
+    @Volatile private var retryAt = 0L
+
+    /** On a network of [addr]: one of the phone's addresses (Wi-Fi, VPN …) is on the same subnet. */
+    private fun onSubnetOf(addr: String): Boolean { val ip = ipInt(addr) ?: return true; return (homeNets + vpnNets).any { it.contains(ip) } }
+
+    /** The phone is on a subnet of [s]'s LAN address or of any stored one. */
+    fun nearby(s: Source): Boolean = onSubnetOf(s.host) || s.altHosts.any { onSubnetOf(it) } || (s.vpnHost.isNotBlank() && onSubnetOf(s.vpnHost))
+
+    /** A network song to skip ("Not this session"). */
+    fun ignored(uri: String): Boolean {
+        if (!ignoreSession || !uri.startsWith("smb://")) return false
+        val host = android.net.Uri.parse(uri).host ?: return false
+        return App.instance.store.current.sources.any { it.zone == app.vlcinterface.data.Zone.LAN && it.host.equals(host, true) }
+    }
+
+    /**
+     * The phone's address isn't on the subnet of any address stored for a LAN server (home Wi-Fi, VPN …): starting
+     * the VPN is suggested — Start the VPN / Retry in N s (time to start it; Settings → VPN) / Not this session.
+     */
     private fun checkNeedVpn() {
-        if (vpnUp.value || !on() || !App.instance.store.current.settings.vpnAskStart) { askedStartFor = ""; return }
-        val s = App.instance.store.current.sources.firstOrNull { it.vpnHost.isNotBlank() && !onLan(it.host) } ?: run { askedStartFor = ""; return }
-        val key = s.id + homeNets.joinToString { "${it.addr}/${it.prefix}" }
+        val st = App.instance.store.current
+        val servers = st.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" && isIpLiteral(it.host) }
+        val away = servers.filter { !nearby(it) }
+        if (away.isEmpty()) { askedStartFor = ""; ignoreSession = false; return }        // back near a server: all as usual
+        if (!on() || !st.settings.vpnAskStart || ignoreSession) return
+        if (System.currentTimeMillis() < retryAt) return
+        val s = away.first()
+        val key = s.id + (homeNets + vpnNets).joinToString { "${it.addr}/${it.prefix}" }
         if (key == askedStartFor) return
         // Really not reachable (a route may still lead to it).
-        if (reachable(s.host, 445, 800)) return
+        if (reachable(hostNow(s), 445, 800)) return
         askedStartFor = key
         askStart.value = s
+    }
+
+    /** "Retry in N s": the question comes back after that if the server is still out of reach. */
+    fun retryLater() {
+        askStart.value = null
+        val sec = App.instance.store.current.settings.vpnRetrySec
+        retryAt = System.currentTimeMillis() + sec * 1000L
+        askedStartFor = ""
+        scope.launch { delay(sec * 1000L + 200); NetIndex.recheckReachable(); checkNeedVpn() }
+    }
+
+    /** "Not this session": network songs skipped until the phone is near a server again. */
+    fun skipSession() {
+        askStart.value = null; ignoreSession = true
+        ServerLog.log("vpn", "session", "smb", "", true, "Network songs skipped for this session (no VPN)")
     }
 
     /** Opens the VPN app (ZeroTier when installed, else Android's VPN settings) — it can't be switched on from here. */

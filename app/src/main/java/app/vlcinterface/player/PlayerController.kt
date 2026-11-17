@@ -1288,6 +1288,17 @@ class PlayerController(private val context: Context, private val store: Store) {
         triedBridge = false
         val oldPfd = currentPfd
         currentPfd = null
+        // "Not this session" (no VPN away from home): network songs are skipped at once.
+        if (app.vlcinterface.sources.VpnLink.ignored(item.uri)) {
+            stopping = true; mp.stop(); main.postDelayed({ stopping = false }, 300)
+            _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, ended = false,
+                metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, rgInfo = "",
+                error = "Skipped ${item.title}: network songs off for this session")
+            endHandled = false
+            if (s0.queue.all { app.vlcinterface.sources.VpnLink.ignored(it.uri) }) return       // nothing else to play
+            main.postDelayed({ if (_state.value.item === item && !endHandled) handleEnd(_state.value) }, 200)
+            return
+        }
         val media = try { makeMedia(item, s0, useBridge = item.smbVersion == "SMB1") } catch (e: Exception) {
             // The file can't be opened at all (gone, moved, phone permission lost…): say so and go on with the next one,
             // instead of the queue silently stopping on the song before.
