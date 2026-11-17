@@ -250,7 +250,6 @@ fun SongsTab(nav: Navigator) {
         Text("Tap songs to select them · long-press: the song's menu (with songs selected: play time and a new playlist)", color = C.muted, fontSize = 11.sp)
         if (loading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
         LazyColumn(Modifier.weight(1f).scrollbar(state), state = state) {
-            if (songs.size > 20) stickyHeader { JumpToBox(state, songs.map { listOf(it.artist, it.album, it.title).joinToString("  –  ") }, offset = 1) }
             items(songs, key = { it.uri }) { s ->
                 val on = s.uri in selected
                 Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(RoundedCornerShape(6.dp))
