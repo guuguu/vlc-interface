@@ -116,11 +116,10 @@ object Prefetch {
         try {
             val u = p.uri
             // Several connections at once, tuned to the bandwidth; playback keeps priority (see ParallelFetch).
-            val ok = ParallelFetch.download(p, tmp, MAX_BYTES, keepGoing = { gen == g && !paused() }) { if (p.uri.startsWith("http")) single(p, tmp, g) else false }
+            val ok = ParallelFetch.download(p, tmp, MAX_BYTES, keepGoing = { gen == g && !paused() }, what = "cache ahead") { if (p.uri.startsWith("http")) single(p, tmp, g) else false }
             if (!ok || gen != g || paused()) { tmp.delete(); return }
             tmp.renameTo(dst)
             done[u] = dst
-            ServerLog.log("cache", "next", "", "", true, "Next song cached: ${p.title}", "${dst.length() / 1024} KB")
         } catch (e: Exception) {
             tmp.delete()
         } finally { if (gen == g) target = "" }

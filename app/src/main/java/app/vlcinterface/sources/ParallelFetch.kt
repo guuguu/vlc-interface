@@ -25,6 +25,32 @@ object ParallelFetch {
     private const val PIECE = 1 shl 20
     private const val MAX_THREADS = 8
     private const val STEP_MS = 1500L
+    /** What was copied this playing session, per server and kind (for the one report in Logs). */
+    private class Stat { var files = 0; var bytes = 0L; var ms = 0L; var failed = 0 }
+    private val stats = java.util.concurrent.ConcurrentHashMap<String, Stat>()
+
+    private fun record(host: String, what: String, bytes: Long, ms: Long, ok: Boolean) {
+        val st = stats.getOrPut("$host|$what") { Stat() }
+        synchronized(st) { if (ok) { st.files++; st.bytes += bytes; st.ms += ms } else st.failed++ }
+    }
+
+    /**
+     * Once per playing session (exit, or the player unused for an hour): one report in Logs — per server and kind
+     * (caching ahead, ReplayGain reads, ReplayGain updates, indexing): files, MB, average speed, connections used.
+     */
+    fun report() {
+        if (stats.isEmpty() && gateBest.isEmpty()) return
+        val lines = stats.entries.sortedBy { it.key }.map { (k, st) ->
+            val (host, what) = k.split('|', limit = 2)
+            val mb = st.bytes / 1048576.0
+            val speed = if (st.ms > 0) st.bytes * 1000.0 / st.ms / 1048576 else 0.0
+            "$what · $host: ${st.files} file(s), ${"%.1f".format(java.util.Locale.US, mb)} MB, " +
+                "${"%.1f".format(java.util.Locale.US, speed)} MB/s, ${best[host] ?: 1} connection(s)" + if (st.failed > 0) ", ${st.failed} failed" else ""
+        } + gateBest.map { (h, n) -> "indexing · $h: $n at once" }
+        ServerLog.log("transfer", "report", "", "", true, "Network transfers this session", lines.joinToString("\n"))
+        stats.clear()
+    }
+
     /** Best connection count found per server (this session). */
     private val best = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
@@ -96,7 +122,7 @@ object ParallelFetch {
      * the copy is complete; false when it stopped, was too big, or the server can't serve pieces (then [fallback]
      * is used if given).
      */
-    fun download(p: PlayItem, dst: File, maxBytes: Long = 0, keepGoing: () -> Boolean = { true },
+    fun download(p: PlayItem, dst: File, maxBytes: Long = 0, keepGoing: () -> Boolean = { true }, what: String = "copy",
                  progress: (Long, Long) -> Unit = { _, _ -> }, fallback: (() -> Boolean)? = null): Boolean {
         val r = try { remote(p) } catch (e: Exception) { null }
         if (r == null) return fallback?.invoke() ?: false
@@ -107,7 +133,9 @@ object ParallelFetch {
                 override fun writeAt(lane: Int, pos: Long, buf: ByteArray, len: Int) = synchronized(out) { out.seek(pos); out.write(buf, 0, len) }
                 override fun close() {}
             }
+            val t0 = System.currentTimeMillis()
             return run(hostOf(p.uri), r.size, { lane -> r.reader(lane) }, w, keepGoing, progress, "Copied ${p.title}")
+                .also { record(hostOf(p.uri), what, r.size, System.currentTimeMillis() - t0, it) }
         }
     }
 
@@ -137,7 +165,10 @@ object ParallelFetch {
                 override fun close() { handles.forEach { try { it.close() } catch (_: Exception) {} } }
             }
             try {
-                if (!run(hostOf(targetUri), src.length(), reader, w, { true }, progress, "Sent ${p.title}")) throw IllegalStateException("copy to the server stopped")
+                val t0 = System.currentTimeMillis()
+                val ok = run(hostOf(targetUri), src.length(), reader, w, { true }, progress, "Sent ${p.title}")
+                record(hostOf(targetUri), "ReplayGain update", src.length(), System.currentTimeMillis() - t0, ok)
+                if (!ok) throw IllegalStateException("copy to the server stopped")
             } finally { w.close() }
         }
         return true
@@ -228,8 +259,6 @@ object ParallelFetch {
                     // No real gain (or a loss): back one and keep that.
                     val keep = if (speed < lastSpeed * 0.95 && n > 1) n - 1 else n
                     allowed.set(keep); best[host] = keep; tuning = false
-                    ServerLog.log(host, "transfer", "", "", true, "Parallel copy: $keep connection(s) best for $host",
-                        "${(maxOf(speed, lastSpeed) / 1048576 * 10).toLong() / 10.0} MB/s")
                 }
                 lastSpeed = maxOf(speed, lastSpeed)
             } else lastSpeed = maxOf(lastSpeed * 0.8, speed)
@@ -274,7 +303,6 @@ object ParallelFetch {
                     last = maxOf(last, speed)
                 }
                 gateBest[host] = allowed
-                ServerLog.log(host, "index", "", "", true, "Indexing: $allowed at once best for $host")
             }
         }
 

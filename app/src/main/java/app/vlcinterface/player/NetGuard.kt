@@ -29,6 +29,7 @@ object NetGuard {
     val idleAsk = MutableStateFlow(false)
     private const val IDLE_MS = 60 * 60_000L
     @Volatile private var lastUsed = System.currentTimeMillis()
+    @Volatile private var reported = false
     private var wifi = false
     private var online = false
     private var startBytes = -1L
@@ -206,6 +207,9 @@ object NetGuard {
                 try {
                     val now = System.currentTimeMillis()
                     if (App.instance.player.state.value.isPlaying) lastUsed = now
+                    // Playing session over (an hour without playing): the network transfer report, once.
+                    if (now - lastUsed >= IDLE_MS && !reported) { reported = true; app.vlcinterface.sources.ParallelFetch.report() }
+                    if (now - lastUsed < IDLE_MS) reported = false
                     if (mobileOk && now - lastUsed >= IDLE_MS) {
                         mobileOk = false; app.vlcinterface.sources.VpnLink.useNas.value = emptySet()
                         app.vlcinterface.data.ServerLog.log("network", "idle", "", "", true, "Player unused for an hour: mobile data has to be allowed again")

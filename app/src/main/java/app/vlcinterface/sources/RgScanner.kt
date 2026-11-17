@@ -539,7 +539,7 @@ object RgScanner {
         if (ctx.cacheDir.usableSpace < 2L * 1024 * 1024 * 1024) return null
         val f = File(ctx.cacheDir, "rgcopy-${Integer.toHexString(u.hashCode())}.${item.ext.ifEmpty { "bin" }}")
         return try {
-            if (ParallelFetch.download(item, f, 300L * 1024 * 1024, keepGoing = { !cancelled() })) { lastCopy = u to f; f }
+            if (ParallelFetch.download(item, f, 300L * 1024 * 1024, keepGoing = { !cancelled() }, what = "ReplayGain read")) { lastCopy = u to f; f }
             else { f.delete(); null }
         } catch (_: Exception) { f.delete(); null }
     }
@@ -550,7 +550,7 @@ object RgScanner {
         (lastCopy?.takeIf { it.first == u && it.second.isFile }?.second ?: Prefetch.localFor(u))?.let { c ->
             c.copyTo(dst, true); lastCopy?.let { if (it.first == u) { it.second.delete(); lastCopy = null } }; return
         }
-        if ((u.startsWith("smb://") || u.startsWith("http")) && ParallelFetch.download(item, dst)) return
+        if ((u.startsWith("smb://") || u.startsWith("http")) && ParallelFetch.download(item, dst, what = "ReplayGain read")) return
         val input = when {
             u.startsWith("content://") -> ctx.contentResolver.openInputStream(Uri.parse(u))
             u.startsWith("file://") -> File(Uri.parse(u).path!!).inputStream()
