@@ -1,8 +1,11 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package app.vlcinterface.ui
 
 import androidx.compose.foundation.background
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -45,7 +48,7 @@ import app.vlcinterface.player.PlayItem
  * after the current song (and into the playing playlist) — nothing is removed, no duplicates.
  */
 @Composable
-fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
+fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, onDone: () -> Unit) {
     val ctx = LocalContext.current
     val player = App.instance.player
     var library by remember { mutableStateOf<List<PlayItem>?>(null) }
@@ -91,8 +94,12 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
                 LazyColumn(Modifier.weight(1f, fill = false).scrollbar(st), state = st, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     itemsIndexed(hits) { idx, h ->
                         val queued = "${h.uri}#${h.startMs}" in inQueue
+                        // Long-press: Play, Add to queue, Go to folder, ReplayGain scan.
+                        var resMenu by remember(h.uri) { mutableStateOf(false) }
+                        androidx.compose.foundation.layout.Box { SearchResultMenu(h, resMenu, nav, { resMenu = false }, after = onDone) }
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (idx == at) accent().copy(alpha = 0.25f) else C.tile)
-                            .clickable { if (playNext) player.queueNext(h) else player.jumpToSong(h); onDone() }.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                            .combinedClickable(onClick = { if (playNext) player.queueNext(h) else player.jumpToSong(h); onDone() }, onLongClick = { resMenu = true })
+                            .padding(horizontal = 8.dp, vertical = 6.dp)) {
                             Text(h.title, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}" + if (queued) "  · in the queue" else "",
                                 color = if (queued) accent() else C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -466,3 +466,19 @@ fun ExitSavingHost() {
         confirmButton = { STextButton({ RadioCapture.exitNow() }) { Text("Close now (not saved)", color = C.bad) } },
     )
 }
+
+/** Long-press on a search result (song or video): Play, Add to queue, Go to folder, ReplayGain scan. */
+@Composable
+fun SearchResultMenu(item: PlayItem, open: Boolean, nav: Navigator?, onClose: () -> Unit, after: () -> Unit = {}) {
+    val ctx = LocalContext.current
+    SDropdownMenu(open, onClose) {
+        SMenuItem({ Text("▶  Play") }, { onClose(); app.vlcinterface.App.instance.player.play(item); after() })
+        SMenuItem({ Text("Add to queue") }, {
+            onClose()
+            val n = app.vlcinterface.App.instance.player.addToQueue(listOf(item))
+            Toast.makeText(ctx, if (n > 0) "Added to the queue" else "Already in the queue", Toast.LENGTH_SHORT).show()
+        })
+        if (nav != null) SMenuItem({ Text("Go to folder") }, { onClose(); openItemFolder(nav, item); after() })
+        if (item.isMusic) SMenuItem({ Text("ReplayGain scan…") }, { onClose(); FileDialogs.rg = item })
+    }
+}

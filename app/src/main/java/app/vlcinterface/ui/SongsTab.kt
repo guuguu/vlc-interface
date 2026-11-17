@@ -238,14 +238,19 @@ fun SongsTab(nav: Navigator) {
                     .border(1.dp, C.line, RoundedCornerShape(10.dp)).scrollbar(sc).verticalScroll(sc).padding(4.dp)) {
                     Text("${hits.size}${if (hits.size == 50) "+" else ""} found", color = C.muted, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
                     hits.forEach { h ->
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable {
+                      // Long-press: Play, Add to queue, Go to folder, ReplayGain scan.
+                      var resMenu by remember(h.uri) { mutableStateOf(false) }
+                      Box {
+                        SearchResultMenu(h, resMenu, nav, { resMenu = false })
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).combinedClickable(onClick = {
                             val i = songs.indexOfFirst { it.uri == h.uri }
                             focus = h.uri; query = ""; focusMgr.clearFocus()
                             if (i >= 0) scope.launch { state.animateScrollToItem((i - 3).coerceAtLeast(0)) }
-                        }.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                        }, onLongClick = { resMenu = true }).padding(horizontal = 8.dp, vertical = 6.dp)) {
                             Text(h.title, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}", color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
+                      }
                     }
                 }
             }

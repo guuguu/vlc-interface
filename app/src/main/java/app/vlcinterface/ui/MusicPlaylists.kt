@@ -156,8 +156,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
         }) { BackgroundWorkButton(); ScreenOnSign(C.text); OutputPill(openOutput); ExitButton() }
         SaveSongBar()
-        if (jump) JumpDialog { jump = false }
-        if (playNextPick) JumpDialog(playNext = true) { playNextPick = false }
+        if (jump) JumpDialog(nav = nav) { jump = false }
+        if (playNextPick) JumpDialog(playNext = true, nav = nav) { playNextPick = false }
         // Upright: one scrolling page. Sideways: the same page split in two under the track / ReplayGain line —
         // picture and titles on the left, controls and the rest on the right, each scrolling on its own.
         val partA: @Composable ColumnScope.() -> Unit = {
