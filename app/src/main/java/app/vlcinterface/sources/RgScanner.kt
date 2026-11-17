@@ -801,7 +801,8 @@ object MediaInfo {
         } catch (e: Exception) { err = e.message ?: e.javaClass.simpleName }
         finally { try { r.release() } catch (_: Exception) {}; ds?.close() }
         tags += "File" to item.fileName.ifEmpty { Uri.decode(item.uri).substringAfterLast('/') }
-        tags += "Location" to Uri.decode(item.uri).let { u -> if (u.startsWith("content://")) item.folderKey.removePrefix("local:").ifEmpty { u } else u.substringBeforeLast('/') }
+        // The folder on the phone / network (never a content:// address).
+        tags += "Location" to PhysicalPath.of(ctx, item).substringBeforeLast('/')
         val fileRg = ReplayGain.fromFile(ctx, item.uri, item.user, item.password, item.domain, item.smbVersion)
         Info(tags, fileRg, RgStore.get(item.uri), err)
     }

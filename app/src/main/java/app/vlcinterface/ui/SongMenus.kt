@@ -41,19 +41,8 @@ import app.vlcinterface.player.PlayItem
 import app.vlcinterface.sources.RadioCapture
 import app.vlcinterface.sources.SongLinks
 
-/** The file's place, readable: phone path (/storage/…), smb://server/share/…, or the web address. */
-fun filePathOf(ctx: Context, item: PlayItem): String {
-    val u = item.uri
-    if (u.startsWith("content://")) try {
-        @Suppress("DEPRECATION")
-        ctx.contentResolver.query(Uri.parse(u), arrayOf(MediaStore.MediaColumns.DATA), null, null, null)?.use { c ->
-            if (c.moveToFirst()) c.getString(0)?.takeIf { it.isNotBlank() }?.let { return it }
-        }
-    } catch (_: Exception) {}
-    if (u.startsWith("file://")) return Uri.parse(u).path ?: Uri.decode(u)
-    // Network: never the password, even when the address holds one.
-    return Uri.decode(u).replace(Regex("^(\\w+://)[^/@]*@"), "$1")
-}
+/** The file's place on the phone / network, readable (see [app.vlcinterface.sources.PhysicalPath]). */
+fun filePathOf(ctx: Context, item: PlayItem): String = app.vlcinterface.sources.PhysicalPath.of(ctx, item)
 
 private fun copy(ctx: Context, text: String, what: String) {
     ctx.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText(what, text))
