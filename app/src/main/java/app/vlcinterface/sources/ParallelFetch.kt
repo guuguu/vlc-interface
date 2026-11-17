@@ -185,6 +185,7 @@ object ParallelFetch {
         val allowed = AtomicInteger(best[host] ?: 1)
         val running = AtomicInteger(0)
         val stopF = java.util.concurrent.atomic.AtomicBoolean(false)
+        val holdForPlay = java.util.concurrent.atomic.AtomicBoolean(false)
         val retry = java.util.concurrent.ConcurrentLinkedQueue<Int>()
         // ¾ of the measured speed while playback comes from the network (bytes per second; 0 = no limit).
         val limit = AtomicLong(0)
@@ -200,7 +201,8 @@ object ParallelFetch {
             val buf = ByteArray(PIECE)
             try {
                 while (!stopF.get()) {
-                    if (running.get() > allowed.get()) break              // fewer connections asked for
+                    if (running.get() > allowed.get()) break              // fewer connections asked for: this one ends
+                    while (holdForPlay.get() && !stopF.get()) Thread.sleep(500)   // playback stutters: all wait
                     val i = retry.poll() ?: nextPiece.getAndIncrement().takeIf { it < pieces } ?: break
                     val pos = i.toLong() * PIECE
                     val len = minOf(PIECE.toLong(), size - pos).toInt()
@@ -235,33 +237,63 @@ object ParallelFetch {
         fun spawn() { running.incrementAndGet(); threads += Thread { worker() }.also { it.isDaemon = true; it.start() } }
         repeat(allowed.get()) { spawn() }
 
-        // Tuning: every 1.5 s the speed is measured; one more connection while it pays off.
-        var lastSpeed = 0.0; var tuning = best[host] == null; var lastBytes = 0L; var lastAt = System.currentTimeMillis()
+        /*
+         * Connections set while the copy runs, every 1.5 s:
+         *  - start: one more while speed rises clearly (+15 %), then kept;
+         *  - playback stutters (buffering): one connection ended per step; at one left the copy waits until playback
+         *    has been smooth for 10 s;
+         *  - the network doesn't keep up (errors, or speed under 60 % of the best seen): one ended per step;
+         *  - all well for 20 s: one more tried, kept only if it brings +10 %.
+         */
+        var tuning = best[host] == null
+        var peak = 0.0; var lastSpeed = 0.0; var lastBytes = 0L; var lastAt = System.currentTimeMillis()
+        var lastFailed = 0; var lastStutter = 0L; var calmSince = System.currentTimeMillis()
+        var trying = false; var before = 0.0
+        fun drop() { if (allowed.get() > 1) allowed.decrementAndGet(); calmSince = System.currentTimeMillis(); trying = false }
         while (true) {
             Thread.sleep(250)
-            if (!keepGoing()) { stopF.set(true) }
+            if (!keepGoing()) { stopF.set(true); holdForPlay.set(false) }
             val alive = synchronized(threads) { threads.any { it.isAlive } }
             if (!alive && (retry.isEmpty() || stopF.get())) break
             if (!alive && retry.isNotEmpty() && !stopF.get()) { spawn(); continue }
             val now = System.currentTimeMillis()
+            // Stutter is checked often: playback comes first.
+            if (playerBuffering()) {
+                if (now - lastStutter > 1000) {
+                    lastStutter = now
+                    if (allowed.get() > 1) drop() else holdForPlay.set(true)
+                }
+                continue
+            }
+            if (holdForPlay.get() && now - lastStutter > 10_000) { holdForPlay.set(false); calmSince = now }
             if (now - lastAt < STEP_MS) continue
             val speed = (doneBytes.get() - lastBytes) * 1000.0 / (now - lastAt)
             lastBytes = doneBytes.get(); lastAt = now
-            val fg = playingFromNetwork()
-            if (playerBuffering() && allowed.get() > 1) { allowed.decrementAndGet() }       // playback buffers: give way
-            limit.set(if (fg && lastSpeed > 0) (maxOf(speed, lastSpeed) * 0.75).toLong() else 0)
             windowStart.set(now); windowBytes.set(0)
-            if (tuning) {
-                val n = allowed.get()
-                if (lastSpeed == 0.0 || speed > lastSpeed * 1.15) {
-                    if (n < MAX_THREADS && nextPiece.get() < pieces) { allowed.set(n + 1); spawn() } else { tuning = false; best[host] = n }
-                } else {
-                    // No real gain (or a loss): back one and keep that.
-                    val keep = if (speed < lastSpeed * 0.95 && n > 1) n - 1 else n
-                    allowed.set(keep); best[host] = keep; tuning = false
+            if (holdForPlay.get()) continue
+            limit.set(if (playingFromNetwork() && peak > 0) (peak * 0.75).toLong() else 0)
+            val errs = failed.get() - lastFailed; lastFailed = failed.get()
+            val n = allowed.get()
+            when {
+                tuning -> {
+                    if (lastSpeed == 0.0 || speed > lastSpeed * 1.15) {
+                        if (n < MAX_THREADS && nextPiece.get() < pieces) { allowed.set(n + 1); spawn() } else { tuning = false; best[host] = n }
+                    } else {
+                        if (speed < lastSpeed * 0.95 && n > 1) allowed.set(n - 1)
+                        best[host] = allowed.get(); tuning = false; calmSince = now
+                    }
                 }
-                lastSpeed = maxOf(speed, lastSpeed)
-            } else lastSpeed = maxOf(lastSpeed * 0.8, speed)
+                errs > 0 || (peak > 0 && speed < peak * 0.6 && n > 1) -> { drop(); best[host] = allowed.get() }   // network can't keep up
+                trying -> {                                         // one more was tried: kept if it paid off
+                    trying = false
+                    if (speed < before * 1.10) allowed.decrementAndGet() else best[host] = allowed.get()
+                    calmSince = now
+                }
+                now - calmSince > 20_000 && n < MAX_THREADS && nextPiece.get() < pieces -> {
+                    trying = true; before = speed; allowed.set(n + 1); spawn()
+                }
+            }
+            peak = maxOf(peak * 0.9, speed); lastSpeed = speed
         }
         synchronized(threads) { threads.toList() }.forEach { it.join(3000) }
         if (tuning && best[host] == null) best[host] = allowed.get()
@@ -270,9 +302,9 @@ object ParallelFetch {
     }
 
     /**
-     * A limit on how many network operations run at once (indexing: folder listings and tag reads), tuned like the
-     * copies: it starts at the count remembered for the server (else 2) and goes up while the work gets clearly
-     * faster (+15 % every 3 s), up to 16; one back when it got slower. Used with withPermit like a Semaphore.
+     * A limit on how many network operations run at once (indexing: folder listings and tag reads), set like the
+     * copies while indexing runs: starts at the count remembered for the server (else 2), up while it gets clearly
+     * faster, down one at a time when playback stutters or the network can't keep up. Used like a Semaphore.
      */
     class Gate(private val host: String, private val counter: AtomicLong) {
         private val max = 16
@@ -285,24 +317,30 @@ object ParallelFetch {
             val start = (gateBest[host] ?: 2).coerceIn(1, max)
             repeat(max - start) { sem.acquire(); held.add(Unit) }
             allowed = start
-            if (gateBest[host] != null) return
             tuner = scope.launch {
-                var last = 0.0; var lastCount = counter.get(); var at = System.currentTimeMillis()
+                // Same rules as the copies: up while it pays off; down one per step when playback stutters or the
+                // network can't keep up (under 60 % of the best); one more tried after 30 s of calm.
+                var last = 0.0; var peak = 0.0; var lastCount = counter.get(); var at = System.currentTimeMillis()
+                var tuning = gateBest[host] == null; var calm = at; var trying = false; var before = 0.0
+                suspend fun down() { if (allowed > 1) { sem.acquire(); held.add(Unit); allowed-- }; calm = System.currentTimeMillis(); trying = false }
+                fun up() { if (allowed < max && held.isNotEmpty()) { held.poll(); sem.release(); allowed++ } }
                 while (true) {
-                    kotlinx.coroutines.delay(3000)
-                    val now = System.currentTimeMillis(); val c = counter.get()
+                    kotlinx.coroutines.delay(1000)
+                    val now = System.currentTimeMillis()
+                    if (playerBuffering()) { down(); continue }
+                    if (now - at < 3000) continue
+                    val c = counter.get()
                     val speed = (c - lastCount) * 1000.0 / (now - at); lastCount = c; at = now
                     if (speed <= 0.0) continue                       // nothing measured (long listing): wait
-                    if (last == 0.0 || speed > last * 1.15) {
-                        if (allowed >= max) break
-                        held.poll(); sem.release(); allowed++
-                    } else {
-                        if (speed < last * 0.95 && allowed > 1) { sem.acquire(); held.add(Unit); allowed-- }
-                        break
+                    when {
+                        tuning -> if (last == 0.0 || speed > last * 1.15) { if (allowed < max) up() else tuning = false }
+                                  else { if (speed < last * 0.95) down(); tuning = false; gateBest[host] = allowed; calm = now }
+                        peak > 0 && speed < peak * 0.6 && allowed > 1 -> { down(); gateBest[host] = allowed }
+                        trying -> { trying = false; if (speed < before * 1.10) down() else gateBest[host] = allowed; calm = now }
+                        now - calm > 30_000 && allowed < max -> { trying = true; before = speed; up() }
                     }
-                    last = maxOf(last, speed)
+                    peak = maxOf(peak * 0.9, speed); last = speed
                 }
-                gateBest[host] = allowed
             }
         }
 
