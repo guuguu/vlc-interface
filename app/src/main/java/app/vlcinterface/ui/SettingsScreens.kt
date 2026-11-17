@@ -238,6 +238,7 @@ fun SettingsScreen(nav: Navigator) {
                 ValueRow("Crashes", "App crashes, and why the app ended last time (from Android)", "Open") { nav.go(Screen.LogPage(app.vlcinterface.data.CrashLog.KEY)) }; Divider()
                 ValueRow("Sound engine", "The app's sound output: switches and problems", "Open") { nav.go(Screen.LogPage("sound-engine")) }; Divider()
                 ValueRow("Radio pictures", "Each song a station announced: picture found, or what was searched", "Open") { nav.go(Screen.LogPage("radio-pictures")) }; Divider()
+                ValueRow("VPN", "VPN on / off, servers found on it, LAN ↔ VPN switches", "Open") { nav.go(Screen.LogPage("vpn")) }; Divider()
                 ValueRow("Player", "Songs skipped (not found / not reachable)", "Open") { nav.go(Screen.LogPage("player")) }
                 Divider()
                 // By hand: everything in the app's cache folder (radio buffer, songs being saved, radio pictures,
