@@ -174,8 +174,16 @@ object SmbProbe {
             }
         }
 
-    fun fileContext(version: String, user: String, pass: String, domain: String): CIFSContext =
-        context(version.ifEmpty { "SMB311" }, user, pass, domain, user.isEmpty())
+    /**
+     * One shared connection setup per server login (cached): every file opened through it reuses the same
+     * connection. A new setup per file opened a new connection each time and never closed them, until the server
+     * (small NAS / router shares especially) refused more — "Failed to connect: 0.0.0.0<00>/…".
+     */
+    private val shared = java.util.concurrent.ConcurrentHashMap<String, CIFSContext>()
+    fun fileContext(version: String, user: String, pass: String, domain: String): CIFSContext {
+        val v = version.ifEmpty { "SMB311" }
+        return shared.getOrPut("$v|$domain|$user|$pass") { context(v, user, pass, domain, user.isEmpty()) }
+    }
 }
 
 /** Plain-words reasons for SMB / network failures, from the server's NT status code or the exception. */

@@ -196,7 +196,9 @@ object RgScanner {
     private suspend fun run(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescan: Boolean, results: ArrayList<RgResult>,
                             onlyWithoutRg: Boolean = false) {
         tagWeight = if (mode == RgMode.ALBUMS_BY_TAGS) 0.1f else 0f; fracs.clear()
-        val workers = items.size.coerceIn(1, 4)   // one thread per file, at most 4 at once
+        // One thread per file, at most 4 at once — 2 when files come from a network share (small servers limit
+        // how many files can be open at once).
+        val workers = items.size.coerceIn(1, if (items.any { it.uri.startsWith("smb://", true) }) 2 else 4)
         fun addResult(r: RgResult) = synchronized(results) { results += r }
         fun snapshot() = synchronized(results) { results.toList() }
         // Albums by tags: grouped by the tags inside each file (album artist | year | album title), read now,
@@ -249,8 +251,18 @@ object RgScanner {
         parallel(toMeasure, workers) { it ->
             fracs[it.uri] = 0f
             update { s -> s.copy(current = it.title, phase = "Measuring" + if (workers > 1) " ($workers at a time)" else "") }
-            val m: Loudness? = try { measure(ctx, it) { f -> fracs[it.uri] = f; update { s -> s } } } catch (e: Exception) {
-                addResult(RgResult(it.title, "can't decode: ${e.message ?: e.javaClass.simpleName}", false)); null
+            // A refused / dropped network connection is tried again (after 1 s, then 3 s) before it counts as a problem.
+            var m: Loudness? = null
+            for (attempt in 0..2) {
+                try { m = measure(ctx, it) { f -> fracs[it.uri] = f; update { s -> s } }; break } catch (e: Exception) {
+                    val msg = (e.message ?: "") + " " + (e.cause?.message ?: "")
+                    val network = msg.contains("connect", true) || msg.contains("timed out", true) || msg.contains("reset", true) ||
+                        msg.contains("transport", true) || e is java.io.IOException
+                    if (network && attempt < 2) { kotlinx.coroutines.delay(if (attempt == 0) 1000L else 3000L); continue }
+                    addResult(RgResult(it.title, "can't decode: ${e.message ?: e.javaClass.simpleName}" +
+                        if (attempt > 0) " (tried ${attempt + 1} times)" else "", false))
+                    break
+                }
             }
             // A measurement that came out silent / invalid is a failure, never written as 0.00 dB.
             val bad = m != null && (m.integrated.let { v -> v.isNaN() || v.isInfinite() } || m.peak.isNaN() || m.peak > 4f)
