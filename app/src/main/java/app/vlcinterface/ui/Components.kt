@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -404,7 +405,7 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
     // Never over the status bar or the navigation / gesture bar: at most the space between them (the menu scrolls),
     // and Android's menu keeps 48 dp from the screen's top and bottom edges, beyond those bars.
     val dens = androidx.compose.ui.platform.LocalDensity.current
-    val bars = androidx.compose.foundation.layout.WindowInsets.systemBars
+    val bars = androidx.compose.foundation.layout.WindowInsets.Companion.systemBars
     val freeH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp -
         with(dens) { (bars.getTop(dens) + bars.getBottom(dens)).toDp() } - 104.dp
     androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = 340.dp).heightIn(max = freeH.coerceAtLeast(160.dp)), containerColor = C.menu) {
