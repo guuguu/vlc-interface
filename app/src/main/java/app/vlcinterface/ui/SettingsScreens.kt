@@ -122,10 +122,20 @@ fun SettingsScreen(nav: Navigator) {
                 ValueRow("Keep radio ready to save", "Records the playing station (a second connection: double data). " + when (s.radioCapture) {
                     "always" -> "Any network, mobile data included: never interrupted, dropped or deleted when the network changes"
                     "off" -> "Off: songs can't be saved"
-                    else -> "Wi-Fi only: when Wi-Fi goes, kept only if back within the radio buffer with nothing missing, else deleted"
+                    else -> "Wi-Fi only: when Wi-Fi goes, kept if it's back within the radio buffer (${s.radioBufferMin} min), else deleted"
                 },
                     when (s.radioCapture) { "always" -> "Always"; "off" -> "Off"; else -> "Wi-Fi only" }) {
                     set(s.copy(radioCapture = when (s.radioCapture) { "wifi" -> "always"; "always" -> "off"; else -> "wifi" }))
+                }
+                Divider()
+                // Radio buffer: the last N minutes kept for saving, and how long a lost connection may take to come back.
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text("Radio buffer: ${s.radioBufferMin} min", color = C.text, fontSize = 15.sp)
+                    Text("The last ${s.radioBufferMin} min are kept for saving (longer while a song is being saved); a lost connection back within ${s.radioBufferMin} min keeps the recording",
+                        color = C.muted, fontSize = 12.sp)
+                    var v by remember { mutableStateOf(s.radioBufferMin.toFloat()) }
+                    androidx.compose.material3.Slider(v, { v = it }, valueRange = 1f..20f, steps = 18,
+                        onValueChangeFinished = { set(s.copy(radioBufferMin = Math.round(v).coerceIn(1, 20))) })
                 }
                 Divider()
                 // Free space: under X GB free, recordings may use Y % of it (every decision is said and logged).

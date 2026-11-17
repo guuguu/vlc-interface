@@ -105,7 +105,9 @@ object RadioCapture {
     private var job: Job? = null
     private val lock = Any()
     private lateinit var dir: File
-    private class Seg(val file: File, val start: Long) { var length = 0L }
+    private class Seg(val file: File, val start: Long, val startAt: Long = System.currentTimeMillis()) { var length = 0L }
+    /** The radio buffer (Settings → Saved songs, 1–20 min, 5 by default), by time. */
+    private fun bufferMs() = App.instance.store.current.settings.radioBufferMin * 60_000L
     private val segs = ArrayDeque<Seg>()
     private var total = 0L
     private var firstAt = 0L
@@ -146,10 +148,9 @@ object RadioCapture {
 
     // ---------------------------------------------------------------- connection changes
 
-    /** The radio's network buffer (PlayerController: ":network-caching=3000"): the outage it can cover. */
-    const val BUFFER_MS = 3000L
-    /** Connection lost / changed: the recording is held — kept if the connection is back within [BUFFER_MS] and the
-     *  recording's own connection never broke (nothing missing), else deleted. */
+    /** Connection lost / changed: the recording is held — kept if the connection is back within the radio buffer
+     *  (Settings → Saved songs; a short jump where it broke is noted), else deleted. */
+    @Volatile private var keepThroughGap = false
     private val holding = MutableStateFlow(false)
     @Volatile private var broke = false
     private var holdJob: Job? = null
@@ -163,7 +164,7 @@ object RadioCapture {
         if (holding.value || (!status.value.running && segs.isEmpty())) return
         broke = false; holding.value = true
         holdJob = scope.launch {
-            delay(BUFFER_MS)
+            delay(bufferMs())
             if (holding.value) { dropAll(); holding.value = false }
         }
     }
@@ -171,8 +172,11 @@ object RadioCapture {
     fun netBack() {
         if (holding.value) {
             holdJob?.cancel(); holding.value = false
-            if (broke) dropAll()
-            else { ServerLog.log("saved-songs", "kept", "radio", "", true, "Connection back within the buffer: recording kept"); return }
+            // Back within the buffer: kept (if the stream broke, it goes on after a short jump).
+            if (broke) keepThroughGap = true
+            ServerLog.log("saved-songs", "kept", "radio", "", true, "Connection back within the ${App.instance.store.current.settings.radioBufferMin} min buffer: recording kept" +
+                if (broke) " (may have a short jump where it broke)" else "")
+            return
         }
         // Recording deleted meanwhile: it starts again from zero.
         if (!status.value.running) wantKey.takeIf { it.isNotEmpty() }?.split('\u0000')?.let { (u, n) -> start(u, n) }
@@ -272,29 +276,33 @@ object RadioCapture {
                 val m = floorMsg()
                 status.value = status.value.copy(format = "unsupported", running = false, message = m); spaceNote(m); return null
             }
-            // ~22 minutes kept; under 100 GB free, at most 30 % of the free space (announced once).
+            // The buffer (by time) kept; under 100 GB free, at most 30 % of the free space (announced once).
+            val segMs = 15_000L
             val b = budget()
-            val keepSegs = if (b == Long.MAX_VALUE) 44 else (b / segBytes).toInt().coerceIn(0, 44)
-            if (keepSegs < 2) {
+            if (b < bytesPerSec * 60) {
                 val m = "Not enough free space to record: ${gb(freeBytes())} free, recordings may use ${pct()} % (${gb(b)})"
                 status.value = status.value.copy(format = "unsupported", running = false, message = m); spaceNote(m); return null
             }
+            val fitMin = if (b == Long.MAX_VALUE) Long.MAX_VALUE else (b / bytesPerSec / 60).toLong()
             if (b != Long.MAX_VALUE && !reconnect) spaceNote("Free space ${gb(freeBytes())}: recording limited to ${pct()} % (${gb(b)})" +
-                (if (keepSegs < 44) " — ${keepSegs / 2} min kept" else ""), long = false)
+                (if (fitMin < App.instance.store.current.settings.radioBufferMin) " — $fitMin min kept" else ""), long = false)
+            // Back within the buffer after a break: what was recorded stays (as with "Always").
+            val keepAll = reconnect && (anyNetwork() || keepThroughGap)
+            if (reconnect) keepThroughGap = false
             synchronized(lock) {
                 // A new connection continues nothing: what was recorded before has a hole after it, so a song in
                 // progress can't be saved whole (dropped) and the kept minutes start again.
                 // ("Always": nothing is dropped — the song is kept, with the short jump where the stream broke.)
-                if (reconnect && anyNetwork()) {
+                if (keepAll) {
                     if (status.value.pending != null) ServerLog.log("saved-songs", "gap", "radio", "", true,
                         "Stream reconnected while “${status.value.pending?.title}” plays: kept (may have a short jump)")
                 } else if (reconnect && status.value.pending != null) {
                     ServerLog.log("saved-songs", "drop", "radio", "", false, "“${status.value.pending?.title}” not saved: the stream was interrupted")
                     status.value = status.value.copy(pending = null)
                 }
-                if (!(reconnect && anyNetwork())) marks.clear()
-                if (!(reconnect && anyNetwork()) && status.value.pending == null && saveQueue.value.isEmpty()) { segs.forEach { it.file.delete() }; segs.clear() }
-                if (!(reconnect && anyNetwork())) chains.clear()
+                if (!keepAll) marks.clear()
+                if (!keepAll && status.value.pending == null && saveQueue.value.isEmpty()) { segs.forEach { it.file.delete() }; segs.clear() }
+                if (!keepAll) chains.clear()
                 firstAt = System.currentTimeMillis()
             }
             status.value = status.value.copy(format = fmt, message = if (metaint > 0 || fmt == "ogg") "" else "This station sends no song titles: save by hand (Start / Stop, or the last minutes)")
@@ -313,11 +321,18 @@ object RadioCapture {
                     if (n < 0) throw Exception("stream ended")
                     synchronized(lock) {
                         var seg = segs.lastOrNull()
-                        if (seg == null || seg.length >= segBytes) {
+                        val nowT = System.currentTimeMillis()
+                        if (seg == null || nowT - seg.startAt >= segMs) {
                             out?.close()
-                            seg = Seg(File(dir, "s${System.nanoTime()}.bin"), total); segs.addLast(seg)
+                            seg = Seg(File(dir, "s${System.nanoTime()}.bin"), total, nowT); segs.addLast(seg)
                             out = java.io.FileOutputStream(seg.file)
-                            while (segs.size > keepSegs) segs.removeFirst().file.delete()
+                            // Kept by time: the last N minutes (Settings), and further back while a song being saved
+                            // (or waiting to be saved) still needs it; never more than the free-space share.
+                            val keepFrom = nowT - bufferMs()
+                            val needFrom = status.value.pending?.let { it.start - (bytesPerSec * 15).toLong() } ?: Long.MAX_VALUE
+                            while (segs.size > 2 && saveQueue.value.isEmpty() && segs[1].startAt <= keepFrom && segs[1].start <= needFrom)
+                                segs.removeFirst().file.delete()
+                            if (b != Long.MAX_VALUE) while (segs.size > 2 && segs.sumOf { it.length } > b) segs.removeFirst().file.delete()
                             val first = segs.first().start
                             // Marks before the oldest kept byte: only the latest one stays (its song is still in progress).
                             val old = marks.filter { it.offset < first }
