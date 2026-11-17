@@ -250,7 +250,7 @@ object VpnLink {
     }
 
     /** Away from home and this NAS not chosen with "Use NAS": its songs wait for the button. */
-    fun waitsForUse(uri: String): Boolean { val s = sourceOf(uri) ?: return false; return !atHome(s) && s.id !in useNas.value }
+    fun waitsForUse(uri: String): Boolean { val s = sourceOf(uri) ?: return false; return !atHome(s) && (s.id !in useNas.value || !vpnUp.value) }   // away: only chosen, and only with the VPN on
 
     /** "Use NAS" with these servers (empty: stop using them). Also allows mobile data for the session. */
     fun setUse(ids: Set<String>) {

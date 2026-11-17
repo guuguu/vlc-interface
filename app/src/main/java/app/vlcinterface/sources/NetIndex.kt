@@ -71,6 +71,7 @@ object NetIndex {
     suspend fun songsReachable(): List<PlayItem> = kotlinx.coroutines.coroutineScope {
         val now = System.currentTimeMillis()
         val srcs = App.instance.store.current.sources.filter { s -> byPin.keys.any { it.startsWith(s.id + "|") } }
+            .filter { s -> s.zone != app.vlcinterface.data.Zone.LAN || VpnLink.atHome(s) || (s.id in VpnLink.useNas.value && VpnLink.vpnUp.value) }
             .filter { s -> !(VpnLink.ignoreSession && s.zone == app.vlcinterface.data.Zone.LAN) }
         val up = srcs.map { s ->
             async {
