@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package app.vlcinterface.ui
 
 import android.content.ContentUris
@@ -226,6 +228,11 @@ fun MediaList(
         entries == null -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
         rows.isEmpty() -> Text(if (kind == "video") "No videos here — switch to Audio at the top of Libraries for music." else "No music here — switch to Video at the top of Libraries for videos.", color = C.muted, modifier = Modifier.padding(20.dp))
         else -> LazyColumn(Modifier.fillMaxSize().scrollbar(state).padding(horizontal = 16.dp), state = state) {
+            // Long folders: "Jump to…" pinned on top (each letter: the first matching name).
+            if (rows.size > 20) stickyHeader {
+                JumpToBox(state, rows.map { r -> when (r) { is Row0.Dir -> r.e.name; is Row0.Song -> r.e.name; is Row0.Video -> r.e.name; is Row0.Header -> "" } },
+                    offset = 1 + (if (selected.isNotEmpty()) 1 else 0) + (if (order.size > 1 && selected.isEmpty()) 1 else 0))
+            }
             // Play the whole folder (its audio + video files, album order) in order or at random.
             if (selected.isNotEmpty()) item {
                 val chosen = list.filter { it.uri in selected }

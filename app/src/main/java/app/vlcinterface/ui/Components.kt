@@ -178,6 +178,35 @@ private fun Modifier.fastScroll(color: Color, shown: () -> Boolean, thumb: (Floa
     }
 }
 
+/**
+ * "Jump to…" box pinned at the top of long lists: each letter typed moves the list to the first item that starts
+ * with the text (then: a word in it starting with it, then: containing it). [offset] = list rows before the items.
+ */
+@Composable
+fun JumpToBox(state: LazyListState, labels: List<String>, offset: Int = 0) {
+    var q by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    fun norm(x: String) = java.text.Normalizer.normalize(x.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+    val keys = remember(labels) { labels.map { norm(it) } }
+    fun jump(t: String) {
+        val n = norm(t.trim()); if (n.isEmpty()) return
+        val i = keys.indexOfFirst { it.startsWith(n) }.takeIf { it >= 0 }
+            ?: keys.indexOfFirst { k -> k.split(Regex("[^\\p{L}\\p{N}]+")).any { it.startsWith(n) } }.takeIf { it >= 0 }
+            ?: keys.indexOfFirst { it.contains(n) }.takeIf { it >= 0 } ?: return
+        scope.launch { state.scrollToItem(i + offset) }
+    }
+    Row(Modifier.fillMaxWidth().background(C.bg).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(17.dp)).background(C.card2).padding(horizontal = 14.dp),
+            contentAlignment = Alignment.CenterStart) {
+            if (q.isEmpty()) Text("Jump to…", color = C.muted, fontSize = 13.sp)
+            androidx.compose.foundation.text.BasicTextField(q, { q = it; jump(it) }, singleLine = true,
+                textStyle = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 14.sp),
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(accent()), modifier = Modifier.fillMaxWidth())
+        }
+        if (q.isNotEmpty()) Text("✕", color = C.muted, fontSize = 16.sp, modifier = Modifier.clickable { q = "" }.padding(horizontal = 10.dp))
+    }
+}
+
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) = Scaled {
     Text(text.uppercase(), modifier = modifier.padding(top = 6.dp, bottom = 4.dp), color = C.muted,

@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package app.vlcinterface.ui
 
 import android.content.Intent
@@ -603,6 +605,7 @@ fun QueueScreen(nav: Navigator) {
         OrderSwitch(st.settings.shuffle, Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) { player.setShuffle(it) }
         val state = rememberLazyListState(initialFirstVisibleItemIndex = (p.index - 2).coerceAtLeast(0))
         LazyColumn(Modifier.weight(1f).scrollbar(state).padding(horizontal = 16.dp), state = state) {
+            if (p.queue.size > 20) stickyHeader { JumpToBox(state, p.queue.map { listOf(it.title, it.artist).joinToString(" ") }, offset = 1) }
             itemsIndexed(p.queue) { i, q ->
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
                     .background(if (i == p.index) accent().copy(alpha = 0.12f) else Color.Transparent)
@@ -830,6 +833,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
         if (pl.items.isEmpty()) Text("Empty. Long-press songs or folders in the Library → Add to playlist, or add a .cue sheet from the menu.",
             color = C.muted, modifier = Modifier.padding(20.dp))
         LazyColumn(Modifier.weight(1f).scrollbar(state).padding(horizontal = 16.dp), state = state) {
+            if (pl.items.size > 20) stickyHeader { JumpToBox(state, pl.items.map { listOf(it.title, it.artist).joinToString(" ") }, offset = 1) }
             itemsIndexed(pl.items) { i, e ->
                 val cur = playing.origin.playlistId == pl.id && playing.index == i
                 Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
