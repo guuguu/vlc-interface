@@ -261,6 +261,27 @@ object RadioCapture {
         try { jobs.clear(); if (::work.isInitialized) work.listFiles()?.forEach { it.delete() } } catch (_: Exception) {}
     }
 
+    /**
+     * Settings → Clear all caches: the radio buffer, songs being saved (lost), radio pictures and temporary files —
+     * everything in the app's cache folder. A ReplayGain scan running is paused around it (its queue kept). Returns
+     * the bytes freed.
+     */
+    fun clearAllCaches(ctx: Context): Long {
+        val rg = app.vlcinterface.sources.RgScanner
+        val rgWasRunning = rg.state.value.running
+        if (rgWasRunning) rg.pause()
+        val before = ctx.cacheDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+        wipe()
+        ctx.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+        // The app's own folders back, empty.
+        if (::dir.isInitialized) dir.mkdirs()
+        if (::work.isInitialized) work.mkdirs()
+        val after = ctx.cacheDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() }
+        if (rgWasRunning) rg.resume()
+        ServerLog.log("saved-songs", "clear", "app", "", true, "Caches cleared by hand", "freed ${(before - after) / 1024} KB")
+        return before - after
+    }
+
     // ---------------------------------------------------------------- exit
 
     /** Exit asked while songs are being saved: they are finished first (shown in a pop-up), then the app closes. */

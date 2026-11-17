@@ -220,6 +220,29 @@ fun SettingsScreen(nav: Navigator) {
                 ValueRow("Sound engine", "The app's sound output: switches and problems", "Open") { nav.go(Screen.LogPage("sound-engine")) }; Divider()
                 ValueRow("Radio pictures", "Each song a station announced: picture found, or what was searched", "Open") { nav.go(Screen.LogPage("radio-pictures")) }; Divider()
                 ValueRow("Player", "Songs skipped (not found / not reachable)", "Open") { nav.go(Screen.LogPage("player")) }
+                Divider()
+                // By hand: everything in the app's cache folder (radio buffer, songs being saved, radio pictures,
+                // temporary files). Settings, playlists, logs and ReplayGain values are not touched.
+                var askClear by remember { mutableStateOf(false) }
+                var cacheSize by remember { mutableStateOf(-1L) }
+                val cctx = LocalContext.current
+                LaunchedEffect(askClear) { cacheSize = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { cctx.cacheDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() } } }
+                ValueRow("Clear all caches", "Radio buffer, songs being saved, radio pictures, temporary files" +
+                    if (cacheSize >= 0) " · ${"%.1f".format(java.util.Locale.US, cacheSize / 1048576.0)} MB" else "", "Clear") { askClear = true }
+                if (askClear) {
+                    val busy = app.vlcinterface.sources.RadioCapture.hasWork()
+                    AlertDialog(onDismissRequest = { askClear = false }, containerColor = C.panel,
+                        title = { Text("Clear all caches?", color = C.text) },
+                        text = { Text((if (busy) "Songs being saved from the radio are stopped and lost. " else "") +
+                            "The radio buffer, radio pictures and temporary files are deleted. Settings, playlists, logs and saved songs stay.",
+                            color = if (busy) C.bad else C.muted, fontSize = 13.sp) },
+                        confirmButton = { STextButton({
+                            askClear = false
+                            val freed = app.vlcinterface.sources.RadioCapture.clearAllCaches(cctx)
+                            android.widget.Toast.makeText(cctx, "Caches cleared: ${"%.1f".format(java.util.Locale.US, freed / 1048576.0)} MB freed", android.widget.Toast.LENGTH_SHORT).show()
+                        }) { Text("Clear", color = C.bad, fontWeight = FontWeight.Bold) } },
+                        dismissButton = { STextButton({ askClear = false }) { Text("Cancel") } })
+                }
             }
             SectionTitle("Subtitles")
             CardBox {
