@@ -318,22 +318,22 @@ object RadioCapture {
      * where it may begin, then everything recorded until its end (+ the seconds after, to find the gap). The buffer
      * can be emptied meanwhile (station change, pause) without touching it.
      */
-    private class Job(val file: File, val base: Long) {
+    private class SaveCopy(val file: File, val base: Long) {
         var out: java.io.FileOutputStream? = java.io.FileOutputStream(file, true)
         @Volatile var stopAt = Long.MAX_VALUE
         @Volatile var closed = false
         fun close() { try { out?.close() } catch (_: Exception) {}; out = null; closed = true }
     }
-    private val jobs = java.util.concurrent.ConcurrentHashMap<Long, Job>()
+    private val jobs = java.util.concurrent.ConcurrentHashMap<Long, SaveCopy>()
 
     /** The save-folder copy of [p], made now from the buffer: from [from] (or the buffer's start) to now. */
-    private fun beginJob(p: Pending, from: Long = p.start - (bytesPerSec * 12).toLong()): Job {
+    private fun beginJob(p: Pending, from: Long = p.start - (bytesPerSec * 12).toLong()): SaveCopy {
         synchronized(lock) {
             jobs[p.id]?.let { return it }
             val base = maxOf(segs.firstOrNull()?.start ?: total, from)
             val f = File(work, "job_${p.id}.bin")
             f.outputStream().use { o -> o.write(readRange(base, total)) }
-            return Job(f, base).also { jobs[p.id] = it }
+            return SaveCopy(f, base).also { jobs[p.id] = it }
         }
     }
 
