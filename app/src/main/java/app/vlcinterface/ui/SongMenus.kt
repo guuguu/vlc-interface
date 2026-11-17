@@ -203,7 +203,7 @@ fun SaveSongDialog(onDone: () -> Unit) {
     val where = (if (st.settings.saveFolder.isEmpty()) "the library root" else Uri.decode(st.settings.saveFolder).substringAfterLast(':').ifEmpty { "your folder" }) + " /$sub"
     val label = @Composable { t: String, c: androidx.compose.ui.graphics.Color -> Text(t, color = c, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text(if (pend != null) "Saving" else "Save this song", color = C.text) },
+        title = { Text(if (pend != null || q.isNotEmpty()) "Saving" else "Save this song", color = C.text) },
         text = {
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text((pend?.name?.ifBlank { null } ?: pend?.title?.ifBlank { null } ?: s.title).ifEmpty { "No song title announced" },
@@ -230,10 +230,10 @@ fun SaveSongDialog(onDone: () -> Unit) {
                             if (pend.manual.isEmpty() || pend.manual == "gap") Pill("+ next song") { say(RadioCapture.addSong()) }
                         }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Pill("Stop now — save", filled = true) { say(RadioCapture.stopNow()); onDone() }
-                        Pill("Cancel — don't save") { RadioCapture.cancelPending(); say("Not saved"); onDone() }
-                    }
+                } else if (q.isNotEmpty()) {
+                    // Recording done: being encoded / saved now.
+                    val enc by RadioCapture.saveProgress.collectAsState()
+                    Text("Encoding and saving “${q.first()}”: ${(enc * 100).toInt()} %", color = accent(), fontSize = 13.sp)
                 } else {
                     Text("Saved to $where. Both ends go to the gap between songs, with all tags found.", color = C.muted, fontSize = 12.sp)
                     // 1. How much
@@ -284,8 +284,13 @@ fun SaveSongDialog(onDone: () -> Unit) {
                 if (q.isNotEmpty()) Text("Saving queue: " + q.joinToString(" · "), color = accent(), fontSize = 12.sp)
             }
         },
+        // While saving: the window's own buttons — Stop and save (while recording), Cancel — forget it (always).
+        dismissButton = if (pend != null || q.isNotEmpty()) ({
+            STextButton({ say(RadioCapture.forgetAll()); onDone() }) { Text("Cancel — forget it", color = C.bad) }
+        }) else null,
         confirmButton = {
-            if (pend != null || !s.running) STextButton(onDone) { Text("Close", color = accent()) }
+            if (pend != null) STextButton({ say(RadioCapture.stopNow()); onDone() }) { Text("Stop and save", color = accent(), fontWeight = FontWeight.Bold) }
+            else if (q.isNotEmpty() || !s.running) STextButton(onDone) { Text("Close", color = accent()) }
             else {
                 val m = custom.toIntOrNull()?.takeIf { it in 1..180 } ?: minutes
                 val ok = when (mode) { "last" -> lastMin * 60 <= recSec + 5; else -> true }

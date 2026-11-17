@@ -84,6 +84,23 @@ object RadioCapture {
             Thread.sleep(3)
             while (app.vlcinterface.player.BackgroundWork.paused.value) Thread.sleep(300)
         } catch (_: InterruptedException) {}
+        // "Cancel — forget it": the song being encoded stops here.
+        if (epoch != workEpoch) throw Forgotten()
+    }
+
+    /** Raised inside a save that was cancelled with "Cancel — forget it". */
+    private class Forgotten : RuntimeException("cancelled")
+    /** Bumped by [forgetAll]: saves asked before it are dropped, also mid-encoding. */
+    @Volatile private var epoch = 0
+    @Volatile private var workEpoch = 0
+
+    /** "Cancel — forget it": the song being recorded, encoded or waiting is dropped; nothing is kept. */
+    fun forgetAll(): String {
+        synchronized(lock) { status.value = status.value.copy(pending = null) }
+        endQuestion.value = false
+        epoch++
+        ServerLog.log("saved-songs", "cancel", "radio", "", true, "Saving cancelled — nothing kept")
+        return "Cancelled — nothing saved"
     }
     private var job: Job? = null
     private val lock = Any()
@@ -491,16 +508,22 @@ object RadioCapture {
         val now = if (partialEnd) try { readRange(from, minOf(total, end)) } catch (_: Exception) { null } else null
         // Otherwise a bit later: the margin after the end, to find the gap after the song.
         saveQueue.value = saveQueue.value + p.title
+        val myEpoch = epoch
         scope.launch {
             if (!partialEnd) delay(13_000)
             val to = minOf(synchronized(lock) { total }, end + margin)
             val data = now ?: try { readRange(from, to) } catch (e: Exception) {
                 saveQueue.value = saveQueue.value - p.title; toast("Saving failed: ${e.message}"); return@launch }
             // One at a time, in the order asked (single low-priority thread).
-            kotlinx.coroutines.withContext(saver) { status.value = status.value.copy(busy = "Saving “${p.title}”…"); saveStartedAt = System.currentTimeMillis(); saveProgress.value = 0f; try {
+            kotlinx.coroutines.withContext(saver) {
+              if (epoch != myEpoch) { saveQueue.value = saveQueue.value - p.title; return@withContext }   // cancelled meanwhile
+              workEpoch = myEpoch
+              status.value = status.value.copy(busy = "Saving “${p.title}”…"); saveStartedAt = System.currentTimeMillis(); saveProgress.value = 0f; try {
                 val where = save(App.instance, p, data, (p.start - from).toInt(), (end - from).toInt().coerceAtMost(data.size), partialEnd, from)
                 ServerLog.log("saved-songs", "save", "radio", "", true, p.title, "From ${p.station} → $where" + (if (p.partialStart) " · beginning missing" else "") + (if (partialEnd) " · end missing" else ""))
                 toast((if (p.out == "original") "Saved: " else "Encoding ended: ") + where.substringAfterLast('/'), long = false)
+            } catch (e: Forgotten) {
+                // Cancelled while encoding: nothing kept.
             } catch (e: Throwable) {
                 ServerLog.log("saved-songs", "save", "radio", "", false, p.title.ifBlank { p.name.ifBlank { "(no title)" } },
                     (e.message ?: e.javaClass.simpleName) + (if (diag.isNotEmpty()) " — $diag" else ""))
