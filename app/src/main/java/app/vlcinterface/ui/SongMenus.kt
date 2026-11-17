@@ -447,3 +447,22 @@ fun SavedSongsDialog(onDone: () -> Unit) {
         confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
     )
 }
+
+/** Exit asked while songs are being saved: they are finished first, then the app closes ("Close now" loses them). */
+@Composable
+fun ExitSavingHost() {
+    val on by RadioCapture.exiting.collectAsState()
+    if (!on) return
+    val q by RadioCapture.saveQueue.collectAsState()
+    val enc by RadioCapture.saveProgress.collectAsState()
+    AlertDialog(onDismissRequest = {}, containerColor = C.panel,
+        title = { Text("Finishing the save", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("The app closes as soon as this is saved.", color = C.muted, fontSize = 13.sp)
+                q.forEachIndexed { i, t -> Text((if (i == 0) "Saving “$t”: ${(enc * 100).toInt()} %" else "Waiting: “$t”"), color = if (i == 0) accent() else C.text, fontSize = 14.sp) }
+            }
+        },
+        confirmButton = { STextButton({ RadioCapture.exitNow() }) { Text("Close now (not saved)", color = C.bad) } },
+    )
+}

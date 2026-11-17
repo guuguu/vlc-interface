@@ -52,6 +52,8 @@ object RadioCapture {
                        /** Saved by hand: "start" = Start / Stop saving, "last" = the last X minutes, "timed" = for X minutes
                         *  from now (ends at [untilAt]); "" = the announced song (ends with it, or after [songsLeft] songs). */
                        val manual: String = "", val name: String = "",
+                       /** Stays the same through copies: ties the song to its save folder copy. */
+                       val id: Long = System.nanoTime(),
                        val untilAt: Long = 0, val songsLeft: Int = 1, val extraAfterSongMs: Long = 0,
                        /** Format chosen when saving was asked: "original" or "mp3" (kept even if changed later). */
                        val out: String = App.instance.store.current.settings.saveFormat,
@@ -96,7 +98,7 @@ object RadioCapture {
 
     /** "Cancel — forget it": the song being recorded, encoded or waiting is dropped; nothing is kept. */
     fun forgetAll(): String {
-        synchronized(lock) { status.value = status.value.copy(pending = null) }
+        synchronized(lock) { status.value.pending?.let { dropJob(it) }; status.value = status.value.copy(pending = null) }
         endQuestion.value = false
         epoch++
         ServerLog.log("saved-songs", "cancel", "radio", "", true, "Saving cancelled — nothing kept")
@@ -105,6 +107,7 @@ object RadioCapture {
     private var job: Job? = null
     private val lock = Any()
     private lateinit var dir: File
+    private lateinit var work: File
     private class Seg(val file: File, val start: Long, val startAt: Long = System.currentTimeMillis()) { var length = 0L }
     /** The radio buffer (Settings → Saved songs, 1–20 min, 5 by default), by time. */
     private fun bufferMs() = App.instance.store.current.settings.radioBufferMin * 60_000L
@@ -124,6 +127,9 @@ object RadioCapture {
     fun init(ctx: Context) {
         // App ended last time in the middle of a song: its recording and any half-made save are simply dropped.
         dir = File(ctx.cacheDir, "radiocap").apply { deleteRecursively(); mkdirs() }
+        // Songs being saved (their recording, and the working copies of encoding): their own folder, emptied once
+        // saved, on an error and after a crash.
+        work = File(ctx.cacheDir, "radiosave").apply { deleteRecursively(); mkdirs() }
         scope.launch { cleanLeftovers(ctx) }
         scope.launch { while (true) { delay(1000); try { tick() } catch (_: Exception) {} } }
         val player = App.instance.player
@@ -219,6 +225,7 @@ object RadioCapture {
      */
     fun dropAll() {
         synchronized(lock) {
+            status.value.pending?.let { dropJob(it) }
             status.value = status.value.copy(pending = null)
             job?.cancel(); job = null
             try { call?.cancel() } catch (_: Exception) {}; call = null
@@ -239,7 +246,7 @@ object RadioCapture {
         job?.cancel(); job = null
         try { call?.cancel() } catch (_: Exception) {}; call = null
         if (p != null) finishLater(p, total, partialEnd = true)
-        flushWaiters()
+        closeJobs()
         synchronized(lock) {
             marks.clear(); chains.clear()
             segs.forEach { it.file.delete() }; segs.clear()
@@ -251,19 +258,79 @@ object RadioCapture {
     fun wipe() {
         try { stop() } catch (_: Exception) {}
         try { if (::dir.isInitialized) dir.listFiles()?.forEach { it.delete() } } catch (_: Exception) {}
+        try { jobs.clear(); if (::work.isInitialized) work.listFiles()?.forEach { it.delete() } } catch (_: Exception) {}
+    }
+
+    // ---------------------------------------------------------------- exit
+
+    /** Exit asked while songs are being saved: they are finished first (shown in a pop-up), then the app closes. */
+    val exiting = MutableStateFlow(false)
+    @Volatile private var exitAction: (() -> Unit)? = null
+    fun hasWork() = status.value.pending != null || saveQueue.value.isNotEmpty()
+
+    /** A song still recording is stopped and saved with what's recorded; every waiting save is done; then [then]. */
+    fun finishThen(then: () -> Unit) {
+        exitAction = then; exiting.value = true
+        app.vlcinterface.player.BackgroundWork.resume()          // encoding must not wait for the pause button
+        stop()
+        scope.launch {
+            while (exiting.value && (saveQueue.value.isNotEmpty() || status.value.pending != null)) delay(300)
+            Handler(Looper.getMainLooper()).post { if (exiting.value) { exiting.value = false; exitAction?.invoke(); exitAction = null } }
+        }
+    }
+
+    /** "Close now": what isn't saved yet is lost. */
+    fun exitNow() {
+        forgetAll()
+        exiting.value = false
+        exitAction?.invoke(); exitAction = null
     }
 
     /** A crash: the recording folder is deleted at once (no locks, nothing else). */
-    fun wipeOnCrash(ctx: Context) { try { File(ctx.cacheDir, "radiocap").deleteRecursively() } catch (_: Throwable) {} }
+    fun wipeOnCrash(ctx: Context) {
+        try { File(ctx.cacheDir, "radiocap").deleteRecursively() } catch (_: Throwable) {}
+        try { File(ctx.cacheDir, "radiosave").deleteRecursively() } catch (_: Throwable) {}
+    }
 
-    /** Saves waiting for the seconds after their end (to find the gap): their data, taken now when the buffer goes. */
-    private class Waiter(val from: Long, val end: Long, val margin: Long) { @Volatile var data: ByteArray? = null }
-    private val waiters = java.util.concurrent.CopyOnWriteArrayList<Waiter>()
-    private fun flushWaiters() {
+    /**
+     * A song asked to be saved: its own copy in the save folder (radiosave/job_<id>.bin) — what the buffer held from
+     * where it may begin, then everything recorded until its end (+ the seconds after, to find the gap). The buffer
+     * can be emptied meanwhile (station change, pause) without touching it.
+     */
+    private class Job(val file: File, val base: Long) {
+        var out: java.io.FileOutputStream? = java.io.FileOutputStream(file, true)
+        @Volatile var stopAt = Long.MAX_VALUE
+        @Volatile var closed = false
+        fun close() { try { out?.close() } catch (_: Exception) {}; out = null; closed = true }
+    }
+    private val jobs = java.util.concurrent.ConcurrentHashMap<Long, Job>()
+
+    /** The save-folder copy of [p], made now from the buffer: from [from] (or the buffer's start) to now. */
+    private fun beginJob(p: Pending, from: Long = p.start - (bytesPerSec * 12).toLong()): Job {
         synchronized(lock) {
-            for (w in waiters) if (w.data == null) w.data = try { readRange(w.from, minOf(total, w.end + w.margin)) } catch (_: Exception) { ByteArray(0) }
+            jobs[p.id]?.let { return it }
+            val base = maxOf(segs.firstOrNull()?.start ?: total, from)
+            val f = File(work, "job_${p.id}.bin")
+            f.outputStream().use { o -> o.write(readRange(base, total)) }
+            return Job(f, base).also { jobs[p.id] = it }
         }
     }
+
+    /** Recording goes on into every collecting copy (called with each chunk, under the lock). */
+    private fun feedJobs(b: ByteArray, n: Int, at: Long) {
+        for (j in jobs.values) {
+            if (j.closed) continue
+            val k = minOf(n.toLong(), j.stopAt - at).toInt()
+            if (k > 0) try { j.out?.write(b, 0, k) } catch (_: Exception) { j.close() }
+            if (at + n >= j.stopAt) j.close()
+        }
+    }
+
+    /** All copies stop collecting (station changed, recording stopped): what they hold stays for their saves. */
+    private fun closeJobs() { jobs.values.forEach { it.close() } }
+
+    /** The song's copy deleted (saved, failed, cancelled). */
+    private fun dropJob(p: Pending) { jobs.remove(p.id)?.let { it.close(); it.file.delete() } }
 
     /** Reads the stream, keeps its audio and the title marks. Returns another address when it was a playlist. */
     @Volatile private var call: okhttp3.Call? = null
@@ -320,6 +387,7 @@ object RadioCapture {
                         "Stream reconnected while “${status.value.pending?.title}” plays: kept (may have a short jump)")
                 } else if (reconnect && status.value.pending != null) {
                     ServerLog.log("saved-songs", "drop", "radio", "", false, "“${status.value.pending?.title}” not saved: the stream was interrupted")
+                    status.value.pending?.let { dropJob(it) }
                     status.value = status.value.copy(pending = null)
                 }
                 if (!keepAll) marks.clear()
@@ -361,6 +429,7 @@ object RadioCapture {
                             if (old.size > 1) marks.removeAll(old.dropLast(1).toSet())
                         }
                         out!!.write(buf, 0, n); seg.length += n
+                        feedJobs(buf, n, total)
                         watcher?.feed(buf, 0, n, total)
                         total += n
                         val secs = (System.currentTimeMillis() - firstAt) / 1000.0
@@ -456,13 +525,15 @@ object RadioCapture {
             if (m.title.isBlank()) return "The station announces no song now"
             val first = segs.firstOrNull()?.start ?: 0
             val partial = !s.titleStartKnown || m.offset < first
-            status.value = s.copy(pending = Pending(m.title, maxOf(m.offset, first), partial, station, m.at, s.format, name = name.trim()))
+            val np = Pending(m.title, maxOf(m.offset, first), partial, station, m.at, s.format, name = name.trim())
+            status.value = s.copy(pending = np)
+            scope.launch { try { beginJob(np) } catch (_: Exception) {} }
             return if (partial) "Song start not found: the whole recording (${((total - first) / bytesPerSec / 60).toInt()} min) is saved, up to the song's end"
             else "“${m.title}” will be saved when it ends"
         }
     }
 
-    fun cancelPending() { status.value = status.value.copy(pending = null) }
+    fun cancelPending() { status.value.pending?.let { dropJob(it) }; status.value = status.value.copy(pending = null) }
 
     /** Saving for [minutes] from now (start and end moved to the gap between songs); can be stopped or extended. */
     fun saveFor(minutes: Int, name: String): String {
@@ -472,8 +543,10 @@ object RadioCapture {
             if (s.pending != null) return "Already saving"
             spaceFor(minutes * 60.0 + 24)?.let { return it }
             val now = System.currentTimeMillis()
-            status.value = s.copy(pending = Pending(marks.lastOrNull()?.title ?: "", total, false, station, now, s.format, "timed", name.trim(),
-                untilAt = now + minutes * 60_000L))
+            val np = Pending(marks.lastOrNull()?.title ?: "", total, false, station, now, s.format, "timed", name.trim(),
+                untilAt = now + minutes * 60_000L)
+            status.value = s.copy(pending = np)
+            scope.launch { try { beginJob(np) } catch (_: Exception) {} }
             return "Saving for $minutes min"
         }
     }
@@ -568,7 +641,9 @@ object RadioCapture {
             if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
             if (s.pending != null) return "Already saving"
             spaceFor(600.0)?.let { return it }
-            status.value = s.copy(pending = Pending(marks.lastOrNull()?.title ?: "", total, false, station, System.currentTimeMillis(), s.format, "start", name.trim()))
+            val np = Pending(marks.lastOrNull()?.title ?: "", total, false, station, System.currentTimeMillis(), s.format, "start", name.trim())
+            status.value = s.copy(pending = np)
+            scope.launch { try { beginJob(np) } catch (_: Exception) {} }
             return "Saving from now — tap Stop saving at the end"
         }
     }
@@ -612,27 +687,32 @@ object RadioCapture {
     }
 
     private fun finishLater(p: Pending, end: Long, partialEnd: Boolean) {
-        val first: Long; val margin: Long
+        val margin = (bytesPerSec * 12).toLong()
+        // The song's own copy (made now if it has none yet: "the last minutes"); it collects until the end + the
+        // seconds after it (to find the gap), or stops now when recording stopped.
+        val j = try { beginJob(p) } catch (e: Exception) { toast("Saving failed: ${e.message}"); return }
         synchronized(lock) {
-            first = segs.firstOrNull()?.start ?: 0
-            margin = (bytesPerSec * 12).toLong()
+            j.stopAt = if (partialEnd) minOf(end, total) else end + margin
+            if (partialEnd || total >= j.stopAt || !status.value.running) j.close()
         }
-        val from = maxOf(first, p.start - margin)
-        // Recording stopped: the data is taken now (the next station starts afresh).
-        val now = if (partialEnd) try { readRange(from, minOf(total, end)) } catch (_: Exception) { null } else null
-        // Otherwise a bit later: the margin after the end, to find the gap after the song.
         saveQueue.value = saveQueue.value + p.title
         val myEpoch = epoch
-        val w = if (partialEnd) null else Waiter(from, end, margin).also { waiters += it }
         scope.launch {
-            // The seconds after the end are waited for (unless the buffer is emptied first: then taken at once).
-            if (w != null) { var waited = 0; while (w.data == null && waited < 13_000) { delay(250); waited += 250 }; waiters -= w }
-            val to = minOf(synchronized(lock) { total }, end + margin)
-            val data = now ?: w?.data ?: try { readRange(from, to) } catch (e: Exception) {
-                saveQueue.value = saveQueue.value - p.title; toast("Saving failed: ${e.message}"); return@launch }
+            var waited = 0
+            while (!j.closed && waited < 30_000) { delay(250); waited += 250 }
+            j.close()
+            // From the copy: the song with its margins.
+            val from = maxOf(j.base, p.start - margin)
+            val data = try {
+                java.io.RandomAccessFile(j.file, "r").use { f ->
+                    val off = (from - j.base).coerceIn(0, f.length()); val len = (minOf(j.stopAt, j.base + f.length()) - from).coerceIn(0, f.length() - off)
+                    ByteArray(len.toInt()).also { f.seek(off); f.readFully(it) }
+                }
+            } catch (e: Exception) {
+                dropJob(p); saveQueue.value = saveQueue.value - p.title; toast("Saving failed: ${e.message}"); return@launch }
             // One at a time, in the order asked (single low-priority thread).
             kotlinx.coroutines.withContext(saver) {
-              if (epoch != myEpoch) { saveQueue.value = saveQueue.value - p.title; return@withContext }   // cancelled meanwhile
+              if (epoch != myEpoch) { dropJob(p); saveQueue.value = saveQueue.value - p.title; return@withContext }   // cancelled meanwhile
               workEpoch = myEpoch
               status.value = status.value.copy(busy = "Saving “${p.title}”…"); saveStartedAt = System.currentTimeMillis(); saveProgress.value = 0f; try {
                 val where = save(App.instance, p, data, (p.start - from).toInt(), (end - from).toInt().coerceAtMost(data.size), partialEnd, from)
@@ -647,7 +727,8 @@ object RadioCapture {
             } finally {
                 // Working copies (the cut, the part, the made file before it's stored) never stay, saved or not:
                 // only the one file in raw/ or mp3/ remains.
-                dir.listFiles { f -> f.name.startsWith("clip.") || f.name.startsWith("part.") || f.name.startsWith("out.") }?.forEach { it.delete() }
+                work.listFiles { f -> f.name.startsWith("clip.") || f.name.startsWith("part.") || f.name.startsWith("out.") }?.forEach { it.delete() }
+                dropJob(p)
                 status.value = status.value.copy(busy = ""); saveQueue.value = saveQueue.value - p.title
             } }
         }
@@ -815,7 +896,7 @@ object RadioCapture {
     private fun gapsIn(p: Pending, from: Long, to: Long): List<Pair<Long, Double>> {
         val data = readRange(from, to)
         val clip = clipOf(p.copy(start = from), data, from)
-        val f = File(dir, "scan.${clip.cleanExt}")
+        val f = File(work, "scan.${clip.cleanExt}")
         try {
             clip.write(0, clip.n, f)
             val rms = rmsOf(f, progress = false)
@@ -837,6 +918,9 @@ object RadioCapture {
             spaceFor(600.0)?.let { return it }
             p = Pending(marks.lastOrNull()?.title ?: "", total, false, station, System.currentTimeMillis(), s.format, "gap", name.trim())
             status.value = s.copy(pending = p)
+            // Its copy reaches back as far as the start may be looked for (10 min).
+            val back = p.start - (bytesPerSec * 600).toLong()
+            scope.launch { try { beginJob(p, back) } catch (_: Exception) {} }
         }
         scope.launch(finder) { findSong(p) }
         return "Finding where this song began and where it ends…"
@@ -976,7 +1060,7 @@ object RadioCapture {
         diag = ""
         val clip = clipOf(p, data, from)
         val t = clip.t
-        val clean = File(dir, "clip.${clip.cleanExt}")
+        val clean = File(work, "clip.${clip.cleanExt}")
         clip.write(0, clip.n, clean)
         val nomStart = t[clip.indexOfByte(startByte)]; val nomEnd = t[clip.indexOfByte(endByte)]
 
@@ -1014,7 +1098,7 @@ object RadioCapture {
         val s = App.instance.store.current.settings
         val reencode = p.out != "original"
         val outExt = if (reencode) "mp3" else clip.origExt
-        val out = File(dir, "out.$outExt")
+        val out = File(work, "out.$outExt")
         var lufs = 0.0; var peak = 0f
         fun produce() {
             out.delete()
@@ -1024,7 +1108,7 @@ object RadioCapture {
             } else {
                 val i0 = clip.indexOfTime(cutStart).coerceAtMost(clip.n - 1)
                 val i1 = clip.indexOfTime(cutEnd).coerceIn(i0 + 1, clip.n)
-                val part = File(dir, "part.${clip.cleanExt}")
+                val part = File(work, "part.${clip.cleanExt}")
                 clip.write(i0, i1, part)
                 val m = measure(part); lufs = m.first; peak = m.second
                 if (clip.remuxToM4a) remuxAdts(part, out) else part.copyTo(out, true)

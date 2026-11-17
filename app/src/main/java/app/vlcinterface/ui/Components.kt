@@ -552,6 +552,9 @@ fun BackButton(nav: Navigator, tint: Color = C.text) {
 
 /** Exit: stops playback and any scan, removes the notifications and closes the app completely ([restart]: then starts it again fresh). */
 fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
+    // Songs being saved from the radio: finished first (a pop-up shows them), then the app closes.
+    val rc = app.vlcinterface.sources.RadioCapture
+    if (rc.hasWork() && !rc.exiting.value) { rc.finishThen { exitApp(restart, keepNotice) }; return }
     val a = app.vlcinterface.App.instance
     try { a.store.flush() } catch (_: Exception) {}
     try { app.vlcinterface.sources.RgScanner.cancel() } catch (_: Exception) {}

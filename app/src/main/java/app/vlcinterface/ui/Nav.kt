@@ -163,6 +163,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 LowBatteryHost()
                 WifiLostHost()
                 SaveEndQuestionHost()
+                ExitSavingHost()
                 OutputFallbackHost()
                 FileDialogsHost(nav)   // windows from file menus (Tags & ReplayGain, ReplayGain scan, Add to playlist)
             }
