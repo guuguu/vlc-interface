@@ -53,6 +53,8 @@ jobs:
         with:
           name: vlc-interface-${{ steps.ver.outputs.name }}
           path: out/*.apk
+          # Old test builds aren't needed: each one is deleted after 3 days (no storage piling up).
+          retention-days: 3
 
       # Releases only when asked: the commit message must contain [release] (or a v* tag is pushed).
       # Other builds only keep the APK as a run artifact.
