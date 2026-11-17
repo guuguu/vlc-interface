@@ -24,6 +24,14 @@ data class Source(
     val lastScan: Long = 0L,
     /** Shares found read-only (writes to them are kept in the app); "*" = the whole server. */
     val readOnly: List<String> = emptyList(),
+    /** The same server reached through the VPN (e.g. ZeroTier): used when the VPN is on and you're not on its LAN. */
+    val vpnHost: String = "",
+    /** How the server identifies itself (to recognise it on the VPN): SMB server GUID, NetBIOS name, MAC. */
+    val smbGuid: String = "",
+    val nbName: String = "",
+    val mac: String = "",
+    /** Which address to use: "auto" (VPN address when away with the VPN on), "lan" or "vpn" (chosen by hand). */
+    val addrMode: String = "auto",
 ) {
     val defaultPort: Int
         get() = when (proto) {
@@ -38,6 +46,7 @@ data class Source(
         .put("password", passwordTransform(password)).put("domain", domain)
         .put("wifiOnly", wifiOnly).put("pins", JSONArray(pins)).put("smbVersion", smbVersion)
         .put("lastScan", lastScan).put("readOnly", JSONArray(readOnly))
+        .put("vpnHost", vpnHost).put("smbGuid", smbGuid).put("nbName", nbName).put("mac", mac).put("addrMode", addrMode)
 
     companion object {
         fun fromJson(o: JSONObject, passwordTransform: (String) -> String) = Source(
@@ -56,6 +65,11 @@ data class Source(
             smbVersion = o.optString("smbVersion"),
             lastScan = o.optLong("lastScan", 0L),
             readOnly = o.optJSONArray("readOnly").strings(),
+            vpnHost = o.optString("vpnHost"),
+            smbGuid = o.optString("smbGuid"),
+            nbName = o.optString("nbName"),
+            mac = o.optString("mac"),
+            addrMode = o.optString("addrMode", "auto").let { if (it in setOf("auto", "lan", "vpn")) it else "auto" },
         )
     }
 }

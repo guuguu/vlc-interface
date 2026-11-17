@@ -135,7 +135,7 @@ object ServerCheck {
             // Guest first, then the given login.
             for (guest in if (user.isNotEmpty()) listOf(true, false) else listOf(true)) {
                 try {
-                    val l = SmbFile("smb://$host/", SmbProbe.context(v, user, pass, domain, guest)).list()
+                    val l = SmbFile(VpnLink.route("smb://$host/"), SmbProbe.context(v, user, pass, domain, guest)).list()
                     if (label !in spoken) spoken += label
                     if (guest) guestOk = true else loginOk = true
                     if (listing == null || !guest) listing = l

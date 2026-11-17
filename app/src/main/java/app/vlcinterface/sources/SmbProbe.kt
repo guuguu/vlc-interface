@@ -118,7 +118,7 @@ object SmbProbe {
             val attempts = if (hasCreds) listOf(false, true) else listOf(true)
             for (guest in attempts) {
                 try {
-                    val f = SmbFile(url, context(v, user, pass, domain, guest))
+                    val f = SmbFile(VpnLink.route(url), context(v, user, pass, domain, guest))
                     val list = if (path.share.isEmpty()) f.list() else f.listFiles()?.map { it.name }?.toTypedArray()
                     ok = true
                     note = if (guest) "works as guest" else "works"
@@ -139,7 +139,7 @@ object SmbProbe {
 
         // 2) Login results, reported separately.
         val bv = best.ifEmpty { "SMB311" }
-        val guestOk = try { SmbFile(url, context(bv, "", "", "", true)).exists(); true } catch (e: Exception) { guestReason = SmbErrors.explain(e, true, path.share, path.path); false }
+        val guestOk = try { SmbFile(VpnLink.route(url), context(bv, "", "", "", true)).exists(); true } catch (e: Exception) { guestReason = SmbErrors.explain(e, true, path.share, path.path); false }
         steps += ProbeStep("Login", "Guest / anonymous", guestOk, if (guestOk) "allowed" else guestReason.ifEmpty { "not allowed" })
         if (hasCreds) {
             val credOk = best.isNotEmpty() && !bestGuest || (best.isNotEmpty() && credReason.isEmpty())
@@ -164,7 +164,7 @@ object SmbProbe {
             try {
                 val ctx = context(version.ifEmpty { "SMB311" }, user, pass, domain, user.isEmpty())
                 val url = "smb://$host/" + folder.trim('/') + "/"
-                val files = SmbFile(url.replace("//$host//", "//$host/"), ctx).listFiles() ?: emptyArray()
+                val files = SmbFile(VpnLink.route(url.replace("//$host//", "//$host/")), ctx).listFiles() ?: emptyArray()
                 Result.success(files.map {
                     val name = it.name.trimEnd('/')
                     Entry(name, "smb://$host/${(folder.trim('/') + "/" + name).trim('/')}" + if (it.isDirectory) "/" else "", it.isDirectory, if (it.isDirectory) -1 else it.length())

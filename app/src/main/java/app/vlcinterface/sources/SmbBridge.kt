@@ -65,7 +65,7 @@ object SmbBridge {
                     out.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray()); return
                 }
                 val ctx = SmbProbe.fileContext(t.version, t.user, t.pass, t.domain)
-                SmbRandomAccessFile(SmbFile(Uri.decode(t.url), ctx), "r").use { raf ->
+                SmbRandomAccessFile(SmbFile(VpnLink.route(Uri.decode(t.url)), ctx), "r").use { raf ->
                     val size = raf.length()
                     var start = 0L
                     var end = size - 1

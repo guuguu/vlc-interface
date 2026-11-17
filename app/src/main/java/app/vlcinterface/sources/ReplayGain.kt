@@ -79,7 +79,7 @@ object ReplayGain {
                 }
             }
             scheme == "smb" -> {
-                val f = SmbFile(android.net.Uri.decode(uri), SmbProbe.fileContext(smbVersion, user, pass, domain))
+                val f = SmbFile(VpnLink.route(android.net.Uri.decode(uri)), SmbProbe.fileContext(smbVersion, user, pass, domain))
                 val raf = f.openRandomAccess("r")
                 object : Ranged {
                     override val size = f.length()

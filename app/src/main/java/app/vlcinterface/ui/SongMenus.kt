@@ -482,3 +482,41 @@ fun SearchResultMenu(item: PlayItem, open: Boolean, nav: Navigator?, onClose: ()
         if (item.isMusic) SMenuItem({ Text("ReplayGain scan…") }, { onClose(); FileDialogs.rg = item })
     }
 }
+
+/**
+ * VPN questions: "Is <server on the VPN> the same as <LAN server>?" (yes: kept as its VPN address), and, away from
+ * home with the VPN off, "Start the VPN?" (opens the VPN app — this app can't switch it on itself, said so).
+ */
+@Composable
+fun VpnQuestionsHost() {
+    val v = app.vlcinterface.sources.VpnLink
+    val ctx = LocalContext.current
+    val same by v.ask.collectAsState()
+    same?.let { (s, f) ->
+        AlertDialog(onDismissRequest = {}, containerColor = C.panel,
+            title = { Text("Same server?", color = C.text) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("A server was found on the VPN at ${f.ip}" + (if (f.nbName.isNotEmpty()) " (${f.nbName})" else "") + ".", color = C.text, fontSize = 14.sp)
+                    Text("Is it the same as “${s.name.ifBlank { s.host }} - ${s.host}”?", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    Text(when {
+                        f.guid.isNotEmpty() && f.guid == s.smbGuid -> "Same server ID (SMB GUID)."
+                        f.mac.isNotEmpty() && f.mac == s.mac -> "Same network card (MAC)."
+                        f.nbName.isNotEmpty() && f.nbName.equals(s.nbName, true) -> "Same network name."
+                        else -> "Similar name."
+                    } + " Yes: away from home with the VPN on, the app uses ${f.ip}; on its Wi-Fi again, ${s.host}.", color = C.muted, fontSize = 12.sp)
+                }
+            },
+            confirmButton = { STextButton({ v.answer(true) }) { Text("Yes, same", color = accent(), fontWeight = FontWeight.Bold) } },
+            dismissButton = { STextButton({ v.answer(false) }) { Text("No") } })
+    }
+    val start by v.askStart.collectAsState()
+    start?.let { s ->
+        AlertDialog(onDismissRequest = { v.askStart.value = null }, containerColor = C.panel,
+            title = { Text("${s.name.ifBlank { s.host }} not reachable", color = C.text) },
+            text = { Text("You're not on its home network and the VPN is off. Start the VPN to reach it at ${s.vpnHost}?", color = C.text, fontSize = 14.sp) },
+            confirmButton = { STextButton({ v.askStart.value = null; Toast.makeText(ctx, v.startVpn(ctx), Toast.LENGTH_LONG).show() }) {
+                Text("Start the VPN", color = accent(), fontWeight = FontWeight.Bold) } },
+            dismissButton = { STextButton({ v.askStart.value = null }) { Text("Not now") } })
+    }
+}

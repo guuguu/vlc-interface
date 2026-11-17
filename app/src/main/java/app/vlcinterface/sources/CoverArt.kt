@@ -118,7 +118,7 @@ object CoverArt {
             }
             is Smb -> {
                 val cx = SmbProbe.fileContext(pl.item.smbVersion, pl.item.user, pl.item.password, pl.item.domain)
-                names.firstNotNullOfOrNull { n -> SmbFile(pl.folder + n, cx).takeIf { it.exists() }?.inputStream?.use { it.readBytes() } }
+                names.firstNotNullOfOrNull { n -> SmbFile(VpnLink.route(pl.folder + n), cx).takeIf { it.exists() }?.inputStream?.use { it.readBytes() } }
             }
             is Web -> names.firstNotNullOfOrNull { n ->
                 Net.http.newCall(Request.Builder().url(pl.folder + n).apply { auth(this, pl.item) }.build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }
@@ -143,7 +143,7 @@ object CoverArt {
             }
             is Smb -> {
                 val cx = SmbProbe.fileContext(pl.item.smbVersion, pl.item.user, pl.item.password, pl.item.domain)
-                SmbFile(pl.folder + name, cx).outputStream.use { it.write(jpeg) }; ""
+                SmbFile(VpnLink.route(pl.folder + name), cx).outputStream.use { it.write(jpeg) }; ""
             }
             is Web -> if (!pl.writable) "not saved — this source is read-only" else
                 Net.http.newCall(Request.Builder().url(pl.folder + name).put(jpeg.toRequestBody("image/jpeg".toMediaType())).apply { auth(this, pl.item) }.build())

@@ -70,7 +70,7 @@ object WriteGuard {
         val host = s.host.substringAfter("://").trimEnd('/')
         val ro = ArrayList<String>(); val lines = ArrayList<String>()
         for (sh in shares) {
-            val f = SmbFile("smb://$host/$sh/.vlci-write-test-${System.currentTimeMillis()}", cx)
+            val f = SmbFile(VpnLink.route("smb://$host/$sh/.vlci-write-test-${System.currentTimeMillis()}"), cx)
             val result = try {
                 f.createNewFile(); f.delete(); null
             } catch (e: Exception) { e }

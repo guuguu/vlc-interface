@@ -447,6 +447,18 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
             SymButton({ nav.go(Screen.LogPage(ServerLog.keyOf(s.host))) }) { SymIcon(Icons.Filled.Info, "Log for ${s.name}", tint = C.muted) }
             SymButton({ nav.go(Screen.EditSource(s.zone, s.id)) }) { SymIcon(Icons.Filled.MoreVert, "Edit ${s.name}", tint = C.muted) }
         }
+        // A NAS with a remembered VPN address: which address to use — Auto, LAN or VPN (by hand).
+        if (s.vpnHost.isNotBlank()) {
+            val vpnOn by app.vlcinterface.sources.VpnLink.vpnUp.collectAsState()
+            val using = remember(s, vpnOn, online) { if (app.vlcinterface.sources.VpnLink.useVpn(s)) "VPN ${s.vpnHost}" else "LAN ${s.host}" }
+            Row(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Address", color = C.muted, fontSize = 12.sp)
+                Pill("Auto", selected = s.addrMode == "auto") { app.vlcinterface.sources.VpnLink.setMode(s, "auto") }
+                Pill("LAN", selected = s.addrMode == "lan") { app.vlcinterface.sources.VpnLink.setMode(s, "lan") }
+                Pill("VPN", selected = s.addrMode == "vpn") { app.vlcinterface.sources.VpnLink.setMode(s, "vpn") }
+            }
+            Text("In use: $using", color = a, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 2.dp))
+        }
         FlowRow(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             s.pins.forEach { pin ->
                 Box(Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFF252A32)).clickable {

@@ -60,7 +60,7 @@ object OsHash {
                 }
                 uri.startsWith("smb://") -> {
                     val s = source ?: return@withContext null
-                    val f = SmbFile(Uri.decode(uri), SmbProbe.fileContext(s.smbVersion, s.user, s.password, s.domain))
+                    val f = SmbFile(VpnLink.route(Uri.decode(uri)), SmbProbe.fileContext(s.smbVersion, s.user, s.password, s.domain))
                     SmbRandomAccessFile(f, "r").use { raf ->
                         val size = raf.length()
                         if (size < CHUNK * 2) return@withContext null

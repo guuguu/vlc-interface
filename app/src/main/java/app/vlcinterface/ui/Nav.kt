@@ -165,6 +165,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 WifiLostHost()
                 SaveEndQuestionHost()
                 ExitSavingHost()
+                VpnQuestionsHost()
                 OutputFallbackHost()
                 FileDialogsHost(nav)   // windows from file menus (Tags & ReplayGain, ReplayGain scan, Add to playlist)
             }

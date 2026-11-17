@@ -85,7 +85,7 @@ object SubtitleFiles {
 
     private fun read(src: Source, uri: String): ByteArray? = try {
         when {
-            uri.startsWith("smb://") -> SmbFile(Uri.decode(uri), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain)).openInputStream().use { it.readBytes() }
+            uri.startsWith("smb://") -> SmbFile(VpnLink.route(Uri.decode(uri)), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain)).openInputStream().use { it.readBytes() }
             uri.startsWith("http") -> {
                 val req = Request.Builder().url(uri).apply { if (src.user.isNotEmpty()) header("Authorization", Credentials.basic(src.user, src.password)) }.build()
                 Net.http.newCall(req).execute().use { it.body?.bytes() }

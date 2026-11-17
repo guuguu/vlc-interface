@@ -966,7 +966,7 @@ fun PickCueScreen(nav: Navigator, p: Screen.PickCue) {
 private suspend fun readBytes(src: Source, uri: String): ByteArray? = withContext(Dispatchers.IO) {
     try {
         when {
-            uri.startsWith("smb://") -> SmbFile(android.net.Uri.decode(uri), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain)).openInputStream().use { it.readBytes() }
+            uri.startsWith("smb://") -> SmbFile(app.vlcinterface.sources.VpnLink.route(android.net.Uri.decode(uri)), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain)).openInputStream().use { it.readBytes() }
             uri.startsWith("http") -> {
                 val req = okhttp3.Request.Builder().url(uri).apply { if (src.user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(src.user, src.password)) }.build()
                 app.vlcinterface.sources.Net.http.newCall(req).execute().use { it.body?.bytes() }

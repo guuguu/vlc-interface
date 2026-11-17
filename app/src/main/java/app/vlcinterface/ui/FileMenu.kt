@@ -217,7 +217,7 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                         }
                         val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                             try {
-                                jcifs.smb.SmbFile(Uri.decode(target.uri), app.vlcinterface.sources.SmbProbe.fileContext(target.smbVersion, target.user, target.password, target.domain))
+                                jcifs.smb.SmbFile(app.vlcinterface.sources.VpnLink.route(Uri.decode(target.uri)), app.vlcinterface.sources.SmbProbe.fileContext(target.smbVersion, target.user, target.password, target.domain))
                                     .use { it.delete() }; true
                             } catch (e: Exception) {
                                 if (app.vlcinterface.sources.WriteGuard.isDenied(e)) app.vlcinterface.sources.WriteGuard.markReadOnly(target.sourceId, target.uri, e.message ?: "refused")
@@ -248,7 +248,7 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                 if (f.src != null) scope.launch {
                     val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                         try {
-                            jcifs.smb.SmbFile(Uri.decode(f.uri).trimEnd('/') + "/", app.vlcinterface.sources.SmbProbe.fileContext(f.src.smbVersion, f.src.user, f.src.password, f.src.domain))
+                            jcifs.smb.SmbFile(app.vlcinterface.sources.VpnLink.route(Uri.decode(f.uri).trimEnd('/') + "/"), app.vlcinterface.sources.SmbProbe.fileContext(f.src.smbVersion, f.src.user, f.src.password, f.src.domain))
                                 .use { it.delete() }; null
                         } catch (e: Exception) { e.message ?: e.javaClass.simpleName }
                     }

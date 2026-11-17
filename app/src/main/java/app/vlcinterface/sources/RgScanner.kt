@@ -205,7 +205,7 @@ object RgScanner {
                 u.startsWith("content://") -> r.setDataSource(ctx, Uri.parse(u))
                 u.startsWith("file://") -> r.setDataSource(Uri.parse(u).path)
                 u.startsWith("/") -> r.setDataSource(u)
-                u.startsWith("smb://") -> { ds = SmbSource(SmbFile(Uri.decode(u), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); r.setDataSource(ds) }
+                u.startsWith("smb://") -> { ds = SmbSource(SmbFile(VpnLink.route(Uri.decode(u)), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); r.setDataSource(ds) }
                 u.startsWith("http") -> r.setDataSource(u, if (item.user.isNotEmpty()) mapOf("Authorization" to okhttp3.Credentials.basic(item.user, item.password)) else emptyMap())
                 else -> return null
             }
@@ -388,7 +388,7 @@ object RgScanner {
                 uri.startsWith("content://") -> ex.setDataSource(ctx, Uri.parse(uri), null)
                 uri.startsWith("file://") -> ex.setDataSource(Uri.parse(uri).path!!)
                 uri.startsWith("/") -> ex.setDataSource(uri)
-                uri.startsWith("smb://") -> { ds = SmbSource(SmbFile(Uri.decode(uri), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); ex.setDataSource(ds) }
+                uri.startsWith("smb://") -> { ds = SmbSource(SmbFile(VpnLink.route(Uri.decode(uri)), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); ex.setDataSource(ds) }
                 uri.startsWith("http://") || uri.startsWith("https://") -> ex.setDataSource(uri,
                     if (item.user.isNotEmpty()) mapOf("Authorization" to okhttp3.Credentials.basic(item.user, item.password)) else emptyMap())
                 else -> throw IllegalStateException("this kind of source can't be read for scanning")
@@ -527,7 +527,7 @@ object RgScanner {
             u.startsWith("content://") -> ctx.contentResolver.openInputStream(Uri.parse(u))
             u.startsWith("file://") -> File(Uri.parse(u).path!!).inputStream()
             u.startsWith("/") -> File(u).inputStream()
-            u.startsWith("smb://") -> SmbFile(Uri.decode(u), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain)).inputStream
+            u.startsWith("smb://") -> SmbFile(VpnLink.route(Uri.decode(u)), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain)).inputStream
             u.startsWith("http") -> Net.http.newCall(Request.Builder().url(u)
                 .apply { if (item.user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(item.user, item.password)) }.build())
                 .execute().let { r -> if (!r.isSuccessful) { r.close(); throw IllegalStateException("HTTP ${r.code}") }; r.body!!.byteStream() }
@@ -559,12 +559,12 @@ object RgScanner {
             u.startsWith("smb://") -> {
                 // Safe replace: write a tagged copy next to the file, then swap it in.
                 val cx = SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain)
-                val orig = SmbFile(Uri.decode(u), cx)
-                val t = SmbFile(Uri.decode(u) + ".rgtmp", cx)
+                val orig = SmbFile(VpnLink.route(Uri.decode(u)), cx)
+                val t = SmbFile(VpnLink.route(Uri.decode(u) + ".rgtmp"), cx)
                 t.outputStream.use { o -> tmp.inputStream().use { copy(it, o, "Saving to the server", tmp.length()) } }
                 if (t.length() != tmp.length()) { t.delete(); throw IllegalStateException("copy on the server is incomplete") }
                 try { orig.delete() } catch (e: Exception) { try { t.delete() } catch (_: Exception) {}; throw e }
-                t.renameTo(SmbFile(Uri.decode(u), cx))
+                t.renameTo(SmbFile(VpnLink.route(Uri.decode(u)), cx))
             }
             u.startsWith("http") && src?.proto == "webdav" -> {
                 Net.http.newCall(Request.Builder().url(u).put(tmp.asRequestBody("application/octet-stream".toMediaType()))
@@ -738,7 +738,7 @@ object MediaInfo {
                 u.startsWith("content://") -> r.setDataSource(ctx, Uri.parse(u))
                 u.startsWith("file://") -> r.setDataSource(Uri.parse(u).path)
                 u.startsWith("/") -> r.setDataSource(u)
-                u.startsWith("smb://") -> { ds = RgScanner.SmbSource(SmbFile(Uri.decode(u), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); r.setDataSource(ds) }
+                u.startsWith("smb://") -> { ds = RgScanner.SmbSource(SmbFile(VpnLink.route(Uri.decode(u)), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); r.setDataSource(ds) }
                 u.startsWith("http") -> r.setDataSource(u, if (item.user.isNotEmpty()) mapOf("Authorization" to okhttp3.Credentials.basic(item.user, item.password)) else emptyMap())
                 else -> return@withContext null
             }
@@ -770,7 +770,7 @@ object MediaInfo {
                 u.startsWith("content://") -> r.setDataSource(ctx, Uri.parse(u))
                 u.startsWith("file://") -> r.setDataSource(Uri.parse(u).path)
                 u.startsWith("/") -> r.setDataSource(u)
-                u.startsWith("smb://") -> { ds = RgScanner.SmbSource(SmbFile(Uri.decode(u), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); r.setDataSource(ds) }
+                u.startsWith("smb://") -> { ds = RgScanner.SmbSource(SmbFile(VpnLink.route(Uri.decode(u)), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); r.setDataSource(ds) }
                 u.startsWith("http") -> r.setDataSource(u, if (item.user.isNotEmpty()) mapOf("Authorization" to okhttp3.Credentials.basic(item.user, item.password)) else emptyMap())
                 else -> throw IllegalStateException("tags can't be read from this kind of source")
             }

@@ -58,7 +58,8 @@ object Net {
 
     suspend fun reachable(host: String, port: Int, timeoutMs: Int = 1500): Boolean = withContext(Dispatchers.IO) {
         try {
-            Socket().use { it.connect(InetSocketAddress(host, port), timeoutMs) }
+            // LAN servers: their VPN address when that's the one in use.
+            Socket().use { it.connect(InetSocketAddress(VpnLink.routeHost(host), port), timeoutMs) }
             true
         } catch (e: Exception) {
             false
@@ -108,7 +109,7 @@ object VlcBrowse {
                     val holder = arrayOfNulls<MediaBrowser>(1)
                     val browser = MediaBrowser(App.instance.player.libVlc, object : MediaBrowser.EventListener {
                         override fun onMediaAdded(index: Int, media: IMedia) {
-                            val u = media.uri?.toString() ?: return
+                            val u = VpnLink.unroute(media.uri?.toString() ?: return)
                             val title = media.getMeta(IMedia.Meta.Title)?.takeIf { it.isNotBlank() } ?: Urls.nameOf(u)
                             out += Entry(title, u, media.type == IMedia.Type.Directory)
                         }
@@ -121,7 +122,7 @@ object VlcBrowse {
                         }
                     }, main)
                     holder[0] = browser
-                    browser.browse(Uri.parse(uri), MediaBrowser.Flag.Interact or MediaBrowser.Flag.NoSlavesAutodetect)
+                    browser.browse(Uri.parse(VpnLink.route(uri)), MediaBrowser.Flag.Interact or MediaBrowser.Flag.NoSlavesAutodetect)
                     cont.invokeOnCancellation { main.post { holder[0]?.release(); holder[0] = null } }
                 }
             }

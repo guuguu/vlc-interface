@@ -163,6 +163,25 @@ fun SettingsScreen(nav: Navigator) {
             CardBox {
                 ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }
                 Divider()
+                // Home NAS over a VPN (ZeroTier, WireGuard …): status, search now, the VPN addresses kept.
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val vl = app.vlcinterface.sources.VpnLink
+                    val up by vl.vpnUp.collectAsState()
+                    val busy by vl.searching.collectAsState()
+                    Text("NAS over VPN", color = C.text, fontSize = 15.sp)
+                    Text(if (up) "VPN on" else "VPN off", color = if (up) accent() else C.muted, fontSize = 12.sp)
+                    Text("When a VPN starts, its network is searched for your LAN servers; a match is asked about and kept. Away from home the VPN address is used, on the home Wi-Fi the LAN one (switch by hand in Libraries → LAN).",
+                        color = C.muted, fontSize = 12.sp)
+                    if (busy.isNotEmpty()) Text(busy, color = accent(), fontSize = 12.sp)
+                    else if (up) Pill("Search the VPN now") { vl.discover() }
+                    st.sources.filter { it.vpnHost.isNotBlank() }.forEach { src ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${src.name.ifBlank { src.host }}: LAN ${src.host} · VPN ${src.vpnHost}", color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            STextButton({ vl.forget(src) }) { Text("Forget VPN") }
+                        }
+                    }
+                }
+                Divider()
                 // Song links: Spotify's own search with a free developer app (no Spotify login). Without it the
                 // links are found through MusicBrainz and a web search.
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

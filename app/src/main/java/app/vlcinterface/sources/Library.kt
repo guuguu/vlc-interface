@@ -102,7 +102,7 @@ object MusicLibrary {
             if (cached != null && !force && (cached.size < 0 || cached.size == e.size)) return e.applyTags(cached)
             return try {
                 val url = if (src.smbVersion == "SMB1" && e.uri.startsWith("smb://"))
-                    SmbBridge.urlFor(e.uri, "SMB1", src.user, src.password, src.domain) else e.uri
+                    SmbBridge.urlFor(e.uri, "SMB1", src.user, src.password, src.domain) else VpnLink.route(e.uri)
                 val m = Media(player.libVlc, Uri.parse(url))
                 m.parse(IMedia.Parse.ParseNetwork)
                 fun meta(id: Int) = m.getMeta(id)?.trim().orEmpty()
@@ -219,7 +219,7 @@ object NasWriter {
     suspend fun exists(src: Source, folderUrl: String, name: String): Boolean = withContext(Dispatchers.IO) {
         try {
             when (src.proto) {
-                "smb" -> SmbFile(Uri.decode(folderUrl.trimEnd('/') + "/" + name), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain)).exists()
+                "smb" -> SmbFile(VpnLink.route(Uri.decode(folderUrl.trimEnd('/') + "/" + name)), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain)).exists()
                 "webdav" -> {
                     val req = Request.Builder().url(folderUrl.trimEnd('/') + "/" + Uri.encode(name)).head()
                         .apply { if (src.user.isNotEmpty()) header("Authorization", Credentials.basic(src.user, src.password)) }.build()
@@ -236,7 +236,7 @@ object NasWriter {
         val r: Result<String> = try {
             when (src.proto) {
                 "smb" -> {
-                    val f = SmbFile(Uri.decode(target), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain))
+                    val f = SmbFile(VpnLink.route(Uri.decode(target)), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain))
                     f.openOutputStream().use { it.write(bytes) }
                     Result.success(target)
                 }
