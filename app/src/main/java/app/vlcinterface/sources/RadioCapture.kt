@@ -48,7 +48,9 @@ import kotlin.math.sqrt
 object RadioCapture {
     data class Mark(val title: String, val offset: Long, val at: Long)
     data class Pending(val title: String, val start: Long, val partialStart: Boolean, val station: String,
-                       val at: Long = System.currentTimeMillis(), val format: String = "")
+                       val at: Long = System.currentTimeMillis(), val format: String = "",
+                       /** Saved by hand: "start" = Start / Stop saving, "last" = the last X minutes; "" = the announced song. */
+                       val manual: String = "", val name: String = "")
     data class Status(
         val url: String = "", val running: Boolean = false, val format: String = "", val message: String = "",
         val pending: Pending? = null, val busy: String = "", val title: String = "", val titleStartKnown: Boolean = false,
@@ -85,6 +87,8 @@ object RadioCapture {
     private var total = 0L
     private var firstAt = 0L
     private val marks = ArrayList<Mark>()
+    /** Ogg streams: each song's logical stream with its header pages (newest last). */
+    private val chains = ArrayList<OggStream.Chain>()
     private var bytesPerSec = 16000.0
     private var station = ""
 
@@ -169,6 +173,7 @@ object RadioCapture {
             val fmt = when {
                 "mpeg" in ct || "mp3" in ct -> "mp3"
                 "aac" in ct || "mp4a" in ct -> "aac"
+                "ogg" in ct || "opus" in ct -> "ogg"
                 else -> { unsupported(ct.ifEmpty { "unknown format" }); return null }
             }
             r.header("icy-br")?.substringBefore(',')?.trim()?.toIntOrNull()?.takeIf { it in 8..1000 }?.let { bytesPerSec = it * 125.0 }
@@ -178,9 +183,15 @@ object RadioCapture {
             synchronized(lock) {
                 marks.clear()
                 if (status.value.pending == null && saveQueue.value.isEmpty()) { segs.forEach { it.file.delete() }; segs.clear() }
+                chains.clear()
                 firstAt = System.currentTimeMillis()
             }
-            status.value = status.value.copy(format = fmt, message = if (metaint > 0) "" else "This station sends no song titles: songs can't be found on their own")
+            status.value = status.value.copy(format = fmt, message = if (metaint > 0 || fmt == "ogg") "" else "This station sends no song titles: save by hand (Start / Stop, or the last minutes)")
+            // Ogg: song titles come with each new logical stream (and its header pages are kept for cutting).
+            val watcher = if (fmt == "ogg") OggStream.Watcher { c ->
+                synchronized(lock) { chains += c; while (chains.size > 60) chains.removeAt(0) }
+                if (c.title.isNotBlank()) titleChanged(c.title, c.offset)
+            } else null
             val buf = ByteArray(16 * 1024)
             var out: java.io.FileOutputStream? = null
             try {
@@ -201,7 +212,9 @@ object RadioCapture {
                             val old = marks.filter { it.offset < first }
                             if (old.size > 1) marks.removeAll(old.dropLast(1).toSet())
                         }
-                        out!!.write(buf, 0, n); seg.length += n; total += n
+                        out!!.write(buf, 0, n); seg.length += n
+                        watcher?.feed(buf, 0, n, total)
+                        total += n
                         val secs = (System.currentTimeMillis() - firstAt) / 1000.0
                         if (secs > 20) bytesPerSec = total / secs
                     }
@@ -228,14 +241,15 @@ object RadioCapture {
         status.value = status.value.copy(format = "unsupported", running = false, message = "Songs from this station can't be saved ($what)")
     }
 
-    private fun titleChanged(t: String) {
+    private fun titleChanged(t: String, at: Long = total) {
         synchronized(lock) {
             if (marks.lastOrNull()?.title == t) return
             val first = marks.isEmpty()
-            marks += Mark(t, total, System.currentTimeMillis())
+            marks += Mark(t, at, System.currentTimeMillis())
             // The first title heard was already playing: its start was not recorded.
             status.value = status.value.copy(title = t, titleStartKnown = !first)
-            status.value.pending?.let { p -> if (p.title != t) { status.value = status.value.copy(pending = null); finishLater(p, total, partialEnd = false) } }
+            // The announced song ended (saving by hand goes on until you stop it).
+            status.value.pending?.let { p -> if (p.manual.isEmpty() && p.title != t) { status.value = status.value.copy(pending = null); finishLater(p, at, partialEnd = false) } }
         }
     }
 
@@ -255,6 +269,43 @@ object RadioCapture {
     }
 
     fun cancelPending() { status.value = status.value.copy(pending = null) }
+
+    /** Seconds of the station kept now (what "the last X minutes" can reach). */
+    fun recordedSec(): Double = synchronized(lock) { (total - (segs.firstOrNull()?.start ?: total)) / bytesPerSec }
+
+    /** Saving by hand, A: from now (moved to the nearest gap within ±10 s) until [stopSaving]. */
+    fun startSaving(name: String): String {
+        synchronized(lock) {
+            val s = status.value
+            if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
+            if (s.pending != null) return "Already saving"
+            status.value = s.copy(pending = Pending(marks.lastOrNull()?.title ?: "", total, false, station, System.currentTimeMillis(), s.format, "start", name.trim()))
+            return "Saving from now — tap Stop saving at the end"
+        }
+    }
+
+    fun stopSaving(): String {
+        synchronized(lock) {
+            val p = status.value.pending?.takeIf { it.manual == "start" } ?: return "Nothing is being saved"
+            status.value = status.value.copy(pending = null)
+            finishLater(p, total, partialEnd = false)
+            return "Saving stopped: the song is cut at the nearest gap and saved"
+        }
+    }
+
+    /** Saving by hand, B: the last [minutes] minutes, both ends moved to the gap between songs. */
+    fun saveLast(minutes: Int, name: String): String {
+        synchronized(lock) {
+            val s = status.value
+            if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
+            val first = segs.firstOrNull()?.start ?: return "Nothing recorded yet"
+            val start = maxOf(first, total - (minutes * 60 * bytesPerSec).toLong())
+            val p = Pending(marks.lastOrNull { it.offset <= start }?.title ?: "", start, false, station,
+                System.currentTimeMillis() - minutes * 60_000L, s.format, "last", name.trim())
+            finishLater(p, total, partialEnd = true)
+            return "Saving the last $minutes min"
+        }
+    }
 
     // ---------------------------------------------------------------- cutting and saving
 
@@ -288,7 +339,7 @@ object RadioCapture {
                 saveQueue.value = saveQueue.value - p.title; toast("Saving failed: ${e.message}"); return@launch }
             // One at a time, in the order asked (single low-priority thread).
             kotlinx.coroutines.withContext(saver) { status.value = status.value.copy(busy = "Saving “${p.title}”…"); saveStartedAt = System.currentTimeMillis(); saveProgress.value = 0f; try {
-                val where = save(App.instance, p, data, (p.start - from).toInt(), (end - from).toInt().coerceAtMost(data.size), partialEnd)
+                val where = save(App.instance, p, data, (p.start - from).toInt(), (end - from).toInt().coerceAtMost(data.size), partialEnd, from)
                 ServerLog.log("saved-songs", "save", "radio", "", true, p.title, "From ${p.station} → $where" + (if (p.partialStart) " · beginning missing" else "") + (if (partialEnd) " · end missing" else ""))
                 toast((if (App.instance.store.current.settings.saveFormat == "original") "Saved: " else "Encoding ended: ") + where.substringAfterLast('/'), long = false)
             } catch (e: Throwable) {
@@ -431,16 +482,62 @@ object RadioCapture {
         return if (db < -38) best * step else null
     }
 
-    private fun save(ctx: Context, p: Pending, data: ByteArray, startByte: Int, endByte: Int, partialEnd: Boolean): String {
-        val fmt = p.format.takeIf { it == "mp3" || it == "aac" } ?: throw Exception("format not supported")
-        val fr = frames(data, fmt)
-        if (fr.size < 20) throw Exception("too little audio recorded")
-        val clean = File(dir, "clip.${if (fmt == "mp3") "mp3" else "aac"}")
-        clean.outputStream().use { o -> fr.forEach { o.write(data, it.pos, it.len) } }
-        // Time of each frame (seconds) from the clip's start.
-        val t = DoubleArray(fr.size + 1); for (i in fr.indices) t[i + 1] = t[i] + fr[i].samples.toDouble() / fr[i].rate
-        fun timeOfByte(b: Int): Double { val i = fr.indexOfFirst { it.pos >= b }; return if (i < 0) t.last() else t[i] }
-        val nomStart = timeOfByte(startByte); val nomEnd = timeOfByte(endByte)
+    /**
+     * A recorded part, in units the stream can be cut at (MP3 / AAC frames, Ogg pages): their place in the data,
+     * the time each begins ([t], seconds; one more entry = the end), and how a run of them becomes a playable file.
+     */
+    private class Clip(val pos: IntArray, val t: DoubleArray, val cleanExt: String, val origExt: String, val origMime: String,
+                       val write: (Int, Int, File) -> Unit, val remuxToM4a: Boolean = false) {
+        val n get() = pos.size
+        fun indexOfByte(b: Int): Int = pos.indexOfFirst { it >= b }.let { if (it < 0) n else it }
+        fun indexOfTime(x: Double): Int = t.indexOfFirst { it >= x - 1e-6 }.let { if (it < 0) n else it }.coerceIn(0, n)
+    }
+
+    private fun clipOf(p: Pending, data: ByteArray, from: Long): Clip {
+        when (p.format) {
+            "mp3", "aac" -> {
+                val fr = frames(data, p.format)
+                if (fr.size < 20) throw Exception("too little audio recorded")
+                val t = DoubleArray(fr.size + 1); for (i in fr.indices) t[i + 1] = t[i] + fr[i].samples.toDouble() / fr[i].rate
+                val raw = if (p.format == "mp3") "mp3" else "aac"
+                return Clip(IntArray(fr.size) { fr[it].pos }, t, raw, if (p.format == "mp3") "mp3" else "m4a",
+                    if (p.format == "mp3") "audio/mpeg" else "audio/mp4",
+                    { a, b, f -> f.outputStream().buffered().use { o -> for (i in a until b) o.write(data, fr[i].pos, fr[i].len) } },
+                    remuxToM4a = p.format == "aac")
+            }
+            "ogg" -> {
+                // The logical stream (song) the part begins in; pages of another one (the song before) are left out.
+                val c = synchronized(lock) { chains.lastOrNull { it.offset <= from + 1 + maxOf(0L, p.start - from) } ?: chains.lastOrNull() }
+                    ?: throw Exception("the stream's start (Ogg headers) wasn't recorded")
+                val all = OggStream.pages(data).filter { it.serial == c.serial && it.granule != 0L }
+                // A part must start on a page that begins a packet.
+                val pg = all.dropWhile { (it.flags and 1) != 0 }
+                if (pg.size < 10) throw Exception("too little audio recorded")
+                val g = LongArray(pg.size); var last = -1L
+                for (i in pg.indices) { if (pg[i].granule != -1L) last = pg[i].granule; g[i] = last }
+                // Granule = position at the end of each page; the first page's start is estimated from the next one.
+                val first = g.indexOfFirst { it >= 0 }.coerceAtLeast(0)
+                val step = if (pg.size > first + 1 && g[first + 1] > g[first]) g[first + 1] - g[first] else 0L
+                val g0 = (g[first] - step).coerceAtLeast(0)
+                for (i in 0 until first) g[i] = g0
+                val t = DoubleArray(pg.size + 1); for (i in pg.indices) t[i + 1] = maxOf(t[i], (g[i] - g0).toDouble() / c.rate)
+                return Clip(IntArray(pg.size) { pg[it].pos }, t, OggStream.ext(c.codec), OggStream.ext(c.codec), OggStream.mime(c.codec), { a, b, f ->
+                    val base = if (a == 0) g0 else g[a - 1]
+                    val part = pg.subList(a, b)
+                    if (c.codec == "flac") OggStream.writeFlac(c, data, part, (g[b - 1] - base).coerceAtLeast(0), f)
+                    else OggStream.writeOgg(c, data, part, base, f)
+                })
+            }
+            else -> throw Exception("format not supported")
+        }
+    }
+
+    private fun save(ctx: Context, p: Pending, data: ByteArray, startByte: Int, endByte: Int, partialEnd: Boolean, from: Long = 0): String {
+        val clip = clipOf(p, data, from)
+        val t = clip.t
+        val clean = File(dir, "clip.${clip.cleanExt}")
+        clip.write(0, clip.n, clean)
+        val nomStart = t[clip.indexOfByte(startByte)]; val nomEnd = t[clip.indexOfByte(endByte)]
 
         // Pass 1: loudness every 50 ms, to find the gaps between songs.
         stage(0f, 0.35f, t.last())
@@ -456,13 +553,21 @@ object RadioCapture {
             }
         }
         val rms = rmsList.toFloatArray()
+        // Start: the gap within ±10 s (not when the song began before recording). End: the gap within ±10 s; for
+        // "the last X minutes" only before now (nothing after it is recorded yet); none when recording stopped.
         var cutStart = if (p.partialStart) nomStart else quietest(rms, step, nomStart - 10, nomStart + 10) ?: nomStart
-        var cutEnd = if (partialEnd) nomEnd else quietest(rms, step, nomEnd - 10, nomEnd + 10) ?: nomEnd
-        // The catalogue length as a second opinion: a gap near start + length wins when the title change was far off.
-        val (artist, title) = app.vlcinterface.player.splitNowPlaying(p.title)
+        var cutEnd = when {
+            p.manual == "last" -> quietest(rms, step, nomEnd - 10, nomEnd) ?: nomEnd
+            partialEnd -> nomEnd
+            else -> quietest(rms, step, nomEnd - 10, nomEnd + 10) ?: nomEnd
+        }
+        val (artist, title) = app.vlcinterface.player.splitNowPlaying(p.name.ifBlank { p.title })
         // Song details from the catalogue — not over mobile data unless allowed.
-        val info = if (app.vlcinterface.player.NetGuard.blocked()) null else try { kotlinx.coroutines.runBlocking { SongLinks.info(artist, title) } } catch (_: Exception) { null }
-        if (!partialEnd && !p.partialStart && info != null && info.lengthMs > 30_000) {
+        val info = if (app.vlcinterface.player.NetGuard.blocked() || title.isBlank()) null
+            else try { kotlinx.coroutines.runBlocking { SongLinks.info(artist, title) } } catch (_: Exception) { null }
+        // The catalogue length as a second opinion (announced songs): a gap near start + length wins when the
+        // title change was far off.
+        if (p.manual.isEmpty() && !partialEnd && !p.partialStart && info != null && info.lengthMs > 30_000) {
             val want = cutStart + info.lengthMs / 1000.0
             if (abs(cutEnd - want) > 12) quietest(rms, step, want - 8, want + 8)?.let { cutEnd = it }
         }
@@ -470,7 +575,7 @@ object RadioCapture {
 
         val s = App.instance.store.current.settings
         val reencode = s.saveFormat != "original"
-        val outExt = if (reencode || fmt == "mp3") "mp3" else "m4a"
+        val outExt = if (reencode) "mp3" else clip.origExt
         val out = File(dir, "out.$outExt")
         var lufs = 0.0; var peak = 0f
         fun produce() {
@@ -479,12 +584,12 @@ object RadioCapture {
             if (reencode) {
                 val r = encodeMp3(clean, cutStart, cutEnd, out); lufs = r.first; peak = r.second
             } else {
-                val i0 = t.indexOfFirst { it >= cutStart - 1e-6 }.coerceIn(0, fr.size - 1)
-                val i1 = t.indexOfFirst { it >= cutEnd - 1e-6 }.let { if (it < 0) fr.size else it }.coerceIn(i0 + 1, fr.size)
-                val part = File(dir, "part.${clean.extension}")
-                part.outputStream().use { o -> for (i in i0 until i1) o.write(data, fr[i].pos, fr[i].len) }
+                val i0 = clip.indexOfTime(cutStart).coerceAtMost(clip.n - 1)
+                val i1 = clip.indexOfTime(cutEnd).coerceIn(i0 + 1, clip.n)
+                val part = File(dir, "part.${clip.cleanExt}")
+                clip.write(i0, i1, part)
                 val m = measure(part); lufs = m.first; peak = m.second
-                if (fmt == "mp3") part.copyTo(out, true) else remuxAdts(part, out)
+                if (clip.remuxToM4a) remuxAdts(part, out) else part.copyTo(out, true)
                 part.delete()
             }
         }
@@ -501,16 +606,21 @@ object RadioCapture {
         }
         clean.delete()
         stage(0.95f, 0.05f, 1.0)
-        writeTags(out, p, artist, title, info, lufs, peak)
+        try { writeTags(out, p, artist, title, info, lufs, peak) }
+        catch (e: Exception) {
+            // Opus files may not take tags here: the song is still saved, without them.
+            if (outExt != "opus") throw e
+            ServerLog.log("saved-songs", "tags", "radio", "", false, "Tags not written (.opus)", e.message ?: "")
+        }
         // No proper song name (nothing announced, the station's own name, "Live", ads …): YY_MM_DD_hr_min.
-        val nice = listOf(info?.artist ?: artist, info?.title ?: title).filter { it.isNotBlank() }.joinToString(" - ").ifBlank { p.title }.trim()
+        val nice = listOf(info?.artist ?: artist, info?.title ?: title).filter { it.isNotBlank() }.joinToString(" - ").ifBlank { p.name.ifBlank { p.title } }.trim()
         val proper = Regex("\\p{L}").containsMatchIn(nice) && !nice.equals(p.station, true) && !nice.contains("http", true) &&
             !Regex("^(live|unknown|untitled|advert|advertisement|ad|ads|commercial|news|jingle|station id|n/a)$", RegexOption.IGNORE_CASE).matches(nice)
         val name = (if (proper) safeName(nice) else java.text.SimpleDateFormat("yy_MM_dd_HH_mm", java.util.Locale.US).format(java.util.Date(p.at))) + ".$outExt"
-        val (where, uri) = store(ctx, out, name, if (outExt == "mp3") "audio/mpeg" else "audio/mp4")
+        val (where, uri) = store(ctx, out, name, if (reencode) "audio/mpeg" else clip.origMime)
         out.delete()
         // Into today's session playlist.
-        val item = app.vlcinterface.player.PlayItem(uri, info?.title ?: title.ifBlank { p.title }, artist = info?.artist ?: artist,
+        val item = app.vlcinterface.player.PlayItem(uri, info?.title ?: title.ifBlank { name.substringBeforeLast('.') }, artist = info?.artist ?: artist,
             album = info?.album ?: "", trackNo = info?.trackNo ?: 0, durationMs = ((cutEnd - cutStart) * 1000).toLong(), fileName = name)
         Handler(Looper.getMainLooper()).post { try { App.instance.player.addToSession(listOf(item)) } catch (_: Exception) {} }
         return where

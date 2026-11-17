@@ -145,36 +145,61 @@ fun SongTitleMenu(item: PlayItem, artist: String, lengthMs: Long, open: Boolean,
     }
 }
 
-/** Radio: "Save this song" — what will happen, then saved when the song ends. */
+/**
+ * Radio: "Save this song" — the announced song (saved when it ends), or by hand: Start / Stop saving, or the last
+ * X minutes; both ends go to the gap between songs. A name can be typed (else the announced one, else the date).
+ */
 @Composable
 fun SaveSongDialog(onDone: () -> Unit) {
     val s by RadioCapture.status.collectAsState()
     val q by RadioCapture.saveQueue.collectAsState()
     val st by app.vlcinterface.App.instance.store.state.collectAsState()
+    var name by remember { mutableStateOf("") }
+    var recSec by remember { mutableStateOf(RadioCapture.recordedSec()) }
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); recSec = RadioCapture.recordedSec() } }
+    val ctx = LocalContext.current
+    fun say(t: String) { Toast.makeText(ctx, t, Toast.LENGTH_LONG).show() }
+    val pend = s.pending
+    val fmt = if (st.settings.saveFormat == "original") "as the station sends it" else "MP3 (LAME V0)"
+    val sub = if (st.settings.saveFormat == "original") "raw" else "mp3"
+    val where = (if (st.settings.saveFolder.isEmpty()) "the library root" else Uri.decode(st.settings.saveFolder).substringAfterLast(':').ifEmpty { "your folder" }) + " /$sub"
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
         title = { Text("Save this song", color = C.text) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(s.title.ifEmpty { "No song title announced yet" }, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                val fmt = if (st.settings.saveFormat == "original") "as the station sends it" else "MP3 (LAME V0)"
-                val sub = if (st.settings.saveFormat == "original") "raw" else "mp3"
-                val where = (if (st.settings.saveFolder.isEmpty()) "the library root" else Uri.decode(st.settings.saveFolder).substringAfterLast(':').ifEmpty { "your folder" }) + " /$sub"
-                Text(when {
-                    s.pending != null -> "Waiting for “${s.pending!!.title}” to end — then saved $fmt to $where."
-                    !s.running -> s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)." }
-                    !s.titleStartKnown -> "Recording began during this song: only the part from then on can be saved. Songs after it are saved whole."
-                    else -> "Saved whole, $fmt, to $where, when it ends. Cut at the gap between songs, with all tags found."
-                }, color = C.muted, fontSize = 13.sp)
-                if (s.message.isNotEmpty() && s.running) Text(s.message, color = C.bad, fontSize = 12.sp)
+            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(s.title.ifEmpty { "No song title announced" }, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                if (!s.running) {
+                    Text(s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)." }, color = C.bad, fontSize = 13.sp)
+                } else {
+                    Text("Saved $fmt to $where. Cut at the gap between songs, with all tags found.", color = C.muted, fontSize = 13.sp)
+                    when {
+                        pend?.manual == "start" -> Text("Saving by hand since ${fmtTime(System.currentTimeMillis() - pend.at)} — tap Stop saving at the end.", color = accent(), fontSize = 13.sp)
+                        pend != null -> Text("Waiting for “${pend.title}” to end — then saved.", color = accent(), fontSize = 13.sp)
+                        s.title.isNotBlank() && !s.titleStartKnown -> Text("Recording began during this song: only the part from then on is saved. Songs after it are saved whole.", color = C.muted, fontSize = 12.sp)
+                    }
+                    // Name (optional): used when the station announces none.
+                    androidx.compose.material3.OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Name (optional)") }, placeholder = { Text("Artist - Title") })
+                    Text("By hand", color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (pend?.manual == "start") Pill("Stop saving", filled = true) { say(RadioCapture.stopSaving()); onDone() }
+                        else Pill("Start saving now", filled = pend == null) { if (pend == null) { say(RadioCapture.startSaving(name)); onDone() } }
+                    }
+                    val mins = listOf(3, 5, 10, 15, 20).filter { it * 60 <= recSec + 5 }
+                    Text("Save the last … minutes" + if (mins.isEmpty()) " (${(recSec / 60).toInt()} min recorded so far)" else "", color = C.muted, fontSize = 12.sp)
+                    if (mins.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        mins.forEach { m -> Pill("$m min") { say(RadioCapture.saveLast(m, name)); onDone() } }
+                    }
+                }
                 if (q.isNotEmpty()) Text("Saving queue: " + q.joinToString(" · "), color = accent(), fontSize = 12.sp)
             }
         },
         confirmButton = {
-            if (s.pending != null) STextButton({ RadioCapture.cancelPending(); onDone() }) { Text("Don't save", color = accent()) }
-            else STextButton({
-                val note = RadioCapture.saveCurrent()
-                Toast.makeText(app.vlcinterface.App.instance, note, Toast.LENGTH_LONG).show(); onDone()
-            }, enabled = s.running && s.title.isNotBlank()) { Text("Save", color = accent()) }
+            val canAuto = s.running && s.title.isNotBlank() && pend == null
+            if (pend != null && pend.manual.isEmpty()) STextButton({ RadioCapture.cancelPending(); onDone() }) { Text("Don't save", color = accent()) }
+            else STextButton({ say(RadioCapture.saveCurrent()); onDone() }, enabled = canAuto) {
+                Text("Save this song", color = if (canAuto) accent() else C.muted)
+            }
         },
         dismissButton = { STextButton(onDone) { Text("Close") } },
     )

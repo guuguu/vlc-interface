@@ -1345,7 +1345,25 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
 @Composable
 private fun RadioListening() {
     val p by App.instance.player.state.collectAsState()
-    Text("Live · listening ${fmtTime(p.time)}", color = C.muted, fontSize = 13.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+    // Counted by the app from when this station started (the stream's own clock can count from the station's
+    // start, days ago — Ogg streams do); paused time is not counted.
+    var shown by remember { mutableStateOf(0L) }
+    LaunchedEffect(Unit) { while (true) { shown = RadioClock.listened(App.instance.player.state.value); kotlinx.coroutines.delay(1000) } }
+    Text("Live · listening ${fmtTime(shown)}", color = C.muted, fontSize = 13.sp, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+}
+
+/** How long the current station has been listened to (playing time only), per station start. */
+object RadioClock {
+    private var uri = ""; private var acc = 0L; private var since = 0L
+    @Synchronized fun listened(s: app.vlcinterface.player.PlayerState): Long {
+        val now = System.currentTimeMillis()
+        val u = s.item?.takeIf { it.isRadio }?.uri ?: ""
+        if (u != uri) { uri = u; acc = 0; since = 0 }
+        val playing = s.isPlaying && u.isNotEmpty()
+        if (playing && since == 0L) since = now
+        if (!playing && since != 0L) { acc += now - since; since = 0 }
+        return acc + if (since != 0L) now - since else 0
+    }
 }
 
 /** Rename a favourite station (the name shown everywhere in the app). */
