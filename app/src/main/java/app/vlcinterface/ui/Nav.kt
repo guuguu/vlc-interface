@@ -163,6 +163,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 RgAskHost()
                 LowBatteryHost()
                 WifiLostHost()
+                MobileIdleHost()
                 SaveEndQuestionHost()
                 ExitSavingHost()
                 VpnQuestionsHost()

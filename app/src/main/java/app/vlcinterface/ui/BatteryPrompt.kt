@@ -235,6 +235,44 @@ fun WifiLostHost() {
     )
 }
 
+/**
+ * The player unused for an hour on mobile data: mobile data has to be allowed again — Accept / Deny, with what
+ * each one means.
+ */
+@Composable
+fun MobileIdleHost() {
+    val g = app.vlcinterface.player.NetGuard
+    val ask by g.idleAsk.collectAsState()
+    if (!ask) return
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    AlertDialog(onDismissRequest = {}, containerColor = C.panel,
+        title = { Text("Use mobile data again?", color = C.text) },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("The player wasn't used for an hour and there's no Wi-Fi.", color = C.text)
+                Text("Accept: everything goes on over mobile data for this session, with no more questions — network songs, " +
+                    "the NAS through the VPN (opened if it's off), radio and saving songs from it, ReplayGain scans and indexing of " +
+                    "network folders, pictures and song links. The data used is counted by your mobile plan.", color = C.text, fontSize = 13.sp)
+                Text("Deny: only songs on the phone play. Network songs and radio wait (press “Use NAS” on the player when you " +
+                    "want them), network background work is paused, no pictures or song links are fetched. Everything goes " +
+                    "on by itself when Wi-Fi is back.", color = C.muted, fontSize = 13.sp)
+            }
+        },
+        confirmButton = { STextButton({ g.idleAnswer(ctx, true) }) { Text("Accept", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) } },
+        dismissButton = { STextButton({ g.idleAnswer(ctx, false) }) { Text("Deny") } },
+    )
+}
+
+/** "Use NAS": on the player when there's no Wi-Fi and mobile data isn't allowed yet for this session. */
+@Composable
+fun UseNasButton() {
+    val g = app.vlcinterface.player.NetGuard
+    val cell by g.cellular.collectAsState()
+    val ok by g.mobileAllowed.collectAsState()
+    if (!cell || ok) return
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    STextButton({ g.useNas(ctx) }) { Text("Use NAS (mobile data, this session)", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 14.sp) }
+}
 
 /** The sound output stayed on libVLC after the app tried twice to bring its own output back. */
 @Composable

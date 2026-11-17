@@ -200,6 +200,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { if (albumName.isNotBlank()) rgAlbum = true }))
                 // Why a song didn't play (shown here too, not only on the video player); the queue goes on by itself.
                 if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                UseNasButton()
                 if (rgAlbum) {
                     val songs = p.queue.filter { it.isMusic && it.album.equals(albumName, true) && (it.folderKey == item.folderKey || item.folderKey.isEmpty()) }
                         .ifEmpty { p.queue.filter { it.isMusic && it.album.equals(albumName, true) } }.ifEmpty { listOf(item) }
@@ -1341,6 +1342,7 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
             if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else null)
         if (details.isNotEmpty()) Text(details.joinToString(" · "), color = accent(), fontSize = 12.sp, lineHeight = 14.sp, textAlign = TextAlign.Center, modifier = station.padding(horizontal = 4.dp, vertical = 3.dp))
         if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
+        UseNasButton()
         // Mobile data only: what this station has used so far, live.
         val cell by app.vlcinterface.player.NetGuard.cellular.collectAsState()
         if (cell) {

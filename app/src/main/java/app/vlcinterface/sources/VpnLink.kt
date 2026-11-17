@@ -246,6 +246,7 @@ object VpnLink {
         val away = servers.filter { !nearby(it) }
         if (away.isEmpty()) { askedStartFor = ""; ignoreSession = false; return }        // back near a server: all as usual
         if (!on() || !st.settings.vpnAskStart || ignoreSession) return
+        if (app.vlcinterface.player.NetGuard.blocked()) return          // no Wi-Fi: nothing until "Use NAS"
         if (System.currentTimeMillis() < retryAt) return
         val s = away.first()
         val key = s.id + (homeNets + vpnNets).joinToString { "${it.addr}/${it.prefix}" }
@@ -264,6 +265,9 @@ object VpnLink {
         askedStartFor = ""
         scope.launch { delay(sec * 1000L + 200); NetIndex.recheckReachable(); checkNeedVpn() }
     }
+
+    /** "Use NAS": network songs back on. */
+    fun clearSkip() { ignoreSession = false; askedStartFor = ""; retryAt = 0 }
 
     /** "Not this session": network songs skipped until the phone is near a server again. */
     fun skipSession() {

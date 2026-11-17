@@ -19,8 +19,16 @@ object NetGuard {
     val cellular = MutableStateFlow(false)
     /** Show the "Wi-Fi lost" question. */
     val ask = MutableStateFlow(false)
-    /** Allowed to play radio over mobile data (answered "Continue"); reset when Wi-Fi comes back. */
-    @Volatile var mobileOk = false
+    /**
+     * Mobile data allowed for this session ("Use NAS" on the player, or "Continue" / "Accept"): everything goes on
+     * over it, no more precautions. Ends only after the player is unused for an hour (then asked again).
+     */
+    val mobileAllowed = MutableStateFlow(false)
+    var mobileOk: Boolean get() = mobileAllowed.value; set(v) { mobileAllowed.value = v }
+    /** Show the "use mobile data again?" question (player unused for an hour). */
+    val idleAsk = MutableStateFlow(false)
+    private const val IDLE_MS = 60 * 60_000L
+    @Volatile private var lastUsed = System.currentTimeMillis()
     private var wifi = false
     private var online = false
     private var startBytes = -1L
@@ -40,11 +48,11 @@ object NetGuard {
             if (w && on && (!wasWifi || !wasOn)) try { app.vlcinterface.sources.RadioCapture.netBack() } catch (_: Exception) {}
             online = on
             wifi = w; cellular.value = c
-            if (w) mobileOk = false
             if (wasWifi && !w) android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ wifiLost() }, 800)
             if (!wasWifi && w) android.os.Handler(android.os.Looper.getMainLooper()).post { wifiBack() }
         }
         read(cm.getNetworkCapabilities(cm.activeNetwork))
+        watch()
         try {
             cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
                 override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = read(caps)
@@ -69,6 +77,8 @@ object NetGuard {
     fun needsInternet(uri: String): Boolean {
         val u = uri.lowercase()
         if (u.startsWith("content://") || u.startsWith("file://") || u.startsWith("/")) return false
+        // No Wi-Fi: anything not on the phone goes over mobile data (home servers only through the VPN).
+        if (cellular.value) return true
         if (Regex("^(https?|ftps?|dav|davs|mms|rtsp|rtmp)://").containsMatchIn(u)) return true
         val host = android.net.Uri.parse(uri).host ?: return false
         // A home server reached through the VPN counts as internet only on mobile data (on any Wi-Fi it doesn't).
@@ -117,9 +127,74 @@ object NetGuard {
 
     /** "Continue on mobile data": everything goes on over mobile data until Wi-Fi is back. */
     fun goOnMobile() {
-        mobileOk = true; ask.value = false
+        mobileOk = true; ask.value = false; lastUsed = System.currentTimeMillis()
         if (stoppedPlayback) { stoppedPlayback = false; App.instance.player.replayCurrent() }
         if (pausedWork) { pausedWork = false; BackgroundWork.resume() }
+    }
+
+    /**
+     * "Use NAS" on the player: you know mobile data is used and you're fine with it — for this session everything
+     * goes on (network songs, NAS through the VPN, radio, background work, pictures and links), no more questions.
+     */
+    fun useNas(ctx: Context) {
+        lastUsed = System.currentTimeMillis()
+        val p = App.instance.player
+        val wasBlocked = p.state.value.error.startsWith(BLOCKED)
+        goOnMobile(); idleAsk.value = false
+        val v = app.vlcinterface.sources.VpnLink
+        v.clearSkip()
+        // Home servers are reached through the VPN: open it if it's off (the subnet check asks again if still needed).
+        if (!v.vpnUp.value && App.instance.store.current.sources.any { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }) {
+            android.widget.Toast.makeText(ctx, v.startVpn(ctx), android.widget.Toast.LENGTH_LONG).show(); v.retryLater()
+        }
+        if (wasBlocked) p.replayCurrent()
+        app.vlcinterface.data.ServerLog.log("network", "use-nas", "", "", true, "Mobile data allowed for this session (Use NAS)")
+    }
+
+    /** Error shown on a song that waits for "Use NAS". */
+    const val BLOCKED = "Mobile data:"
+
+    /** Answer to the hour-idle question. Accept: as "Use NAS". Deny: only phone files; what needs internet stops. */
+    fun idleAnswer(ctx: Context, accept: Boolean) {
+        idleAsk.value = false
+        if (accept) { useNas(ctx); return }
+        mobileOk = false; lastUsed = System.currentTimeMillis()
+        stopInternet()
+    }
+
+    /** Without Wi-Fi and not allowed: playback that needs internet pauses, network background work waits. */
+    private fun stopInternet() {
+        val p = App.instance.player
+        val s = p.state.value
+        val item = s.item
+        if (item != null && s.isPlaying && (item.isRadio || needsInternet(item.uri))) { stoppedPlayback = true; p.pause() }
+        val rg = app.vlcinterface.sources.RgScanner
+        if ((rg.state.value.running && rg.currentNeedsInternet() || app.vlcinterface.sources.NetIndex.internetBusy()) && !BackgroundWork.paused.value) {
+            BackgroundWork.pause(); pausedWork = true
+        }
+    }
+
+    /**
+     * Every 30 s: the player in use keeps the session; unused (not playing) for an hour, mobile data has to be
+     * allowed again (asked only when on mobile data). Without Wi-Fi and not allowed, network background work waits.
+     */
+    private fun watch() {
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        h.postDelayed(object : Runnable {
+            override fun run() {
+                try {
+                    val now = System.currentTimeMillis()
+                    if (App.instance.player.state.value.isPlaying) lastUsed = now
+                    if (mobileOk && now - lastUsed >= IDLE_MS) {
+                        mobileOk = false
+                        app.vlcinterface.data.ServerLog.log("network", "idle", "", "", true, "Player unused for an hour: mobile data has to be allowed again")
+                        if (cellular.value) idleAsk.value = true
+                    }
+                    if (blocked()) stopInternet()
+                } catch (_: Exception) {}
+                h.postDelayed(this, 30_000)
+            }
+        }, 5_000)
     }
 
     /** "Stay stopped": the pop-up closes, nothing over mobile data. */
