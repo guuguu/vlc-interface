@@ -92,23 +92,6 @@ object RgScanner {
     /** Stops the scan running now; the queued ones follow. */
     private fun cancelled() = job?.isActive == false
     @Volatile private var copyThreads = 4
-
-    /** Where the time of a scan went (one line in the ReplayGain log), to see what makes it slow. */
-    private object T {
-        val copyMs = java.util.concurrent.atomic.AtomicLong(); val copyBytes = java.util.concurrent.atomic.AtomicLong()
-        val copies = java.util.concurrent.atomic.AtomicInteger(); val measureMs = java.util.concurrent.atomic.AtomicLong()
-        val writeMs = java.util.concurrent.atomic.AtomicLong(); val inPlace = java.util.concurrent.atomic.AtomicInteger()
-        val fullSwap = java.util.concurrent.atomic.AtomicInteger(); val waitRoomMs = java.util.concurrent.atomic.AtomicLong()
-        var checkWall = 0L; var measureWall = 0L; var writeWall = 0L
-        fun reset() { listOf(copyMs, copyBytes, measureMs, writeMs, waitRoomMs).forEach { it.set(0) }; listOf(copies, inPlace, fullSwap).forEach { it.set(0) }; checkWall = 0; measureWall = 0; writeWall = 0 }
-        fun line(): String {
-            fun s(ms: Long) = "%.1f s".format(java.util.Locale.US, ms / 1000.0)
-            val mbps = if (copyMs.get() > 0) copyBytes.get() * 1000.0 / copyMs.get() / 1048576 else 0.0
-            return "checking tags ${s(checkWall)} · measuring stage ${s(measureWall)} · writing stage ${s(writeWall)} | " +
-                "copies ${copies.get()} (${copyBytes.get() / 1048576} MB, ${"%.1f".format(java.util.Locale.US, mbps)} MB/s per copy, waited for room ${s(waitRoomMs.get())}) · " +
-                "decoding ${s(measureMs.get())} total · writes ${s(writeMs.get())} total (in place ${inPlace.get()}, whole file ${fullSwap.get()})"
-        }
-    }
     /** Copies being made by the download workers (uri → ready copy, null if it couldn't be made). */
     private val ready = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<File?>>()
     /** Most space the scan's copies may take on the phone. */
@@ -215,7 +198,7 @@ object RgScanner {
                 val bad = results.filter { !it.ok }
                 L.log(L.REPLAYGAIN, "scan", mode.name.lowercase(), "", bad.isEmpty(),
                     "${confirmTitle.ifEmpty { "Scan" }}: ${music.size} files · saved ${_state.value.saved} · skipped ${_state.value.skipped} · problems ${bad.size}",
-                    "save: ${target.name.lowercase()} · time: " + T.line())
+                    "save: ${target.name.lowercase()}")
                 bad.take(200).forEach { r -> L.log(L.REPLAYGAIN, "file", "", "", false, "${r.name}: ${r.status}") }
             } catch (_: Exception) {}
         }
@@ -293,8 +276,7 @@ object RgScanner {
 
     private suspend fun run(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescan: Boolean, results: ArrayList<RgResult>,
                             onlyWithoutRg: Boolean = false) {
-        tagWeight = if (mode == RgMode.ALBUMS_BY_TAGS) 0.1f else 0f; fracs.clear(); T.reset()
-        val t0 = System.currentTimeMillis()
+        tagWeight = if (mode == RgMode.ALBUMS_BY_TAGS) 0.1f else 0f; fracs.clear()
         // One thread per file, at most 4 at once — 2 when files come from a network share (small servers limit
         // how many files can be open at once).
         // Network songs now travel once (copy for measuring; only the tag bytes go back): 4 at a time.
@@ -347,8 +329,6 @@ object RgScanner {
                 } else todo += g
             }
         }
-        T.checkWall = System.currentTimeMillis() - t0
-        val t1 = System.currentTimeMillis()
         // Measuring: the expensive part, $workers files at a time.
         val meters = java.util.concurrent.ConcurrentHashMap<String, Loudness>()
         val toMeasure = synchronized(todo) { todo.toList() }.flatten()
@@ -372,10 +352,8 @@ object RgScanner {
                             val item = net[i]
                             waitNasWifi(item)
                             val size = try { ParallelFetch.sizeOf(item) } catch (_: Exception) { 0L }
-                            val tr = System.currentTimeMillis(); waitForRoom(item, size); T.waitRoomMs.addAndGet(System.currentTimeMillis() - tr)
-                            val tc = System.currentTimeMillis()
+                            waitForRoom(item, size)
                             val f = try { netCopy(ctx, item, copyThreads) { f -> fracs[item.uri] = f * 0.5f; update { st -> st } } } catch (_: Exception) { null }
-                            if (f != null) { T.copyMs.addAndGet(System.currentTimeMillis() - tc); T.copyBytes.addAndGet(f.length()); T.copies.incrementAndGet() }
                             reserved.addAndGet(-size)
                             ready[item.uri]?.complete(f)
                         }
@@ -391,7 +369,7 @@ object RgScanner {
             // A refused / dropped network connection is tried again (after 1 s, then 3 s) before it counts as a problem.
             var m: Loudness? = null
             for (attempt in 0..2) {
-                try { val tm = System.currentTimeMillis(); m = measure(ctx, it) { f -> fracs[it.uri] = f; update { s -> s } }; T.measureMs.addAndGet(System.currentTimeMillis() - tm); break } catch (e: Exception) {
+                try { m = measure(ctx, it) { f -> fracs[it.uri] = f; update { s -> s } }; break } catch (e: Exception) {
                     val msg = (e.message ?: "") + " " + (e.cause?.message ?: "")
                     val network = msg.contains("connect", true) || msg.contains("timed out", true) || msg.contains("reset", true) ||
                         msg.contains("transport", true) || e is java.io.IOException
@@ -412,8 +390,6 @@ object RgScanner {
         } finally {
             dl?.cancel(); ready.values.forEach { it.complete(null) }; ready.clear()
         }
-        T.measureWall = System.currentTimeMillis() - t1
-        val t2 = System.currentTimeMillis()
         // Values per album, then saving — also several files at once.
         val writes = ArrayList<Pair<PlayItem, Map<String, String>>>()
         for (g in synchronized(todo) { todo.toList() }) {
@@ -438,15 +414,12 @@ object RgScanner {
             val summary = "track ${values["REPLAYGAIN_TRACK_GAIN"]}" + if (albumMode) " · album ${values["REPLAYGAIN_ALBUM_GAIN"]}" else ""
             waitNasWifi(it)
             update { s -> s.copy(current = it.title, phase = "Writing") }
-            val tw = System.currentTimeMillis()
             val where = save(ctx, it, values, target)
-            T.writeMs.addAndGet(System.currentTimeMillis() - tw)
             addResult(RgResult(it.title, "$summary — $where", !where.startsWith("not")))
             ReplayGain.forget(it.uri)
             if (it.uri.contains("://") && !it.uri.startsWith("content://")) ServerLog.log(it.uri, "replaygain", it.uri.substringBefore("://").uppercase(), it.user, true, "${it.title}: $summary — $where")
             update { s -> s.copy(saved = s.saved + 1, problems = s.problems + if (where.startsWith("not")) 1 else 0, results = snapshot()) }
         }
-        T.writeWall = System.currentTimeMillis() - t2
     }
 
     @Volatile private var phoneAllowed = false
@@ -707,8 +680,7 @@ object RgScanner {
         val u = item.uri
         // Only the tags changed and the file kept its size (they fit in its padding): just those bytes are written
         // on the server — no whole-file transfer.
-        if (u.startsWith("smb://") && orig != null && orig.length() == tmp.length() && patchInPlace(ctx, item, orig, tmp)) { T.inPlace.incrementAndGet(); return }
-        if (u.startsWith("smb://") || u.startsWith("http")) T.fullSwap.incrementAndGet()
+        if (u.startsWith("smb://") && orig != null && orig.length() == tmp.length() && patchInPlace(ctx, item, orig, tmp)) return
         // Whole file replaced: the untagged copy must be exactly the file on the server (checked whole).
         if (orig != null && (u.startsWith("smb://") || u.startsWith("http")) &&
             !ParallelFetch.matchesRemote(item, u, orig, progress = { d, t -> if (t > 0) update { s -> s.copy(current = item.title, phase = "Checking the copy against the server ${d * 100 / t}%") } }))
