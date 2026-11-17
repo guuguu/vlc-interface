@@ -176,6 +176,9 @@ fun SaveSongDialog(onDone: () -> Unit) {
     val st by app.vlcinterface.App.instance.store.state.collectAsState()
     var name by remember { mutableStateOf("") }
     var custom by remember { mutableStateOf("") }
+    var mode by remember { mutableStateOf("song") }
+    var minutes by remember { mutableStateOf(5) }
+    var lastMin by remember { mutableStateOf(5) }
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
     var recSec by remember { mutableStateOf(RadioCapture.recordedSec()) }
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); now = System.currentTimeMillis(); recSec = RadioCapture.recordedSec() } }
@@ -232,51 +235,75 @@ fun SaveSongDialog(onDone: () -> Unit) {
                         Pill("Cancel — don't save") { RadioCapture.cancelPending(); say("Not saved"); onDone() }
                     }
                 } else {
-                    Text("Saved $fmt to $where. Both ends go to the gap between songs, with all tags found.", color = C.muted, fontSize = 12.sp)
-                    androidx.compose.material3.OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Name (optional)") }, placeholder = { Text("Artist - Title") })
-                    // Shazam: opens it; back here, the song it found (copied / shared from Shazam) is pasted in.
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Pill("Shazam") { shazamAt = System.currentTimeMillis(); openShazam(ctx) }
-                        Pill("Paste") { clipSong(ctx)?.let { name = it } ?: say("Nothing to paste") }
+                    Text("Saved to $where. Both ends go to the gap between songs, with all tags found.", color = C.muted, fontSize = 12.sp)
+                    // 1. How much
+                    label("Save", C.text)
+                    val byTitles = s.title.isNotBlank() && s.titleStartKnown
+                    @Composable
+                    fun choice(key: String, text: String, hint: String) {
+                        Row(Modifier.fillMaxWidth().clickable { mode = key }, verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.RadioButton(mode == key, { mode = key })
+                            Column(Modifier.weight(1f)) {
+                                Text(text, color = C.text, fontSize = 14.sp)
+                                if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 11.sp)
+                            }
+                        }
                     }
-                    // Format of this save (also the default in Settings → Saved songs).
+                    choice("song", "This whole song", if (byTitles) "From the station's song titles" else "Found by the gaps between songs")
+                    choice("minutes", "For a number of minutes from now", "")
+                    if (mode == "minutes") {
+                        androidx.compose.foundation.layout.FlowRow(Modifier.padding(start = 48.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(3, 5, 10, 15, 20, 30).forEach { m -> Pill("$m", selected = minutes == m && custom.isEmpty()) { minutes = m; custom = "" } }
+                        }
+                        androidx.compose.material3.OutlinedTextField(custom, { v -> custom = v.filter { it.isDigit() }.take(3) }, singleLine = true,
+                            modifier = Modifier.padding(start = 48.dp).fillMaxWidth(), label = { Text("Custom minutes (1–180)") },
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                    }
+                    choice("hand", "From now until I stop it", "")
+                    val mins = listOf(3, 5, 10, 15, 20).filter { it * 60 <= recSec + 5 }
+                    choice("last", "The last minutes (already played)", if (mins.isEmpty()) "${(recSec / 60).toInt()} min recorded so far" else "")
+                    if (mode == "last" && mins.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(Modifier.padding(start = 48.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        mins.forEach { m -> Pill("$m min", selected = lastMin == m) { lastMin = m } }
+                    }
+                    // 2. Format of this save (also the default in Settings → Saved songs).
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Format", color = C.text, fontSize = 13.sp)
+                        label("Format", C.text)
                         val orig = st.settings.saveFormat == "original"
                         Pill("Original", selected = orig) { app.vlcinterface.App.instance.store.update { it.copy(settings = it.settings.copy(saveFormat = "original")) } }
                         Pill("MP3 V0", selected = !orig) { app.vlcinterface.App.instance.store.update { it.copy(settings = it.settings.copy(saveFormat = "mp3")) } }
                     }
-                    label("The whole song", C.text)
-                    // Announced titles (and their start recorded): song start / end from them; otherwise from the
-                    // gaps between songs (start: the last gap before now; end: the next gap).
-                    val byTitles = s.title.isNotBlank() && s.titleStartKnown
-                    Pill("This whole song", filled = true) { say(if (byTitles) RadioCapture.saveCurrent() else RadioCapture.saveWholeSong(name)); onDone() }
-                    Text(if (byTitles) "From the station's song titles, cut at the gaps." else "Found by the gaps between songs: from where this song began to where it ends.",
-                        color = C.muted, fontSize = 12.sp)
-                    label("Or save for … minutes from now", C.text)
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(3, 5, 10, 15, 20, 30).forEach { m -> Pill("$m") { say(RadioCapture.saveFor(m, name)); onDone() } }
+                    // 3. Name (optional): typed, or from Shazam; else the announced title, else YY_MM_DD_hr_min.
+                    androidx.compose.material3.OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Name (optional)") }, placeholder = { Text("Artist - Title") })
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Pill("Shazam") { shazamAt = System.currentTimeMillis(); openShazam(ctx) }
+                        Pill("Paste") { clipSong(ctx)?.let { name = it } ?: say("Nothing to paste") }
                     }
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        androidx.compose.material3.OutlinedTextField(custom, { v -> custom = v.filter { it.isDigit() }.take(3) }, singleLine = true,
-                            modifier = Modifier.weight(1f), label = { Text("Custom minutes") },
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
-                        val m = custom.toIntOrNull() ?: 0
-                        Pill("Start", filled = m in 1..180) { if (m in 1..180) { say(RadioCapture.saveFor(m, name)); onDone() } }
-                    }
-                    label("Or by hand", C.text)
-                    Pill("Start now, stop when I say") { say(RadioCapture.startSaving(name)); onDone() }
-                    val mins = listOf(3, 5, 10, 15, 20).filter { it * 60 <= recSec + 5 }
-                    Text("Save the last … minutes" + if (mins.isEmpty()) " (${(recSec / 60).toInt()} min recorded so far)" else "", color = C.muted, fontSize = 12.sp)
-                    if (mins.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        mins.forEach { m -> Pill("$m min") { say(RadioCapture.saveLast(m, name)); onDone() } }
-                    }
+                    Text("No name: the station's song title, else the date and time the song began (YY_MM_DD_hr_min).", color = C.muted, fontSize = 11.sp)
                 }
                 if (q.isNotEmpty()) Text("Saving queue: " + q.joinToString(" · "), color = accent(), fontSize = 12.sp)
             }
         },
-        confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
+        confirmButton = {
+            if (pend != null || !s.running) STextButton(onDone) { Text("Close", color = accent()) }
+            else {
+                val m = custom.toIntOrNull()?.takeIf { it in 1..180 } ?: minutes
+                val ok = when (mode) { "last" -> lastMin * 60 <= recSec + 5; else -> true }
+                Row {
+                    STextButton(onDone) { Text("Close") }
+                    STextButton({
+                        val byTitles = s.title.isNotBlank() && s.titleStartKnown
+                        say(when (mode) {
+                            "minutes" -> RadioCapture.saveFor(m, name)
+                            "hand" -> RadioCapture.startSaving(name)
+                            "last" -> RadioCapture.saveLast(lastMin, name)
+                            else -> if (byTitles) RadioCapture.saveCurrent(name) else RadioCapture.saveWholeSong(name)
+                        })
+                        onDone()
+                    }, enabled = ok) { Text(if (mode == "last") "Save" else "Start saving", color = if (ok) accent() else C.muted, fontWeight = FontWeight.Bold) }
+                }
+            }
+        },
     )
 }
 

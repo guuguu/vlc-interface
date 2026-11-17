@@ -340,7 +340,7 @@ object RadioCapture {
     }
 
     /** Ask to save the song now playing (it is written when it ends). Returns a note for the person. */
-    fun saveCurrent(): String {
+    fun saveCurrent(name: String = ""): String {
         synchronized(lock) {
             val s = status.value
             if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
@@ -348,7 +348,7 @@ object RadioCapture {
             if (m.title.isBlank()) return "The station announces no song now"
             val first = segs.firstOrNull()?.start ?: 0
             val partial = !s.titleStartKnown || m.offset < first
-            status.value = s.copy(pending = Pending(m.title, maxOf(m.offset, first), partial, station, m.at, s.format))
+            status.value = s.copy(pending = Pending(m.title, maxOf(m.offset, first), partial, station, m.at, s.format, name = name.trim()))
             return if (partial) "“${m.title}” began before recording started: it is saved from the part recorded, when it ends"
             else "“${m.title}” will be saved when it ends"
         }
