@@ -267,7 +267,13 @@ object RadioCapture {
             r.header("icy-br")?.substringBefore(',')?.trim()?.toIntOrNull()?.takeIf { it in 8..1000 }?.let { bytesPerSec = it * 125.0 }
             val metaint = r.header("icy-metaint")?.toIntOrNull() ?: 0
             val segBytes = (bytesPerSec * 30).toLong().coerceIn(64_000, 4_000_000)
-            val keepSegs = 44   // ~22 minutes
+            // ~22 minutes kept; under 100 GB free, at most 30 % of the free space (announced once).
+            val b = budget()
+            val keepSegs = if (b == Long.MAX_VALUE) 44 else (b / segBytes).toInt().coerceIn(0, 44)
+            if (keepSegs < 2) { status.value = status.value.copy(format = "unsupported", running = false,
+                message = "Not enough free space to record (${gb(freeBytes())} free)"); return null }
+            if (b != Long.MAX_VALUE && !reconnect) toast("Free space ${gb(freeBytes())}: recording limited to 30 % (${gb(b)})" +
+                (if (keepSegs < 44) " — ${keepSegs / 2} min kept" else ""), long = false)
             synchronized(lock) {
                 // A new connection continues nothing: what was recorded before has a hole after it, so a song in
                 // progress can't be saved whole (dropped) and the kept minutes start again.
@@ -359,10 +365,30 @@ object RadioCapture {
     }
 
     /** Ask to save the song now playing (it is written when it ends). Returns a note for the person. */
+    // ---------------------------------------------------------------- free space
+
+    private const val GB = 1024L * 1024 * 1024
+    /** Free bytes where recordings go (the phone's shared storage; the kept minutes are on the same storage). */
+    private fun freeBytes(): Long = try { android.os.StatFs(android.os.Environment.getExternalStorageDirectory().path).availableBytes } catch (_: Exception) { Long.MAX_VALUE }
+    /** Under 100 GB free: recording may use at most 30 % of it; otherwise no limit. */
+    private fun budget(): Long = freeBytes().let { f -> if (f < 100 * GB) (f * 0.3).toLong() else Long.MAX_VALUE }
+    private fun gb(b: Long) = "%.1f GB".format(java.util.Locale.US, b / GB.toDouble())
+
+    /** Bytes a save of [sec] seconds needs (MP3 V0 ≈ 40 kB/s at most, else as the station sends it). */
+    private fun estimate(sec: Double): Long = (sec * (if (App.instance.store.current.settings.saveFormat == "original") bytesPerSec else 40_000.0)).toLong()
+
+    /** Checked when a save starts: null = fits, else why not. */
+    private fun spaceFor(sec: Double): String? {
+        val b = budget(); if (b == Long.MAX_VALUE) return null
+        val need = estimate(sec)
+        return if (need > b) "Not enough free space: ${gb(freeBytes())} free, recordings may use 30 % (${gb(b)}); this needs about ${gb(need)}" else null
+    }
+
     fun saveCurrent(name: String = ""): String {
         synchronized(lock) {
             val s = status.value
             if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
+            spaceFor(600.0)?.let { return it }
             val m = marks.lastOrNull() ?: return "The station hasn't announced a song title yet"
             if (m.title.isBlank()) return "The station announces no song now"
             val first = segs.firstOrNull()?.start ?: 0
@@ -381,6 +407,7 @@ object RadioCapture {
             val s = status.value
             if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
             if (s.pending != null) return "Already saving"
+            spaceFor(minutes * 60.0 + 24)?.let { return it }
             val now = System.currentTimeMillis()
             status.value = s.copy(pending = Pending(marks.lastOrNull()?.title ?: "", total, false, station, now, s.format, "timed", name.trim(),
                 untilAt = now + minutes * 60_000L))
@@ -441,6 +468,15 @@ object RadioCapture {
         if (!songMode && endQuestion.value) endQuestion.value = false
         if (songMode && !endQuestion.value && System.currentTimeMillis() >= p!!.askAt) endQuestion.value = true
         if (p == null) return
+        // A recording reaching the space it may use (30 % of free space under 100 GB): stopped and saved.
+        val b = budget()
+        if (b != Long.MAX_VALUE && estimate((System.currentTimeMillis() - p.at) / 1000.0) >= b) synchronized(lock) {
+            if (status.value.pending === p) {
+                status.value = status.value.copy(pending = null); finishLater(p, total, partialEnd = false)
+                toast("Free space limit reached (30 % of ${gb(freeBytes())}): recording stopped and saved")
+            }
+            return
+        }
         if (p.manual == "timed" && p.untilAt > 0 && System.currentTimeMillis() >= p.untilAt) synchronized(lock) {
             if (status.value.pending === p) { status.value = status.value.copy(pending = null); finishLater(p, total, partialEnd = false) }
         }
@@ -455,6 +491,7 @@ object RadioCapture {
             val s = status.value
             if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
             if (s.pending != null) return "Already saving"
+            spaceFor(600.0)?.let { return it }
             status.value = s.copy(pending = Pending(marks.lastOrNull()?.title ?: "", total, false, station, System.currentTimeMillis(), s.format, "start", name.trim()))
             return "Saving from now — tap Stop saving at the end"
         }
@@ -475,6 +512,7 @@ object RadioCapture {
             val s = status.value
             if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
             val first = segs.firstOrNull()?.start ?: return "Nothing recorded yet"
+            spaceFor(minutes * 60.0)?.let { return it }
             val start = maxOf(first, total - (minutes * 60 * bytesPerSec).toLong())
             val p = Pending(marks.lastOrNull { it.offset <= start }?.title ?: "", start, false, station,
                 System.currentTimeMillis() - minutes * 60_000L, s.format, "last", name.trim())
@@ -718,6 +756,7 @@ object RadioCapture {
             val s = status.value
             if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
             if (s.pending != null) return "Already saving"
+            spaceFor(600.0)?.let { return it }
             p = Pending(marks.lastOrNull()?.title ?: "", total, false, station, System.currentTimeMillis(), s.format, "gap", name.trim())
             status.value = s.copy(pending = p)
         }
