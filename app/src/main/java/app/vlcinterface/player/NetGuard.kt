@@ -34,8 +34,10 @@ object NetGuard {
             val wasWifi = wifi
             val on = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
             val wasOn = online
-            // Wi-Fi → mobile data, or the connection dropped: the radio recording is deleted at once.
-            if ((wasWifi && !w) || (wasOn && !on)) try { app.vlcinterface.sources.RadioCapture.dropAll() } catch (_: Exception) {}
+            // Wi-Fi → mobile data, or the connection dropped: the radio recording is held — kept if the connection is
+            // back within the radio buffer and nothing is missing, else deleted. Wi-Fi back: decided / started again.
+            if ((wasWifi && !w) || (wasOn && !on)) try { app.vlcinterface.sources.RadioCapture.netLost() } catch (_: Exception) {}
+            if (w && on && (!wasWifi || !wasOn)) try { app.vlcinterface.sources.RadioCapture.netBack() } catch (_: Exception) {}
             online = on
             wifi = w; cellular.value = c
             if (w) mobileOk = false

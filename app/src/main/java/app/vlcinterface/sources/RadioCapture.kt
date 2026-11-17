@@ -103,15 +103,48 @@ object RadioCapture {
         val player = App.instance.player
         // Follows the player and the network: on while a station plays and the setting allows it.
         scope.launch {
-            combine(player.state, app.vlcinterface.player.NetGuard.cellular, App.instance.store.state) { s, cell, st ->
+            combine(player.state, app.vlcinterface.player.NetGuard.cellular, App.instance.store.state, holding) { s, cell, st, hold ->
                 val cur = s.item
                 val mode = st.settings.radioCapture
-                if (cur != null && cur.isRadio && !s.userPaused && !s.ended && (if (cell) mode == "always" && app.vlcinterface.player.NetGuard.mobileOk else mode != "off"))
+                // While held (connection just changed) the recording stays as it is, waiting for the decision.
+                if (cur != null && cur.isRadio && !s.userPaused && !s.ended &&
+                    (hold || (if (cell) mode == "always" && app.vlcinterface.player.NetGuard.mobileOk else mode != "off")))
                     cur.uri + "\u0000" + (st.stations.firstOrNull { x -> x.url == cur.uri }?.name ?: cur.title) else ""
             }.distinctUntilChanged().collect { key ->
+                wantKey = key
                 if (key.isEmpty()) stop() else { val (u, n) = key.split('\u0000'); start(u, n) }
             }
         }
+    }
+
+    // ---------------------------------------------------------------- connection changes
+
+    /** The radio's network buffer (PlayerController: ":network-caching=3000"): the outage it can cover. */
+    const val BUFFER_MS = 3000L
+    /** Connection lost / changed: the recording is held — kept if the connection is back within [BUFFER_MS] and the
+     *  recording's own connection never broke (nothing missing), else deleted. */
+    private val holding = MutableStateFlow(false)
+    @Volatile private var broke = false
+    private var holdJob: Job? = null
+    @Volatile private var wantKey = ""
+
+    fun netLost() {
+        if (holding.value || (!status.value.running && segs.isEmpty())) return
+        broke = false; holding.value = true
+        holdJob = scope.launch {
+            delay(BUFFER_MS)
+            if (holding.value) { dropAll(); holding.value = false }
+        }
+    }
+
+    fun netBack() {
+        if (holding.value) {
+            holdJob?.cancel(); holding.value = false
+            if (broke) dropAll()
+            else { ServerLog.log("saved-songs", "kept", "radio", "", true, "Connection back within the buffer: recording kept"); return }
+        }
+        // Recording deleted meanwhile: it starts again from zero.
+        if (!status.value.running) wantKey.takeIf { it.isNotEmpty() }?.split('\u0000')?.let { (u, n) -> start(u, n) }
     }
 
     private fun start(url: String, name: String) {
@@ -122,12 +155,18 @@ object RadioCapture {
         job = scope.launch {
             var tries = 0
             var target = url
+            var again = false
             while (isActive && tries < 4) {
+                // Held after a connection change: no new connection until it's decided (never over mobile data).
+                while (holding.value && isActive) delay(200)
                 try {
-                    val next = capture(target) { isActive }
+                    val next = capture(target, again) { isActive }
+                    again = true
                     if (next != null) { target = next; continue }   // a playlist: its first stream
                 } catch (e: Exception) {
                     if (!isActive) break
+                    again = true
+                    if (holding.value) broke = true
                     status.value = status.value.copy(message = "Recording interrupted: ${e.message ?: e.javaClass.simpleName}")
                 }
                 if (status.value.format == "unsupported") break
@@ -172,7 +211,7 @@ object RadioCapture {
     /** Reads the stream, keeps its audio and the title marks. Returns another address when it was a playlist. */
     @Volatile private var call: okhttp3.Call? = null
 
-    private fun capture(url: String, alive: () -> Boolean): String? {
+    private fun capture(url: String, reconnect: Boolean, alive: () -> Boolean): String? {
         val rq = Request.Builder().url(url).header("Icy-MetaData", "1").header("User-Agent", "VLC/3.0.20 LibVLC/3.0.20").build()
         val c = http.newCall(rq); call = c
         c.execute().use { r ->
@@ -199,6 +238,12 @@ object RadioCapture {
             val segBytes = (bytesPerSec * 30).toLong().coerceIn(64_000, 4_000_000)
             val keepSegs = 44   // ~22 minutes
             synchronized(lock) {
+                // A new connection continues nothing: what was recorded before has a hole after it, so a song in
+                // progress can't be saved whole (dropped) and the kept minutes start again.
+                if (reconnect && status.value.pending != null) {
+                    ServerLog.log("saved-songs", "drop", "radio", "", false, "“${status.value.pending?.title}” not saved: the stream was interrupted")
+                    status.value = status.value.copy(pending = null)
+                }
                 marks.clear()
                 if (status.value.pending == null && saveQueue.value.isEmpty()) { segs.forEach { it.file.delete() }; segs.clear() }
                 chains.clear()
