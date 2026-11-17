@@ -302,27 +302,19 @@ fun SaveSongDialog(onDone: () -> Unit) {
 }
 
 /**
- * Thin bar under the player's top bar while a song is being saved: recording, then encoding / saving; it goes
- * from yellow to red as the operation nears its end. Tap it: the save window (stop, cancel, longer).
+ * Thin bar under the player's top bar while a song is being recorded for saving: only the time recorded / still to
+ * record (encoding and storing aren't counted — a pop-up confirms when it's saved). Yellow → red towards the end.
+ * Tap it: the save window (stop and save, cancel, longer).
  */
 @Composable
 fun SaveSongBar() {
     val cap by RadioCapture.status.collectAsState()
-    val q by RadioCapture.saveQueue.collectAsState()
-    val enc by RadioCapture.saveProgress.collectAsState()
     var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    val pend = cap.pending
-    if (pend == null && q.isEmpty()) return
+    val pend = cap.pending ?: return
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(500); now = System.currentTimeMillis() } }
-    // Recording: 0 … 0.85 (time-limited: exact; until a song ends: against ~4 min, never full); saving: 0.85 … 1.
-    val v = if (pend != null) {
-        val el = (now - pend.at).coerceAtLeast(0).toFloat()
-        val rec = when {
-            pend.manual == "timed" && pend.untilAt > pend.at -> el / (pend.untilAt - pend.at)
-            else -> el / maxOf(240_000f, el + 30_000f)
-        }
-        0.85f * rec.coerceIn(0f, 1f)
-    } else 0.85f + 0.15f * enc.coerceIn(0f, 1f)
+    // Time-limited: exact. Until a song ends (end not known yet): against ~4 min, never full before it ends.
+    val el = (now - pend.at).coerceAtLeast(0).toFloat()
+    val v = (if (pend.manual == "timed" && pend.untilAt > pend.at) el / (pend.untilAt - pend.at) else el / maxOf(240_000f, el + 30_000f)).coerceIn(0f, 1f)
     val col = androidx.compose.ui.graphics.lerp(androidx.compose.ui.graphics.Color(0xFFFFD600), androidx.compose.ui.graphics.Color(0xFFFF1744), v)
     var open by remember { mutableStateOf(false) }
     if (open) SaveSongDialog { open = false }
