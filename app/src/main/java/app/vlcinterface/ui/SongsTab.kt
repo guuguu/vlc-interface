@@ -277,6 +277,22 @@ fun SongsTab(nav: Navigator) {
         else AlertDialog(onDismissRequest = { showSel = false }, containerColor = C.panel,
             title = { Text("${sel.size} selected · ${fmtLong(sel.sumOf { it.durationMs.coerceAtLeast(0) })}", color = C.text) },
             text = {
+              Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Act on the selection right here.
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Pill("▶  Play", filled = true) {
+                        App.instance.player.playQueue(sel, 0, app.vlcinterface.player.Origin("songs", title = "Songs"))
+                        selected = emptySet(); showSel = false; nav.go(Screen.Music)
+                    }
+                    Pill("+ Queue") {
+                        val n = App.instance.player.addToQueue(sel)
+                        android.widget.Toast.makeText(ctx, "$n song${if (n == 1) "" else "s"} added to the queue" +
+                            if (sel.size > n) " (${sel.size - n} already in it)" else "", android.widget.Toast.LENGTH_SHORT).show()
+                        selected = emptySet(); showSel = false
+                    }
+                    Pill("+ Playlist…") { addPl = sel; showSel = false }
+                    Pill("Deselect all") { selected = emptySet(); showSel = false }
+                }
                 val ls = androidx.compose.foundation.lazy.rememberLazyListState()
                 androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 420.dp).scrollbar(ls), state = ls) {
                     items(sel, key = { it.uri }) { s ->
@@ -287,6 +303,7 @@ fun SongsTab(nav: Navigator) {
                         }
                     }
                 }
+              }
             },
             confirmButton = { STextButton({ showSel = false }) { Text("Close", color = accent()) } },
             dismissButton = { STextButton({ selected = emptySet(); showSel = false }) { Text("Deselect all") } },
