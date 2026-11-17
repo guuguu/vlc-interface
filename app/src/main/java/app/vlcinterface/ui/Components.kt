@@ -219,12 +219,13 @@ fun JumpToBox(state: LazyListState, labels: List<String>, offset: Int = 0) {
     }
 }
 
-/** Small "n/total ‹ › ✕" controls of the lists' search bars. */
+/** Small "n/total ▲ ▼ ✕" controls of the lists' search bars. */
 @Composable
 fun SearchSteps(count: Int, at: Int, prev: () -> Unit, next: () -> Unit, clear: () -> Unit) {
     Text(if (count == 0) "0" else "${at + 1}/$count", color = if (count == 0) C.bad else C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
-    Text("‹", color = if (count > 1) C.text else C.muted, fontSize = 22.sp, modifier = Modifier.clickable(enabled = count > 1) { prev() }.padding(horizontal = 8.dp))
-    Text("›", color = if (count > 1) C.text else C.muted, fontSize = 22.sp, modifier = Modifier.clickable(enabled = count > 1) { next() }.padding(horizontal = 8.dp))
+    // ▲ previous match (up the list), ▼ next match (down the list).
+    Text("▲", color = if (count > 1) C.text else C.muted, fontSize = 15.sp, modifier = Modifier.clickable(enabled = count > 1) { prev() }.padding(horizontal = 8.dp))
+    Text("▼", color = if (count > 1) C.text else C.muted, fontSize = 15.sp, modifier = Modifier.clickable(enabled = count > 1) { next() }.padding(horizontal = 8.dp))
     Text("✕", color = C.muted, fontSize = 16.sp, modifier = Modifier.clickable { clear() }.padding(horizontal = 8.dp))
 }
 
