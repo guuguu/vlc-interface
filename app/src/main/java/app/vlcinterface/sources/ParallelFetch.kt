@@ -51,6 +51,9 @@ object ParallelFetch {
         stats.clear()
     }
 
+    /** Servers where playback stuttered during a copy: no more connections added there this session. */
+    private val settled = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
     /** Best connection count found per server (this session). */
     private val best = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
@@ -185,7 +188,6 @@ object ParallelFetch {
         val allowed = AtomicInteger(best[host] ?: 1)
         val running = AtomicInteger(0)
         val stopF = java.util.concurrent.atomic.AtomicBoolean(false)
-        val holdForPlay = java.util.concurrent.atomic.AtomicBoolean(false)
         val retry = java.util.concurrent.ConcurrentLinkedQueue<Int>()
         // ¾ of the measured speed while playback comes from the network (bytes per second; 0 = no limit).
         val limit = AtomicLong(0)
@@ -202,7 +204,6 @@ object ParallelFetch {
             try {
                 while (!stopF.get()) {
                     if (running.get() > allowed.get()) break              // fewer connections asked for: this one ends
-                    while (holdForPlay.get() && !stopF.get()) Thread.sleep(500)   // playback stutters: all wait
                     val i = retry.poll() ?: nextPiece.getAndIncrement().takeIf { it < pieces } ?: break
                     val pos = i.toLong() * PIECE
                     val len = minOf(PIECE.toLong(), size - pos).toInt()
@@ -240,37 +241,38 @@ object ParallelFetch {
         /*
          * Connections set while the copy runs, every 1.5 s:
          *  - start: one more while speed rises clearly (+15 %), then kept;
-         *  - playback stutters (buffering): one connection ended per step; at one left the copy waits until playback
-         *    has been smooth for 10 s;
+         *  - playback stutters: a third of the connections ended at once, and none added again for this server
+         *    (no up-and-down); another stutter: another third, down to one connection, which goes on;
          *  - the network doesn't keep up (errors, or speed under 60 % of the best seen): one ended per step;
-         *  - all well for 20 s: one more tried, kept only if it brings +10 %.
+         *  - all well for 20 s (and no stutter on this server): one more tried, kept only if it brings +10 %.
          */
-        var tuning = best[host] == null
+        var tuning = best[host] == null && host !in settled
         var peak = 0.0; var lastSpeed = 0.0; var lastBytes = 0L; var lastAt = System.currentTimeMillis()
         var lastFailed = 0; var lastStutter = 0L; var calmSince = System.currentTimeMillis()
         var trying = false; var before = 0.0
         fun drop() { if (allowed.get() > 1) allowed.decrementAndGet(); calmSince = System.currentTimeMillis(); trying = false }
         while (true) {
             Thread.sleep(250)
-            if (!keepGoing()) { stopF.set(true); holdForPlay.set(false) }
+            if (!keepGoing()) stopF.set(true)
             val alive = synchronized(threads) { threads.any { it.isAlive } }
             if (!alive && (retry.isEmpty() || stopF.get())) break
             if (!alive && retry.isNotEmpty() && !stopF.get()) { spawn(); continue }
             val now = System.currentTimeMillis()
-            // Stutter is checked often: playback comes first.
+            // Stutter is checked often: playback comes first. A third of the connections go, once per stutter
+            // (given 5 s to take effect); this server gets no more added this session.
             if (playerBuffering()) {
-                if (now - lastStutter > 1000) {
+                if (now - lastStutter > 5000 && allowed.get() > 1) {
                     lastStutter = now
-                    if (allowed.get() > 1) drop() else holdForPlay.set(true)
+                    val n = allowed.get()
+                    allowed.set(maxOf(1, n - maxOf(1, (n + 2) / 3)))
+                    settled += host; tuning = false; trying = false; best[host] = allowed.get()
                 }
                 continue
             }
-            if (holdForPlay.get() && now - lastStutter > 10_000) { holdForPlay.set(false); calmSince = now }
             if (now - lastAt < STEP_MS) continue
             val speed = (doneBytes.get() - lastBytes) * 1000.0 / (now - lastAt)
             lastBytes = doneBytes.get(); lastAt = now
             windowStart.set(now); windowBytes.set(0)
-            if (holdForPlay.get()) continue
             limit.set(if (playingFromNetwork() && peak > 0) (peak * 0.75).toLong() else 0)
             val errs = failed.get() - lastFailed; lastFailed = failed.get()
             val n = allowed.get()
@@ -289,7 +291,7 @@ object ParallelFetch {
                     if (speed < before * 1.10) allowed.decrementAndGet() else best[host] = allowed.get()
                     calmSince = now
                 }
-                now - calmSince > 20_000 && n < MAX_THREADS && nextPiece.get() < pieces -> {
+                host !in settled && now - calmSince > 20_000 && n < MAX_THREADS && nextPiece.get() < pieces -> {
                     trying = true; before = speed; allowed.set(n + 1); spawn()
                 }
             }
@@ -321,13 +323,21 @@ object ParallelFetch {
                 // Same rules as the copies: up while it pays off; down one per step when playback stutters or the
                 // network can't keep up (under 60 % of the best); one more tried after 30 s of calm.
                 var last = 0.0; var peak = 0.0; var lastCount = counter.get(); var at = System.currentTimeMillis()
-                var tuning = gateBest[host] == null; var calm = at; var trying = false; var before = 0.0
+                var tuning = gateBest[host] == null && host !in gateSettled; var calm = at; var trying = false; var before = 0.0; var lastStutter = 0L
                 suspend fun down() { if (allowed > 1) { sem.acquire(); held.add(Unit); allowed-- }; calm = System.currentTimeMillis(); trying = false }
                 fun up() { if (allowed < max && held.isNotEmpty()) { held.poll(); sem.release(); allowed++ } }
                 while (true) {
                     kotlinx.coroutines.delay(1000)
                     val now = System.currentTimeMillis()
-                    if (playerBuffering()) { down(); continue }
+                    // Stutter: a third of the work at once goes, nothing added again for this server.
+                    if (playerBuffering()) {
+                        if (now - lastStutter > 5000 && allowed > 1) {
+                            lastStutter = now
+                            repeat(maxOf(1, (allowed + 2) / 3)) { down() }
+                            gateSettled += host; gateBest[host] = allowed; tuning = false
+                        }
+                        continue
+                    }
                     if (now - at < 3000) continue
                     val c = counter.get()
                     val speed = (c - lastCount) * 1000.0 / (now - at); lastCount = c; at = now
@@ -337,7 +347,7 @@ object ParallelFetch {
                                   else { if (speed < last * 0.95) down(); tuning = false; gateBest[host] = allowed; calm = now }
                         peak > 0 && speed < peak * 0.6 && allowed > 1 -> { down(); gateBest[host] = allowed }
                         trying -> { trying = false; if (speed < before * 1.10) down() else gateBest[host] = allowed; calm = now }
-                        now - calm > 30_000 && allowed < max -> { trying = true; before = speed; up() }
+                        host !in gateSettled && now - calm > 30_000 && allowed < max -> { trying = true; before = speed; up() }
                     }
                     peak = maxOf(peak * 0.9, speed); last = speed
                 }
@@ -347,4 +357,5 @@ object ParallelFetch {
         fun stop() { tuner?.cancel() }
     }
     private val gateBest = java.util.concurrent.ConcurrentHashMap<String, Int>()
+    private val gateSettled = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 }
