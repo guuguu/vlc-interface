@@ -234,7 +234,7 @@ fun SongsTab(nav: Navigator) {
             if (hits.isNotEmpty()) androidx.compose.ui.window.Popup(alignment = Alignment.TopStart, offset = androidx.compose.ui.unit.IntOffset(0, fieldH + 4),
                 properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
                 val sc = androidx.compose.foundation.rememberScrollState()
-                Column(Modifier.fillMaxWidth(0.94f).heightIn(max = popMax).clip(RoundedCornerShape(10.dp)).background(C.popup)
+                Column(Modifier.fillMaxWidth(0.94f).heightIn(max = popMax).clip(RoundedCornerShape(10.dp)).background(C.menu)
                     .border(1.dp, C.line, RoundedCornerShape(10.dp)).scrollbar(sc).verticalScroll(sc).padding(4.dp)) {
                     Text("${hits.size}${if (hits.size == 50) "+" else ""} found", color = C.muted, fontSize = 11.sp, modifier = Modifier.padding(6.dp))
                     hits.forEach { h ->
@@ -246,9 +246,10 @@ fun SongsTab(nav: Navigator) {
                             val i = songs.indexOfFirst { it.uri == h.uri }
                             focus = h.uri; query = ""; focusMgr.clearFocus()
                             if (i >= 0) scope.launch { state.animateScrollToItem((i - 3).coerceAtLeast(0)) }
-                        }, onLongClick = { resMenu = true }).padding(horizontal = 8.dp, vertical = 6.dp)) {
-                            Text(h.title, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}", color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }, onLongClick = { resMenu = true }).padding(horizontal = 8.dp, vertical = UiPrefs.menuGapDp.dp)) {
+                            // Search results follow the menu settings (text size, row spacing, opacity).
+                            Text(h.title, color = C.text, fontSize = UiPrefs.menuFontSp.sp, lineHeight = (UiPrefs.menuFontSp + 3).sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}", color = C.muted, fontSize = (UiPrefs.menuFontSp - 2).sp, lineHeight = (UiPrefs.menuFontSp + 1).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                       }
                     }

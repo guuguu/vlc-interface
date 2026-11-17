@@ -69,7 +69,8 @@ class Navigator {
 fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
     val st by App.instance.store.state.collectAsState()
     UiPrefs.popupAlpha = (st.settings.popupOpacity / 100f).coerceIn(0.5f, 1f)     // never below 50 %: always visible
-    UiPrefs.menuAlpha = (st.settings.menuOpacity / 100f).coerceIn(0.5f, 1f)
+    UiPrefs.menuAlpha = (st.settings.menuOpacity / 100f).coerceIn(0.2f, 1f)
+    UiPrefs.menuGapDp = st.settings.menuGap
     UiPrefs.menuFont = st.settings.menuFont
     // Battery 15 % or less (not charging): every accent-coloured item turns bright red as a warning.
     val lowColour by app.vlcinterface.player.BatteryGuard.warnColour.collectAsState()

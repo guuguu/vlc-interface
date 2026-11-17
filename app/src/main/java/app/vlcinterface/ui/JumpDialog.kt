@@ -75,7 +75,7 @@ fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, onDone: () -> 
             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onDone)
             .dialogBarsPadding()
             .padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.TopCenter) {
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.popup)
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.menu)
                 .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
                 .padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(if (playNext) "Play next" else "Jump to song", color = C.text, fontSize = 22.sp)
@@ -97,12 +97,13 @@ fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, onDone: () -> 
                         // Long-press: Play, Add to queue, Go to folder, ReplayGain scan.
                         var resMenu by remember(h.uri) { mutableStateOf(false) }
                         androidx.compose.foundation.layout.Box { SearchResultMenu(h, resMenu, nav, { resMenu = false }, after = onDone) }
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (idx == at) accent().copy(alpha = 0.25f) else C.tile)
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (idx == at) accent().copy(alpha = 0.25f) else C.menu)
                             .combinedClickable(onClick = { if (playNext) player.queueNext(h) else player.jumpToSong(h); onDone() }, onLongClick = { resMenu = true })
-                            .padding(horizontal = 8.dp, vertical = 6.dp)) {
-                            Text(h.title, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            .padding(horizontal = 8.dp, vertical = UiPrefs.menuGapDp.dp)) {
+                            // Results follow the menu settings (text size, row spacing, opacity).
+                            Text(h.title, color = C.text, fontSize = UiPrefs.menuFontSp.sp, lineHeight = (UiPrefs.menuFontSp + 3).sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}" + if (queued) "  · in the queue" else "",
-                                color = if (queued) accent() else C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                color = if (queued) accent() else C.muted, fontSize = (UiPrefs.menuFontSp - 2).sp, lineHeight = (UiPrefs.menuFontSp + 1).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }

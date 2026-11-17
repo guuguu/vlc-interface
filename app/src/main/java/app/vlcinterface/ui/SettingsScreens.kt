@@ -353,12 +353,25 @@ fun SettingsScreen(nav: Navigator) {
                     OpacityPreview(s.popupOpacity / 100f, "Pop-up window", 15)
                     androidx.compose.material3.Slider(s.popupOpacity.toFloat(), { v -> set(s.copy(popupOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Menu opacity", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("Menu opacity (menus and search results, own setting)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         Text("${s.menuOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(menuOpacity = 90)) }) { Text("Reset") }
                     }
                     OpacityPreview(s.menuOpacity / 100f, "Menu entry", UiPrefs.spOf(s.menuFont))
-                    androidx.compose.material3.Slider(s.menuOpacity.toFloat(), { v -> set(s.copy(menuOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
+                    androidx.compose.material3.Slider(s.menuOpacity.toFloat(), { v -> set(s.copy(menuOpacity = (Math.round(v / 5f) * 5).coerceIn(30, 100))) }, valueRange = 30f..100f)
+                    // Menu row spacing: how close menu (and search result) rows are; preview of three rows.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Menu row spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("${s.menuGap} dp", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(menuGap = 6)) }) { Text("Reset") }
+                    }
+                    Column(Modifier.padding(vertical = 4.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF14171C).copy(alpha = s.menuOpacity / 100f))) {
+                        listOf("Play now", "Add to queue", "Go to folder").forEach { t ->
+                            Text(t, color = C.text, fontSize = UiPrefs.spOf(s.menuFont).sp, lineHeight = (UiPrefs.spOf(s.menuFont) + 4).sp,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = s.menuGap.dp))
+                        }
+                    }
+                    androidx.compose.material3.Slider(s.menuGap.toFloat(), { v -> set(s.copy(menuGap = Math.round(v).coerceIn(0, 16))) }, valueRange = 0f..16f, steps = 15)
                     Text("Menu text", color = C.text, fontSize = 15.sp)
                     Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("small" to "Small", "medium" to "Medium", "large" to "Large", "xlarge" to "Extra large").forEach { (k, l) ->

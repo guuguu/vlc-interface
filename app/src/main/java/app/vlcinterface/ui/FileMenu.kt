@@ -171,16 +171,16 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                     verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (folders) items(folderHits.size) { k ->
                         val f = folderHits[k]
-                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (k == at) accent().copy(alpha = 0.25f) else C.tile)
-                            .clickable { note = ""; pickFolder = f }.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (k == at) accent().copy(alpha = 0.25f) else C.menu)
+                            .clickable { note = ""; pickFolder = f }.padding(horizontal = 8.dp, vertical = UiPrefs.menuGapDp.dp)) {
                             Text("▤ " + f.path.trimEnd('/').substringAfterLast('/'), color = C.text, fontSize = 14.sp, maxLines = 1)
                             Text(f.path + " · " + (if (f.src != null) "LAN" else "phone"), color = C.muted, fontSize = 12.sp, maxLines = 2)
                         }
                     }
                     else items(hits.size) { k ->
                         val h = hits[k]
-                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (k == at) accent().copy(alpha = 0.25f) else C.tile)
-                            .clickable { note = ""; pick = h }.padding(horizontal = 8.dp, vertical = 6.dp)) {
+                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (k == at) accent().copy(alpha = 0.25f) else C.menu)
+                            .clickable { note = ""; pick = h }.padding(horizontal = 8.dp, vertical = UiPrefs.menuGapDp.dp)) {
                             Text(h.title, color = C.text, fontSize = 14.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }} · ${if (h.uri.startsWith("smb://")) "LAN" else "phone"}",
                                 color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)

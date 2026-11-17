@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -81,6 +82,8 @@ object C {
 object UiPrefs {
     var popupAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
     var menuAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
+    /** Space above and below each menu row (dp), from Settings. */
+    var menuGapDp by androidx.compose.runtime.mutableIntStateOf(6)
     /** Battery 15 % or less (not charging): coloured items turn bright red. */
     var lowBattery by androidx.compose.runtime.mutableStateOf(false)
     var menuFont by androidx.compose.runtime.mutableStateOf("medium")
@@ -431,9 +434,9 @@ fun SMenuItem(text: @Composable () -> Unit, onClick: () -> Unit, modifier: Modif
               leadingIcon: (@Composable () -> Unit)? = null, trailingIcon: (@Composable () -> Unit)? = null) = Scaled {
     // Menu text size from Settings; long entries wrap onto more lines instead of being cut.
     val sp = UiPrefs.menuFontSp
-    androidx.compose.material3.DropdownMenuItem({
-        androidx.compose.material3.ProvideTextStyle(androidx.compose.material3.LocalTextStyle.current.copy(fontSize = sp.sp, lineHeight = (sp + 4).sp)) { text() }
-    }, onClick, modifier.heightIn(min = (sp * 3).dp).pointerInput(Unit) {
+    // Own row (Android's menu rows are at least 48 dp high): rows as close as set in Settings (menu row spacing).
+    val gap = UiPrefs.menuGapDp
+    Row(modifier.fillMaxWidth().widthIn(min = 112.dp).clickable(enabled = enabled, onClick = onClick).pointerInput(Unit) {
         // Long-press (no click afterwards): show the menu text size choice in this menu.
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
@@ -457,7 +460,16 @@ fun SMenuItem(text: @Composable () -> Unit, onClick: () -> Unit, modifier: Modif
                 }
             }
         }
-    }, leadingIcon, trailingIcon, enabled)
+    }.padding(horizontal = 16.dp, vertical = gap.dp), verticalAlignment = Alignment.CenterVertically) {
+        leadingIcon?.let { it(); androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp)) }
+        Box(Modifier.weight(1f)) {
+            androidx.compose.material3.ProvideTextStyle(androidx.compose.material3.LocalTextStyle.current.copy(fontSize = sp.sp, lineHeight = (sp + 4).sp,
+                color = if (enabled) C.text else C.muted)) {
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides (if (enabled) C.text else C.muted)) { text() }
+            }
+        }
+        trailingIcon?.let { androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp)); it() }
+    }
 }
 
 @Composable
@@ -523,7 +535,9 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
     val bars = androidx.compose.foundation.layout.WindowInsets.Companion.systemBars
     val freeH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp -
         with(dens) { (bars.getTop(dens) + bars.getBottom(dens)).toDp() } - 104.dp
-    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = 340.dp).heightIn(max = freeH.coerceAtLeast(160.dp)), containerColor = C.menu) {
+    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = 340.dp).heightIn(max = freeH.coerceAtLeast(160.dp)),
+        containerColor = C.menu, tonalElevation = 0.dp, shadowElevation = 0.dp,
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, C.line)) {
         if (!expanded) UiPrefs.sizePick = false
         if (UiPrefs.sizePick) {
             // Quick menu text size check (same setting as in Settings); the menu stays open to see the result.
