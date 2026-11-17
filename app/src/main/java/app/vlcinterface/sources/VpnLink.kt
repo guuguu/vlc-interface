@@ -142,52 +142,77 @@ object VpnLink {
     /** Reached through its VPN address now: VPN up, a VPN address known, not on its own network. */
     private fun on() = try { App.instance.store.current.settings.vpnNas } catch (_: Exception) { true }
 
-    fun useVpn(s: Source): Boolean = on() && s.vpnHost.isNotBlank() && when (s.addrMode) {
-        "vpn" -> true                          // chosen by hand (Libraries → LAN)
-        "lan" -> false
-        else -> vpnUp.value && !onLan(s.host)
+    /**
+     * The address to use for [s] now: chosen by hand (Libraries → LAN: its LAN address or any stored one), or Auto —
+     * its VPN address while the VPN is on and the phone isn't on its own network, else its LAN address.
+     */
+    fun hostNow(s: Source): String = when (s.addrMode) {
+        "lan" -> s.host
+        "vpn" -> s.vpnHost.ifBlank { s.host }
+        "auto", "" -> if (on() && s.vpnHost.isNotBlank() && vpnUp.value && !onLan(s.host)) s.vpnHost else s.host
+        else -> if (s.addrMode in s.altHosts) s.addrMode else s.host
     }
 
-    /** The host to connect to now for [host] (its VPN address when [useVpn]). */
-    fun routeHost(host: String): String {
-        val src = try { App.instance.store.current.sources.firstOrNull { it.vpnHost.isNotBlank() && it.host.equals(host, true) } } catch (_: Exception) { null } ?: return host
-        return if (useVpn(src)) src.vpnHost else host
-    }
+    fun useVpn(s: Source): Boolean = hostNow(s) != s.host
 
-    /** Libraries → LAN: the address chosen by hand (auto / lan / vpn); the switch is said. */
+    private fun sourceOf(host: String): Source? = try {
+        App.instance.store.current.sources.firstOrNull { it.host.equals(host, true) && (it.vpnHost.isNotBlank() || it.altHosts.isNotEmpty()) }
+    } catch (_: Exception) { null }
+
+    /** The host to connect to now for [host]. */
+    fun routeHost(host: String): String = sourceOf(host)?.let { hostNow(it) } ?: host
+
+    /** Libraries → LAN: the address chosen by hand ("auto", "lan" or one of the stored addresses). */
     fun setMode(s: Source, mode: String) {
         App.instance.store.update { x -> x.copy(sources = x.sources.map { if (it.id == s.id) it.copy(addrMode = mode) else it }) }
         scope.launch { delay(300); announceSwitches() }
+        NetIndex.recheckReachable()
     }
 
-    /**
-     * The address to use for [url] now: a LAN server's address swapped for its VPN address while [useVpn].
-     * Everything that opens a server goes through here (playing, browsing, indexing, tags, ReplayGain …).
-     */
+    /** Another address of the same server, stored (Libraries → LAN → +). */
+    fun addAddress(s: Source, ip: String) {
+        val a = ip.trim(); if (a.isBlank() || a.equals(s.host, true)) return
+        App.instance.store.update { x -> x.copy(sources = x.sources.map {
+            if (it.id == s.id) it.copy(altHosts = (it.altHosts + a).distinct(), vpnHost = it.vpnHost.ifBlank { a }) else it }) }
+        ServerLog.log("vpn", "address", "smb", "", true, "${s.name.ifBlank { s.host }}: address $a stored")
+    }
+
+    fun removeAddress(s: Source, ip: String) {
+        App.instance.store.update { x -> x.copy(sources = x.sources.map {
+            if (it.id != s.id) it else {
+                val left = it.altHosts - ip
+                it.copy(altHosts = left, vpnHost = if (it.vpnHost == ip) left.firstOrNull() ?: "" else it.vpnHost,
+                    addrMode = if (it.addrMode == ip || (it.addrMode == "vpn" && left.isEmpty())) "auto" else it.addrMode)
+            } }) }
+        ServerLog.log("vpn", "address", "smb", "", true, "${s.name.ifBlank { s.host }}: address $ip removed")
+    }
+
+    /** The address in use for [url] now: a LAN server's address swapped for the one chosen / its VPN one. */
     fun route(url: String): String {
         val m = Regex("^(\\w+://(?:[^/@]*@)?)([^/:]+)(.*)$").find(url) ?: return url
-        val host = m.groupValues[2]
-        val src = try { App.instance.store.current.sources.firstOrNull { it.vpnHost.isNotBlank() && it.host.equals(host, true) } } catch (_: Exception) { null } ?: return url
-        return if (useVpn(src)) m.groupValues[1] + src.vpnHost + m.groupValues[3] else url
+        val src = sourceOf(m.groupValues[2]) ?: return url
+        val h = hostNow(src)
+        return if (h.equals(src.host, true)) url else m.groupValues[1] + h + m.groupValues[3]
     }
 
-    /** Back from a VPN address to the server's LAN address (what the app keeps in lists and playlists). */
+    /** Back to the server's LAN address (what the app keeps in lists and playlists). */
     fun unroute(url: String): String {
         val m = Regex("^(\\w+://(?:[^/@]*@)?)([^/:]+)(.*)$").find(url) ?: return url
         val host = m.groupValues[2]
-        val src = try { App.instance.store.current.sources.firstOrNull { it.vpnHost.isNotBlank() && it.vpnHost.equals(host, true) } } catch (_: Exception) { null } ?: return url
+        val src = try { App.instance.store.current.sources.firstOrNull { s -> s.vpnHost.equals(host, true) || s.altHosts.any { it.equals(host, true) } } } catch (_: Exception) { null } ?: return url
         return m.groupValues[1] + src.host + m.groupValues[3]
     }
 
     /** Every switch LAN ↔ VPN is said (pop-up and the VPN log). */
     private fun announceSwitches() {
-        val srcs = App.instance.store.current.sources.filter { it.vpnHost.isNotBlank() }
+        val srcs = App.instance.store.current.sources.filter { it.vpnHost.isNotBlank() || it.altHosts.isNotEmpty() }
         for (s in srcs) {
-            val now = useVpn(s)
+            val h = hostNow(s)
+            val now = h != s.host
             val before = usingVpn[s.id]
             usingVpn[s.id] = now
             if (before == null || before == now) continue
-            val msg = if (now) "${s.name.ifBlank { s.host }}: through the VPN (${s.vpnHost}) — not on its home network"
+            val msg = if (now) "${s.name.ifBlank { s.host }}: using $h" + (if (s.addrMode == "auto") " — not on its home network" else " (chosen)")
                 else "${s.name.ifBlank { s.host }}: back on the LAN address (${s.host})"
             // Transparent: no pop-up — written in the VPN log; Libraries → LAN shows the address in use.
             ServerLog.log("vpn", "switch", "vpn", "", true, msg)
@@ -326,7 +351,7 @@ object VpnLink {
             val srcs = App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }
             var asked = 0
             for (ip in open) {
-                if (srcs.any { it.vpnHost == ip || it.host == ip }) continue
+                if (srcs.any { it.vpnHost == ip || it.host == ip || ip in it.altHosts }) continue
                 val f = identify(ip)
                 val best = srcs.map { it to likeness(f, it) }.filter { it.second > 0 }.maxByOrNull { it.second }
                 ServerLog.log("vpn", "found", "smb", "", true, "Server on the VPN: $ip", "guid ${f.guid} · name ${f.nbName} · mac ${f.mac}" +
@@ -358,7 +383,8 @@ object VpnLink {
 
     /** Settings → VPN: a kept VPN address changed by hand. */
     fun setVpnHost(s: Source, ip: String) {
-        App.instance.store.update { x -> x.copy(sources = x.sources.map { if (it.id == s.id) it.copy(vpnHost = ip.trim()) else it }) }
+        App.instance.store.update { x -> x.copy(sources = x.sources.map {
+            if (it.id == s.id) it.copy(vpnHost = ip.trim(), altHosts = (it.altHosts - it.vpnHost + ip.trim()).distinct()) else it }) }
         ServerLog.log("vpn", "profile", "smb", "", true, "${s.name.ifBlank { s.host }}: VPN address set by hand to ${ip.trim()}")
         usingVpn.remove(s.id)
     }
@@ -368,14 +394,15 @@ object VpnLink {
         ask.value = null
         if (!yes) { declined += "${s.id}|${f.ip}"; return }
         App.instance.store.update { x -> x.copy(sources = x.sources.map {
-            if (it.id == s.id) it.copy(vpnHost = f.ip, smbGuid = it.smbGuid.ifEmpty { f.guid }, nbName = it.nbName.ifEmpty { f.nbName }, mac = it.mac.ifEmpty { f.mac }) else it }) }
+            if (it.id == s.id) it.copy(vpnHost = f.ip, altHosts = (it.altHosts + f.ip).distinct(), smbGuid = it.smbGuid.ifEmpty { f.guid }, nbName = it.nbName.ifEmpty { f.nbName }, mac = it.mac.ifEmpty { f.mac }) else it }) }
         ServerLog.log("vpn", "profile", "smb", "", true, "${s.name.ifBlank { s.host }}: VPN address ${f.ip} kept (LAN ${s.host})")
         usingVpn.remove(s.id)
         scope.launch { announceSwitches() }
     }
 
     fun forget(s: Source) {
-        App.instance.store.update { x -> x.copy(sources = x.sources.map { if (it.id == s.id) it.copy(vpnHost = "") else it }) }
+        App.instance.store.update { x -> x.copy(sources = x.sources.map {
+            if (it.id == s.id) it.copy(vpnHost = "", altHosts = it.altHosts - it.vpnHost, addrMode = if (it.addrMode == "vpn" || it.addrMode == it.vpnHost) "auto" else it.addrMode) else it }) }
         usingVpn.remove(s.id)
     }
 

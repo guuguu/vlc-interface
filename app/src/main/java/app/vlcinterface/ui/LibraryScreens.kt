@@ -447,17 +447,48 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
             SymButton({ nav.go(Screen.LogPage(ServerLog.keyOf(s.host))) }) { SymIcon(Icons.Filled.Info, "Log for ${s.name}", tint = C.muted) }
             SymButton({ nav.go(Screen.EditSource(s.zone, s.id)) }) { SymIcon(Icons.Filled.MoreVert, "Edit ${s.name}", tint = C.muted) }
         }
-        // A NAS with a remembered VPN address: which address to use — Auto, LAN or VPN (by hand).
-        if (s.vpnHost.isNotBlank()) {
-            val vpnOn by app.vlcinterface.sources.VpnLink.vpnUp.collectAsState()
-            val using = remember(s, vpnOn, online) { if (app.vlcinterface.sources.VpnLink.useVpn(s)) "VPN ${s.vpnHost}" else "LAN ${s.host}" }
-            Row(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // LAN servers: which address to use — Auto, the LAN one or any stored one (VPN …); + stores another,
+        // long-press an address to remove it.
+        if (s.zone == Zone.LAN && s.proto != "upnp") {
+            val vl = app.vlcinterface.sources.VpnLink
+            val vpnOn by vl.vpnUp.collectAsState()
+            val inUse = remember(s, vpnOn, online) { vl.hostNow(s) }
+            var adding by remember { mutableStateOf(false) }
+            var removing by remember { mutableStateOf<String?>(null) }
+            FlowRow(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Address", color = C.muted, fontSize = 12.sp)
-                Pill("Auto", selected = s.addrMode == "auto") { app.vlcinterface.sources.VpnLink.setMode(s, "auto") }
-                Pill("LAN", selected = s.addrMode == "lan") { app.vlcinterface.sources.VpnLink.setMode(s, "lan") }
-                Pill("VPN", selected = s.addrMode == "vpn") { app.vlcinterface.sources.VpnLink.setMode(s, "vpn") }
+                if (s.vpnHost.isNotBlank()) Pill("Auto", selected = s.addrMode == "auto" || s.addrMode.isBlank()) { vl.setMode(s, "auto") }
+                Pill("LAN ${s.host}", selected = s.addrMode == "lan" || (s.vpnHost.isBlank() && (s.addrMode == "auto" || s.addrMode.isBlank()))) { vl.setMode(s, "lan") }
+                s.altHosts.forEach { h ->
+                    Box(Modifier.combinedClickable(onClick = { vl.setMode(s, h) }, onLongClick = { removing = h })) {
+                        Pill((if (h == s.vpnHost) "VPN " else "") + h, selected = s.addrMode == h || (s.addrMode == "vpn" && h == s.vpnHost)) { vl.setMode(s, h) }
+                    }
+                }
+                Pill("+") { adding = true }
             }
-            Text("In use: $using", color = a, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 2.dp))
+            if (s.vpnHost.isNotBlank() || s.altHosts.isNotEmpty())
+                Text("In use: $inUse" + if (inUse != s.host) " (instead of ${s.host})" else "", color = a, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 2.dp))
+            if (adding) {
+                var ip by remember { mutableStateOf("") }
+                AlertDialog(onDismissRequest = { adding = false }, containerColor = C.panel,
+                    title = { Text("Another address for ${s.name.ifBlank { s.host }}", color = C.text) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Same server on another network (ZeroTier, Tailscale …). Its folders and files stay the same.", color = C.muted, fontSize = 12.sp)
+                            OutlinedTextField(ip, { ip = it.trim() }, singleLine = true, modifier = Modifier.fillMaxWidth(), label = { Text("Address") },
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Uri))
+                        }
+                    },
+                    confirmButton = { STextButton({ vl.addAddress(s, ip); adding = false }, enabled = ip.isNotBlank()) { Text("Save", color = a) } },
+                    dismissButton = { STextButton({ adding = false }) { Text("Cancel") } })
+            }
+            removing?.let { h ->
+                AlertDialog(onDismissRequest = { removing = null }, containerColor = C.panel,
+                    title = { Text("Remove $h?", color = C.text) },
+                    text = { Text("${s.name.ifBlank { s.host }} keeps its other addresses.", color = C.muted, fontSize = 13.sp) },
+                    confirmButton = { STextButton({ vl.removeAddress(s, h); removing = null }) { Text("Remove", color = C.bad) } },
+                    dismissButton = { STextButton({ removing = null }) { Text("Cancel") } })
+            }
         }
         FlowRow(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             s.pins.forEach { pin ->

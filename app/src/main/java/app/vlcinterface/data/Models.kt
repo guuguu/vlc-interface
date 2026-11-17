@@ -32,6 +32,8 @@ data class Source(
     val mac: String = "",
     /** Which address to use: "auto" (VPN address when away with the VPN on), "lan" or "vpn" (chosen by hand). */
     val addrMode: String = "auto",
+    /** Other addresses of the same server (VPN ones, another subnet …), switchable by hand in Libraries → LAN. */
+    val altHosts: List<String> = emptyList(),
 ) {
     val defaultPort: Int
         get() = when (proto) {
@@ -46,7 +48,7 @@ data class Source(
         .put("password", passwordTransform(password)).put("domain", domain)
         .put("wifiOnly", wifiOnly).put("pins", JSONArray(pins)).put("smbVersion", smbVersion)
         .put("lastScan", lastScan).put("readOnly", JSONArray(readOnly))
-        .put("vpnHost", vpnHost).put("smbGuid", smbGuid).put("nbName", nbName).put("mac", mac).put("addrMode", addrMode)
+        .put("vpnHost", vpnHost).put("smbGuid", smbGuid).put("nbName", nbName).put("mac", mac).put("addrMode", addrMode).put("altHosts", JSONArray(altHosts))
 
     companion object {
         fun fromJson(o: JSONObject, passwordTransform: (String) -> String) = Source(
@@ -69,7 +71,8 @@ data class Source(
             smbGuid = o.optString("smbGuid"),
             nbName = o.optString("nbName"),
             mac = o.optString("mac"),
-            addrMode = o.optString("addrMode", "auto").let { if (it in setOf("auto", "lan", "vpn")) it else "auto" },
+            addrMode = o.optString("addrMode", "auto").ifBlank { "auto" },
+            altHosts = o.optJSONArray("altHosts").strings().let { l -> (l + listOfNotNull(o.optString("vpnHost").takeIf { it.isNotBlank() })).distinct() },
         )
     }
 }
