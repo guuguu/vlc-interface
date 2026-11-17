@@ -71,7 +71,10 @@ fun clipSong(ctx: Context): String? {
     return line.take(120)
 }
 
-/** Opens the Shazam app (it listens through the microphone); the Play Store page when it isn't installed. */
+/**
+ * Opens the Shazam app; the Play Store page when it isn't installed. Shazam can listen to this app's sound
+ * directly (no microphone, headphones fine): pick this app when it asks which one to listen to.
+ */
 fun openShazam(ctx: Context) {
     val pkg = "com.shazam.android"
     val launch = ctx.packageManager.getLaunchIntentForPackage(pkg)

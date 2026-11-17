@@ -135,6 +135,8 @@ static bool open_stream(void) {
     AAudioStreamBuilder_setSampleRate(b, (int32_t)(g_src ? g_src : g_rate));
     AAudioStreamBuilder_setUsage(b, AAUDIO_USAGE_MEDIA);
     AAudioStreamBuilder_setContentType(b, AAUDIO_CONTENT_TYPE_MUSIC);
+    /* Other apps may listen to the app's sound (Shazam's "listen to apps" without the microphone). */
+    if (__builtin_available(android 29, *)) AAudioStreamBuilder_setAllowedCapturePolicy(b, AAUDIO_ALLOW_CAPTURE_BY_ALL);
     AAudioStreamBuilder_setPerformanceMode(b, AAUDIO_PERFORMANCE_MODE_NONE);
     AAudioStreamBuilder_setSharingMode(b, AAUDIO_SHARING_MODE_SHARED);
     AAudioStreamBuilder_setErrorCallback(b, on_error, NULL);
