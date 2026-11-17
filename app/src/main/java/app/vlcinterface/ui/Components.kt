@@ -201,21 +201,31 @@ fun JumpToBox(state: LazyListState, labels: List<String>, offset: Int = 0) {
     var q by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val keys = remember(labels) { labels.map { normText(it) } }
-    // The first item holding exactly what's typed (spaces typed included, see textMatch).
-    fun jump(t: String) {
-        val i = keys.indexOfFirst { textMatch(it, t) }.takeIf { it >= 0 } ?: return
-        scope.launch { state.scrollToItem(i + offset) }
-    }
+    // Every item holding exactly what's typed (spaces typed included, see textMatch); ‹ › step through them.
+    val found = remember(q, keys) { if (q.isBlank()) emptyList() else keys.indices.filter { textMatch(keys[it], q) } }
+    var at by remember(q) { mutableStateOf(0) }
+    fun go(k: Int) { if (found.isEmpty()) return; at = (k + found.size) % found.size; scope.launch { state.scrollToItem(found[at] + offset) } }
+    fun jump(t: String) { q = t; at = 0 }
+    androidx.compose.runtime.LaunchedEffect(found) { if (found.isNotEmpty()) state.scrollToItem(found[0] + offset) }
     Row(Modifier.fillMaxWidth().background(C.bg).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(17.dp)).background(C.card2).padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart) {
             if (q.isEmpty()) Text("Jump to…", color = C.muted, fontSize = 13.sp)
-            androidx.compose.foundation.text.BasicTextField(q, { q = it; jump(it) }, singleLine = true,
+            androidx.compose.foundation.text.BasicTextField(q, { jump(it) }, singleLine = true,
                 textStyle = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 14.sp),
                 cursorBrush = androidx.compose.ui.graphics.SolidColor(accent()), modifier = Modifier.fillMaxWidth())
         }
-        if (q.isNotEmpty()) Text("✕", color = C.muted, fontSize = 16.sp, modifier = Modifier.clickable { q = "" }.padding(horizontal = 10.dp))
+        if (q.isNotEmpty()) SearchSteps(found.size, at, { go(at - 1) }, { go(at + 1) }) { q = "" }
     }
+}
+
+/** Small "n/total ‹ › ✕" controls of the lists' search bars. */
+@Composable
+fun SearchSteps(count: Int, at: Int, prev: () -> Unit, next: () -> Unit, clear: () -> Unit) {
+    Text(if (count == 0) "0" else "${at + 1}/$count", color = if (count == 0) C.bad else C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+    Text("‹", color = if (count > 1) C.text else C.muted, fontSize = 22.sp, modifier = Modifier.clickable(enabled = count > 1) { prev() }.padding(horizontal = 8.dp))
+    Text("›", color = if (count > 1) C.text else C.muted, fontSize = 22.sp, modifier = Modifier.clickable(enabled = count > 1) { next() }.padding(horizontal = 8.dp))
+    Text("✕", color = C.muted, fontSize = 16.sp, modifier = Modifier.clickable { clear() }.padding(horizontal = 8.dp))
 }
 
 @Composable

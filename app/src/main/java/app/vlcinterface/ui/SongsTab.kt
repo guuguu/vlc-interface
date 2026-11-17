@@ -206,8 +206,16 @@ fun SongsTab(nav: Navigator) {
         val focusMgr = androidx.compose.ui.platform.LocalFocusManager.current
         // Only songs holding exactly what's typed, in that order (spaces typed before / after count: " rock ").
         val hay = remember(songs) { songs.map { normText(listOf(it.artist, it.album, it.title).joinToString(" ")) } }
-        val hits = remember(query, songs) {
-            if (query.trim().length < 2) emptyList() else songs.indices.filter { textMatch(hay[it], query) }.take(50).map { songs[it] }
+        val allHits = remember(query, songs) { if (query.trim().length < 2) emptyList() else songs.indices.filter { textMatch(hay[it], query) } }
+        // ‹ › step through every match in the list (the pop-up hides while stepping).
+        var at by remember(query) { mutableStateOf(0) }
+        var stepping by remember(query) { mutableStateOf(false) }
+        val hits = if (stepping) emptyList() else allHits.take(50).map { songs[it] }
+        fun step(k: Int) {
+            if (allHits.isEmpty()) return
+            stepping = true; at = (k + allHits.size) % allHits.size
+            val i = allHits[at]; focus = songs[i].uri; focusMgr.clearFocus()
+            scope.launch { state.animateScrollToItem((i - 3).coerceAtLeast(0)) }
         }
         var fieldH by remember { mutableStateOf(0) }
         var fieldBottom by remember { mutableStateOf(0f) }
@@ -230,7 +238,7 @@ fun SongsTab(nav: Navigator) {
                         textStyle = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 14.sp),
                         cursorBrush = androidx.compose.ui.graphics.SolidColor(accent()), modifier = Modifier.fillMaxWidth())
                 }
-                if (query.isNotEmpty()) Text("✕", color = C.muted, fontSize = 16.sp, modifier = Modifier.clickable { query = "" }.padding(horizontal = 10.dp))
+                if (query.isNotEmpty()) SearchSteps(allHits.size, at, { step(at - 1) }, { step(if (stepping) at + 1 else 0) }) { query = "" }
             }
             if (hits.isNotEmpty()) androidx.compose.ui.window.Popup(alignment = Alignment.TopStart, offset = androidx.compose.ui.unit.IntOffset(0, fieldH + 4),
                 properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
