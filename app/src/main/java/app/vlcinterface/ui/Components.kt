@@ -178,6 +178,20 @@ private fun Modifier.fastScroll(color: Color, shown: () -> Boolean, thumb: (Floa
     }
 }
 
+/** Lower case, accents taken off (é → e). */
+fun normText(x: String): String = java.text.Normalizer.normalize(x.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
+
+/**
+ * Search rule for the lists: the typed characters exactly, in their order — spaces typed before / after included
+ * (" rock " = the word rock only). Capitals and accents don't matter; punctuation next to a word counts as a space.
+ * [hay] must already be [normText]-ed; [q] is the text as typed (not trimmed).
+ */
+fun textMatch(hay: String, q: String): Boolean {
+    val n = normText(q); if (n.isBlank()) return false
+    val padded = " $hay "
+    return padded.contains(n) || padded.replace(Regex("[^\\p{L}\\p{N}]+"), " ").contains(n)
+}
+
 /**
  * "Jump to…" box pinned at the top of long lists: each letter typed moves the list to the first item that starts
  * with the text (then: a word in it starting with it, then: containing it). [offset] = list rows before the items.
@@ -186,13 +200,10 @@ private fun Modifier.fastScroll(color: Color, shown: () -> Boolean, thumb: (Floa
 fun JumpToBox(state: LazyListState, labels: List<String>, offset: Int = 0) {
     var q by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    fun norm(x: String) = java.text.Normalizer.normalize(x.lowercase(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}+"), "")
-    val keys = remember(labels) { labels.map { norm(it) } }
+    val keys = remember(labels) { labels.map { normText(it) } }
+    // The first item holding exactly what's typed (spaces typed included, see textMatch).
     fun jump(t: String) {
-        val n = norm(t.trim()); if (n.isEmpty()) return
-        val i = keys.indexOfFirst { it.startsWith(n) }.takeIf { it >= 0 }
-            ?: keys.indexOfFirst { k -> k.split(Regex("[^\\p{L}\\p{N}]+")).any { it.startsWith(n) } }.takeIf { it >= 0 }
-            ?: keys.indexOfFirst { it.contains(n) }.takeIf { it >= 0 } ?: return
+        val i = keys.indexOfFirst { textMatch(it, t) }.takeIf { it >= 0 } ?: return
         scope.launch { state.scrollToItem(i + offset) }
     }
     Row(Modifier.fillMaxWidth().background(C.bg).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {

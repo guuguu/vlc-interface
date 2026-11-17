@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -203,11 +204,10 @@ fun SongsTab(nav: Navigator) {
         var query by remember { mutableStateOf("") }
         var focus by remember { mutableStateOf("") }
         val focusMgr = androidx.compose.ui.platform.LocalFocusManager.current
+        // Only songs holding exactly what's typed, in that order (spaces typed before / after count: " rock ").
+        val hay = remember(songs) { songs.map { normText(listOf(it.artist, it.album, it.title).joinToString(" ")) } }
         val hits = remember(query, songs) {
-            val q = query.trim().lowercase()
-            if (q.length < 2) emptyList() else {
-                songs.filter { s0 -> songMatches(s0, q) }.take(50)
-            }
+            if (query.trim().length < 2) emptyList() else songs.indices.filter { textMatch(hay[it], query) }.take(50).map { songs[it] }
         }
         var fieldH by remember { mutableStateOf(0) }
         var fieldBottom by remember { mutableStateOf(0f) }
@@ -220,10 +220,18 @@ fun SongsTab(nav: Navigator) {
         val bottomBar = maxOf(imeBottom, WindowInsets.navigationBars.getBottom(dens))
         val popMax = with(dens) { ((winH - bottomBar - fieldBottom - 12f).coerceAtLeast(120f)).toDp() }.coerceAtMost(340.dp)
         Box {
-            androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).onGloballyPositioned { fieldH = it.size.height; fieldBottom = it.positionInWindow().y + it.size.height },
-                placeholder = { Text("Search artist, album or song", fontSize = 13.sp) }, textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = C.text),
-                trailingIcon = { if (query.isNotEmpty()) Text("✕", color = C.muted, modifier = Modifier.clickable { query = "" }.padding(10.dp)) })
+            // Small, simple search bar.
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).onGloballyPositioned { fieldH = it.size.height; fieldBottom = it.positionInWindow().y + it.size.height },
+                verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(17.dp)).background(C.card2).padding(horizontal = 14.dp),
+                    contentAlignment = Alignment.CenterStart) {
+                    if (query.isEmpty()) Text("Search…", color = C.muted, fontSize = 13.sp)
+                    androidx.compose.foundation.text.BasicTextField(query, { query = it }, singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 14.sp),
+                        cursorBrush = androidx.compose.ui.graphics.SolidColor(accent()), modifier = Modifier.fillMaxWidth())
+                }
+                if (query.isNotEmpty()) Text("✕", color = C.muted, fontSize = 16.sp, modifier = Modifier.clickable { query = "" }.padding(horizontal = 10.dp))
+            }
             if (hits.isNotEmpty()) androidx.compose.ui.window.Popup(alignment = Alignment.TopStart, offset = androidx.compose.ui.unit.IntOffset(0, fieldH + 4),
                 properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
                 val sc = androidx.compose.foundation.rememberScrollState()
