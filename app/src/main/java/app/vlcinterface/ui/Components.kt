@@ -484,9 +484,20 @@ fun ExitDialogHost() {
     if (ExitPrompt.visible) AlertDialog(onDismissRequest = { ExitPrompt.visible = false }, containerColor = C.panel,
         title = { Text("Exit or restart?", color = C.text) },
         text = {
-            Text("Exit closes the app completely (playback stops, notifications go away).\n" +
-                "Restart closes it and opens it again fresh: the player, sound engine, connections and all settings are loaded anew.",
-                color = C.muted, fontSize = 13.sp)
+            androidx.compose.foundation.layout.Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+                // Work still going on: what it is and about how long it needs (refreshed every second).
+                var work by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(BackgroundWorkInfo.lines()) }
+                androidx.compose.runtime.LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); work = BackgroundWorkInfo.lines() } }
+                if (work.isNotEmpty()) {
+                    Text("Still in progress", color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    work.forEach { Text("• $it", color = C.text, fontSize = 13.sp) }
+                    Text("Exit or restart now stops it: an unfinished song save is lost, a ReplayGain scan keeps what it already wrote.",
+                        color = C.bad, fontSize = 12.sp)
+                }
+                Text("Exit closes the app completely (playback stops, notifications go away).\n" +
+                    "Restart closes it and opens it again fresh: the player, sound engine, connections and all settings are loaded anew.",
+                    color = C.muted, fontSize = 13.sp)
+            }
         },
         confirmButton = {
             androidx.compose.foundation.layout.Row {
@@ -498,6 +509,40 @@ fun ExitDialogHost() {
     )
 }
 
+
+/** What runs in the background, with the estimated time left — for the Exit question. */
+object BackgroundWorkInfo {
+    private fun eta(ms: Long): String = when {
+        ms < 60_000 -> "less than a minute left"
+        ms < 3_600_000 -> "about ${(ms + 30_000) / 60_000} min left"
+        else -> "about ${ms / 3_600_000} h ${(ms % 3_600_000) / 60_000} min left"
+    }
+    private fun left(startedAt: Long, done: Float): Long? =
+        if (startedAt <= 0 || done < 0.02f) null else ((System.currentTimeMillis() - startedAt) * (1 - done) / done).toLong()
+
+    fun lines(): List<String> = buildList {
+        val paused = app.vlcinterface.player.BackgroundWork.paused.value
+        val rg = app.vlcinterface.sources.RgScanner.state.value
+        if (rg.running) add("ReplayGain scan: ${rg.done}/${rg.total} files · " + (left(rg.startedAt, rg.progress)?.let { eta(it) } ?: "estimating time left…"))
+        val rgQ = app.vlcinterface.sources.RgScanner.queued.value
+        if (rgQ.isNotEmpty()) add("${rgQ.size} more ReplayGain scan${if (rgQ.size == 1) "" else "s"} queued: " + rgQ.joinToString(", "))
+        val rc = app.vlcinterface.sources.RadioCapture
+        val q = rc.saveQueue.value
+        if (q.isNotEmpty()) {
+            val pr = rc.saveProgress.value
+            val cur = left(rc.saveStartedAt, pr)
+            add("Saving “${q.first()}”: ${(pr * 100).toInt()} % · " + (cur?.let { eta(it) } ?: "estimating time left…"))
+            if (q.size > 1) {
+                // Each song takes about as long as the one being saved now.
+                val per = if (pr >= 0.02f) ((System.currentTimeMillis() - rc.saveStartedAt) / pr).toLong() else null
+                add("${q.size - 1} more song${if (q.size == 2) "" else "s"} to save" + (if (per != null && cur != null) " · all done in " + eta(cur + per * (q.size - 1)).removeSuffix(" left") else ""))
+            }
+        }
+        rc.status.value.pending?.let { add("“${it.title}”: saved after it ends (still playing)") }
+        app.vlcinterface.sources.NetIndex.busy.value.takeIf { it.isNotEmpty() }?.let { add("$it · time not known") }
+        if (paused && isNotEmpty()) add(0, "Background work is paused (red button)")
+    }
+}
 
 /** Scroll positions of the Library lists, kept while the app runs (going into a folder and back keeps the place). */
 object ScrollMemory { val pos = java.util.concurrent.ConcurrentHashMap<String, Int>() }

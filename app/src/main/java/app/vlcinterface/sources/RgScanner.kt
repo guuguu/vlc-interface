@@ -69,6 +69,8 @@ data class RgScanState(
     val reportPending: Boolean = false,
     /** Quick scan (playlist): a "done" confirmation waits to be shown, with this title. */
     val confirmTitle: String = "",
+    /** When this scan started (time-left estimate). */
+    val startedAt: Long = 0,
 )
 
 /**
@@ -137,7 +139,7 @@ object RgScanner {
         val cueSkipped = items.count { it.isMusic && it.startMs >= 0 }
         current = Queued(ctx, items, mode, target, rescanTagged, onlyWithoutRg, confirmTitle,
             confirmTitle.ifEmpty { if (music.size == 1) music[0].title else "${music.size} songs" })
-        _state.value = RgScanState(running = true, total = music.size, phase = "Preparing")
+        _state.value = RgScanState(running = true, total = music.size, phase = "Preparing", startedAt = System.currentTimeMillis())
         RgScanService.start(ctx)
         job = scope.launch {
             val results = ArrayList<RgResult>()

@@ -57,6 +57,11 @@ object RadioCapture {
     val status = MutableStateFlow(Status())
     /** Songs waiting to be cut / encoded / saved, in order (the first one is being worked on). */
     val saveQueue = MutableStateFlow<List<String>>(emptyList())
+    /** The song being saved now: 0…1 done, and when its work began (time-left estimate on exit). */
+    val saveProgress = MutableStateFlow(0f)
+    @Volatile var saveStartedAt = 0L; private set
+    private var stageBase = 0f; private var stageSpan = 0f; private var stageSec = 1.0
+    private fun stage(base: Float, span: Float, totalSec: Double) { stageBase = base; stageSpan = span; stageSec = totalSec.coerceAtLeast(0.1); saveProgress.value = base }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /**
      * Saving (decode, LAME, tags, copy) runs on one thread at Android's lowest priority, one song at a time, with a
@@ -282,7 +287,7 @@ object RadioCapture {
             val data = now ?: try { readRange(from, to) } catch (e: Exception) {
                 saveQueue.value = saveQueue.value - p.title; toast("Saving failed: ${e.message}"); return@launch }
             // One at a time, in the order asked (single low-priority thread).
-            kotlinx.coroutines.withContext(saver) { status.value = status.value.copy(busy = "Saving “${p.title}”…"); try {
+            kotlinx.coroutines.withContext(saver) { status.value = status.value.copy(busy = "Saving “${p.title}”…"); saveStartedAt = System.currentTimeMillis(); saveProgress.value = 0f; try {
                 val where = save(App.instance, p, data, (p.start - from).toInt(), (end - from).toInt().coerceAtMost(data.size), partialEnd)
                 ServerLog.log("saved-songs", "save", "radio", "", true, p.title, "From ${p.station} → $where" + (if (p.partialStart) " · beginning missing" else "") + (if (partialEnd) " · end missing" else ""))
                 toast((if (App.instance.store.current.settings.saveFormat == "original") "Saved: " else "Encoding ended: ") + where.substringAfterLast('/'), long = false)
@@ -381,7 +386,7 @@ object RadioCapture {
         codec.configure(fmt, null, null, 0); codec.start()
         var rate = fmt.getInteger(MediaFormat.KEY_SAMPLE_RATE); var ch = fmt.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
         val info = MediaCodec.BufferInfo()
-        var inDone = false; var outDone = false
+        var inDone = false; var outDone = false; var doneSec = 0.0
         try {
             while (!outDone) {
                 if (!inDone) {
@@ -401,6 +406,8 @@ object RadioCapture {
                             bb.position(info.offset); bb.limit(info.offset + info.size)
                             val sa = ShortArray(info.size / 2); bb.asShortBuffer().get(sa)
                             onPcm(sa, sa.size / ch, rate, ch)
+                            doneSec += sa.size.toDouble() / ch / rate
+                            saveProgress.value = stageBase + stageSpan * (doneSec / stageSec).toFloat().coerceIn(0f, 1f)
                             breathe()
                         }
                         codec.releaseOutputBuffer(oi, false)
@@ -436,6 +443,7 @@ object RadioCapture {
         val nomStart = timeOfByte(startByte); val nomEnd = timeOfByte(endByte)
 
         // Pass 1: loudness every 50 ms, to find the gaps between songs.
+        stage(0f, 0.35f, t.last())
         val step = 0.05
         val rmsList = ArrayList<Float>()
         var acc = 0.0; var cnt = 0; var stepFrames = 0
@@ -466,6 +474,7 @@ object RadioCapture {
         var lufs = 0.0; var peak = 0f
         fun produce() {
             out.delete()
+            stage(0.35f, 0.6f, if (reencode) t.last() else (cutEnd - cutStart))
             if (reencode) {
                 val r = encodeMp3(clean, cutStart, cutEnd, out); lufs = r.first; peak = r.second
             } else {
@@ -490,6 +499,7 @@ object RadioCapture {
             if (!readsBack(out, want)) { out.delete(); clean.delete(); throw Exception("the made file did not check out — not saved") }
         }
         clean.delete()
+        stage(0.95f, 0.05f, 1.0)
         writeTags(out, p, artist, title, info, lufs, peak)
         // No proper song name (nothing announced, the station's own name, "Live", ads …): YY_MM_DD_hr_min.
         val nice = listOf(info?.artist ?: artist, info?.title ?: title).filter { it.isNotBlank() }.joinToString(" - ").ifBlank { p.title }.trim()
