@@ -942,7 +942,8 @@ object RadioCapture {
         out.delete()
         // Into today's session playlist.
         val item = app.vlcinterface.player.PlayItem(uri, info?.title ?: title.ifBlank { name.substringBeforeLast('.') }, artist = info?.artist ?: artist,
-            album = info?.album ?: "", trackNo = info?.trackNo ?: 0, durationMs = ((cutEnd - cutStart) * 1000).toLong(), fileName = name)
+            album = info?.album ?: "", trackNo = info?.trackNo ?: 0, durationMs = ((cutEnd - cutStart) * 1000).toLong(), fileName = name,
+            folderKey = lastFolderKey)
         Handler(Looper.getMainLooper()).post { try { App.instance.player.addToSession(listOf(item)) } catch (_: Exception) {} }
         return where
     }
@@ -1104,6 +1105,22 @@ object RadioCapture {
         return null
     }
 
+    /** "primary:Music/mp3/x.mp3" → /storage/emulated/0/Music/mp3/x.mp3 ("1234-ABCD:…" → /storage/1234-ABCD/…). */
+    private fun realPath(docId: String): String? {
+        val vol = docId.substringBefore(':', ""); val rel = docId.substringAfter(':', "")
+        if (vol.isEmpty() || rel.isEmpty()) return null
+        return if (vol == "primary") File(android.os.Environment.getExternalStorageDirectory(), rel).path else "/storage/$vol/$rel"
+    }
+
+    /** Registers the file with Android's media library and returns its content:// address there (≤ 5 s). */
+    private fun mediaUri(ctx: Context, path: String): String? {
+        val done = java.util.concurrent.CountDownLatch(1)
+        var out: String? = null
+        android.media.MediaScannerConnection.scanFile(ctx, arrayOf(path), null) { _, uri -> out = uri?.toString(); done.countDown() }
+        done.await(5, java.util.concurrent.TimeUnit.SECONDS)
+        return out
+    }
+
     /** The sub-folder [name] of a chosen folder (Android folder access), made when missing. */
     private fun subDir(ctx: Context, tree: Uri, name: String): Uri {
         val parentId = DocumentsContract.getTreeDocumentId(tree)
@@ -1122,7 +1139,11 @@ object RadioCapture {
      * Into <library root>/raw (original) or <library root>/mp3 (re-encoded) — next to the phone library, or in the
      * folder chosen in Settings (its raw / mp3 sub-folders). Returns (where, file address).
      */
+    /** Folder key of the saved file for the Library ("local:<volume>:<relative path>"), to open its folder. */
+    @Volatile private var lastFolderKey = ""
+
     private fun store(ctx: Context, f: File, name: String, mime: String, out: String): Pair<String, String> {
+        lastFolderKey = ""
         val sub = if (out == "original") "raw" else "mp3"
         val tree = App.instance.store.current.settings.saveFolder
         if (tree.isNotEmpty()) try {
@@ -1133,7 +1154,16 @@ object RadioCapture {
             try { ctx.contentResolver.openOutputStream(tmp)!!.use { o -> f.inputStream().use { it.copyTo(o) } } }
             catch (e: Exception) { try { DocumentsContract.deleteDocument(ctx.contentResolver, tmp) } catch (_: Exception) {}; throw e }
             val doc = DocumentsContract.renameDocument(ctx.contentResolver, tmp, name) ?: tmp
-            return (Uri.decode(tree).substringAfterLast(':').ifEmpty { "chosen folder" } + "/$sub/" + name) to doc.toString()
+            // The real place on the phone, and the file registered in Android's media library: the saved song then
+            // has a normal address (its folder opens, Libraries and the playlist find it) instead of a folder-access one.
+            val docId = DocumentsContract.getDocumentId(doc)
+            val path = realPath(docId)
+            docId.substringAfter(':', "").substringBeforeLast('/', "").takeIf { it.isNotEmpty() }?.let { dirRel ->
+                val v = docId.substringBefore(':').let { if (it == "primary") MediaStore.VOLUME_EXTERNAL_PRIMARY else it.lowercase() }
+                lastFolderKey = "local:$v:$dirRel/"
+            }
+            val media = path?.let { mediaUri(ctx, it) }
+            return (path ?: (Uri.decode(tree).substringAfterLast(':').ifEmpty { "chosen folder" } + "/$sub/" + name)) to (media ?: doc.toString())
         } catch (e: Exception) {
             ServerLog.log("saved-songs", "folder", "local", "", false, "Chosen saved-songs folder not writable — saved next to the library", e.message ?: "")
         }
@@ -1148,7 +1178,9 @@ object RadioCapture {
                 ctx.contentResolver.openOutputStream(uri)!!.use { o -> f.inputStream().use { it.copyTo(o) } }
                 ctx.contentResolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
             } catch (e: Exception) { try { ctx.contentResolver.delete(uri, null, null) } catch (_: Exception) {}; throw e }
-            return "$rel$name" to uri.toString()
+            lastFolderKey = "local:$volume:$rel"
+            val base = if (volume == MediaStore.VOLUME_EXTERNAL_PRIMARY) android.os.Environment.getExternalStorageDirectory().path else "/storage/$volume"
+            return "$base/$rel$name" to uri.toString()
         }
         return try { insertAt(vol, "$root$sub/") }
         // Android only takes songs under Music/ (and a few others): the library root there when it isn't.
