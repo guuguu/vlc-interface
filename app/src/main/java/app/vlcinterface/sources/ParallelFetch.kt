@@ -126,7 +126,7 @@ object ParallelFetch {
      * is used if given).
      */
     fun download(p: PlayItem, dst: File, maxBytes: Long = 0, keepGoing: () -> Boolean = { true }, what: String = "copy",
-                 full: Boolean = false,
+                 full: Boolean = false, maxThreads: Int = MAX_THREADS,
                  progress: (Long, Long) -> Unit = { _, _ -> }, fallback: (() -> Boolean)? = null): Boolean {
         val r = try { remote(p) } catch (e: Exception) { null }
         if (r == null) return fallback?.invoke() ?: false
@@ -138,14 +138,39 @@ object ParallelFetch {
                 override fun close() {}
             }
             val t0 = System.currentTimeMillis()
-            var ok = run(hostOf(p.uri), r.size, { lane -> r.reader(lane) }, w, keepGoing, progress, "Copied ${p.title}")
+            var ok = run(hostOf(p.uri), r.size, { lane -> r.reader(lane) }, w, keepGoing, progress, "Copied ${p.title}", maxThreads)
             if (ok) out.fd.sync()                                   // on the storage before it's checked and used
             // Integrity: size, then the content checked against the server (whole file when it will be written
             // back, sampled pieces otherwise). A copy that doesn't match is never used.
-            if (ok) ok = dst.length() == r.size && (if (full) sameAsRemote(p, p.uri, dst) else samplesMatch(r, dst))
+            if (ok) ok = dst.length() == r.size && (if (full) matchesRemote(p, p.uri, dst, maxThreads = maxThreads) else samplesMatch(r, dst))
             if (!ok && dst.length() == r.size) ServerLog.log(hostOf(p.uri), "integrity", "", "", false, "Copy of ${p.title} didn't match the server — dropped")
             record(hostOf(p.uri), what, r.size, System.currentTimeMillis() - t0, ok)
             return ok
+        }
+    }
+
+    /**
+     * Whole-file check against the server: every piece read again (tuned parallel connections, like the copies)
+     * and compared byte for byte with [local]. Much faster than one plain stream over a VPN. A web server without
+     * byte ranges: one stream and SHA-256.
+     */
+    fun matchesRemote(p: PlayItem, uri: String, local: File, progress: (Long, Long) -> Unit = { _, _ -> },
+                      maxThreads: Int = MAX_THREADS): Boolean {
+        val r = try { remote(p.copy(uri = uri)) } catch (_: Exception) { null } ?: return sameAsRemote(p, uri, local)
+        if (r.size != local.length()) return false
+        val bad = java.util.concurrent.atomic.AtomicBoolean(false)
+        RandomAccessFile(local, "r").use { f ->
+            val w = object : Writer {
+                override fun writeAt(lane: Int, pos: Long, buf: ByteArray, len: Int) {
+                    if (bad.get()) return
+                    val c = ByteArray(len)
+                    synchronized(f) { f.seek(pos); f.readFully(c) }
+                    for (i in 0 until len) if (c[i] != buf[i]) { bad.set(true); return }
+                }
+                override fun close() {}
+            }
+            val ok = try { run(hostOf(uri), r.size, { lane -> r.reader(lane) }, w, { !bad.get() }, progress, "Checked ${p.title}", maxThreads) } catch (_: Exception) { false }
+            return ok && !bad.get()
         }
     }
 
@@ -218,7 +243,7 @@ object ParallelFetch {
                 var ok = run(hostOf(targetUri), src.length(), reader, w, { true }, progress, "Sent ${p.title}")
                 w.close()
                 // Integrity: the copy on the server read back whole and compared (SHA-256) before it's used.
-                if (ok) ok = sameAsRemote(p, targetUri, src)
+                if (ok) ok = matchesRemote(p, targetUri, src, progress)
                 if (!ok) ServerLog.log(hostOf(targetUri), "integrity", "", "", false, "Copy of ${p.title} on the server didn't match — not used")
                 record(hostOf(targetUri), "ReplayGain update", src.length(), System.currentTimeMillis() - t0, ok)
                 if (!ok) throw IllegalStateException("copy to the server stopped")
@@ -229,14 +254,15 @@ object ParallelFetch {
 
     /** The piece workers, their count tuned while they run. */
     private fun run(host: String, size: Long, newReader: (Int) -> Reader, w: Writer, keepGoing: () -> Boolean,
-                    progress: (Long, Long) -> Unit, what: String): Boolean {
+                    progress: (Long, Long) -> Unit, what: String, maxThreads: Int = MAX_THREADS): Boolean {
+        val cap = maxThreads.coerceIn(1, MAX_THREADS)
         val pieces = ((size + PIECE - 1) / PIECE).toInt()
         if (pieces == 0) return true
         val nextPiece = AtomicInteger(0)
         val written = java.util.BitSet(pieces)                       // every piece accounted for, not just a byte count
         val doneBytes = AtomicLong(0)
         val failed = AtomicInteger(0)
-        val allowed = AtomicInteger(best[host] ?: 1)
+        val allowed = AtomicInteger((best[host] ?: 1).coerceAtMost(cap))
         val running = AtomicInteger(0)
         val stopF = java.util.concurrent.atomic.AtomicBoolean(false)
         val retry = java.util.concurrent.ConcurrentLinkedQueue<Int>()
@@ -331,7 +357,7 @@ object ParallelFetch {
             when {
                 tuning -> {
                     if (lastSpeed == 0.0 || speed > lastSpeed * 1.15) {
-                        if (n < MAX_THREADS && nextPiece.get() < pieces) { allowed.set(n + 1); spawn() } else { tuning = false; best[host] = n }
+                        if (n < cap && nextPiece.get() < pieces) { allowed.set(n + 1); spawn() } else { tuning = false; best[host] = n }
                     } else {
                         if (speed < lastSpeed * 0.95 && n > 1) allowed.set(n - 1)
                         best[host] = allowed.get(); tuning = false; calmSince = now
@@ -343,7 +369,7 @@ object ParallelFetch {
                     if (speed < before * 1.10) allowed.decrementAndGet() else best[host] = allowed.get()
                     calmSince = now
                 }
-                host !in settled && now - calmSince > 20_000 && n < MAX_THREADS && nextPiece.get() < pieces -> {
+                host !in settled && now - calmSince > 20_000 && n < cap && nextPiece.get() < pieces -> {
                     trying = true; before = speed; allowed.set(n + 1); spawn()
                 }
             }

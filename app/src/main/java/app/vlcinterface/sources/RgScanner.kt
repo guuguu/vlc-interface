@@ -91,6 +91,7 @@ object RgScanner {
 
     /** Stops the scan running now; the queued ones follow. */
     private fun cancelled() = job?.isActive == false
+    @Volatile private var copyThreads = 4
 
     /** A NAS song away from home: waits until VPN-NAS is unlocked with "Wi-Fi" (or you're home). */
     private fun waitNasWifi(it: PlayItem) {
@@ -159,10 +160,10 @@ object RgScanner {
             try {
                 run(ctx, music, mode, target, rescanTagged, results, onlyWithoutRg)
             } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
+                dropCopies(); throw e
             } catch (e: Exception) {
                 results += RgResult("Scan", "stopped: ${e.message}", false)
-            }
+            } finally { dropCopies() }
             _state.value = _state.value.copy(running = false, finished = true, current = "", phase = "Done", results = results.toList(),
                 reportPending = results.any { !it.ok } || confirmTitle.isNotEmpty(), confirmTitle = confirmTitle)
             // ReplayGain log: one line for the scan, one per file that had a problem.
@@ -253,6 +254,8 @@ object RgScanner {
         // One thread per file, at most 4 at once — 2 when files come from a network share (small servers limit
         // how many files can be open at once).
         val workers = items.size.coerceIn(1, if (items.any { it.uri.startsWith("smb://", true) }) 2 else 4)
+        // Connections per copy shared between the files measured at once (the NAS isn't flooded).
+        copyThreads = maxOf(2, 8 / workers)
         fun addResult(r: RgResult) = synchronized(results) { results += r }
         fun snapshot() = synchronized(results) { results.toList() }
         // Albums by tags: grouped by the tags inside each file (album artist | year | album title), read now,
@@ -398,7 +401,8 @@ object RgScanner {
             val uri = item.uri
             // Network file: copied first with several connections (tuned to the bandwidth), then read from the phone;
             // kept for the tag update that follows. A cached copy (next song) is used as it is.
-            val local = netCopy(ctx, item)
+            val local = netCopy(ctx, item, copyThreads) { f -> onProgress(f * 0.5f) }
+            val base = if (local != null && (uri.startsWith("smb://") || uri.startsWith("http"))) 0.5f else 0f
             when {
                 local != null -> ex.setDataSource(local.path)
                 uri.startsWith("content://") -> ex.setDataSource(ctx, Uri.parse(uri), null)
@@ -446,7 +450,7 @@ object RgScanner {
                                 val now = System.currentTimeMillis()
                                 if (durUs > 0 && now - lastReport > 500) {
                                     lastReport = now
-                                    onProgress((t.toFloat() / durUs).coerceIn(0f, 1f))
+                                    onProgress(base + (1f - base) * (t.toFloat() / durUs).coerceIn(0f, 1f))
                                 }
                             }
                         }
@@ -537,20 +541,29 @@ object RgScanner {
         } finally { tmp.delete() }
     }
 
-    /** Last network file copied for a scan (uri → copy), reused by the tag update. */
-    @Volatile private var lastCopy: Pair<String, File>? = null
+    /**
+     * Network files copied for this scan (uri → copy), reused by the tag update, then deleted. One per file: with
+     * several files measured at once, one copy no longer deletes another that is still being read.
+     */
+    private val copies = java.util.concurrent.ConcurrentHashMap<String, File>()
 
-    /** A phone copy of a network song for scanning (parallel connections), or null (read over the network). */
-    private fun netCopy(ctx: Context, item: PlayItem): File? {
+    /** Copies of this scan removed (end of the scan, cancel). */
+    private fun dropCopies() { copies.values.forEach { it.delete() }; copies.clear() }
+
+    /**
+     * A phone copy of a network song for scanning (parallel connections), or null (read over the network).
+     * [onProgress] gets 0…1 of the copy (shown as the first half of the file's progress).
+     */
+    private fun netCopy(ctx: Context, item: PlayItem, threads: Int, onProgress: (Float) -> Unit): File? {
         val u = item.uri
         if (!(u.startsWith("smb://") || u.startsWith("http"))) return null
         Prefetch.localFor(u)?.let { return it }
-        lastCopy?.let { (k, f) -> if (k == u && f.isFile) return f; f.delete() }
-        lastCopy = null
+        copies[u]?.let { if (it.isFile) return it }
         if (ctx.cacheDir.usableSpace < 2L * 1024 * 1024 * 1024) return null
-        val f = File(ctx.cacheDir, "rgcopy-${Integer.toHexString(u.hashCode())}.${item.ext.ifEmpty { "bin" }}")
+        val f = File(ctx.cacheDir, "rgcopy-${Integer.toHexString(u.hashCode())}-${System.nanoTime()}.${item.ext.ifEmpty { "bin" }}")
         return try {
-            if (ParallelFetch.download(item, f, 300L * 1024 * 1024, keepGoing = { !cancelled() }, what = "ReplayGain read")) { lastCopy = u to f; f }
+            if (ParallelFetch.download(item, f, 300L * 1024 * 1024, keepGoing = { !cancelled() }, what = "ReplayGain read",
+                    maxThreads = threads, progress = { d, t -> if (t > 0) onProgress(d.toFloat() / t) })) { copies[u] = f; f }
             else { f.delete(); null }
         } catch (_: Exception) { f.delete(); null }
     }
@@ -561,12 +574,13 @@ object RgScanner {
         // This copy is tagged and written back over the original: it must be exactly the file on the server —
         // checked whole (SHA-256 against a fresh read) whichever way it was made.
         // Already copied for the scan (or cached ahead): taken from the phone once it's checked.
-        (lastCopy?.takeIf { it.first == u && it.second.isFile }?.second ?: Prefetch.localFor(u))?.let { c ->
-            val ok = !net || ParallelFetch.sameAsRemote(item, u, c)
-            lastCopy?.let { if (it.first == u) { if (!ok) it.second.delete(); lastCopy = null } }
-            if (ok) { c.copyTo(dst, true); return }
+        val pct = { what: String -> { d: Long, t: Long -> if (t > 0) update { s -> s.copy(current = item.title, phase = "$what ${d * 100 / t}%") } } }
+        (copies[u]?.takeIf { it.isFile } ?: Prefetch.localFor(u))?.let { c ->
+            val ok = !net || ParallelFetch.matchesRemote(item, u, c, pct("Checking the copy against the server"))
+            copies.remove(u)?.let { if (it != c || !ok) it.delete() }
+            if (ok) { c.copyTo(dst, true); if (c.name.startsWith("rgcopy-")) c.delete(); return }
         }
-        if (net && ParallelFetch.download(item, dst, what = "ReplayGain read", full = true)) return
+        if (net && ParallelFetch.download(item, dst, what = "ReplayGain read", full = true, progress = pct("Reading the file"))) return
         val input = when {
             u.startsWith("content://") -> ctx.contentResolver.openInputStream(Uri.parse(u))
             u.startsWith("file://") -> File(Uri.parse(u).path!!).inputStream()
@@ -578,7 +592,7 @@ object RgScanner {
             else -> null
         } ?: throw IllegalStateException("can't read the file")
         input.use { i -> dst.outputStream().use { o -> copy(i, o, "Reading the file"); o.fd.sync() } }
-        if (net && !ParallelFetch.sameAsRemote(item, u, dst)) { dst.delete(); throw IllegalStateException("the copy read from the server didn't match it — nothing changed") }
+        if (net && !ParallelFetch.matchesRemote(item, u, dst, pct("Checking the copy against the server"))) { dst.delete(); throw IllegalStateException("the copy read from the server didn't match it — nothing changed") }
     }
 
     /** Copies with progress on the scan page (big files over the network take a while). */
@@ -607,11 +621,11 @@ object RgScanner {
                 val orig = SmbFile(VpnLink.route(Uri.decode(u)), cx)
                 val t = SmbFile(VpnLink.route(Uri.decode(u) + ".rgtmp"), cx)
                 // Several connections at once (tuned); one plain stream if that fails.
-                val par = try { ParallelFetch.uploadSmb(item, tmp, u + ".rgtmp") } catch (_: Exception) { false }
+                val par = try { ParallelFetch.uploadSmb(item, tmp, u + ".rgtmp") { d, t -> if (t > 0) update { s -> s.copy(current = item.title, phase = "Sending and checking ${d * 100 / t}%") } } } catch (_: Exception) { false }
                 if (!par) t.outputStream.use { o -> tmp.inputStream().use { copy(it, o, "Saving to the server", tmp.length()) } }
                 if (t.length() != tmp.length()) { t.delete(); throw IllegalStateException("copy on the server is incomplete") }
                 // The tagged copy on the server read back whole and compared before it replaces anything.
-                if (!par && !ParallelFetch.sameAsRemote(item, u + ".rgtmp", tmp)) { t.delete(); throw IllegalStateException("copy on the server didn't match — original kept") }
+                if (!par && !ParallelFetch.matchesRemote(item, u + ".rgtmp", tmp)) { t.delete(); throw IllegalStateException("copy on the server didn't match — original kept") }
                 // Swap without a moment where the song is gone: original → .rgold, copy → original, then .rgold
                 // removed; any failure puts the original back.
                 val old = SmbFile(VpnLink.route(Uri.decode(u) + ".rgold"), cx)
@@ -630,7 +644,7 @@ object RgScanner {
                 val t = "$u.rgtmp"
                 Net.http.newCall(auth(Request.Builder().url(t).put(tmp.asRequestBody("application/octet-stream".toMediaType()))).build())
                     .execute().use { r -> if (!r.isSuccessful) throw IllegalStateException("server refused (HTTP ${r.code})") }
-                if (!ParallelFetch.sameAsRemote(item, t, tmp)) {
+                if (!ParallelFetch.matchesRemote(item, t, tmp)) {
                     try { Net.http.newCall(auth(Request.Builder().url(t).delete()).build()).execute().close() } catch (_: Exception) {}
                     throw IllegalStateException("copy on the server didn't match — original kept")
                 }
