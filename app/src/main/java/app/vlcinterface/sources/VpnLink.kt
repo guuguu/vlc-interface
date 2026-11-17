@@ -184,8 +184,8 @@ object VpnLink {
             if (before == null || before == now) continue
             val msg = if (now) "${s.name.ifBlank { s.host }}: through the VPN (${s.vpnHost}) — not on its home network"
                 else "${s.name.ifBlank { s.host }}: back on the LAN address (${s.host})"
+            // Transparent: no pop-up — written in the VPN log; Libraries → LAN shows the address in use.
             ServerLog.log("vpn", "switch", "vpn", "", true, msg)
-            toast(msg)
         }
     }
 
@@ -322,6 +322,12 @@ object VpnLink {
                     (best?.let { " · like ${it.first.name.ifBlank { it.first.host }} (${it.second})" } ?: " · like none"))
                 val s = best?.first ?: continue
                 if ("${s.id}|$ip" in declined) continue
+                // Same server ID or network card: certain — kept without a question (a short note says so).
+                if (best.second >= 3 || (best.second == 2 && f.mac.isNotEmpty() && f.mac == s.mac)) {
+                    ask.value = s to f; answer(true)
+                    toast("${s.name.ifBlank { s.host }} found on the VPN (${f.ip}): used automatically away from home")
+                    continue
+                }
                 // One question at a time.
                 while (ask.value != null) delay(500)
                 ask.value = s to f; asked++
