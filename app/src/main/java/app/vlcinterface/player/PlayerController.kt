@@ -925,11 +925,26 @@ class PlayerController(private val context: Context, private val store: Store) {
         app.vlcinterface.data.ServerLog.log("player", "nas-back", "", "", true, "NAS usable: list reloaded with its NAS songs (${ordered.size})")
     }
 
-    /** NAS not usable: its songs leave the queue (the playing one stays); only local files go on. */
+    /** NAS not usable (VPN-NAS off, VPN down …): the queue is refreshed to local songs only. */
     fun pruneNas() = main.post {
         val s = _state.value
         if (s.queue.none { nasOff(it) }) return@post
         val cur = s.queue.getOrNull(s.index)
+        // VPN-NAS off: the list keeps only local songs; a NAS song playing now stops and the next local one starts.
+        if (cur != null && nasOff(cur)) {
+            val next = s.queue.drop(s.index + 1).firstOrNull { !nasOff(it) } ?: s.queue.take(s.index).firstOrNull { !nasOff(it) }
+            val q = s.queue.filter { !nasOff(it) }
+            orderedQueue = orderedQueue?.filter { !nasOff(it) }
+            if (q.isEmpty() || next == null) {
+                stopping = true; mp.stop(); main.postDelayed({ stopping = false }, 300)
+                _state.value = s.copy(queue = listOf(cur), index = 0, isPlaying = false, error = "NAS offline: no local songs in this list")
+                return@post
+            }
+            _state.value = s.copy(queue = q, index = q.indexOfFirst { it === next }.coerceAtLeast(0))
+            if (!s.isPlaying) startPaused = true                     // paused: the local song waits ready
+            startItem(_state.value.index, -1)
+            return@post
+        }
         val q = s.queue.filter { it === cur || !nasOff(it) }
         orderedQueue = orderedQueue?.filter { it === cur || !nasOff(it) }
         _state.value = s.copy(queue = q, index = q.indexOfFirst { it === cur }.coerceAtLeast(0))
