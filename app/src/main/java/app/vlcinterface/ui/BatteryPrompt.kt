@@ -184,31 +184,37 @@ fun LowBatteryHost() {
 
 
 /**
- * Wi-Fi lost while a station played: exit, or go on over mobile data. Lower-bitrate favourites are offered, and
- * FLAC stations are advised against on mobile data.
+ * Wi-Fi lost, mobile data in use: what needed internet was stopped — listed here. Continue on mobile data,
+ * stay stopped, or exit. For radio: lower-bitrate favourites, and FLAC advised against on mobile data.
  */
 @Composable
 fun WifiLostHost() {
     val ask by app.vlcinterface.player.NetGuard.ask.collectAsState()
     if (!ask) return
     val g = app.vlcinterface.player.NetGuard
+    val stopped by g.stopped.collectAsState()
     val st by App.instance.store.state.collectAsState()
     val cur = App.instance.player.state.value.item
+    val radio = cur?.isRadio == true
     val curMeta = st.stations.firstOrNull { it.url == cur?.uri }?.meta ?: ""
-    val light = st.stations.filter { s -> g.bitrateOf(s.meta).let { it in 1..128 } && !s.meta.contains("flac", true) && s.url != cur?.uri }
+    val light = if (!radio) emptyList() else st.stations.filter { s -> g.bitrateOf(s.meta).let { it in 1..128 } && !s.meta.contains("flac", true) && s.url != cur?.uri }
     AlertDialog(onDismissRequest = {}, containerColor = C.panel,
-        title = { Text("Wi-Fi lost", color = C.text) },
+        title = { Text("Wi-Fi lost — mobile data in use", color = C.text) },
         text = {
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("The radio stopped. Exit, or continue on mobile data?", color = C.text)
-                Text("Use lower bitrate stations on mobile data (128 kbps or less). Don't use FLAC stations on mobile data: they use a lot of data.",
-                    color = C.muted, fontSize = 13.sp)
-                if (curMeta.contains("flac", true)) Text("This station is FLAC.", color = C.bad, fontSize = 13.sp)
+                Text("Stopped, because it needs internet:", color = C.text)
+                stopped.forEach { Text("• $it", color = C.text, fontSize = 13.sp) }
+                Text("Phone files and the rest go on. Nothing uses mobile data unless you continue.", color = C.muted, fontSize = 13.sp)
+                if (radio) {
+                    Text("Use lower bitrate stations on mobile data (128 kbps or less). Don't use FLAC stations on mobile data: they use a lot of data.",
+                        color = C.muted, fontSize = 13.sp)
+                    if (curMeta.contains("flac", true)) Text("This station is FLAC.", color = C.bad, fontSize = 13.sp)
+                }
                 if (light.isNotEmpty()) {
                     Text("Lower bitrate favourites", color = C.text, fontSize = 14.sp)
                     light.take(8).forEach { s ->
                         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(C.tile).clickable {
-                            g.mobileOk = true; g.ask.value = false; App.instance.player.playStation(s.name, s.url)
+                            g.goOnMobile(); App.instance.player.playStation(s.name, s.url)
                         }.padding(10.dp)) {
                             Column {
                                 Text(s.name, color = C.text, fontSize = 14.sp)
@@ -219,7 +225,12 @@ fun WifiLostHost() {
                 }
             }
         },
-        confirmButton = { STextButton({ g.goOnMobile() }) { Text("Continue on mobile data", color = accent()) } },
+        confirmButton = {
+            Row {
+                STextButton({ g.stayStopped() }) { Text("Stay stopped") }
+                STextButton({ g.goOnMobile() }) { Text("Continue on mobile data", color = accent()) }
+            }
+        },
         dismissButton = { STextButton({ g.ask.value = false; exitApp() }) { Text("Exit") } },
     )
 }

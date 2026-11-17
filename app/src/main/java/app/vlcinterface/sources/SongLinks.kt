@@ -172,6 +172,10 @@ object SongLinks {
 
     suspend fun find(artist: String, title: String, year: Int = 0, lengthMs: Long = 0, album: String = ""): Result = withContext(Dispatchers.IO) {
         val notes = ArrayList<String>()
+        // Wi-Fi lost, mobile data not allowed: nothing is looked up.
+        if (app.vlcinterface.player.NetGuard.blocked())
+            return@withContext Result(null, null, "https://open.spotify.com/search/" + Uri.encode("$artist $title"), true,
+                listOf("On mobile data: links aren't looked up (Wi-Fi lost)"))
         val info = info(artist, title, year, lengthMs, album)
         if (info == null) notes += "Not found in the iTunes catalogue — searched by name only"
         val y = if (year > 0) year else info?.year ?: 0

@@ -33,7 +33,8 @@ object NetGuard {
             val wasWifi = wifi
             wifi = w; cellular.value = c
             if (w) mobileOk = false
-            if (wasWifi && !w) android.os.Handler(android.os.Looper.getMainLooper()).post { wifiLost() }
+            if (wasWifi && !w) android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ wifiLost() }, 800)
+            if (!wasWifi && w) android.os.Handler(android.os.Looper.getMainLooper()).post { wifiBack() }
         }
         read(cm.getNetworkCapabilities(cm.activeNetwork))
         try {
@@ -44,16 +45,73 @@ object NetGuard {
         } catch (_: Exception) {}
     }
 
+    /** What was stopped when Wi-Fi went (shown in the pop-up). */
+    val stopped = MutableStateFlow<List<String>>(emptyList())
+    private var stoppedPlayback = false
+    private var pausedWork = false
+
+    /** On mobile data and not allowed there: anything that needs internet waits. */
+    fun blocked(): Boolean = cellular.value && !mobileOk
+
+    /**
+     * Needs internet: radio and web addresses (http, https, WebDAV, FTP), and network shares on hosts outside the
+     * home network. Phone files and LAN shares (private addresses, .local, plain names) don't.
+     */
+    fun needsInternet(uri: String): Boolean {
+        val u = uri.lowercase()
+        if (u.startsWith("content://") || u.startsWith("file://") || u.startsWith("/")) return false
+        if (Regex("^(https?|ftps?|dav|davs|mms|rtsp|rtmp)://").containsMatchIn(u)) return true
+        val host = android.net.Uri.parse(uri).host ?: return false
+        return !(Regex("^(10\\.|192\\.168\\.|172\\.(1[6-9]|2\\d|3[01])\\.|127\\.|169\\.254\\.)").containsMatchIn(host) ||
+            host.endsWith(".local") || host.endsWith(".lan") || host.endsWith(".home") || !host.contains('.'))
+    }
+
+    /**
+     * Wi-Fi gone, mobile data in use: what needs internet stops (playback of a station / web file, ReplayGain scans
+     * and indexing of internet files, radio recording, picture and link look-ups); a pop-up says what stopped.
+     * Phone and LAN work goes on.
+     */
     private fun wifiLost() {
+        if (mobileOk || !cellular.value) return
         val p = App.instance.player
         val s = p.state.value
-        if (s.item?.isRadio != true || mobileOk) return
-        p.pause()
+        val list = ArrayList<String>()
+        val item = s.item
+        if (item != null && s.isPlaying && (item.isRadio || needsInternet(item.uri))) {
+            p.pause(); stoppedPlayback = true
+            list += (if (item.isRadio) "Radio: " else "Playing: ") + item.title
+        }
+        val rg = app.vlcinterface.sources.RgScanner
+        if (rg.state.value.running && rg.currentNeedsInternet()) { list += "ReplayGain scan (queue kept)" }
+        if (app.vlcinterface.sources.NetIndex.internetBusy()) list += "Indexing of internet folders"
+        if (rg.state.value.running && rg.currentNeedsInternet() || app.vlcinterface.sources.NetIndex.internetBusy()) {
+            if (!BackgroundWork.paused.value) { BackgroundWork.pause(); pausedWork = true }
+        }
+        // Radio recording (for saving songs) stops by itself on mobile data.
+        if (item?.isRadio == true && App.instance.store.current.settings.radioCapture != "off") list += "Radio recording for saving songs"
+        if (list.isEmpty()) return
+        list += "Picture and song-link downloads"
+        app.vlcinterface.data.ServerLog.log("network", "wifi-lost", "", "", false, "Wi-Fi lost: stopped what needs internet", list.joinToString(" · "))
+        stopped.value = list
         ask.value = true
     }
 
-    /** "Continue on mobile data". */
-    fun goOnMobile() { mobileOk = true; ask.value = false; App.instance.player.replayCurrent() }
+    /** Wi-Fi back: work paused because of it goes on (playback stays stopped until you press play). */
+    private fun wifiBack() {
+        if (pausedWork) { pausedWork = false; BackgroundWork.resume() }
+        stoppedPlayback = false
+        if (ask.value) ask.value = false
+    }
+
+    /** "Continue on mobile data": everything goes on over mobile data until Wi-Fi is back. */
+    fun goOnMobile() {
+        mobileOk = true; ask.value = false
+        if (stoppedPlayback) { stoppedPlayback = false; App.instance.player.replayCurrent() }
+        if (pausedWork) { pausedWork = false; BackgroundWork.resume() }
+    }
+
+    /** "Stay stopped": the pop-up closes, nothing over mobile data. */
+    fun stayStopped() { ask.value = false }
 
     /** Data used by the playing station since it started on mobile data (bytes), or -1 when not on mobile data. */
     fun stationBytes(): Long {

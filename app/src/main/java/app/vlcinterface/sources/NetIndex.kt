@@ -98,6 +98,8 @@ object NetIndex {
         synchronized(jobs) { jobs.toList() }.forEach { it.cancel() }
         busy.value = ""
     }
+    /** Indexing a folder on a server outside the home network right now. */
+    fun internetBusy(): Boolean = inWork.values.any { (s, p) -> try { app.vlcinterface.player.NetGuard.needsInternet(Urls.forSource(s.copy(path = ""), p)) } catch (_: Exception) { false } }
     fun resume() { val l = held.values.toList(); held.clear(); l.forEach { (s, p) -> build(s, p) } }
 
     /** Low battery: every indexing run stops (what was already indexed is kept). */

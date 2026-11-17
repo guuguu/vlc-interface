@@ -102,7 +102,7 @@ object RadioCapture {
             combine(player.state, app.vlcinterface.player.NetGuard.cellular, App.instance.store.state) { s, cell, st ->
                 val cur = s.item
                 val mode = st.settings.radioCapture
-                if (cur != null && cur.isRadio && !s.userPaused && !s.ended && (mode == "always" || (mode == "wifi" && !cell)))
+                if (cur != null && cur.isRadio && !s.userPaused && !s.ended && (if (cell) mode == "always" && app.vlcinterface.player.NetGuard.mobileOk else mode != "off"))
                     cur.uri + "\u0000" + (st.stations.firstOrNull { x -> x.url == cur.uri }?.name ?: cur.title) else ""
             }.distinctUntilChanged().collect { key ->
                 if (key.isEmpty()) stop() else { val (u, n) = key.split('\u0000'); start(u, n) }
@@ -460,7 +460,8 @@ object RadioCapture {
         var cutEnd = if (partialEnd) nomEnd else quietest(rms, step, nomEnd - 10, nomEnd + 10) ?: nomEnd
         // The catalogue length as a second opinion: a gap near start + length wins when the title change was far off.
         val (artist, title) = app.vlcinterface.player.splitNowPlaying(p.title)
-        val info = try { kotlinx.coroutines.runBlocking { SongLinks.info(artist, title) } } catch (_: Exception) { null }
+        // Song details from the catalogue — not over mobile data unless allowed.
+        val info = if (app.vlcinterface.player.NetGuard.blocked()) null else try { kotlinx.coroutines.runBlocking { SongLinks.info(artist, title) } } catch (_: Exception) { null }
         if (!partialEnd && !p.partialStart && info != null && info.lengthMs > 30_000) {
             val want = cutStart + info.lengthMs / 1000.0
             if (abs(cutEnd - want) > 12) quietest(rms, step, want - 8, want + 8)?.let { cutEnd = it }
@@ -613,7 +614,7 @@ object RadioCapture {
             (if (p.partialStart) " (beginning missing)" else ""))
         set(org.jaudiotagger.tag.FieldKey.ENCODER, if (f.extension == "mp3" && App.instance.store.current.settings.saveFormat != "original") "LAME ${Mp3Encoder.version} V0 (vlc interface)" else "vlc interface (stream copy)")
         // Picture: the album's from the catalogue, else the radio picture shown on the player.
-        val pic = info?.artworkUrl?.takeIf { it.isNotEmpty() }?.let { fetch(it) }
+        val pic = if (app.vlcinterface.player.NetGuard.blocked()) null else info?.artworkUrl?.takeIf { it.isNotEmpty() }?.let { fetch(it) }
             ?: App.instance.player.state.value.artworkUrl.takeIf { it.startsWith("http") }?.let { fetch(it) }
         if (pic != null) try {
             val art = org.jaudiotagger.tag.images.ArtworkFactory.getNew()

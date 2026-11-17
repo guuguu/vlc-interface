@@ -114,6 +114,8 @@ object RgScanner {
         }
     }
     fun resume() = startNext()
+    /** The scan running now reads files over the internet (stopped when Wi-Fi is lost). */
+    fun currentNeedsInternet(): Boolean = current?.items?.any { app.vlcinterface.player.NetGuard.needsInternet(it.uri) } == true
     private fun startNext() {
         if (_state.value.running || app.vlcinterface.player.BackgroundWork.paused.value) return
         val q = queue.poll() ?: return
