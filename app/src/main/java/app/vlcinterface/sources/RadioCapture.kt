@@ -107,8 +107,11 @@ object RadioCapture {
                 val cur = s.item
                 val mode = st.settings.radioCapture
                 // While held (connection just changed) the recording stays as it is, waiting for the decision.
-                if (cur != null && cur.isRadio && !s.userPaused && !s.ended &&
-                    (hold || (if (cell) mode == "always" && app.vlcinterface.player.NetGuard.mobileOk else mode != "off")))
+                // "Always" (any network, your choice in Settings): goes on over mobile data, and even while the
+                // player was stopped by the Wi-Fi-lost pop-up.
+                val netPaused = mode == "always" && app.vlcinterface.player.NetGuard.stoppedPlayback
+                if (cur != null && cur.isRadio && (!s.userPaused || netPaused) && !s.ended &&
+                    (hold || (if (cell) mode == "always" else mode != "off")))
                     cur.uri + "\u0000" + (st.stations.firstOrNull { x -> x.url == cur.uri }?.name ?: cur.title) else ""
             }.distinctUntilChanged().collect { key ->
                 wantKey = key
@@ -128,7 +131,11 @@ object RadioCapture {
     private var holdJob: Job? = null
     @Volatile private var wantKey = ""
 
+    private fun anyNetwork() = App.instance.store.current.settings.radioCapture == "always"
+
     fun netLost() {
+        // "Always": your choice — nothing is held, dropped or deleted; recording goes on over the new network.
+        if (anyNetwork()) return
         if (holding.value || (!status.value.running && segs.isEmpty())) return
         broke = false; holding.value = true
         holdJob = scope.launch {
@@ -240,13 +247,17 @@ object RadioCapture {
             synchronized(lock) {
                 // A new connection continues nothing: what was recorded before has a hole after it, so a song in
                 // progress can't be saved whole (dropped) and the kept minutes start again.
-                if (reconnect && status.value.pending != null) {
+                // ("Always": nothing is dropped — the song is kept, with the short jump where the stream broke.)
+                if (reconnect && anyNetwork()) {
+                    if (status.value.pending != null) ServerLog.log("saved-songs", "gap", "radio", "", true,
+                        "Stream reconnected while “${status.value.pending?.title}” plays: kept (may have a short jump)")
+                } else if (reconnect && status.value.pending != null) {
                     ServerLog.log("saved-songs", "drop", "radio", "", false, "“${status.value.pending?.title}” not saved: the stream was interrupted")
                     status.value = status.value.copy(pending = null)
                 }
-                marks.clear()
-                if (status.value.pending == null && saveQueue.value.isEmpty()) { segs.forEach { it.file.delete() }; segs.clear() }
-                chains.clear()
+                if (!(reconnect && anyNetwork())) marks.clear()
+                if (!(reconnect && anyNetwork()) && status.value.pending == null && saveQueue.value.isEmpty()) { segs.forEach { it.file.delete() }; segs.clear() }
+                if (!(reconnect && anyNetwork())) chains.clear()
                 firstAt = System.currentTimeMillis()
             }
             status.value = status.value.copy(format = fmt, message = if (metaint > 0 || fmt == "ogg") "" else "This station sends no song titles: save by hand (Start / Stop, or the last minutes)")

@@ -117,7 +117,11 @@ fun SettingsScreen(nav: Navigator) {
                 ValueRow("Format", if (s.saveFormat == "original") "As the station sends it (MP3 as is, AAC as .m4a)" else "Re-encoded, best VBR quality",
                     if (s.saveFormat == "original") "Original" else "MP3 V0") { set(s.copy(saveFormat = if (s.saveFormat == "original") "mp3" else "original")) }
                 Divider()
-                ValueRow("Keep radio ready to save", "Records the playing station (a second connection: double data)",
+                ValueRow("Keep radio ready to save", "Records the playing station (a second connection: double data). " + when (s.radioCapture) {
+                    "always" -> "Any network, mobile data included: never interrupted, dropped or deleted when the network changes"
+                    "off" -> "Off: songs can't be saved"
+                    else -> "Wi-Fi only: when Wi-Fi goes, kept only if back within the radio buffer with nothing missing, else deleted"
+                },
                     when (s.radioCapture) { "always" -> "Always"; "off" -> "Off"; else -> "Wi-Fi only" }) {
                     set(s.copy(radioCapture = when (s.radioCapture) { "wifi" -> "always"; "always" -> "off"; else -> "wifi" }))
                 }

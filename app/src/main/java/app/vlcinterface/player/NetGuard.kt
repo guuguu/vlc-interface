@@ -55,7 +55,8 @@ object NetGuard {
 
     /** What was stopped when Wi-Fi went (shown in the pop-up). */
     val stopped = MutableStateFlow<List<String>>(emptyList())
-    private var stoppedPlayback = false
+    /** The player was stopped by the Wi-Fi-lost pop-up (not by you). */
+    @Volatile var stoppedPlayback = false; private set
     private var pausedWork = false
 
     /** On mobile data and not allowed there: anything that needs internet waits. */
@@ -86,7 +87,7 @@ object NetGuard {
         val list = ArrayList<String>()
         val item = s.item
         if (item != null && s.isPlaying && (item.isRadio || needsInternet(item.uri))) {
-            p.pause(); stoppedPlayback = true
+            stoppedPlayback = true; p.pause()
             list += (if (item.isRadio) "Radio: " else "Playing: ") + item.title
         }
         val rg = app.vlcinterface.sources.RgScanner
@@ -96,7 +97,8 @@ object NetGuard {
             if (!BackgroundWork.paused.value) { BackgroundWork.pause(); pausedWork = true }
         }
         // Radio recording (for saving songs) stops by itself on mobile data.
-        if (item?.isRadio == true && App.instance.store.current.settings.radioCapture != "off") list += "Radio recording for saving songs"
+        // ("Always" in Settings: the recording goes on over mobile data — your choice.)
+        if (item?.isRadio == true && App.instance.store.current.settings.radioCapture == "wifi") list += "Radio recording for saving songs"
         if (list.isEmpty()) return
         list += "Picture and song-link downloads"
         app.vlcinterface.data.ServerLog.log("network", "wifi-lost", "", "", false, "Wi-Fi lost: stopped what needs internet", list.joinToString(" · "))
