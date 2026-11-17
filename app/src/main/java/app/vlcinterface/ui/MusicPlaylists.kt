@@ -154,7 +154,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.text) }
             // Jump to a song: search the queue and the Library; plays it (added after the current song if new).
             SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
-        }) { BackgroundWorkButton(); ScreenOnSign(C.text); OutputPill(openOutput); ExitButton() }
+        }) { ShazamButton(); BackgroundWorkButton(); ScreenOnSign(C.text); OutputPill(openOutput); ExitButton() }
         SaveSongBar()
         if (jump) JumpDialog(nav = nav) { jump = false }
         if (playNextPick) JumpDialog(playNext = true, nav = nav) { playNextPick = false }

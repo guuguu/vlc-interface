@@ -9,6 +9,8 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -552,5 +554,24 @@ fun VpnQuestionsHost() {
                 STextButton({ v.skipSession(); Toast.makeText(ctx, "Network songs skipped for this session", Toast.LENGTH_SHORT).show() }) { Text("Cancel — skip network songs this session") }
             } },
             confirmButton = {}, dismissButton = {})
+    }
+}
+
+
+/**
+ * Small Shazam launcher for the players' header: opens Shazam (it can listen to this app's sound directly —
+ * pick this app when it asks). Only a plain search mark and the name, no Shazam logo.
+ */
+@Composable
+fun ShazamButton(tint: androidx.compose.ui.graphics.Color = C.text) {
+    val ctx = LocalContext.current
+    androidx.compose.foundation.layout.Row(
+        Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+            .border(1.dp, tint.copy(alpha = 0.45f), androidx.compose.foundation.shape.RoundedCornerShape(14.dp))
+            .clickable { openShazam(ctx) }.padding(start = 5.dp, end = 8.dp, top = 3.dp, bottom = 3.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        androidx.compose.material3.Icon(androidx.compose.material.icons.Icons.Filled.Search, "Open Shazam", tint = tint,
+            modifier = Modifier.size(16.dp))
+        Text("Shazam", color = tint, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
