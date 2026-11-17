@@ -1487,6 +1487,9 @@ class PlayerController(private val context: Context, private val store: Store) {
             }
             useBridge && item.uri.startsWith("smb://") ->
                 Media(libVlc, Uri.parse(SmbBridge.urlFor(item.uri, item.smbVersion.ifEmpty { "SMB1" }, item.user, item.password, item.domain)))
+            // A network song cached ahead (the next one while the last played): played from the phone.
+            app.vlcinterface.sources.Prefetch.localFor(item.uri) != null ->
+                Media(libVlc, app.vlcinterface.sources.Prefetch.localFor(item.uri)!!.absolutePath)
             // LAN servers: their VPN address while away from home with the VPN on.
             else -> Media(libVlc, Uri.parse(app.vlcinterface.sources.VpnLink.route(item.uri)))
         }

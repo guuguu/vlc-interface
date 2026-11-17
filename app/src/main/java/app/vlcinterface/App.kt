@@ -46,6 +46,7 @@ class App : Application() {
         output = OutputRouter(this)
         media = MediaCenter(this, player)
         app.vlcinterface.sources.RadioCapture.init(this)
+        app.vlcinterface.sources.Prefetch.init(this)            // next network song cached ahead
         app.vlcinterface.sources.VpnLink.init(this)          // home NAS over a VPN (ZeroTier …)   // radio: keeps the playing station ready to save songs
         player.currentOutputName = output.active?.name ?: ""
         output.onActiveChanged = { before, after, picked ->
