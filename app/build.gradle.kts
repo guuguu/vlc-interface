@@ -95,7 +95,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
-    implementation("org.videolan.android:libvlc-all:3.6.0")
+    implementation("org.videolan.android:libvlc-all:3.7.6")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // Writing ReplayGain tags (ID3v2, Vorbis comments, MP4) into music files.
