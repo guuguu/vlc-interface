@@ -163,25 +163,6 @@ fun SettingsScreen(nav: Navigator) {
             CardBox {
                 ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }
                 Divider()
-                // Home NAS over a VPN (ZeroTier, WireGuard …): status, search now, the VPN addresses kept.
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    val vl = app.vlcinterface.sources.VpnLink
-                    val up by vl.vpnUp.collectAsState()
-                    val busy by vl.searching.collectAsState()
-                    Text("NAS over VPN", color = C.text, fontSize = 15.sp)
-                    Text(if (up) "VPN on" else "VPN off", color = if (up) accent() else C.muted, fontSize = 12.sp)
-                    Text("When a VPN starts, its network is searched for your LAN servers; a match is asked about and kept. Away from home the VPN address is used, on the home Wi-Fi the LAN one (switch by hand in Libraries → LAN).",
-                        color = C.muted, fontSize = 12.sp)
-                    if (busy.isNotEmpty()) Text(busy, color = accent(), fontSize = 12.sp)
-                    else if (up) Pill("Search the VPN now") { vl.discover() }
-                    st.sources.filter { it.vpnHost.isNotBlank() }.forEach { src ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("${src.name.ifBlank { src.host }}: LAN ${src.host} · VPN ${src.vpnHost}", color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                            STextButton({ vl.forget(src) }) { Text("Forget VPN") }
-                        }
-                    }
-                }
-                Divider()
                 // Song links: Spotify's own search with a free developer app (no Spotify login). Without it the
                 // links are found through MusicBrainz and a web search.
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -227,6 +208,39 @@ fun SettingsScreen(nav: Navigator) {
                         }) { Text("Open the site") } })
                 }
             }
+            // VPN: home NAS through ZeroTier / Tailscale … (their own app keeps the login: nothing to enter here).
+            SectionTitle("VPN")
+            CardBox {
+                val vl = app.vlcinterface.sources.VpnLink
+                val up by vl.vpnUp.collectAsState()
+                val busy by vl.searching.collectAsState()
+                ValueRow("Status", if (up) "A VPN is on" else "No VPN on", if (up) "On" else "Off") {}
+                Divider()
+                ToggleRow("Home NAS through the VPN", "Away from home with the VPN on, your LAN servers are reached through it — at home, directly", s.vpnNas) { set(s.copy(vpnNas = it)) }
+                Divider()
+                ToggleRow("Ask to start the VPN", "Away from home with the VPN off, when a home server can't be reached", s.vpnAskStart) { set(s.copy(vpnAskStart = it)) }
+                Divider()
+                ValueRow("VPN app", "Opened by “Start the VPN” (its saved login is used)",
+                    when (s.vpnApp) { "zerotier" -> "ZeroTier"; "tailscale" -> "Tailscale"; "settings" -> "Android settings"; else -> "Auto" }) {
+                    val o = listOf("auto", "zerotier", "tailscale", "settings"); set(s.copy(vpnApp = o[(o.indexOf(s.vpnApp) + 1).mod(o.size)]))
+                }
+                Divider()
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Home servers on the VPN", color = C.text, fontSize = 15.sp)
+                    if (busy.isNotEmpty()) Text(busy, color = accent(), fontSize = 12.sp)
+                    else if (up && s.vpnNas) Pill("Search the VPN now") { vl.discover() }
+                    val kept = st.sources.filter { it.vpnHost.isNotBlank() }
+                    if (kept.isEmpty()) Text("None yet — found by themselves when the VPN starts", color = C.muted, fontSize = 12.sp)
+                    kept.forEach { src ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${src.name.ifBlank { src.host }}: LAN ${src.host} · VPN ${src.vpnHost}", color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            STextButton({ vl.forget(src) }) { Text("Forget") }
+                        }
+                    }
+                }
+                Divider()
+                ValueRow("VPN log", "VPN on / off, servers found, LAN ↔ VPN switches", "Open") { nav.go(Screen.LogPage("vpn")) }
+            }
             // Logs, by kind. Each page has Errors only / Empty log / Share / Save to NAS.
             SectionTitle("Logs")
             CardBox {
@@ -238,7 +252,6 @@ fun SettingsScreen(nav: Navigator) {
                 ValueRow("Crashes", "App crashes, and why the app ended last time (from Android)", "Open") { nav.go(Screen.LogPage(app.vlcinterface.data.CrashLog.KEY)) }; Divider()
                 ValueRow("Sound engine", "The app's sound output: switches and problems", "Open") { nav.go(Screen.LogPage("sound-engine")) }; Divider()
                 ValueRow("Radio pictures", "Each song a station announced: picture found, or what was searched", "Open") { nav.go(Screen.LogPage("radio-pictures")) }; Divider()
-                ValueRow("VPN", "VPN on / off, servers found on it, LAN ↔ VPN switches", "Open") { nav.go(Screen.LogPage("vpn")) }; Divider()
                 ValueRow("Player", "Songs skipped (not found / not reachable)", "Open") { nav.go(Screen.LogPage("player")) }
                 Divider()
                 // By hand: everything in the app's cache folder (radio buffer, songs being saved, radio pictures,

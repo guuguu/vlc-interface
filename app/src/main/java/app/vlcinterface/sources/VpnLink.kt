@@ -126,7 +126,7 @@ object VpnLink {
             announceSwitches()
             if (vpnUp.value && !wasUp) {
                 ServerLog.log("vpn", "up", "vpn", "", true, "VPN / tunnel up: " + self.joinToString { ipStr(it) })
-                discover()
+                if (on()) discover()
             }
             if (!vpnUp.value && wasUp) ServerLog.log("vpn", "down", "vpn", "", true, "VPN / tunnel down")
             checkNeedVpn()
@@ -137,7 +137,9 @@ object VpnLink {
     fun onLan(host: String): Boolean { val ip = ipInt(host) ?: return true; return homeNets.any { it.contains(ip) } }
 
     /** Reached through its VPN address now: VPN up, a VPN address known, not on its own network. */
-    fun useVpn(s: Source): Boolean = s.vpnHost.isNotBlank() && when (s.addrMode) {
+    private fun on() = try { App.instance.store.current.settings.vpnNas } catch (_: Exception) { true }
+
+    fun useVpn(s: Source): Boolean = on() && s.vpnHost.isNotBlank() && when (s.addrMode) {
         "vpn" -> true                          // chosen by hand (Libraries → LAN)
         "lan" -> false
         else -> vpnUp.value && !onLan(s.host)
@@ -191,7 +193,7 @@ object VpnLink {
 
     /** Away from home, VPN off, a server with a VPN address can't be reached: ask to start the VPN (once per change). */
     private fun checkNeedVpn() {
-        if (vpnUp.value) { askedStartFor = ""; return }
+        if (vpnUp.value || !on() || !App.instance.store.current.settings.vpnAskStart) { askedStartFor = ""; return }
         val s = App.instance.store.current.sources.firstOrNull { it.vpnHost.isNotBlank() && !onLan(it.host) } ?: run { askedStartFor = ""; return }
         val key = s.id + homeNets.joinToString { "${it.addr}/${it.prefix}" }
         if (key == askedStartFor) return
@@ -204,7 +206,13 @@ object VpnLink {
     /** Opens the VPN app (ZeroTier when installed, else Android's VPN settings) — it can't be switched on from here. */
     fun startVpn(ctx: Context): String {
         val pm = ctx.packageManager
-        val apps = listOf("com.zerotier.one", "com.wireguard.android", "net.openvpn.openvpn", "de.blinkt.openvpn", "com.tailscale.ipn")
+        // The VPN app chosen in Settings → VPN (its own login is used — nothing to enter here), else the first installed.
+        val apps = when (App.instance.store.current.settings.vpnApp) {
+            "zerotier" -> listOf("com.zerotier.one")
+            "tailscale" -> listOf("com.tailscale.ipn")
+            "settings" -> emptyList()
+            else -> listOf("com.zerotier.one", "com.tailscale.ipn", "com.wireguard.android", "net.openvpn.openvpn", "de.blinkt.openvpn")
+        }
         for (p in apps) pm.getLaunchIntentForPackage(p)?.let {
             ctx.startActivity(it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
             return "Opened ${pm.getApplicationLabel(pm.getApplicationInfo(p, 0))}: switch the VPN on there — Android doesn't let this app do it itself"
