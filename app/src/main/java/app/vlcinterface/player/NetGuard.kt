@@ -156,6 +156,7 @@ object NetGuard {
         goOnMobile(); idleAsk.value = false
         val v = app.vlcinterface.sources.VpnLink
         v.clearSkip()
+        if (v.useNas.value.isEmpty()) v.setUse(v.lastUsed.ifEmpty { v.lanServers().map { it.id }.toSet() })
         // Home servers are reached through the VPN: open it if it's off (the subnet check asks again if still needed).
         if (!v.vpnUp.value && App.instance.store.current.sources.any { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }) {
             android.widget.Toast.makeText(ctx, v.startVpn(ctx), android.widget.Toast.LENGTH_LONG).show(); v.retryLater()
@@ -164,14 +165,21 @@ object NetGuard {
         app.vlcinterface.data.ServerLog.log("network", "use-nas", "", "", true, "Mobile data allowed for this session (Use NAS)")
     }
 
+    /** "Use NAS" with the chosen servers (from the button's list); empty = stop using the NAS. */
+    fun useNas(ctx: Context, ids: Set<String>) {
+        val v = app.vlcinterface.sources.VpnLink
+        if (ids.isEmpty()) { v.setUse(emptySet()); mobileOk = false; return }
+        v.setUse(ids); useNas(ctx)
+    }
+
     /** Error shown on a song that waits for "Use NAS". */
-    const val BLOCKED = "Mobile data:"
+    const val BLOCKED = "Waiting for “Use NAS”:"
 
     /** Answer to the hour-idle question. Accept: as "Use NAS". Deny: only phone files; what needs internet stops. */
     fun idleAnswer(ctx: Context, accept: Boolean) {
         idleAsk.value = false
         if (accept) { useNas(ctx); return }
-        mobileOk = false; lastUsed = System.currentTimeMillis()
+        mobileOk = false; lastUsed = System.currentTimeMillis(); app.vlcinterface.sources.VpnLink.setUse(emptySet())
         stopInternet()
     }
 
@@ -199,7 +207,7 @@ object NetGuard {
                     val now = System.currentTimeMillis()
                     if (App.instance.player.state.value.isPlaying) lastUsed = now
                     if (mobileOk && now - lastUsed >= IDLE_MS) {
-                        mobileOk = false
+                        mobileOk = false; app.vlcinterface.sources.VpnLink.useNas.value = emptySet()
                         app.vlcinterface.data.ServerLog.log("network", "idle", "", "", true, "Player unused for an hour: mobile data has to be allowed again")
                         if (cellular.value) idleAsk.value = true
                     }

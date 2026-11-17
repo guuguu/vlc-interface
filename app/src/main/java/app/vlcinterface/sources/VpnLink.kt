@@ -229,6 +229,40 @@ object VpnLink {
     /** The phone is on a subnet of [s]'s LAN address or of any stored one. */
     fun nearby(s: Source): Boolean = onSubnetOf(s.host) || s.altHosts.any { onSubnetOf(it) } || (s.vpnHost.isNotBlank() && onSubnetOf(s.vpnHost))
 
+    /** NAS / shares (Libraries → LAN) in use away from home this session ("Use NAS"); empty = none. */
+    val useNas = MutableStateFlow<Set<String>>(emptySet())
+    /** Ask "use the NAS away from home?" (once per session / network change). */
+    val askUse = MutableStateFlow(false)
+    @Volatile private var askedUseFor = ""
+    @Volatile var lastUsed: Set<String> = emptySet(); private set
+
+    /** The LAN servers and shares stored on Libraries → LAN. */
+    fun lanServers(): List<Source> = App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }
+
+    /** On [s]'s home subnet (its LAN address or a stored non-VPN one), i.e. reached directly. */
+    fun atHome(s: Source): Boolean = onLan(s.host) || s.altHosts.any { it != s.vpnHost && isIpLiteral(it) && onLan(it) }
+
+    /** The LAN server a song address belongs to (LAN address or any stored one). */
+    fun sourceOf(uri: String): Source? {
+        if (!uri.startsWith("smb://")) return null
+        val host = android.net.Uri.parse(uri).host ?: return null
+        return lanServers().firstOrNull { it.host.equals(host, true) || it.altHosts.any { a -> a.equals(host, true) } || it.vpnHost.equals(host, true) }
+    }
+
+    /** Away from home and this NAS not chosen with "Use NAS": its songs wait for the button. */
+    fun waitsForUse(uri: String): Boolean { val s = sourceOf(uri) ?: return false; return !atHome(s) && s.id !in useNas.value }
+
+    /** "Use NAS" with these servers (empty: stop using them). Also allows mobile data for the session. */
+    fun setUse(ids: Set<String>) {
+        useNas.value = ids; askUse.value = false
+        if (ids.isNotEmpty()) { lastUsed = ids; ignoreSession = false }
+        ServerLog.log("vpn", "use-nas", "smb", "", true, if (ids.isEmpty()) "NAS not used (away from home)"
+            else "NAS used this session: " + lanServers().filter { it.id in ids }.joinToString { it.name.ifBlank { it.host } })
+    }
+
+    /** Reachable now at the address in use (port 445). Blocking: call off the main thread. */
+    fun reachableNow(s: Source): Boolean = reachable(hostNow(s), 445, 1500)
+
     /** A network song to skip ("Not this session"). */
     fun ignored(uri: String): Boolean {
         if (!ignoreSession || !uri.startsWith("smb://")) return false
@@ -244,6 +278,14 @@ object VpnLink {
         val st = App.instance.store.current
         val servers = st.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" && isIpLiteral(it.host) }
         val away = servers.filter { !nearby(it) }
+        // Away from the home subnet with the VPN on: ask once whether the NAS should be used (the player's
+        // "Use NAS" button does it any time later).
+        val notHome = servers.filter { !atHome(it) }
+        if (notHome.isEmpty()) { askedUseFor = ""; if (useNas.value.isNotEmpty()) useNas.value = emptySet() }
+        else if (vpnUp.value && useNas.value.isEmpty() && !ignoreSession) {
+            val k = (homeNets + vpnNets).joinToString { "${it.addr}/${it.prefix}" }
+            if (k != askedUseFor) { askedUseFor = k; askUse.value = true }
+        }
         if (away.isEmpty()) { askedStartFor = ""; ignoreSession = false; return }        // back near a server: all as usual
         if (!on() || !st.settings.vpnAskStart || ignoreSession) return
         if (app.vlcinterface.player.NetGuard.blocked()) return          // no Wi-Fi: nothing until "Use NAS"

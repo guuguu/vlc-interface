@@ -1289,11 +1289,12 @@ class PlayerController(private val context: Context, private val store: Store) {
         val oldPfd = currentPfd
         currentPfd = null
         // No Wi-Fi and mobile data not allowed yet: what needs internet waits for "Use NAS" on the player.
-        if (NetGuard.blocked() && (item.isRadio || NetGuard.needsInternet(item.uri))) {
+        if (!app.vlcinterface.sources.VpnLink.ignored(item.uri) &&
+            (app.vlcinterface.sources.VpnLink.waitsForUse(item.uri) || NetGuard.blocked() && (item.isRadio || NetGuard.needsInternet(item.uri)))) {
             stopping = true; mp.stop(); main.postDelayed({ stopping = false }, 300)
             _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, ended = false,
                 metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, rgInfo = "",
-                error = "${NetGuard.BLOCKED} press “Use NAS” to play network songs over mobile data")
+                error = "${NetGuard.BLOCKED} away from home or on mobile data, network songs play after you press it")
             endHandled = true
             return
         }

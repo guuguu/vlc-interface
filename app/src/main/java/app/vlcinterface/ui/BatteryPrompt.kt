@@ -1,5 +1,13 @@
 package app.vlcinterface.ui
 
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -263,15 +271,95 @@ fun MobileIdleHost() {
     )
 }
 
-/** "Use NAS": on the player when there's no Wi-Fi and mobile data isn't allowed yet for this session. */
+/**
+ * "Use NAS": always on the player. Highlighted while NAS use is accepted; works only with the VPN on (away from
+ * home). Tap: the NAS and shares stored on Libraries → LAN, with their state, to choose which to use.
+ */
 @Composable
 fun UseNasButton() {
-    val g = app.vlcinterface.player.NetGuard
-    val cell by g.cellular.collectAsState()
-    val ok by g.mobileAllowed.collectAsState()
-    if (!cell || ok) return
+    val v = app.vlcinterface.sources.VpnLink
+    val on by v.useNas.collectAsState()
+    val vpn by v.vpnUp.collectAsState()
+    var pick by remember { mutableStateOf(false) }
+    val active = on.isNotEmpty()
+    val label = when { active -> "Using NAS (${on.size})"; vpn -> "Use NAS"; else -> "Use NAS · VPN off" }
+    Box(Modifier.padding(top = 4.dp).clip(RoundedCornerShape(16.dp))
+        .background(if (active) accent() else C.tile)
+        .border(1.dp, if (active) accent() else if (vpn) accent().copy(alpha = 0.6f) else C.muted.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+        .clickable { pick = true }.padding(horizontal = 14.dp, vertical = 6.dp)) {
+        Text(label, color = if (active) Color.Black else if (vpn) accent() else C.muted, fontSize = 13.sp,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+    }
+    if (pick) NasPickDialog { pick = false }
+}
+
+/** The NAS / shares from Libraries → LAN: state (home, VPN, reachable) and which to use away from home. */
+@Composable
+fun NasPickDialog(onClose: () -> Unit) {
+    val v = app.vlcinterface.sources.VpnLink
     val ctx = androidx.compose.ui.platform.LocalContext.current
-    STextButton({ g.useNas(ctx) }) { Text("Use NAS (mobile data, this session)", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold, fontSize = 14.sp) }
+    val st by App.instance.store.state.collectAsState()
+    val vpn by v.vpnUp.collectAsState()
+    val on by v.useNas.collectAsState()
+    val servers = st.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }
+    var chosen by remember { mutableStateOf(on.ifEmpty { v.lastUsed.ifEmpty { servers.map { it.id }.toSet() } }) }
+    val reach = remember { mutableStateMapOf<String, Boolean?>() }
+    LaunchedEffect(servers.map { it.id + v.hostNow(it) }, vpn) {
+        servers.forEach { s -> reach[s.id] = null; launch(kotlinx.coroutines.Dispatchers.IO) { reach[s.id] = v.reachableNow(s) } }
+    }
+    AlertDialog(onDismissRequest = onClose, containerColor = C.panel,
+        title = { Text("NAS and network shares", color = C.text) },
+        text = {
+            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(if (vpn) "VPN on. Choose what to use — data goes over your current connection (mobile data too)."
+                    else "VPN off: away from home the NAS can't be used. Start the VPN, then choose.", color = if (vpn) C.text else C.bad, fontSize = 13.sp)
+                if (servers.isEmpty()) Text("No NAS or share yet — add them on Libraries → LAN.", color = C.muted, fontSize = 13.sp)
+                servers.forEach { s ->
+                    val home = v.atHome(s)
+                    val r = reach[s.id]
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(C.tile)
+                        .clickable(enabled = !home) { chosen = if (s.id in chosen) chosen - s.id else chosen + s.id }.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.Checkbox(home || s.id in chosen, { c -> chosen = if (c) chosen + s.id else chosen - s.id }, enabled = !home)
+                        Column(Modifier.weight(1f)) {
+                            Text(s.name.ifBlank { s.host }, color = C.text, fontSize = 14.sp)
+                            Text(v.hostNow(s) + " · " + when { home -> "home network (direct)"; r == null -> "checking…"; r -> "reachable"; else -> "not reachable" },
+                                color = if (r == false && !home) C.bad else C.muted, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Row {
+                if (!vpn) STextButton({ android.widget.Toast.makeText(ctx, v.startVpn(ctx), android.widget.Toast.LENGTH_LONG).show(); v.retryLater() }) { Text("Start the VPN", color = accent()) }
+                else STextButton({ app.vlcinterface.player.NetGuard.useNas(ctx, chosen.filter { id -> servers.any { it.id == id } }.toSet()); onClose() }, enabled = chosen.isNotEmpty()) {
+                    Text("Use", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) }
+            }
+        },
+        dismissButton = {
+            Row {
+                if (on.isNotEmpty()) STextButton({ app.vlcinterface.player.NetGuard.useNas(ctx, emptySet()); onClose() }) { Text("Stop using") }
+                STextButton(onClose) { Text("Close") }
+            }
+        },
+    )
+}
+
+/** Away from the home subnet with the VPN on: use the NAS now, or later with the player's button. */
+@Composable
+fun NasUseQuestionHost() {
+    val v = app.vlcinterface.sources.VpnLink
+    val ask by v.askUse.collectAsState()
+    if (!ask) return
+    var pick by remember { mutableStateOf(false) }
+    if (pick) { NasPickDialog { pick = false; v.askUse.value = false }; return }
+    AlertDialog(onDismissRequest = { v.askUse.value = false }, containerColor = C.panel,
+        title = { Text("Away from home", color = C.text) },
+        text = { Text("You're not on your home network; the VPN is on. Use the NAS now? Its data goes over your current connection " +
+            "(mobile data too). You can switch it any time with “Use NAS” on the player.", color = C.text, fontSize = 14.sp) },
+        confirmButton = { STextButton({ pick = true }) { Text("Use NAS…", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) } },
+        dismissButton = { STextButton({ v.askUse.value = false }) { Text("Not now") } })
 }
 
 /** The sound output stayed on libVLC after the app tried twice to bring its own output back. */

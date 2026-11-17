@@ -164,6 +164,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 LowBatteryHost()
                 WifiLostHost()
                 MobileIdleHost()
+                NasUseQuestionHost()
                 SaveEndQuestionHost()
                 ExitSavingHost()
                 VpnQuestionsHost()
