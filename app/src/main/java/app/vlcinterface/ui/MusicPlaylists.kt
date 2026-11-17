@@ -376,7 +376,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.verticalScroll(scroll).padding(horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partB() }
         } else Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            verticalArrangement = Arrangement.spacedBy(if (item.isRadio) 10.dp else 14.dp)) {
             partA(); partB()
         }
     }
@@ -1323,23 +1323,23 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
         var songMenu by remember { mutableStateOf(false) }
         val station = Modifier.combinedClickable(onClick = { stMenu = true }, onLongClick = { stMenu = true })
         val song = Modifier.combinedClickable(onClick = { songMenu = true }, onLongClick = { songMenu = true })
-        Text("RADIO STATION", color = accent(), fontSize = 12.sp, letterSpacing = 1.sp, modifier = station)
+        Text("RADIO STATION", color = accent(), fontSize = 12.sp, lineHeight = 14.sp, letterSpacing = 1.sp, modifier = station)
         Box {
             Text(name + if (p.stationName.isNotBlank() && !p.stationName.equals(name, true)) " · ${p.stationName}" else "",
-                color = C.text, fontSize = (16 * tk).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                color = C.text, fontSize = (16 * tk).sp, lineHeight = (19 * tk).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = station)
             StationMenu(item, stMenu, "station") { stMenu = false }
         }
-        Text(item.uri.substringAfter("://").take(60), color = C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = station)
+        Text(item.uri.substringAfter("://").take(60), color = C.muted, fontSize = 11.sp, lineHeight = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = station)
         Box {
-            Text(title.ifEmpty { "Live" }, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp).then(song))
+            Text(title.ifEmpty { "Live" }, color = C.text, fontSize = (22 * tk).sp, lineHeight = (25 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp).then(song))
             StationMenu(item, songMenu, "song") { songMenu = false }
         }
-        if (artist.isNotEmpty()) Text(artist, color = C.muted, fontSize = (15 * tk).sp, textAlign = TextAlign.Center, modifier = song)
+        if (artist.isNotEmpty()) Text(artist, color = C.muted, fontSize = (15 * tk).sp, lineHeight = (18 * tk).sp, textAlign = TextAlign.Center, modifier = song)
         val details = listOfNotNull((fav?.meta ?: LastStationMeta.of(item.uri)).ifEmpty { null }, p.rgInfo.ifEmpty { null },
             if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else null)
-        if (details.isNotEmpty()) Text(details.joinToString(" · "), color = accent(), fontSize = 12.sp, textAlign = TextAlign.Center, modifier = station.padding(4.dp))
+        if (details.isNotEmpty()) Text(details.joinToString(" · "), color = accent(), fontSize = 12.sp, lineHeight = 14.sp, textAlign = TextAlign.Center, modifier = station.padding(horizontal = 4.dp, vertical = 3.dp))
         if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
         // Mobile data only: what this station has used so far, live.
         val cell by app.vlcinterface.player.NetGuard.cellular.collectAsState()
