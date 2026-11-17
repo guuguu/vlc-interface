@@ -6,6 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -155,15 +157,45 @@ fun SettingsScreen(nav: Navigator) {
                 // links are found through MusicBrainz and a web search.
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Spotify links", color = C.text, fontSize = 15.sp)
-                    Text("Optional, most reliable: a free app at developer.spotify.com → Dashboard → Create app; paste its Client ID and Secret here",
-                        color = C.muted, fontSize = 12.sp)
+                    val on = s.spotifyId.isNotBlank() && s.spotifySecret.isNotBlank()
+                    Text(if (on) "On: song links include Spotify" else "Off: no Spotify anywhere until both keys are set", color = if (on) accent() else C.muted, fontSize = 12.sp)
+                    var help by remember { mutableStateOf(false) }
+                    var helped by remember { mutableStateOf(false) }
+                    Text("How to get them?", color = accent(), fontSize = 13.sp, modifier = Modifier.clickable { help = true })
                     var id by remember { mutableStateOf(s.spotifyId) }
                     var sec by remember { mutableStateOf(s.spotifySecret) }
+                    // The first tap on a box: the help.
+                    val firstTap = Modifier.onFocusChanged { if (it.isFocused && !helped && !on) { helped = true; help = true } }
                     androidx.compose.material3.OutlinedTextField(id, { id = it.trim(); set(s.copy(spotifyId = id)) }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(), label = { Text("Client ID") })
+                        modifier = Modifier.fillMaxWidth().then(firstTap), label = { Text("Client ID") })
                     androidx.compose.material3.OutlinedTextField(sec, { sec = it.trim(); set(s.copy(spotifySecret = sec)) }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth(), label = { Text("Client Secret") },
+                        modifier = Modifier.fillMaxWidth().then(firstTap), label = { Text("Client Secret") },
                         visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                    if (help) AlertDialog(onDismissRequest = { help = false }, containerColor = C.panel,
+                        title = { Text("Spotify keys", color = C.text) },
+                        text = {
+                            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Free, a few minutes, any Spotify account (free accounts too). Best done on a computer.", color = C.text, fontSize = 14.sp)
+                                listOf(
+                                    "Open developer.spotify.com and log in with your Spotify account.",
+                                    "Accept the developer terms if asked.",
+                                    "Dashboard → Create app.",
+                                    "App name and description: anything (e.g. \"vlc interface\").",
+                                    "Redirect URI: https://localhost (it's not used), then Add.",
+                                    "Which API: tick Web API. Accept the terms → Save.",
+                                    "Open the app → Settings: copy the Client ID.",
+                                    "Click View client secret: copy the Client Secret.",
+                                    "Paste both here. Spotify links work at once.",
+                                ).forEachIndexed { i, t -> Text("${i + 1}. $t", color = C.text, fontSize = 13.sp) }
+                                Text("The keys stay on this phone and are only used to search Spotify's catalogue for song links — no access to your account.",
+                                    color = C.muted, fontSize = 12.sp)
+                            }
+                        },
+                        confirmButton = { STextButton({ help = false }) { Text("OK", color = accent()) } },
+                        dismissButton = { STextButton({
+                            help = false
+                            try { ctxV.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://developer.spotify.com/dashboard"))) } catch (_: Exception) {}
+                        }) { Text("Open the site") } })
                 }
             }
             // Logs, by kind. Each page has Errors only / Empty log / Share / Save to NAS.

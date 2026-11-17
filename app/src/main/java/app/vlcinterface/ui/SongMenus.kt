@@ -101,7 +101,7 @@ fun SongLinksDialog(artist: String, title: String, lengthMs: Long, album: String
         val name = listOf(r?.info?.artist ?: artist, r?.info?.title ?: title).filter { it.isNotBlank() }.joinToString(" – ")
         append(name)
         if (yt) r?.youtube?.let { append("\nYouTube: ${it.url}") }
-        if (sp && r != null) append("\nSpotify: ${r.spotify}")
+        if (sp && r != null && r.spotify.isNotEmpty()) append("\nSpotify: ${r.spotify}")
         if (fp && path != null) append("\nFile: $path")
     }
     @Composable
@@ -121,11 +121,11 @@ fun SongLinksDialog(artist: String, title: String, lengthMs: Long, album: String
                 Text(listOf(artist, title).filter { it.isNotBlank() }.joinToString(" – "), color = C.text, fontSize = 14.sp)
                 if (r == null) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = accent())
-                    Text("Searching YouTube and Spotify…", color = C.muted, fontSize = 13.sp)
+                    Text(if (app.vlcinterface.App.instance.store.current.settings.spotifyId.isNotBlank()) "Searching YouTube and Spotify…" else "Searching YouTube…", color = C.muted, fontSize = 13.sp)
                 } else {
                     r.info?.let { i -> Text(listOfNotNull(i.album.ifEmpty { null }, if (i.year > 0) "${i.year}" else null).joinToString(" · "), color = C.muted, fontSize = 12.sp) }
                     pick(yt, { yt = it }, "YouTube", r.youtube?.let { "${it.title}\n${it.channel}" } ?: "No matching video", r.youtube != null)
-                    pick(sp, { sp = it }, "Spotify", if (r.spotifyIsSearch) (r.notes.firstOrNull { it.startsWith("Spotify") }?.removePrefix("Spotify: ")
+                    if (r.spotify.isNotEmpty()) pick(sp, { sp = it }, "Spotify", if (r.spotifyIsSearch) (r.notes.firstOrNull { it.startsWith("Spotify") }?.removePrefix("Spotify: ")
                         ?: "Song page not found — Spotify search link") else r.spotify)
                     r.notes.filterNot { it.startsWith("Spotify") || it.startsWith("No matching") }.forEach { Text(it, color = C.muted, fontSize = 11.sp) }
                 }
@@ -150,7 +150,7 @@ fun SongTitleMenu(item: PlayItem, artist: String, lengthMs: Long, open: Boolean,
     if (links) SongLinksDialog(artist, item.title, lengthMs, item.album, filePathOf(ctx, item)) { links = false }
     SDropdownMenu(open, onClose) {
         SMenuItem({ Text("ReplayGain scan…") }, { onClose(); FileDialogs.rg = item })
-        SMenuItem({ Text("YouTube / Spotify links…") }, { onClose(); links = true })
+        SMenuItem({ Text(if (app.vlcinterface.App.instance.store.current.settings.spotifyId.isNotBlank()) "YouTube / Spotify links…" else "YouTube link…") }, { onClose(); links = true })
         SMenuItem({ Text("Copy file path") }, { onClose(); copy(ctx, filePathOf(ctx, item), "Path") })
     }
 }

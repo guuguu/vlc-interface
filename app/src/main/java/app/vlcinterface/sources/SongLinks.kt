@@ -272,8 +272,10 @@ object SongLinks {
         val len = ((if (lengthMs > 0) lengthMs else info?.lengthMs ?: 0) / 1000).toInt()
         val yt = youtube(info?.artist ?: artist, info?.title ?: title, len, y)
         if (yt == null) notes += "No matching YouTube video"
-        val (sp, spSearch) = spotify(info, artist, title, yt)
-        if (spSearch) notes += "Spotify: song page not found — a Spotify search link is used" + (if (why.isNotEmpty()) " (" + why.joinToString("; ") + ")" else "")
+        // Spotify only with the developer keys set (Settings → Network → Spotify links); otherwise no Spotify at all.
+        val hasKeys = app.vlcinterface.App.instance.store.current.settings.let { it.spotifyId.isNotBlank() && it.spotifySecret.isNotBlank() }
+        val (sp, spSearch) = if (hasKeys) spotify(info, artist, title, yt) else "" to false
+        if (hasKeys && spSearch) notes += "Spotify: song page not found — a Spotify search link is used" + (if (why.isNotEmpty()) " (" + why.joinToString("; ") + ")" else "")
         ServerLog.log("song-links", "find", "https", "", yt != null && !spSearch, "$artist – $title",
             "youtube: ${yt?.let { "${it.url} (${it.channel}, ${it.score})" } ?: "none"} · spotify: $sp" + (if (why.isNotEmpty()) " · " + why.joinToString("; ") else ""))
         Result(info, yt, sp, spSearch, notes)
