@@ -185,6 +185,15 @@ fun SettingsScreen(nav: Navigator) {
             SectionTitle("Look")
             CardBox {
                 ToggleRow("Auto-rotate", "On: the app turns with the phone · Off: stays upright (videos still turn with the rotate button)", s.autoRotate) { set(s.copy(autoRotate = it)) }
+                Divider()
+                // All long lists: the bar on the right; drag it (or touch the right edge) to jump anywhere fast.
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Text("Scroll bar width", color = C.text, fontSize = 15.sp)
+                    Text("All lists: drag the bar on the right edge to scroll fast", color = C.muted, fontSize = 12.sp)
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        (4..9).forEach { px -> Pill("$px px", selected = s.scrollbarPx == px) { set(s.copy(scrollbarPx = px)) } }
+                    }
+                }
             }
             // Deleting a file for good: only here (not in the lists' menus), with a search like the Songs list / player.
             CardBox {

@@ -1,5 +1,10 @@
 package app.vlcinterface.ui
 
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.composed
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -101,29 +106,75 @@ fun scheme(accent: Color): ColorScheme = darkColorScheme(
 fun accent() = LocalAccent.current
 
 /** Always-visible thin scrollbar for a verticalScroll Column while content overflows. */
-fun Modifier.scrollbar(state: ScrollState, color: Color = Color(0xFF6B717C)): Modifier = drawWithContent {
-    drawContent()
-    val max = state.maxValue
-    if (max > 0 && max != Int.MAX_VALUE) {
-        val total = size.height + max
-        val thumbH = (size.height * size.height / total).coerceAtLeast(24.dp.toPx())
-        val y = (size.height - thumbH) * state.value / max
-        drawRoundRect(color, Offset(size.width - 4.dp.toPx(), y), Size(3.dp.toPx(), thumbH), CornerRadius(2.dp.toPx()))
-    }
+fun Modifier.scrollbar(state: ScrollState, color: Color = Color(0xFF6B717C)): Modifier = composed {
+    val scope = rememberCoroutineScope()
+    fastScroll(color, { state.maxValue > 0 && state.maxValue != Int.MAX_VALUE }, { h ->
+        val total = h + state.maxValue
+        (h * h / total) to (state.value.toFloat() / state.maxValue)
+    }) { f -> scope.launch { state.scrollTo((f * state.maxValue).toInt()) } }
 }
 
 /** Same for lazy lists (approximation based on item positions). */
-fun Modifier.scrollbar(state: LazyListState, color: Color = Color(0xFF6B717C)): Modifier = drawWithContent {
-    drawContent()
-    val info = state.layoutInfo
-    val total = info.totalItemsCount
-    val visible = info.visibleItemsInfo
-    if (total > 0 && visible.isNotEmpty() && (visible.size < total || state.canScrollForward || state.canScrollBackward)) {
-        val frac = visible.size.toFloat() / total
-        val thumbH = (size.height * frac).coerceAtLeast(24.dp.toPx())
-        val first = state.firstVisibleItemIndex.toFloat() / (total - visible.size).coerceAtLeast(1)
-        val y = (size.height - thumbH) * first.coerceIn(0f, 1f)
-        drawRoundRect(color, Offset(size.width - 4.dp.toPx(), y), Size(3.dp.toPx(), thumbH), CornerRadius(2.dp.toPx()))
+fun Modifier.scrollbar(state: LazyListState, color: Color = Color(0xFF6B717C)): Modifier = composed {
+    val scope = rememberCoroutineScope()
+    fastScroll(color, {
+        val info = state.layoutInfo
+        info.totalItemsCount > 0 && info.visibleItemsInfo.isNotEmpty() &&
+            (info.visibleItemsInfo.size < info.totalItemsCount || state.canScrollForward || state.canScrollBackward)
+    }, { h ->
+        val info = state.layoutInfo
+        val total = info.totalItemsCount; val vis = info.visibleItemsInfo.size
+        (h * vis / total) to (state.firstVisibleItemIndex.toFloat() / (total - vis).coerceAtLeast(1)).coerceIn(0f, 1f)
+    }) { f ->
+        val info = state.layoutInfo
+        val target = (f * (info.totalItemsCount - info.visibleItemsInfo.size).coerceAtLeast(0)).toInt()
+        scope.launch { state.scrollToItem(target.coerceIn(0, (info.totalItemsCount - 1).coerceAtLeast(0))) }
+    }
+}
+
+/**
+ * The lists' scroll bar: its width set in Settings (4–9 px); drag it (or touch the right edge) to jump straight to
+ * any place — 8000 items in one move. [thumb] gives (thumb height, position 0…1) for a list height.
+ */
+private fun Modifier.fastScroll(color: Color, shown: () -> Boolean, thumb: (Float) -> Pair<Float, Float>, jump: (Float) -> Unit): Modifier = composed {
+    var dragging by remember { mutableStateOf(false) }
+    val widthPx = app.vlcinterface.App.instance.store.state.collectAsState().value.settings.scrollbarPx.toFloat()
+    val accentCol = accent()
+    this.pointerInput(Unit) {
+        val grab = 24.dp.toPx()
+        awaitEachGesture {
+            // Only touches on the right edge, and only when there is something to scroll; the list keeps the rest.
+            val down = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial).changes.firstOrNull() ?: return@awaitEachGesture
+            if (!down.pressed || down.position.x < size.width - grab || !shown()) return@awaitEachGesture
+            fun to(y: Float) {
+                val (th, _) = thumb(size.height.toFloat()); val tH = th.coerceAtLeast(24.dp.toPx())
+                jump(((y - tH / 2) / (size.height - tH).coerceAtLeast(1f)).coerceIn(0f, 1f))
+            }
+            // A tap on the edge (a ⋮ button there) goes through; only a drag along the edge becomes fast scroll.
+            val slop = viewConfiguration.touchSlop
+            while (true) {
+                val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                val c = ev.changes.firstOrNull() ?: return@awaitEachGesture
+                if (!c.pressed) return@awaitEachGesture
+                if (kotlin.math.abs(c.position.y - down.position.y) > slop) { c.consume(); dragging = true; to(c.position.y); break }
+            }
+            while (true) {
+                val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                val c = ev.changes.firstOrNull() ?: break
+                if (!c.pressed) { c.consume(); break }
+                c.consume(); to(c.position.y)
+            }
+            dragging = false
+        }
+    }.drawWithContent {
+        drawContent()
+        if (!shown()) return@drawWithContent
+        val (th, pos) = thumb(size.height)
+        val thumbH = th.coerceAtLeast(24.dp.toPx())
+        val y = (size.height - thumbH) * pos
+        // Dragging: a bit wider and in the accent colour, so you see what you hold.
+        val w = if (dragging) widthPx * 1.6f else widthPx
+        drawRoundRect(if (dragging) accentCol else color, Offset(size.width - w - 1.dp.toPx(), y), Size(w, thumbH), CornerRadius(w / 2))
     }
 }
 
