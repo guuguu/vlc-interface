@@ -47,6 +47,7 @@ class App : Application() {
         media = MediaCenter(this, player)
         app.vlcinterface.sources.RadioCapture.init(this)
         app.vlcinterface.sources.Prefetch.init(this)            // next network song cached ahead
+        app.vlcinterface.sources.RgScanner.recoverPatches(this) // an interrupted in-place tag update put right
         app.vlcinterface.player.QueueKeeper.init(this)          // queue and song kept over a restart
         app.vlcinterface.player.QueueKeeper.restore(player)
         app.vlcinterface.sources.VpnLink.init(this)          // home NAS over a VPN (ZeroTier …)   // radio: keeps the playing station ready to save songs

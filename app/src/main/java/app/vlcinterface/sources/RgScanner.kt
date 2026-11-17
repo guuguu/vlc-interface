@@ -253,7 +253,8 @@ object RgScanner {
         tagWeight = if (mode == RgMode.ALBUMS_BY_TAGS) 0.1f else 0f; fracs.clear()
         // One thread per file, at most 4 at once — 2 when files come from a network share (small servers limit
         // how many files can be open at once).
-        val workers = items.size.coerceIn(1, if (items.any { it.uri.startsWith("smb://", true) }) 2 else 4)
+        // Network songs now travel once (copy for measuring; only the tag bytes go back): 4 at a time.
+        val workers = items.size.coerceIn(1, 4)
         // Connections per copy shared between the files measured at once (the NAS isn't flooded).
         copyThreads = maxOf(2, 8 / workers)
         fun addResult(r: RgResult) = synchronized(results) { results += r }
@@ -510,8 +511,11 @@ object RgScanner {
         val src = App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }
         val ext = item.ext.lowercase()
         val tmp = File(ctx.cacheDir, "rgscan-${java.util.UUID.randomUUID()}.${ext.ifEmpty { "bin" }}")
+        val net = item.uri.startsWith("smb://") || item.uri.startsWith("http")
+        val orig = if (net) File(tmp.path + ".orig") else null
         return try {
             download(ctx, item, tmp)
+            orig?.let { tmp.copyTo(it, true) }                 // untagged, for the in-place update / the check
             TagWriter.write(tmp, values)
             // Check the tagged copy before it replaces anything.
             val check = ReplayGain.parse(tmp.inputStream().use { s -> ByteArray(512 * 1024).let { b -> val n = s.read(b); b.copyOf(maxOf(n, 0)) } } +
@@ -520,11 +524,14 @@ object RgScanner {
             // The file the player has open is never rewritten under it: the tagged copy waits until the song is over.
             if (App.instance.player.state.value.item?.uri == item.uri) {
                 RgStore.put(item.uri, values)
+                // Written later with the full swap: the copy is checked against the server now.
+                if (orig != null && !ParallelFetch.matchesRemote(item, item.uri, orig)) throw IllegalStateException("the copy read from the server didn't match it — nothing changed")
                 addPending(ctx, item, tmp)
                 return "cached — written to the file after this song"
             }
-            try { upload(ctx, item, src, tmp) } catch (e: Exception) {
+            try { upload(ctx, item, src, tmp, orig) } catch (e: Exception) {
                 if (!inUse(e)) throw e
+                if (orig != null && !ParallelFetch.matchesRemote(item, item.uri, orig)) throw IllegalStateException("the copy read from the server didn't match it — nothing changed")
                 // The server refuses while the player has the file open: the tagged copy is cached and written
                 // as soon as the player is done with that file. Until then the app uses the values itself.
                 RgStore.put(item.uri, values)
@@ -538,7 +545,7 @@ object RgScanner {
             // Refused for good (read-only share): marked, and this song's values count as kept in the app.
             if (WriteGuard.isDenied(e)) { WriteGuard.markReadOnly(item.sourceId, item.uri, e.message ?: "refused"); "kept in the app (share is read-only)" }
             else "not written (${e.message ?: e.javaClass.simpleName}) — kept in the app"
-        } finally { tmp.delete() }
+        } finally { tmp.delete(); orig?.delete() }
     }
 
     /**
@@ -576,11 +583,10 @@ object RgScanner {
         // Already copied for the scan (or cached ahead): taken from the phone once it's checked.
         val pct = { what: String -> { d: Long, t: Long -> if (t > 0) update { s -> s.copy(current = item.title, phase = "$what ${d * 100 / t}%") } } }
         (copies[u]?.takeIf { it.isFile } ?: Prefetch.localFor(u))?.let { c ->
-            val ok = !net || ParallelFetch.matchesRemote(item, u, c, pct("Checking the copy against the server"))
-            copies.remove(u)?.let { if (it != c || !ok) it.delete() }
-            if (ok) { c.copyTo(dst, true); if (c.name.startsWith("rgcopy-")) c.delete(); return }
+            copies.remove(u)?.let { if (it != c) it.delete() }
+            c.copyTo(dst, true); if (c.name.startsWith("rgcopy-")) c.delete(); return
         }
-        if (net && ParallelFetch.download(item, dst, what = "ReplayGain read", full = true, progress = pct("Reading the file"))) return
+        if (net && ParallelFetch.download(item, dst, what = "ReplayGain read", progress = pct("Reading the file"))) return
         val input = when {
             u.startsWith("content://") -> ctx.contentResolver.openInputStream(Uri.parse(u))
             u.startsWith("file://") -> File(Uri.parse(u).path!!).inputStream()
@@ -592,7 +598,7 @@ object RgScanner {
             else -> null
         } ?: throw IllegalStateException("can't read the file")
         input.use { i -> dst.outputStream().use { o -> copy(i, o, "Reading the file"); o.fd.sync() } }
-        if (net && !ParallelFetch.matchesRemote(item, u, dst, pct("Checking the copy against the server"))) { dst.delete(); throw IllegalStateException("the copy read from the server didn't match it — nothing changed") }
+
     }
 
     /** Copies with progress on the scan page (big files over the network take a while). */
@@ -607,8 +613,15 @@ object RgScanner {
         }
     }
 
-    private fun upload(ctx: Context, item: PlayItem, src: Source?, tmp: File) {
+    private fun upload(ctx: Context, item: PlayItem, src: Source?, tmp: File, orig: File? = null) {
         val u = item.uri
+        // Only the tags changed and the file kept its size (they fit in its padding): just those bytes are written
+        // on the server — no whole-file transfer.
+        if (u.startsWith("smb://") && orig != null && orig.length() == tmp.length() && patchInPlace(ctx, item, orig, tmp)) return
+        // Whole file replaced: the untagged copy must be exactly the file on the server (checked whole).
+        if (orig != null && (u.startsWith("smb://") || u.startsWith("http")) &&
+            !ParallelFetch.matchesRemote(item, u, orig) { d, t -> if (t > 0) update { s -> s.copy(current = item.title, phase = "Checking the copy against the server ${d * 100 / t}%") } })
+            throw IllegalStateException("the copy read from the server didn't match it — nothing changed")
         when {
             u.startsWith("content://") -> ctx.contentResolver.openOutputStream(Uri.parse(u), "wt")!!.use { o -> tmp.inputStream().use { copy(it, o, "Saving", tmp.length()) } }
             u.startsWith("file://") || u.startsWith("/") -> {
@@ -668,6 +681,98 @@ object RgScanner {
     @Synchronized private fun readPending(ctx: Context): org.json.JSONArray =
         try { org.json.JSONArray(pendingIndex(ctx).readText()) } catch (_: Exception) { org.json.JSONArray() }
     @Synchronized private fun writePending(ctx: Context, a: org.json.JSONArray) { try { pendingIndex(ctx).writeText(a.toString()) } catch (_: Exception) {} }
+
+    /**
+     * In-place tag update: the byte ranges that differ between the untagged copy and the tagged one (only the tag
+     * area) are written straight into the file on the server. Safe:
+     *  - the server's bytes there must still equal the copy's (the file didn't change meanwhile), else nothing is
+     *    written;
+     *  - a journal with the original and new bytes is saved on the phone first, so a crash or a lost connection
+     *    mid-write is put right at the next start;
+     *  - every written range is read back and compared; any mismatch puts the original bytes back.
+     * Bytes outside the tag area are never sent, so a transfer error elsewhere in the copy can't reach the server.
+     * Returns false when it doesn't apply (too many changes) — the full swap is used then.
+     */
+    private fun patchInPlace(ctx: Context, item: PlayItem, orig: File, tmp: File): Boolean {
+        val ranges = ArrayList<LongArray>()                      // [pos, len]
+        java.io.RandomAccessFile(orig, "r").use { a -> java.io.RandomAccessFile(tmp, "r").use { b ->
+            val n = orig.length(); val ba = ByteArray(1 shl 16); val bb = ByteArray(1 shl 16)
+            var pos = 0L; var start = -1L; var lastDiff = -1L
+            while (pos < n) {
+                val len = minOf(ba.size.toLong(), n - pos).toInt()
+                a.seek(pos); a.readFully(ba, 0, len); b.seek(pos); b.readFully(bb, 0, len)
+                for (i in 0 until len) if (ba[i] != bb[i]) {
+                    val at = pos + i
+                    if (start < 0) start = at
+                    else if (at - lastDiff > 4096) { ranges += longArrayOf(start, lastDiff - start + 1); start = at }
+                    lastDiff = at
+                }
+                pos += len
+            }
+            if (start >= 0) ranges += longArrayOf(start, lastDiff - start + 1)
+        } }
+        if (ranges.isEmpty()) return true                        // nothing to change
+        if (ranges.size > 32 || ranges.sumOf { it[1] } > 2L * 1024 * 1024) return false
+        fun read(f: File, at: Long, len: Int) = java.io.RandomAccessFile(f, "r").use { r -> ByteArray(len).also { r.seek(at); r.readFully(it) } }
+        val before = ranges.map { read(orig, it[0], it[1].toInt()) }
+        val after = ranges.map { read(tmp, it[0], it[1].toInt()) }
+        val u = item.uri
+        val f = SmbFile(VpnLink.route(Uri.decode(u)), SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))
+        update { s -> s.copy(current = item.title, phase = "Writing the tags") }
+        if (f.length() != orig.length()) throw IllegalStateException("the file changed on the server — nothing changed")
+        val jdir = File(ctx.filesDir, "rgpatch").apply { mkdirs() }
+        val journal = File(jdir, Integer.toHexString(u.hashCode()) + "-" + System.nanoTime() + ".json")
+        fun b64(b: ByteArray) = android.util.Base64.encodeToString(b, android.util.Base64.NO_WRAP)
+        val ja = org.json.JSONArray()
+        ranges.forEachIndexed { i, rg -> ja.put(JSONObject().put("pos", rg[0]).put("old", b64(before[i])).put("new", b64(after[i]))) }
+        java.io.FileOutputStream(journal).use { o -> o.write(JSONObject().put("uri", u).put("sourceId", item.sourceId)
+            .put("smbVersion", item.smbVersion).put("ranges", ja).toString().toByteArray()); o.fd.sync() }
+        (f.openRandomAccess("rw") as jcifs.smb.SmbRandomAccessFile).use { raf ->
+            fun get(at: Long, len: Int) = ByteArray(len).also { b -> raf.seek(at); var k = 0; while (k < len) { val n = raf.read(b, k, len - k); if (n <= 0) break; k += n } }
+            // The server still holds exactly what was read: else nothing is written.
+            ranges.forEachIndexed { i, rg -> if (!get(rg[0], rg[1].toInt()).contentEquals(before[i])) { journal.delete(); throw IllegalStateException("the file changed on the server — nothing changed") } }
+            try {
+                ranges.forEachIndexed { i, rg -> raf.seek(rg[0]); raf.write(after[i]) }
+                ranges.forEachIndexed { i, rg -> if (!get(rg[0], rg[1].toInt()).contentEquals(after[i])) throw IllegalStateException("read-back mismatch") }
+            } catch (e: Exception) {
+                try {
+                    ranges.forEachIndexed { i, rg -> raf.seek(rg[0]); raf.write(before[i]) }
+                    if (ranges.withIndex().all { (i, rg) -> get(rg[0], rg[1].toInt()).contentEquals(before[i]) }) journal.delete()
+                } catch (_: Exception) {}
+                throw IllegalStateException("tags couldn't be written safely (${e.message}) — original kept")
+            }
+        }
+        journal.delete()
+        return true
+    }
+
+    /**
+     * App start: an in-place update cut off (crash, connection lost) is finished or undone — each range is either
+     * all new (done) or put back to the original bytes.
+     */
+    fun recoverPatches(ctx: Context) {
+        val jdir = File(ctx.filesDir, "rgpatch")
+        val list = jdir.listFiles()?.filter { it.name.endsWith(".json") } ?: return
+        if (list.isEmpty()) return
+        scope.launch {
+            for (j in list) try {
+                val o = JSONObject(j.readText())
+                val s = App.instance.store.current.sources.firstOrNull { it.id == o.optString("sourceId") } ?: continue
+                val f = SmbFile(VpnLink.route(Uri.decode(o.getString("uri"))), SmbProbe.fileContext(o.optString("smbVersion"), s.user, s.password, s.domain))
+                val a = o.getJSONArray("ranges")
+                val rs = (0 until a.length()).map { a.getJSONObject(it) }
+                fun dec(x: String) = android.util.Base64.decode(x, android.util.Base64.NO_WRAP)
+                (f.openRandomAccess("rw") as jcifs.smb.SmbRandomAccessFile).use { raf ->
+                    fun get(at: Long, len: Int) = ByteArray(len).also { b -> raf.seek(at); var k = 0; while (k < len) { val n = raf.read(b, k, len - k); if (n <= 0) break; k += n } }
+                    val allNew = rs.all { r -> dec(r.getString("new")).let { get(r.getLong("pos"), it.size).contentEquals(it) } }
+                    if (!allNew) rs.forEach { r -> raf.seek(r.getLong("pos")); raf.write(dec(r.getString("old"))) }
+                }
+                j.delete()
+                app.vlcinterface.data.ServerLog.log(app.vlcinterface.data.ServerLog.REPLAYGAIN, "recover", "", "", true,
+                    "Interrupted tag update put right: ${Uri.decode(o.getString("uri")).substringAfterLast('/')}")
+            } catch (_: Exception) { /* not reachable now: tried again at the next start */ }
+        }
+    }
 
     @Synchronized private fun addPending(ctx: Context, item: PlayItem, tmp: File) {
         val a = readPending(ctx)
