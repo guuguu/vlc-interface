@@ -152,6 +152,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Jump to a song: search the queue and the Library; plays it (added after the current song if new).
             SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
         }) { BackgroundWorkButton(); ScreenOnSign(C.text); OutputPill(openOutput); ExitButton() }
+        SaveSongBar()
         if (jump) JumpDialog { jump = false }
         if (playNextPick) JumpDialog(playNext = true) { playNextPick = false }
         // Upright: one scrolling page. Sideways: the same page split in two under the track / ReplayGain line —

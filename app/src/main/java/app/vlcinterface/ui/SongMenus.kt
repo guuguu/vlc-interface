@@ -8,6 +8,9 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.widget.Toast
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -247,22 +250,22 @@ fun SaveSongDialog(onDone: () -> Unit) {
                     // Announced titles (and their start recorded): song start / end from them; otherwise from the
                     // gaps between songs (start: the last gap before now; end: the next gap).
                     val byTitles = s.title.isNotBlank() && s.titleStartKnown
-                    Pill("This whole song", filled = true) { say(if (byTitles) RadioCapture.saveCurrent() else RadioCapture.saveWholeSong(name)) }
+                    Pill("This whole song", filled = true) { say(if (byTitles) RadioCapture.saveCurrent() else RadioCapture.saveWholeSong(name)); onDone() }
                     Text(if (byTitles) "From the station's song titles, cut at the gaps." else "Found by the gaps between songs: from where this song began to where it ends.",
                         color = C.muted, fontSize = 12.sp)
                     label("Or save for … minutes from now", C.text)
                     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(3, 5, 10, 15, 20, 30).forEach { m -> Pill("$m") { say(RadioCapture.saveFor(m, name)) } }
+                        listOf(3, 5, 10, 15, 20, 30).forEach { m -> Pill("$m") { say(RadioCapture.saveFor(m, name)); onDone() } }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         androidx.compose.material3.OutlinedTextField(custom, { v -> custom = v.filter { it.isDigit() }.take(3) }, singleLine = true,
                             modifier = Modifier.weight(1f), label = { Text("Custom minutes") },
                             keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
                         val m = custom.toIntOrNull() ?: 0
-                        Pill("Start", filled = m in 1..180) { if (m in 1..180) say(RadioCapture.saveFor(m, name)) }
+                        Pill("Start", filled = m in 1..180) { if (m in 1..180) { say(RadioCapture.saveFor(m, name)); onDone() } }
                     }
                     label("Or by hand", C.text)
-                    Pill("Start now, stop when I say") { say(RadioCapture.startSaving(name)) }
+                    Pill("Start now, stop when I say") { say(RadioCapture.startSaving(name)); onDone() }
                     val mins = listOf(3, 5, 10, 15, 20).filter { it * 60 <= recSec + 5 }
                     Text("Save the last … minutes" + if (mins.isEmpty()) " (${(recSec / 60).toInt()} min recorded so far)" else "", color = C.muted, fontSize = 12.sp)
                     if (mins.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -274,4 +277,35 @@ fun SaveSongDialog(onDone: () -> Unit) {
         },
         confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
     )
+}
+
+/**
+ * Thin bar under the player's top bar while a song is being saved: recording, then encoding / saving; it goes
+ * from yellow to red as the operation nears its end. Tap it: the save window (stop, cancel, longer).
+ */
+@Composable
+fun SaveSongBar() {
+    val cap by RadioCapture.status.collectAsState()
+    val q by RadioCapture.saveQueue.collectAsState()
+    val enc by RadioCapture.saveProgress.collectAsState()
+    var now by remember { mutableStateOf(System.currentTimeMillis()) }
+    val pend = cap.pending
+    if (pend == null && q.isEmpty()) return
+    LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(500); now = System.currentTimeMillis() } }
+    // Recording: 0 … 0.85 (time-limited: exact; until a song ends: against ~4 min, never full); saving: 0.85 … 1.
+    val v = if (pend != null) {
+        val el = (now - pend.at).coerceAtLeast(0).toFloat()
+        val rec = when {
+            pend.manual == "timed" && pend.untilAt > pend.at -> el / (pend.untilAt - pend.at)
+            else -> el / maxOf(240_000f, el + 30_000f)
+        }
+        0.85f * rec.coerceIn(0f, 1f)
+    } else 0.85f + 0.15f * enc.coerceIn(0f, 1f)
+    val col = androidx.compose.ui.graphics.lerp(androidx.compose.ui.graphics.Color(0xFFFFD600), androidx.compose.ui.graphics.Color(0xFFFF1744), v)
+    var open by remember { mutableStateOf(false) }
+    if (open) SaveSongDialog { open = false }
+    androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp).height(3.dp)
+        .clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)).background(C.line).clickable { open = true }) {
+        androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth(v).fillMaxHeight().background(col))
+    }
 }
