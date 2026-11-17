@@ -230,17 +230,39 @@ object RadioCapture {
         ServerLog.log("saved-songs", "drop", "radio", "", true, "Connection changed: radio recording deleted")
     }
 
+    /**
+     * Station changed / stopped: the buffer is emptied. A song being saved takes what's recorded first (saved with it),
+     * and saves still waiting for their last seconds take their data now.
+     */
     fun stop() {
         val p = status.value.pending
         job?.cancel(); job = null
         try { call?.cancel() } catch (_: Exception) {}; call = null
         if (p != null) finishLater(p, total, partialEnd = true)
+        flushWaiters()
         synchronized(lock) {
-            // Byte offsets never restart, so a song still waiting to be saved keeps its data until it's taken.
-            marks.clear()
-            if (p == null && saveQueue.value.isEmpty()) { segs.forEach { it.file.delete() }; segs.clear() }
+            marks.clear(); chains.clear()
+            segs.forEach { it.file.delete() }; segs.clear()
         }
         status.value = status.value.copy(running = false, pending = null, message = "")
+    }
+
+    /** Explicit exit: everything recorded and every working copy deleted (unsaved songs are lost). */
+    fun wipe() {
+        try { stop() } catch (_: Exception) {}
+        try { if (::dir.isInitialized) dir.listFiles()?.forEach { it.delete() } } catch (_: Exception) {}
+    }
+
+    /** A crash: the recording folder is deleted at once (no locks, nothing else). */
+    fun wipeOnCrash(ctx: Context) { try { File(ctx.cacheDir, "radiocap").deleteRecursively() } catch (_: Throwable) {} }
+
+    /** Saves waiting for the seconds after their end (to find the gap): their data, taken now when the buffer goes. */
+    private class Waiter(val from: Long, val end: Long, val margin: Long) { @Volatile var data: ByteArray? = null }
+    private val waiters = java.util.concurrent.CopyOnWriteArrayList<Waiter>()
+    private fun flushWaiters() {
+        synchronized(lock) {
+            for (w in waiters) if (w.data == null) w.data = try { readRange(w.from, minOf(total, w.end + w.margin)) } catch (_: Exception) { ByteArray(0) }
+        }
     }
 
     /** Reads the stream, keeps its audio and the title marks. Returns another address when it was a playlist. */
@@ -601,10 +623,12 @@ object RadioCapture {
         // Otherwise a bit later: the margin after the end, to find the gap after the song.
         saveQueue.value = saveQueue.value + p.title
         val myEpoch = epoch
+        val w = if (partialEnd) null else Waiter(from, end, margin).also { waiters += it }
         scope.launch {
-            if (!partialEnd) delay(13_000)
+            // The seconds after the end are waited for (unless the buffer is emptied first: then taken at once).
+            if (w != null) { var waited = 0; while (w.data == null && waited < 13_000) { delay(250); waited += 250 }; waiters -= w }
             val to = minOf(synchronized(lock) { total }, end + margin)
-            val data = now ?: try { readRange(from, to) } catch (e: Exception) {
+            val data = now ?: w?.data ?: try { readRange(from, to) } catch (e: Exception) {
                 saveQueue.value = saveQueue.value - p.title; toast("Saving failed: ${e.message}"); return@launch }
             // One at a time, in the order asked (single low-priority thread).
             kotlinx.coroutines.withContext(saver) {

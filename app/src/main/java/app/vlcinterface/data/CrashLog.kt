@@ -23,6 +23,8 @@ object CrashLog {
                     "Crash in ${t.name}: ${e.javaClass.simpleName}: ${e.message ?: ""}".take(300),
                     context() + "\n\n" + android.util.Log.getStackTraceString(e))
             } catch (_: Throwable) {}
+            // The radio buffer goes with the crash (also cleared at the next start).
+            try { app.vlcinterface.sources.RadioCapture.wipeOnCrash(ctx) } catch (_: Throwable) {}
             previous?.uncaughtException(t, e)
         }
         recordLastExit(ctx)
