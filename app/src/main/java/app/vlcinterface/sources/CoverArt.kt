@@ -73,12 +73,16 @@ object CoverArt {
     private val shown = java.util.concurrent.ConcurrentHashMap<String, Pair<String, List<String>>>()
     private fun sha(b: ByteArray) = java.security.MessageDigest.getInstance("SHA-1").digest(b).joinToString("") { "%02x".format(it) }
 
-    @Synchronized private fun loadBans() = try {
-        if (banFile.isFile) { val o = JSONObject(banFile.readText()); o.keys().forEach { k -> val a = o.getJSONArray(k); banned[k] = (0 until a.length()).map { a.getString(it) }.toMutableSet() } }
-    } catch (_: Exception) {}
-    @Synchronized private fun saveBans() = try {
-        val o = JSONObject(); banned.forEach { (k, v) -> o.put(k, org.json.JSONArray(v.toList())) }; banFile.writeText(o.toString())
-    } catch (_: Exception) {}
+    @Synchronized private fun loadBans() {
+        try {
+            if (banFile.isFile) { val o = JSONObject(banFile.readText()); o.keys().forEach { k -> val a = o.getJSONArray(k); banned[k] = (0 until a.length()).map { a.getString(it) }.toMutableSet() } }
+        } catch (_: Exception) {}
+    }
+    @Synchronized private fun saveBans() {
+        try {
+            val o = JSONObject(); banned.forEach { (k, v) -> o.put(k, org.json.JSONArray(v.toList())) }; banFile.writeText(o.toString())
+        } catch (_: Exception) {}
+    }
     @Synchronized private fun isBanned(ak: String, vararg tags: String) = banned[ak]?.let { b -> tags.any { it.isNotEmpty() && it in b } } == true
 
     /** The picture a song shows can be marked wrong (one was shown by the app or from its file). */
