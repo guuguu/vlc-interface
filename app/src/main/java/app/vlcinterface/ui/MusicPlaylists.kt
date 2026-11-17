@@ -2,6 +2,7 @@
 
 package app.vlcinterface.ui
 
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -1484,12 +1485,12 @@ fun StationSearch() {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Find stations", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.material3.OutlinedTextField(q, { q = it }, Modifier.weight(1f), singleLine = true, placeholder = { Text("Station name") },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { run() }))
-            SymButton({ run() }) { SymIcon(Icons.Filled.Search, "Search", tint = C.text) }
-        }
+        // ▲ ▼ step through the results (highlighted, scrolled into view).
+        val reqs = remember(results) { List(results?.size ?: 0) { androidx.compose.foundation.relocation.BringIntoViewRequester() } }
+        var at by remember(results) { mutableStateOf(-1) }
+        val sscope = rememberCoroutineScope()
+        fun step(k: Int) { if (reqs.isEmpty()) return; at = (k + reqs.size) % reqs.size; sscope.launch { reqs[at].bringIntoView() } }
+        SmallSearchBar(q, { q = it }, "Station name", reqs.size, at.coerceAtLeast(0), { step(at - 1) }, { step(at + 1) }, onSearch = { run() })
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Filter("style", "Style", style, (listOf("any" to "") + listOf("Rock", "Pop", "Jazz", "Classical", "Blues", "Metal", "Electronic", "Chill", "Ambient",
                 "Hip hop", "Country", "Folk", "Reggae", "Soul", "Oldies", "80s", "90s", "News", "Talk").map { it to it.lowercase() })
@@ -1507,7 +1508,9 @@ fun StationSearch() {
         when {
             results == null -> Box(Modifier.fillMaxWidth().padding(10.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
             error.isNotEmpty() -> Text(error, color = C.bad, fontSize = 13.sp)
-            else -> results!!.forEach { r ->
+            else -> results!!.forEachIndexed { ri, r ->
+              Box(Modifier.then(if (ri < reqs.size) Modifier.bringIntoViewRequester(reqs[ri]) else Modifier)
+                  .background(if (ri == at) accent().copy(alpha = 0.18f) else Color.Transparent, RoundedCornerShape(8.dp))) {
                 val fav = st.stations.any { it.url == r.url }
                 LastStationMeta.put(r.url, r.meta)
                 var rMenu by remember(r.url) { mutableStateOf(false) }
@@ -1534,6 +1537,7 @@ fun StationSearch() {
                         }
                     }
                 }
+              }
             }
         }
     }

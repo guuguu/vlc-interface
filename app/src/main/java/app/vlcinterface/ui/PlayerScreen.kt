@@ -1,5 +1,8 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package app.vlcinterface.ui
 
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
@@ -690,18 +693,20 @@ private fun DownloadPanel(p: PlayerState, onBack: () -> Unit) {
             Text("‹ Back", color = accent(), modifier = Modifier.clickable(onClick = onBack).padding(8.dp))
             Text("Detected: $title0 ${if (year0.isNotEmpty()) "($year0)" else ""}" + if (hash != null) " · file hash" else "", color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.material3.OutlinedTextField(query, { query = it }, Modifier.weight(1f), singleLine = true, label = { Text("Search") })
-            Pill("Search", filled = true, modifier = Modifier.padding(start = 8.dp)) { search() }
-        }
+        // ▲ ▼ step through the results (highlighted, scrolled into view).
+        val reqs = remember(results) { List(results?.size ?: 0) { androidx.compose.foundation.relocation.BringIntoViewRequester() } }
+        var at by remember(results) { mutableStateOf(-1) }
+        fun step(k: Int) { if (reqs.isEmpty()) return; at = (k + reqs.size) % reqs.size; scope.launch { reqs[at].bringIntoView() } }
+        SmallSearchBar(query, { query = it }, "Search subtitles", reqs.size, at.coerceAtLeast(0), { step(at - 1) }, { step(at + 1) }, onSearch = { search() })
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             (st.settings.subLangs + listOf("en", "es", "fr", "de", "it", "pt", "ro")).distinct().forEach { l ->
                 Pill(l.uppercase(), selected = l in langs) { langs = if (l in langs) langs - l else langs + l }
             }
         }
         if (status.isNotEmpty()) Text(status, color = C.muted, fontSize = 13.sp)
-        results?.forEach { r ->
-            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        results?.forEachIndexed { ri, r ->
+            Row(Modifier.fillMaxWidth().then(if (ri < reqs.size) Modifier.bringIntoViewRequester(reqs[ri]) else Modifier)
+                .clip(RoundedCornerShape(10.dp)).background(if (ri == at) accent().copy(alpha = 0.25f) else C.card).padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(r.match, color = if (r.hashMatch) C.ok else C.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(if (r.hashMatch) Color(0xFF1E3A27) else Color(0xFF2A2F38)).padding(horizontal = 6.dp, vertical = 3.dp))
                 Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {

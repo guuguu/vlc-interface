@@ -229,17 +229,8 @@ fun SongsTab(nav: Navigator) {
         val popMax = with(dens) { ((winH - bottomBar - fieldBottom - 12f).coerceAtLeast(120f)).toDp() }.coerceAtMost(340.dp)
         Box {
             // Small, simple search bar.
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp).onGloballyPositioned { fieldH = it.size.height; fieldBottom = it.positionInWindow().y + it.size.height },
-                verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(17.dp)).background(C.card2).padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.CenterStart) {
-                    if (query.isEmpty()) Text("Search…", color = C.muted, fontSize = 13.sp)
-                    androidx.compose.foundation.text.BasicTextField(query, { query = it }, singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 14.sp),
-                        cursorBrush = androidx.compose.ui.graphics.SolidColor(accent()), modifier = Modifier.fillMaxWidth())
-                }
-                if (query.isNotEmpty()) SearchSteps(allHits.size, at, { step(at - 1) }, { step(if (stepping) at + 1 else 0) }) { query = "" }
-            }
+            SmallSearchBar(query, { query = it }, "Search…", allHits.size, at, { step(at - 1) }, { step(if (stepping) at + 1 else 0) },
+                modifier = Modifier.onGloballyPositioned { fieldH = it.size.height; fieldBottom = it.positionInWindow().y + it.size.height })
             if (hits.isNotEmpty()) androidx.compose.ui.window.Popup(alignment = Alignment.TopStart, offset = androidx.compose.ui.unit.IntOffset(0, fieldH + 4),
                 properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
                 val sc = androidx.compose.foundation.rememberScrollState()
@@ -446,13 +437,9 @@ internal fun searchNorm(t: String): String =
  * whole or partly, in the artist, album, title or file name — case, accents and punctuation ignored.
  * E.g. "acd ros", "rosie acdc", "blood got".
  */
-fun songMatches(p: PlayItem, query: String): Boolean {
-    val words = searchNorm(query).split(' ').filter { it.isNotEmpty() }
-    if (words.isEmpty()) return false
-    val hay = searchNorm("${p.artist} ${p.album} ${p.title} ${p.fileName}")
-    val joined = hay.replace(" ", "")
-    return words.all { w -> hay.contains(w) || joined.contains(w) }
-}
+/** Exactly what's typed, in its order (spaces typed before / after count) — see [textMatch]. */
+fun songMatches(p: PlayItem, query: String): Boolean =
+    textMatch(normText("${p.artist} ${p.album} ${p.title} ${p.fileName}"), query)
 
 
 /**

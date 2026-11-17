@@ -1,6 +1,7 @@
 package app.vlcinterface.ui
 
 import androidx.compose.foundation.background
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -56,9 +57,8 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
     val queue = player.state.value.queue
     val inQueue = remember(queue) { queue.map { "${it.uri}#${it.startMs}" }.toHashSet() }
     val hits = remember(query, library, queue) {
-        val q = query.trim().lowercase()
-        if (q.length < 2) emptyList() else {
-            fun ok(p: PlayItem) = songMatches(p, q)
+        if (query.trim().length < 2) emptyList() else {
+            fun ok(p: PlayItem) = songMatches(p, query)
             // Play next searches the whole Songs list; Jump to also looks in the queue first.
             ((if (playNext) emptyList() else queue.filter(::ok)) + (library ?: emptyList()).filter(::ok)).distinctBy { "${it.uri}#${it.startMs}" }.take(60)
         }
@@ -75,8 +75,11 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
                 .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
                 .padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(if (playNext) "Play next" else "Jump to song", color = C.text, fontSize = 22.sp)
-                OutlinedTextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Artist, album or song", fontSize = 13.sp) }, textStyle = TextStyle(fontSize = 14.sp, color = C.text))
+                val st = rememberLazyListState()
+                val jscope = androidx.compose.runtime.rememberCoroutineScope()
+                var at by remember(query) { mutableStateOf(-1) }
+                fun step(k: Int) { if (hits.isEmpty()) return; at = (k + hits.size) % hits.size; jscope.launch { st.animateScrollToItem(at) } }
+                SmallSearchBar(query, { query = it }, "Artist, album or song", hits.size, at.coerceAtLeast(0), { step(at - 1) }, { step(at + 1) })
                 Text(when {
                     library == null -> "Reading the Library…"
                     query.trim().length < 2 -> if (playNext) "Type at least 2 letters · the song you pick plays after the current one"
@@ -84,11 +87,10 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
                     else -> "${hits.size}${if (hits.size == 60) "+" else ""} found"
                 }, color = C.muted, fontSize = 12.sp)
                 if (indexing.isNotEmpty()) Text("★ $indexing — LAN songs appear when done", color = accent(), fontSize = 12.sp)
-                val st = rememberLazyListState()
                 LazyColumn(Modifier.weight(1f, fill = false).scrollbar(st), state = st, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    items(hits) { h ->
+                    androidx.compose.foundation.lazy.itemsIndexed(hits) { idx, h ->
                         val queued = "${h.uri}#${h.startMs}" in inQueue
-                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(C.tile)
+                        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (idx == at) accent().copy(alpha = 0.25f) else C.tile)
                             .clickable { if (playNext) player.queueNext(h) else player.jumpToSong(h); onDone() }.padding(horizontal = 8.dp, vertical = 6.dp)) {
                             Text(h.title, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}" + if (queued) "  · in the queue" else "",

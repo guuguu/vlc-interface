@@ -207,15 +207,28 @@ fun JumpToBox(state: LazyListState, labels: List<String>, offset: Int = 0) {
     fun go(k: Int) { if (found.isEmpty()) return; at = (k + found.size) % found.size; scope.launch { state.scrollToItem(found[at] + offset) } }
     fun jump(t: String) { q = t; at = 0 }
     androidx.compose.runtime.LaunchedEffect(found) { if (found.isNotEmpty()) state.scrollToItem(found[0] + offset) }
-    Row(Modifier.fillMaxWidth().background(C.bg).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    SmallSearchBar(q, { jump(it) }, "Jump to…", found.size, at, { go(at - 1) }, { go(at + 1) }, modifier = Modifier.background(C.bg))
+}
+
+/**
+ * The app's search bar: small and simple — the text, then "n/total ▲ ▼ ✕" once something is typed. [onSearch]: a
+ * search sent somewhere (Enter / the 🔍), for online searches. [count] / [at]: results and the one shown.
+ */
+@Composable
+fun SmallSearchBar(value: String, onChange: (String) -> Unit, placeholder: String, count: Int = 0, at: Int = 0,
+                   prev: () -> Unit = {}, next: () -> Unit = {}, onSearch: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(17.dp)).background(C.card2).padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart) {
-            if (q.isEmpty()) Text("Jump to…", color = C.muted, fontSize = 13.sp)
-            androidx.compose.foundation.text.BasicTextField(q, { jump(it) }, singleLine = true,
+            if (value.isEmpty()) Text(placeholder, color = C.muted, fontSize = 13.sp, maxLines = 1)
+            androidx.compose.foundation.text.BasicTextField(value, onChange, singleLine = true,
                 textStyle = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 14.sp),
-                cursorBrush = androidx.compose.ui.graphics.SolidColor(accent()), modifier = Modifier.fillMaxWidth())
+                cursorBrush = androidx.compose.ui.graphics.SolidColor(accent()), modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = if (onSearch != null) androidx.compose.ui.text.input.ImeAction.Search else androidx.compose.ui.text.input.ImeAction.Done),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch?.invoke() }))
         }
-        if (q.isNotEmpty()) SearchSteps(found.size, at, { go(at - 1) }, { go(at + 1) }) { q = "" }
+        if (onSearch != null) Text("🔍", fontSize = 16.sp, modifier = Modifier.clickable { onSearch() }.padding(horizontal = 8.dp))
+        if (value.isNotEmpty() || count > 0) SearchSteps(count, at, prev, next) { onChange("") }
     }
 }
 

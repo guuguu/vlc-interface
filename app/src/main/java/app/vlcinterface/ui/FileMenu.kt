@@ -123,14 +123,12 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     androidx.compose.runtime.LaunchedEffect(Unit) { library = SongsCache.all(ctx.applicationContext) }
     androidx.compose.runtime.LaunchedEffect(folders) { if (folders && folderList == null) folderList = allFolders(ctx.applicationContext) }
     val folderHits = remember(query, folderList) {
-        val words = searchNorm(query).split(' ').filter { it.isNotEmpty() }
-        if (query.trim().length < 2 || words.isEmpty()) emptyList()
-        else (folderList ?: emptyList()).filter { f -> val h = searchNorm(f.path); words.all { h.contains(it) } }.take(60)
+        if (query.trim().length < 2) emptyList()
+        else (folderList ?: emptyList()).filter { f -> textMatch(normText(f.path), query) }.take(60)
     }
     androidx.compose.runtime.LaunchedEffect(pick) { pickPath = pick?.let { fullPathOf(ctx, it) } ?: "" }
     val hits = remember(query, library) {
-        val q = query.trim()
-        if (q.length < 2) emptyList() else (library ?: emptyList()).filter { songMatches(it, q) }.take(60)
+        if (query.trim().length < 2) emptyList() else (library ?: emptyList()).filter { songMatches(it, query) }.take(60)
     }
     fun forget(uri: String) {
         App.instance.store.update { s ->
@@ -156,9 +154,11 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                     Pill("Songs", selected = !folders) { folders = false }
                     Pill("Folders", selected = folders) { folders = true }
                 }
-                androidx.compose.material3.OutlinedTextField(query, { query = it }, singleLine = true, modifier = androidx.compose.ui.Modifier.fillMaxWidth(),
-                    placeholder = { Text(if (folders) "Folder name or path" else "Artist, album or song", fontSize = 13.sp) },
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = C.text))
+                val st = androidx.compose.foundation.lazy.rememberLazyListState()
+                var at by remember(query, folders) { mutableStateOf(-1) }
+                val n = if (folders) folderHits.size else hits.size
+                fun step(k: Int) { if (n == 0) return; at = (k + n) % n; scope.launch { st.animateScrollToItem(at) } }
+                SmallSearchBar(query, { query = it }, if (folders) "Folder name or path" else "Artist, album or song", n, at.coerceAtLeast(0), { step(at - 1) }, { step(at + 1) })
                 Text(when {
                     folders && folderList == null -> "Reading the folders…"
                     !folders && library == null -> "Reading the Library…"
@@ -167,12 +167,11 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                     else -> "${hits.size}${if (hits.size == 60) "+" else ""} found"
                 }, color = C.muted, fontSize = 12.sp)
                 if (note.isNotEmpty()) Text(note, color = C.bad, fontSize = 13.sp)
-                val st = androidx.compose.foundation.lazy.rememberLazyListState()
                 androidx.compose.foundation.lazy.LazyColumn(androidx.compose.ui.Modifier.weight(1f, fill = false).scrollbar(st), state = st,
                     verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (folders) items(folderHits.size) { k ->
                         val f = folderHits[k]
-                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(C.tile)
+                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (k == at) accent().copy(alpha = 0.25f) else C.tile)
                             .clickable { note = ""; pickFolder = f }.padding(horizontal = 8.dp, vertical = 6.dp)) {
                             Text("▤ " + f.path.trimEnd('/').substringAfterLast('/'), color = C.text, fontSize = 14.sp, maxLines = 1)
                             Text(f.path + " · " + (if (f.src != null) "LAN" else "phone"), color = C.muted, fontSize = 12.sp, maxLines = 2)
@@ -180,7 +179,7 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                     }
                     else items(hits.size) { k ->
                         val h = hits[k]
-                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(C.tile)
+                        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).background(if (k == at) accent().copy(alpha = 0.25f) else C.tile)
                             .clickable { note = ""; pick = h }.padding(horizontal = 8.dp, vertical = 6.dp)) {
                             Text(h.title, color = C.text, fontSize = 14.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                             Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }} · ${if (h.uri.startsWith("smb://")) "LAN" else "phone"}",

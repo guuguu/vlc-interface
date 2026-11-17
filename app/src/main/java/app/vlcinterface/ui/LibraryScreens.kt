@@ -1,5 +1,8 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package app.vlcinterface.ui
 
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -624,10 +627,12 @@ fun RadioTab(nav: Navigator) {
             }
             Pill("⬇  Import favourites", modifier = Modifier.weight(1f)) { importer.launch(arrayOf("*/*")) }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(q, { q = it }, Modifier.weight(1f), placeholder = { Text("Search stations by name") }, singleLine = true)
-            SymButton({ run(name = q) }) { SymIcon(Icons.Filled.Search, "Search", tint = C.text) }
-        }
+        // ▲ ▼ step through the results (highlighted, scrolled into view).
+        val reqs = remember(results) { List(results?.size ?: 0) { androidx.compose.foundation.relocation.BringIntoViewRequester() } }
+        var at by remember(results) { mutableStateOf(-1) }
+        val sscope = androidx.compose.runtime.rememberCoroutineScope()
+        fun step(k: Int) { if (reqs.isEmpty()) return; at = (k + reqs.size) % reqs.size; sscope.launch { reqs[at].bringIntoView() } }
+        SmallSearchBar(q, { q = it }, "Search stations by name", reqs.size, at.coerceAtLeast(0), { step(at - 1) }, { step(at + 1) }, onSearch = { run(name = q) })
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("Jazz", "News", "Rock", "Classical", "Pop", "Chill").forEach { g -> Pill(g) { run(tag = g) } }
             Pill("Near me") { run(country = java.util.Locale.getDefault().country) }
@@ -652,14 +657,17 @@ fun RadioTab(nav: Navigator) {
             results!!.isNotEmpty() -> {
                 SectionTitle("Results")
                 CardBox {
-                    results!!.forEach { r ->
+                    results!!.forEachIndexed { ri, r ->
                         val fav = st.stations.any { it.url == r.url }
+                        Box(Modifier.then(if (ri < reqs.size) Modifier.bringIntoViewRequester(reqs[ri]) else Modifier)
+                            .background(if (ri == at) accent().copy(alpha = 0.18f) else Color.Transparent)) {
                         StationRow(r.name, r.meta, fav, onFav = {
                             App.instance.store.update { x ->
                                 if (fav) x.copy(stations = x.stations.filterNot { it.url == r.url })
                                 else x.copy(stations = x.stations + Station(name = r.name, url = r.url, meta = r.meta, favicon = r.favicon))
                             }
                         }) { play(r.name, r.url) }
+                        }
                         Divider()
                     }
                 }
