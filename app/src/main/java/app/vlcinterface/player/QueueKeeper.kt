@@ -13,12 +13,19 @@ import kotlinx.coroutines.launch
  * aren't written: they come from the source (Libraries) when the queue is brought back.
  */
 object QueueKeeper {
-    private lateinit var file: File
+    private lateinit var dir: File
+    /** Kept per kind — "audio", "video", "radio" — so each player has its own last queue to come back to. */
+    private fun file(kind: String) = File(dir, "queue-$kind.json")
+    private val lastKindFile get() = File(dir, "queue-last.txt")
+
+    fun kindOf(it: PlayItem?): String = when { it == null -> ""; it.isRadio -> "radio"; it.isMusic -> "audio"; else -> "video" }
+    fun has(kind: String) = ::dir.isInitialized && file(kind).isFile
     @Volatile private var lastKey = ""
     @Volatile private var lastSave = 0L
 
     fun init(ctx: Context) {
-        file = File(ctx.filesDir, "queue.json")
+        dir = ctx.filesDir
+        File(dir, "queue.json").let { old -> if (old.isFile) { val k = "audio"; if (!file(k).exists()) old.renameTo(file(k)) else old.delete() } }
         val p = App.instance.player
         // Saved when the queue, the song or the order changes; the position every 5 s while playing.
         kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
@@ -50,7 +57,9 @@ object QueueKeeper {
 
     /** Written now (also from exit, before the player stops). */
     fun save(s: PlayerState, ordered: List<PlayItem>?) {
-        if (!::file.isInitialized || s.queue.isEmpty()) return
+        if (!::dir.isInitialized || s.queue.isEmpty()) return
+        val kind = kindOf(s.queue.getOrNull(s.index)).ifEmpty { return }
+        val file = file(kind)
         try {
             val o = JSONObject()
                 .put("queue", JSONArray().apply { s.queue.forEach { put(itemJson(it)) } })
@@ -60,22 +69,30 @@ object QueueKeeper {
             if (ordered != null) o.put("ordered", JSONArray().apply { ordered.forEach { put(itemJson(it)) } })
             val tmp = File(file.path + ".tmp")
             tmp.writeText(o.toString()); tmp.renameTo(file)
+            lastKindFile.writeText(kind)
         } catch (_: Exception) {}
     }
 
-    /** At app start: the kept queue back, its song ready and paused at the kept position. */
-    fun restore(p: PlayerController) {
-        if (!::file.isInitialized || !file.isFile) return
+    /**
+     * The kept queue of [kind] back (at app start: the kind used last), its song ready and paused at the kept
+     * position. [force]: replaces what's loaded now (the player button of another kind).
+     */
+    fun restore(p: PlayerController, kind: String? = null, force: Boolean = false): Boolean {
+        if (!::dir.isInitialized) return false
+        val k = kind ?: try { lastKindFile.readText().trim() } catch (_: Exception) { "audio" }
+        val file = file(k)
+        if (!file.isFile) return false
         try {
             val o = JSONObject(file.readText())
             val qa = o.getJSONArray("queue")
             val q = (0 until qa.length()).map { itemOf(qa.getJSONObject(it)) }
-            if (q.isEmpty()) return
+            if (q.isEmpty()) return false
             val ordered = o.optJSONArray("ordered")?.let { a -> (0 until a.length()).map { itemOf(a.getJSONObject(it)) } }
             val og = o.optJSONObject("origin")
             val origin = if (og == null) Origin() else Origin(og.optString("kind", "single"), og.optString("sourceId"), og.optString("uri"),
                 og.optString("title"), og.optString("playlistId"), og.optString("localFolderId"))
-            p.restoreQueue(q, o.optInt("index").coerceIn(0, q.size - 1), o.optLong("time"), origin, ordered)
-        } catch (_: Exception) {}
+            p.restoreQueue(q, o.optInt("index").coerceIn(0, q.size - 1), o.optLong("time"), origin, ordered, force)
+            return true
+        } catch (_: Exception) { return false }
     }
 }

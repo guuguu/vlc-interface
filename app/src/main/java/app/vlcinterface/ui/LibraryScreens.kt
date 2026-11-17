@@ -138,8 +138,35 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
                 libKind == "video" -> "Video" to Screen.Player
                 else -> "Audio" to Screen.Music
             }
+            val pKind = pLabel.lowercase()
+            val pctx = androidx.compose.ui.platform.LocalContext.current
+            var swapAsk by remember { mutableStateOf("") }
+            // Opens that player: with its own kind loaded now, straight away; otherwise its last queue comes back
+            // (paused at its spot) — asked first when something of another kind is playing.
+            fun openPlayer(confirmed: Boolean = false) {
+                val qk = app.vlcinterface.player.QueueKeeper
+                val p = App.instance.player
+                val cur = p.state.value.item
+                when {
+                    qk.kindOf(cur) == pKind -> nav.go(pScreen)
+                    !qk.has(pKind) -> {
+                        val t = android.widget.Toast.makeText(pctx, "Nothing played in the $pLabel player yet", android.widget.Toast.LENGTH_LONG)
+                        t.show(); android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ t.cancel() }, 3000)
+                    }
+                    cur != null && p.state.value.isPlaying && !confirmed -> swapAsk = qk.kindOf(cur)
+                    else -> {
+                        qk.restore(p, pKind, force = true)
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ nav.go(pScreen) }, 300)
+                    }
+                }
+            }
+            if (swapAsk.isNotEmpty()) AlertDialog(onDismissRequest = { swapAsk = "" }, containerColor = C.panel,
+                title = { Text("${swapAsk.replaceFirstChar { it.uppercase() }} is playing", color = C.text) },
+                text = { Text("Stop it and bring back your last ${pKind} queue (paused where it was)?", color = C.text, fontSize = 14.sp) },
+                confirmButton = { STextButton({ swapAsk = ""; openPlayer(true) }) { Text("Load $pLabel", color = accent(), fontWeight = FontWeight.Bold) } },
+                dismissButton = { STextButton({ swapAsk = "" }) { Text("Cancel") } })
             Row(Modifier.clip(RoundedCornerShape(16.dp)).border(1.dp, accent().copy(alpha = 0.7f), RoundedCornerShape(16.dp))
-                .clickable { nav.go(pScreen) }.padding(start = 6.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+                .clickable { openPlayer() }.padding(start = 6.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 SymIcon(Icons.Filled.PlayArrow, "Open the $pLabel player", tint = accent())
                 Text(pLabel, color = accent(), fontSize = 13.sp, fontWeight = FontWeight.Bold)

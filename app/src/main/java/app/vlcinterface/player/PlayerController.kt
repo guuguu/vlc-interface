@@ -929,8 +929,9 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun originalOrder(): List<PlayItem>? = orderedQueue
 
     /** App start: the queue kept over the restart, its song ready and paused at [time]. */
-    fun restoreQueue(q: List<PlayItem>, index: Int, time: Long, origin: Origin, ordered: List<PlayItem>?) = main.post {
-        if (_state.value.item != null) return@post                  // something was started meanwhile: kept
+    fun restoreQueue(q: List<PlayItem>, index: Int, time: Long, origin: Origin, ordered: List<PlayItem>?, force: Boolean = false) = main.post {
+        if (_state.value.item != null && !force) return@post        // something was started meanwhile: kept
+        _state.value.let { pv -> if (pv.item != null) { QueueKeeper.save(pv, orderedQueue); mp.pause() } }
         orderedQueue = ordered
         fullList = (ordered ?: q).filter { !it.isRadio }
         _state.value = PlayerState(queue = q, index = index, origin = origin)
