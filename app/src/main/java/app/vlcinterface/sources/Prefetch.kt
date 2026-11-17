@@ -12,7 +12,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.Request
 import java.io.File
@@ -28,6 +27,14 @@ object Prefetch {
     private lateinit var dir: File
     private var job: Job? = null
     @Volatile private var target = ""                            // uri being cached now
+    @Volatile private var gen = 0                                // each new start; an older copy in progress stops
+    /** Queue changed less than 2 min after the previous change: no caching (network only) until 5 min without changes. */
+    @Volatile private var pausedUntil = 0L
+    private var lastQueueChange = 0L
+    private var lastQueue: List<String>? = null
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    private const val BUSY_MS = 2 * 60_000L
+    private const val CALM_MS = 5 * 60_000L
     private val done = java.util.concurrent.ConcurrentHashMap<String, File>()   // uri → complete copy
     private const val MAX_BYTES = 100L * 1024 * 1024             // bigger songs aren't cached
     private const val MIN_FREE = 2L * 1024 * 1024 * 1024         // never under 2 GB free
@@ -39,12 +46,39 @@ object Prefetch {
             App.instance.player.state
                 .map { s -> s.index to s.queue.map { it.uri } }
                 .distinctUntilChanged()
-                .collect { update() }
+                .collect { (_, q) -> onChange(q) }
         }
     }
 
-    /** The complete local copy of [uri], or null. */
-    fun localFor(uri: String): File? = done[uri]?.takeIf { it.isFile && it.length() > 0 }
+    /** The complete local copy of [uri], or null (none while caching is paused: played from the network). */
+    fun localFor(uri: String): File? = if (paused()) null else done[uri]?.takeIf { it.isFile && it.length() > 0 }
+
+    private fun paused() = System.currentTimeMillis() < pausedUntil
+
+    /**
+     * The queue itself changed (added, removed, order — e.g. sequential ↔ random): what was being cached is dropped
+     * and the new next song is cached from scratch. Changes closer than 2 min apart pause caching until the queue
+     * has been left alone for 5 min.
+     */
+    @Synchronized private fun onChange(q: List<String>) {
+        val now = System.currentTimeMillis()
+        val changed = lastQueue != null && lastQueue != q
+        lastQueue = q
+        if (changed) {
+            if (now - lastQueueChange < BUSY_MS || paused()) {
+                if (!paused()) ServerLog.log("cache", "pause", "", "", true, "Caching ahead paused: queue changed often (network only for 5 min without changes)")
+                pausedUntil = now + CALM_MS
+                main.removeCallbacksAndMessages(null)
+                main.postDelayed({ scope.launch { update() } }, CALM_MS + 500)
+            }
+            lastQueueChange = now
+            restart()
+        }
+        update()
+    }
+
+    /** Copy in progress dropped (its partial file deleted). */
+    private fun restart() { gen++; job?.cancel(); target = ""; if (::dir.isInitialized) dir.listFiles { f -> f.name.endsWith(".part") }?.forEach { it.delete() } }
 
     private fun isNetwork(p: PlayItem): Boolean = !p.isRadio && p.isMusic && (p.uri.startsWith("smb://") || p.uri.startsWith("http"))
 
@@ -55,21 +89,27 @@ object Prefetch {
     } catch (_: Exception) { false }
 
     /** Queue or song changed: cache the next network song; drop copies no longer needed. */
-    private fun update() {
+    @Synchronized private fun update() {
         if (!::dir.isInitialized) return
         val s = App.instance.player.state.value
         val cur = s.queue.getOrNull(s.index)
         val next = s.queue.drop(s.index + 1).firstOrNull { isNetwork(it) && it.uri != cur?.uri && allowed(it) }
+        if (paused()) {
+            restart()
+            done.keys.filter { it != cur?.uri }.forEach { k -> done.remove(k)?.delete() }
+            return
+        }
         val keep = setOfNotNull(cur?.uri, next?.uri)
         done.keys.filter { it !in keep }.forEach { k -> done.remove(k)?.delete() }
         if (next == null) { if (target !in keep) { job?.cancel(); target = "" }; return }
         if (next.uri == target || localFor(next.uri) != null) return
         job?.cancel()
         target = next.uri
-        job = scope.launch { fetch(next) }
+        val g = ++gen
+        job = scope.launch { fetch(next, g) }
     }
 
-    private fun fetch(p: PlayItem) {
+    private fun fetch(p: PlayItem, g: Int) {
         dir.mkdirs()
         if (dir.usableSpace < MIN_FREE) return
         val name = Integer.toHexString(p.uri.hashCode()) + "." + p.ext.ifEmpty { "bin" }
@@ -91,15 +131,15 @@ object Prefetch {
             if (size > MAX_BYTES) { input.close(); return }
             input.use { i -> tmp.outputStream().use { o ->
                 val buf = ByteArray(256 * 1024)
-                while (scope.isActive && target == u) { val n = i.read(buf); if (n < 0) break; o.write(buf, 0, n) }
+                while (gen == g && !paused()) { val n = i.read(buf); if (n < 0) break; o.write(buf, 0, n) }
             } }
-            if (target != u || (size > 0 && tmp.length() != size)) { tmp.delete(); return }
+            if (gen != g || paused() || (size > 0 && tmp.length() != size)) { tmp.delete(); return }
             tmp.renameTo(dst)
             done[u] = dst
             ServerLog.log("cache", "next", "", "", true, "Next song cached: ${p.title}", "${dst.length() / 1024} KB")
         } catch (e: Exception) {
             tmp.delete()
-        } finally { if (target == p.uri) target = "" }
+        } finally { if (gen == g) target = "" }
     }
 
     /** Exit: copies removed. */
