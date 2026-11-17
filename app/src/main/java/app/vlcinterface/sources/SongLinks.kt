@@ -73,13 +73,50 @@ object SongLinks {
             o.optString("artworkUrl100").replace("100x100bb", "1000x1000bb"), o.optString("trackViewUrl"))
     }
 
-    /** Spotify page of the song (via song.link from the iTunes page), else a Spotify search link. */
-    private fun spotify(info: Info?, artist: String, title: String): Pair<String, Boolean> {
-        if (info != null && info.itunesUrl.isNotEmpty()) {
-            val b = get("https://api.song.link/v1-alpha.1/links?url=" + Uri.encode(info.itunesUrl))
-            val u = try { b?.let { JSONObject(it).optJSONObject("linksByPlatform")?.optJSONObject("spotify")?.optString("url") } } catch (_: Exception) { null }
-            if (!u.isNullOrBlank()) return u to false
+    /** Why the last Spotify look-up steps failed (in the song-links log). */
+    private val why = java.util.Collections.synchronizedList(ArrayList<String>())
+
+    private fun getCode(url: String): Pair<Int, String?> = try {
+        val rq = Request.Builder().url(url).header("User-Agent", Net.UA).build()
+        Net.http.newCall(rq).execute().use { r -> r.code to (if (r.isSuccessful) r.body?.string() else null) }
+    } catch (e: Exception) { -1 to (e.message ?: e.javaClass.simpleName) }
+
+    /** song.link (Odesli): the Spotify page of the song at [from] (an Apple Music / YouTube / Deezer address). */
+    private fun odesli(from: String, label: String): String? {
+        val (code, body) = getCode("https://api.song.link/v1-alpha.1/links?userCountry=US&url=" + Uri.encode(from))
+        if (code != 200 || body == null) {
+            why += "$label: song.link " + when (code) { 429 -> "rate-limited (429)"; 404 -> "doesn't know it (404)"; -1 -> "not reachable ($body)"; else -> "answered $code" }
+            return null
         }
+        val u = try { JSONObject(body).optJSONObject("linksByPlatform")?.optJSONObject("spotify")?.optString("url") } catch (_: Exception) { null }
+        if (u.isNullOrBlank()) why += "$label: song.link has no Spotify page for it"
+        return u?.takeIf { it.isNotBlank() }
+    }
+
+    /** The song on Deezer (free search, no key): its page, for song.link. */
+    private fun deezer(artist: String, title: String): String? {
+        val q = Uri.encode("artist:\"$artist\" track:\"$title\"")
+        val (code, body) = getCode("https://api.deezer.com/search?q=$q&limit=10")
+        if (code != 200 || body == null) { why += "Deezer: answered $code"; return null }
+        val arr = try { JSONObject(body).optJSONArray("data") } catch (_: Exception) { null } ?: return null
+        for (i in 0 until arr.length()) {
+            val o = arr.getJSONObject(i)
+            if (cover(title, o.optString("title")) >= 0.6 && cover(artist, o.optJSONObject("artist")?.optString("name") ?: "") >= 0.6)
+                return o.optString("link").takeIf { it.isNotBlank() }
+        }
+        why += "Deezer: not found"
+        return null
+    }
+
+    /**
+     * Spotify page of the song: song.link from the iTunes page, else from the YouTube video, else from the song's
+     * Deezer page; when none knows it, a Spotify search link.
+     */
+    private fun spotify(info: Info?, artist: String, title: String, yt: Video?): Pair<String, Boolean> {
+        why.clear()
+        info?.itunesUrl?.takeIf { it.isNotEmpty() }?.let { odesli(it, "iTunes")?.let { u -> return u to false } }
+        yt?.url?.let { odesli(it, "YouTube")?.let { u -> return u to false } }
+        deezer(info?.artist ?: artist, info?.title ?: title)?.let { d -> odesli(d, "Deezer")?.let { u -> return u to false } }
         return "https://open.spotify.com/search/" + Uri.encode("$artist $title") to true
     }
 
@@ -182,10 +219,10 @@ object SongLinks {
         val len = ((if (lengthMs > 0) lengthMs else info?.lengthMs ?: 0) / 1000).toInt()
         val yt = youtube(info?.artist ?: artist, info?.title ?: title, len, y)
         if (yt == null) notes += "No matching YouTube video"
-        val (sp, spSearch) = spotify(info, artist, title)
-        if (spSearch) notes += "Spotify: song page not found — a Spotify search link is used"
+        val (sp, spSearch) = spotify(info, artist, title, yt)
+        if (spSearch) notes += "Spotify: song page not found — a Spotify search link is used" + (if (why.isNotEmpty()) " (" + why.joinToString("; ") + ")" else "")
         ServerLog.log("song-links", "find", "https", "", yt != null && !spSearch, "$artist – $title",
-            "youtube: ${yt?.let { "${it.url} (${it.channel}, ${it.score})" } ?: "none"} · spotify: $sp")
+            "youtube: ${yt?.let { "${it.url} (${it.channel}, ${it.score})" } ?: "none"} · spotify: $sp" + (if (why.isNotEmpty()) " · " + why.joinToString("; ") else ""))
         Result(info, yt, sp, spSearch, notes)
     }
 }

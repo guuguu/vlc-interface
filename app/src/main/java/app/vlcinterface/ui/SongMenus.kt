@@ -125,7 +125,8 @@ fun SongLinksDialog(artist: String, title: String, lengthMs: Long, album: String
                 } else {
                     r.info?.let { i -> Text(listOfNotNull(i.album.ifEmpty { null }, if (i.year > 0) "${i.year}" else null).joinToString(" · "), color = C.muted, fontSize = 12.sp) }
                     pick(yt, { yt = it }, "YouTube", r.youtube?.let { "${it.title}\n${it.channel}" } ?: "No matching video", r.youtube != null)
-                    pick(sp, { sp = it }, "Spotify", if (r.spotifyIsSearch) "Song page not found — Spotify search link" else r.spotify)
+                    pick(sp, { sp = it }, "Spotify", if (r.spotifyIsSearch) (r.notes.firstOrNull { it.startsWith("Spotify") }?.removePrefix("Spotify: ")
+                        ?: "Song page not found — Spotify search link") else r.spotify)
                     r.notes.filterNot { it.startsWith("Spotify") || it.startsWith("No matching") }.forEach { Text(it, color = C.muted, fontSize = 11.sp) }
                 }
                 if (path != null) pick(fp, { fp = it }, "File path", path)
