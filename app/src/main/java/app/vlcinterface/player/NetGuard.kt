@@ -36,11 +36,17 @@ object NetGuard {
 
     fun init(ctx: Context) {
         val cm = ctx.getSystemService(ConnectivityManager::class.java) ?: return
-        fun read(caps: NetworkCapabilities?) {
-            val w = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true || caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
-            val c = !w && caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+        fun read(@Suppress("UNUSED_PARAMETER") ignored: NetworkCapabilities?) {
+            // The phone's real connections, under any VPN (ZeroTier, Tailscale … become the default network and hide
+            // whether Wi-Fi or mobile data carries them).
+            @Suppress("DEPRECATION")
+            val real = try { cm.allNetworks.mapNotNull { cm.getNetworkCapabilities(it) }
+                .filter { !it.hasTransport(NetworkCapabilities.TRANSPORT_VPN) && it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) } } catch (_: Exception) { emptyList() }
+            val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+            val w = real.any { it.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || it.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) }
+            val c = !w && real.any { it.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) }
             val wasWifi = wifi
-            val on = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+            val on = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true || real.isNotEmpty()
             val wasOn = online
             // Wi-Fi → mobile data, or the connection dropped: the radio recording is held — kept if the connection is
             // back within the radio buffer and nothing is missing, else deleted. Wi-Fi back: decided / started again.
@@ -57,6 +63,13 @@ object NetGuard {
             cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
                 override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = read(caps)
                 override fun onLost(network: Network) = read(cm.getNetworkCapabilities(cm.activeNetwork))
+            })
+            // Wi-Fi / mobile data changing under a VPN doesn't change the default network: watched on their own too.
+            cm.registerNetworkCallback(android.net.NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) = read(null)
+                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) = read(null)
+                override fun onLost(network: Network) = read(null)
             })
         } catch (_: Exception) {}
     }
