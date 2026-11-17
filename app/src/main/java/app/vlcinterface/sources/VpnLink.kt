@@ -129,7 +129,7 @@ object VpnLink {
             announceSwitches()
             if (vpnUp.value && !wasUp) {
                 ServerLog.log("vpn", "up", "vpn", "", true, "VPN / tunnel up: " + self.joinToString { ipStr(it) })
-                if (on()) discover()
+                if (on() || autoFor.isNotEmpty()) discover()
             }
             if (!vpnUp.value && wasUp) ServerLog.log("vpn", "down", "vpn", "", true, "VPN / tunnel down")
             checkNeedVpn()
@@ -256,7 +256,7 @@ object VpnLink {
     fun setUse(ids: Set<String>) {
         useNas.value = ids; askUse.value = false
         try { App.instance.player.pruneNas() } catch (_: Exception) {}
-        if (ids.isNotEmpty()) { lastUsed = ids; ignoreSession = false }
+        if (ids.isNotEmpty()) { lastUsed = ids; ignoreSession = false; autoFind(ids) }
         ServerLog.log("vpn", "use-nas", "smb", "", true, if (ids.isEmpty()) "NAS not used (away from home)"
             else "NAS used this session: " + lanServers().filter { it.id in ids }.joinToString { it.name.ifBlank { it.host } })
     }
@@ -322,6 +322,7 @@ object VpnLink {
 
     /** Opens the VPN app (ZeroTier when installed, else Android's VPN settings) — it can't be switched on from here. */
     fun startVpn(ctx: Context): String {
+        autoFind(useNas.value.ifEmpty { askStart.value?.let { setOf(it.id) } ?: emptySet() })
         val pm = ctx.packageManager
         // The VPN app chosen in Settings → VPN (its own login is used — nothing to enter here), else the first installed.
         val apps = when (App.instance.store.current.settings.vpnApp) {
@@ -419,9 +420,28 @@ object VpnLink {
     }
 
     /** Searches the VPN's networks for SMB servers and asks about those like a LAN server (also from Settings). */
+    /** Servers chosen with "Use NAS" that have no VPN address yet: found on the VPN and added without a question. */
+    @Volatile private var autoFor: Set<String> = emptySet()
+
+    /** A VPN address is stored for [s] (when the VPN is down: any VPN address noted). */
+    private fun hasVpnAddr(s: Source): Boolean {
+        val all = (listOf(s.vpnHost) + s.altHosts).filter { isIpLiteral(it) }
+        if (vpnNets.isEmpty()) return s.vpnHost.isNotBlank()
+        return all.any { a -> ipInt(a)?.let { ip -> vpnNets.any { it.contains(ip) } } == true }
+    }
+
+    /** After "Use NAS" (or Yes on its question): chosen servers without a VPN address are looked for on the VPN now,
+     *  or as soon as it's up, and their address is added as another one (no search by hand in Settings). */
+    private fun autoFind(ids: Set<String>) {
+        val need = lanServers().filter { it.id in ids && !hasVpnAddr(it) }.map { it.id }.toSet()
+        if (need.isEmpty()) return
+        autoFor = autoFor + need
+        if (vpnUp.value) discover()
+    }
+
     fun discover() {
         scope.launch {
-            if (searching.value.isNotEmpty()) return@launch
+            if (searching.value.isNotEmpty()) { if (autoFor.isNotEmpty()) { while (searching.value.isNotEmpty()) delay(500); discover() }; return@launch }
             val nets = vpnNets
             if (nets.isEmpty()) return@launch
             // The VPN's own /24s (and routed nets up to /22): at most ~1000 addresses.
@@ -446,6 +466,12 @@ object VpnLink {
                 ServerLog.log("vpn", "found", "smb", "", true, "Server on the VPN: $ip", "guid ${f.guid} · name ${f.nbName} · mac ${f.mac}" +
                     (best?.let { " · like ${it.first.name.ifBlank { it.first.host }} (${it.second})" } ?: " · like none"))
                 val s = best?.first ?: continue
+                // Chosen with "Use NAS" and no VPN address yet: you already said yes — added at once.
+                if (s.id in autoFor) {
+                    ask.value = s to f; answer(true); autoFor = autoFor - s.id
+                    toast("${s.name.ifBlank { s.host }}: VPN address $ip added")
+                    continue
+                }
                 if ("${s.id}|$ip" in declined) continue
                 // Same server ID or network card: certain — kept without a question (a short note says so).
                 if (best.second >= 3 || (best.second == 2 && f.mac.isNotEmpty() && f.mac == s.mac)) {
@@ -458,6 +484,15 @@ object VpnLink {
                 ask.value = s to f; asked++
             }
             searching.value = ""
+            // Chosen servers still without a VPN address and nothing alike found: the one SMB server on the VPN that
+            // isn't known yet is taken for it (you said yes to using it).
+            val left = lanServers().filter { it.id in autoFor && !hasVpnAddr(it) }
+            val unknown = open.filter { ip -> lanServers().none { it.vpnHost == ip || it.host == ip || ip in it.altHosts } }
+            if (left.size == 1 && unknown.size == 1) {
+                val f = identify(unknown[0]); ask.value = left[0] to f; answer(true)
+                toast("${left[0].name.ifBlank { left[0].host }}: VPN address ${unknown[0]} added")
+            } else if (left.isNotEmpty()) toast("No VPN address found for " + left.joinToString { it.name.ifBlank { it.host } } + " — Settings → VPN → Search the VPN now")
+            autoFor = emptySet()
             if (open.isEmpty()) ServerLog.log("vpn", "search", "smb", "", false, "No server found on the VPN")
         }
     }
