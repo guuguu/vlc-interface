@@ -138,6 +138,24 @@ object RadioCapture {
         }
     }
 
+    /**
+     * Wi-Fi lost (mobile data now) or the connection dropped: recording stops and everything recorded is deleted —
+     * the kept minutes, a song waiting to end or being saved by hand (not saved), and working copies not in use.
+     * A song already being encoded finishes from the copy it holds.
+     */
+    fun dropAll() {
+        synchronized(lock) {
+            status.value = status.value.copy(pending = null)
+            job?.cancel(); job = null
+            try { call?.cancel() } catch (_: Exception) {}; call = null
+            segs.forEach { it.file.delete() }; segs.clear(); marks.clear(); chains.clear()
+            if (::dir.isInitialized && saveQueue.value.isEmpty())
+                dir.listFiles()?.forEach { it.delete() }
+            status.value = status.value.copy(running = false, message = "Recording stopped: connection changed (recording deleted)")
+        }
+        ServerLog.log("saved-songs", "drop", "radio", "", true, "Connection changed: radio recording deleted")
+    }
+
     fun stop() {
         val p = status.value.pending
         job?.cancel(); job = null

@@ -22,6 +22,7 @@ object NetGuard {
     /** Allowed to play radio over mobile data (answered "Continue"); reset when Wi-Fi comes back. */
     @Volatile var mobileOk = false
     private var wifi = false
+    private var online = false
     private var startBytes = -1L
     private var startKey = ""
 
@@ -31,6 +32,11 @@ object NetGuard {
             val w = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true || caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true
             val c = !w && caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
             val wasWifi = wifi
+            val on = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+            val wasOn = online
+            // Wi-Fi → mobile data, or the connection dropped: the radio recording is deleted at once.
+            if ((wasWifi && !w) || (wasOn && !on)) try { app.vlcinterface.sources.RadioCapture.dropAll() } catch (_: Exception) {}
+            online = on
             wifi = w; cellular.value = c
             if (w) mobileOk = false
             if (wasWifi && !w) android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ wifiLost() }, 800)
