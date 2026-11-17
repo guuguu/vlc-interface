@@ -54,7 +54,9 @@ object RadioCapture {
                        val manual: String = "", val name: String = "",
                        val untilAt: Long = 0, val songsLeft: Int = 1, val extraAfterSongMs: Long = 0,
                        /** Format chosen when saving was asked: "original" or "mp3" (kept even if changed later). */
-                       val out: String = App.instance.store.current.settings.saveFormat)
+                       val out: String = App.instance.store.current.settings.saveFormat,
+                       /** Song saves: when to ask what to do if its end hasn't been found (10 min after asking). */
+                       val askAt: Long = System.currentTimeMillis() + 600_000L)
     data class Status(
         val url: String = "", val running: Boolean = false, val format: String = "", val message: String = "",
         val pending: Pending? = null, val busy: String = "", val title: String = "", val titleStartKnown: Boolean = false,
@@ -349,7 +351,7 @@ object RadioCapture {
             val first = segs.firstOrNull()?.start ?: 0
             val partial = !s.titleStartKnown || m.offset < first
             status.value = s.copy(pending = Pending(m.title, maxOf(m.offset, first), partial, station, m.at, s.format, name = name.trim()))
-            return if (partial) "“${m.title}” began before recording started: it is saved from the part recorded, when it ends"
+            return if (partial) "Song start not found: the whole recording (${((total - first) / bytesPerSec / 60).toInt()} min) is saved, up to the song's end"
             else "“${m.title}” will be saved when it ends"
         }
     }
@@ -401,9 +403,27 @@ object RadioCapture {
         }
     }
 
-    /** Timed saves end by themselves (checked every second). */
+    /** "No song end found in 10 minutes": show the question (stop and save / continue / discard). */
+    val endQuestion = MutableStateFlow(false)
+
+    fun answerStop(): String { endQuestion.value = false; return stopNow() }
+    fun answerDiscard() { endQuestion.value = false; cancelPending() }
+    fun answerContinue(minutes: Int): String {
+        synchronized(lock) {
+            endQuestion.value = false
+            val p = status.value.pending ?: return "Nothing is being saved"
+            status.value = status.value.copy(pending = p.copy(manual = "timed", untilAt = System.currentTimeMillis() + minutes * 60_000L))
+            return "Saving $minutes min more"
+        }
+    }
+
+    /** Timed saves end by themselves (checked every second); song saves ask after 10 min without an end. */
     private fun tick() {
-        val p = status.value.pending ?: return
+        val p = status.value.pending
+        val songMode = p != null && (p.manual.isEmpty() || p.manual == "gap")
+        if (!songMode && endQuestion.value) endQuestion.value = false
+        if (songMode && !endQuestion.value && System.currentTimeMillis() >= p!!.askAt) endQuestion.value = true
+        if (p == null) return
         if (p.manual == "timed" && p.untilAt > 0 && System.currentTimeMillis() >= p.untilAt) synchronized(lock) {
             if (status.value.pending === p) { status.value = status.value.copy(pending = null); finishLater(p, total, partialEnd = false) }
         }
@@ -698,6 +718,7 @@ object RadioCapture {
                     at = System.currentTimeMillis() - (((req - (start?.first ?: from)) / bytesPerSec) * 1000).toLong())
                 status.value = status.value.copy(pending = p)
             }
+            if (start == null) toast("Song start not found: the whole recording (${((req - from) / bytesPerSec / 60).toInt()} min) is saved, up to the end you chose", long = false)
             // End: the first gap at least a minute into the song.
             var scanFrom = maxOf(p.start, req - (bytesPerSec * 2).toLong())
             var minEnd = p.start + (bytesPerSec * 60).toLong()
@@ -705,12 +726,6 @@ object RadioCapture {
                 delay(10_000)
                 if (!same()) return
                 val to = synchronized(lock) { total }
-                val cur = status.value.pending ?: return
-                if (System.currentTimeMillis() - p0.at > 15 * 60_000L) {
-                    synchronized(lock) { if (same()) { status.value = status.value.copy(pending = null); finishLater(cur, to, partialEnd = false) } }
-                    ServerLog.log("saved-songs", "end", "radio", "", false, "No gap found within 15 min: saved up to now")
-                    return
-                }
                 if (to - scanFrom < bytesPerSec * 6) continue
                 val end = gapsIn(p, scanFrom, to).firstOrNull { it.first >= minEnd }
                 scanFrom = to - (bytesPerSec * 2).toLong()

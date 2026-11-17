@@ -337,3 +337,39 @@ fun SaveSongBar() {
         androidx.compose.foundation.layout.Box(Modifier.fillMaxWidth(v).fillMaxHeight().background(col))
     }
 }
+
+/**
+ * A song being saved has shown no end for 10 minutes: stop and save what's recorded, go on for a chosen time,
+ * or discard everything. Recording goes on while the question waits.
+ */
+@Composable
+fun SaveEndQuestionHost() {
+    val ask by RadioCapture.endQuestion.collectAsState()
+    if (!ask) return
+    val cap by RadioCapture.status.collectAsState()
+    val ctx = LocalContext.current
+    var custom by remember { mutableStateOf("") }
+    fun say(t: String) { Toast.makeText(ctx, t, Toast.LENGTH_SHORT).show() }
+    val title = cap.pending?.let { it.name.ifBlank { it.title } }?.ifBlank { null }
+    AlertDialog(onDismissRequest = {}, containerColor = C.panel,
+        title = { Text("No song end found", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("No end of " + (title?.let { "“$it”" } ?: "the song") + " was detected in 10 minutes. Recording goes on.", color = C.text, fontSize = 14.sp)
+                Text("Continue for", color = C.muted, fontSize = 13.sp)
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(2, 5, 10, 15).forEach { m -> Pill("$m min") { say(RadioCapture.answerContinue(m)) } }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.material3.OutlinedTextField(custom, { v -> custom = v.filter { it.isDigit() }.take(3) }, singleLine = true,
+                        modifier = Modifier.weight(1f), label = { Text("Minutes") },
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                    val m = custom.toIntOrNull() ?: 0
+                    Pill("Continue", filled = m in 1..180) { if (m in 1..180) say(RadioCapture.answerContinue(m)) }
+                }
+            }
+        },
+        confirmButton = { STextButton({ say(RadioCapture.answerStop()) }) { Text("Stop and save", color = accent(), fontWeight = FontWeight.Bold) } },
+        dismissButton = { STextButton({ RadioCapture.answerDiscard(); say("Discarded") }) { Text("Discard everything", color = C.bad) } },
+    )
+}
