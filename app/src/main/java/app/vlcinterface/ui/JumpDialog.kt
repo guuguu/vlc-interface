@@ -69,7 +69,7 @@ fun JumpDialog(playNext: Boolean = false, onDone: () -> Unit) {
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().clickable(
             interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null, onClick = onDone)
-            .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.ime))
+            .dialogBarsPadding()
             .padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.TopCenter) {
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.popup)
                 .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -52,7 +53,7 @@ fun AlertDialog(
         // Tapping outside closes it, like a normal dialog.
         Box(Modifier.fillMaxSize()
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismissRequest)
-            .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.ime))
+            .dialogBarsPadding()
             .padding(horizontal = 20.dp, vertical = 12.dp),
             contentAlignment = Alignment.Center) {
             Column(modifier.widthIn(max = 560.dp).fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(if (containerColor == C.panel) C.popup else containerColor.copy(alpha = UiPrefs.popupAlpha))
@@ -78,4 +79,23 @@ fun AlertDialog(
             }
         }
     }
+}
+
+
+/**
+ * Keeps a dialog window's content clear of the status bar, the navigation / gesture bar and the keyboard. A dialog
+ * window doesn't always receive the screen's bars, so the app's own window is asked too and the larger value used —
+ * otherwise the buttons at the bottom could end up under the navigation bar, out of reach.
+ */
+@Composable
+fun Modifier.dialogBarsPadding(): Modifier {
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    val act = androidx.compose.ui.platform.LocalContext.current.let { c ->
+        var x = c; while (x is android.content.ContextWrapper && x !is android.app.Activity) x = x.baseContext; x as? android.app.Activity }
+    val bars = act?.window?.decorView?.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+    val own = WindowInsets.safeDrawing.union(WindowInsets.ime)
+    val top = with(dens) { maxOf(own.getTop(dens), bars?.top ?: 0).toDp() }
+    val bottom = with(dens) { maxOf(own.getBottom(dens), bars?.bottom ?: 0).toDp() }
+    return this.padding(top = top, bottom = bottom)
+        .windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Horizontal))
 }

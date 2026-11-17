@@ -145,7 +145,7 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDone,
         properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.ime)).padding(horizontal = 16.dp, vertical = 12.dp),
+            .dialogBarsPadding().padding(horizontal = 16.dp, vertical = 12.dp),
             contentAlignment = androidx.compose.ui.Alignment.TopCenter) {
             androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.popup).padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
