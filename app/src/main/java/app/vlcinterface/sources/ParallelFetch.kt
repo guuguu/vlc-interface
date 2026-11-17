@@ -174,6 +174,9 @@ object ParallelFetch {
         }
     }
 
+    /** Size of a network file (0 if unknown). */
+    fun sizeOf(p: PlayItem): Long = try { remote(p)?.size ?: 0L } catch (_: Exception) { 0L }
+
     /** SHA-256 of a stream. */
     private fun sha(i: java.io.InputStream): ByteArray {
         val md = java.security.MessageDigest.getInstance("SHA-256"); val b = ByteArray(1 shl 20)

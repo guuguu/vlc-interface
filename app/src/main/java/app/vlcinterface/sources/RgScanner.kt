@@ -94,8 +94,30 @@ object RgScanner {
     @Volatile private var copyThreads = 4
     /** Copies being made by the download workers (uri → ready copy, null if it couldn't be made). */
     private val ready = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.CompletableDeferred<File?>>()
-    /** A "waiting copy" slot held per song until it's measured. */
-    private val heldAhead = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.sync.Semaphore>()
+    /** Most space the scan's copies may take on the phone. */
+    private const val COPY_LIMIT = 500L * 1024 * 1024
+    /** Bytes of downloads under way (counted before they land). */
+    private val reserved = java.util.concurrent.atomic.AtomicLong(0)
+    /** Songs whose copies are measured (oldest first): let go first when room is needed. */
+    private val measuredCopies = LinkedHashSet<String>()
+
+    private fun copiesBytes() = copies.values.sumOf { if (it.isFile) it.length() else 0L }
+
+    /** Waits until a copy of [size] bytes fits under 500 MB (one file alone always fits). */
+    private fun waitForRoom(item: PlayItem, size: Long) {
+        var shown = false
+        while (!cancelled()) {
+            synchronized(reserved) {
+                val used = copiesBytes() + reserved.get()
+                if (used + size <= COPY_LIMIT || (used == 0L)) { reserved.addAndGet(size); return }
+                // Room needed: a measured copy goes (its tag update reads the song again).
+                val u = synchronized(measuredCopies) { measuredCopies.firstOrNull()?.also { measuredCopies.remove(it) } }
+                if (u != null) { copies.remove(u)?.delete(); return@synchronized }
+            }
+            if (!shown) { shown = true; update { st -> st.copy(phase = "Downloads waiting: 500 MB of copies on the phone") } }
+            Thread.sleep(1000)
+        }
+    }
 
     /** A NAS song away from home: waits until VPN-NAS is unlocked with "Wi-Fi" (or you're home). */
     private fun waitNasWifi(it: PlayItem) {
@@ -311,10 +333,11 @@ object RgScanner {
         val meters = java.util.concurrent.ConcurrentHashMap<String, Loudness>()
         val toMeasure = synchronized(todo) { todo.toList() }.flatten()
         // Dedicated download workers: network songs are copied ahead, in list order, while others are measured —
-        // the network and the phone work at the same time. At most 4 copies wait ready on the phone.
+        // the network and the phone work at the same time. Never more than 500 MB of copies on the phone: a
+        // download waits until there's room (measured copies are let go first; their tag update reads them again).
         val net = toMeasure.filter { (it.uri.startsWith("smb://") || it.uri.startsWith("http")) && Prefetch.localFor(it.uri) == null }
         net.forEach { ready[it.uri] = kotlinx.coroutines.CompletableDeferred() }
-        val ahead = kotlinx.coroutines.sync.Semaphore(4)
+        measuredCopies.clear(); reserved.set(0)
         val dlWorkers = net.size.coerceIn(0, 2)
         copyThreads = maxOf(2, 8 / maxOf(1, dlWorkers))
         val dl = if (net.isEmpty()) null else scope.launch {
@@ -325,10 +348,11 @@ object RgScanner {
                         while (true) {
                             val i = next.getAndIncrement(); if (i >= net.size) break
                             val item = net[i]
-                            ahead.acquire()                              // room for one more waiting copy
-                            heldAhead[item.uri] = ahead
                             waitNasWifi(item)
+                            val size = try { ParallelFetch.sizeOf(item) } catch (_: Exception) { 0L }
+                            waitForRoom(item, size)
                             val f = try { netCopy(ctx, item, copyThreads) { f -> fracs[item.uri] = f * 0.5f; update { st -> st } } } catch (_: Exception) { null }
+                            reserved.addAndGet(-size)
                             ready[item.uri]?.complete(f)
                         }
                     }
@@ -357,13 +381,12 @@ object RgScanner {
             val bad = m != null && (m.integrated.let { v -> v.isNaN() || v.isInfinite() } || m.peak.isNaN() || m.peak > 4f)
             if (bad) addResult(RgResult(it.title, "measurement failed (no usable sound decoded) — nothing written", false))
             if (m != null && !bad) meters[it.uri] = m
-            heldAhead.remove(it.uri)?.release()                          // its copy is measured: room for the next
+            synchronized(measuredCopies) { measuredCopies += it.uri }   // its copy may go when room is needed
             fracs.remove(it.uri)
             update { s -> s.copy(done = s.done + 1, measured = s.measured + 1, problems = s.problems + if (m == null || bad) 1 else 0, results = snapshot()) }
         }
         } finally {
             dl?.cancel(); ready.values.forEach { it.complete(null) }; ready.clear()
-            heldAhead.values.forEach { try { it.release() } catch (_: Exception) {} }; heldAhead.clear()
         }
         // Values per album, then saving — also several files at once.
         val writes = ArrayList<Pair<PlayItem, Map<String, String>>>()
@@ -438,8 +461,9 @@ object RgScanner {
             // Network file: copied first with several connections (tuned to the bandwidth), then read from the phone;
             // kept for the tag update that follows. A cached copy (next song) is used as it is.
             // Copied ahead by the download workers (waits for it if still coming), else copied here.
-            val local = ready[uri]?.let { d -> kotlinx.coroutines.runBlocking { d.await() } }
-                ?: netCopy(ctx, item, copyThreads) { f -> onProgress(f * 0.5f) }
+            val pending = ready[uri]
+            val local = if (pending != null) kotlinx.coroutines.runBlocking { pending.await() }      // copy from the download workers
+                else netCopy(ctx, item, copyThreads) { f -> onProgress(f * 0.5f) }
             val base = if (local != null && (uri.startsWith("smb://") || uri.startsWith("http"))) 0.5f else 0f
             when {
                 local != null -> ex.setDataSource(local.path)
