@@ -49,8 +49,10 @@ object RadioCapture {
     data class Mark(val title: String, val offset: Long, val at: Long)
     data class Pending(val title: String, val start: Long, val partialStart: Boolean, val station: String,
                        val at: Long = System.currentTimeMillis(), val format: String = "",
-                       /** Saved by hand: "start" = Start / Stop saving, "last" = the last X minutes; "" = the announced song. */
-                       val manual: String = "", val name: String = "")
+                       /** Saved by hand: "start" = Start / Stop saving, "last" = the last X minutes, "timed" = for X minutes
+                        *  from now (ends at [untilAt]); "" = the announced song (ends with it, or after [songsLeft] songs). */
+                       val manual: String = "", val name: String = "",
+                       val untilAt: Long = 0, val songsLeft: Int = 1, val extraAfterSongMs: Long = 0)
     data class Status(
         val url: String = "", val running: Boolean = false, val format: String = "", val message: String = "",
         val pending: Pending? = null, val busy: String = "", val title: String = "", val titleStartKnown: Boolean = false,
@@ -100,6 +102,7 @@ object RadioCapture {
         // App ended last time in the middle of a song: its recording and any half-made save are simply dropped.
         dir = File(ctx.cacheDir, "radiocap").apply { deleteRecursively(); mkdirs() }
         scope.launch { cleanLeftovers(ctx) }
+        scope.launch { while (true) { delay(1000); try { tick() } catch (_: Exception) {} } }
         val player = App.instance.player
         // Follows the player and the network: on while a station plays and the setting allows it.
         scope.launch {
@@ -322,8 +325,15 @@ object RadioCapture {
             marks += Mark(t, at, System.currentTimeMillis())
             // The first title heard was already playing: its start was not recorded.
             status.value = status.value.copy(title = t, titleStartKnown = !first)
-            // The announced song ended (saving by hand goes on until you stop it).
-            status.value.pending?.let { p -> if (p.manual.isEmpty() && p.title != t) { status.value = status.value.copy(pending = null); finishLater(p, at, partialEnd = false) } }
+            // The announced song ended (saving by hand goes on until you stop it): extended by songs or minutes, or saved.
+            status.value.pending?.let { p ->
+                if (p.manual.isEmpty() && p.title != t) when {
+                    p.songsLeft > 1 -> status.value = status.value.copy(pending = p.copy(songsLeft = p.songsLeft - 1))
+                    p.extraAfterSongMs > 0 -> status.value = status.value.copy(pending = p.copy(manual = "timed",
+                        untilAt = System.currentTimeMillis() + p.extraAfterSongMs, extraAfterSongMs = 0))
+                    else -> { status.value = status.value.copy(pending = null); finishLater(p, at, partialEnd = false) }
+                }
+            }
         }
     }
 
@@ -343,6 +353,59 @@ object RadioCapture {
     }
 
     fun cancelPending() { status.value = status.value.copy(pending = null) }
+
+    /** Saving for [minutes] from now (start and end moved to the gap between songs); can be stopped or extended. */
+    fun saveFor(minutes: Int, name: String): String {
+        synchronized(lock) {
+            val s = status.value
+            if (!s.running) return s.message.ifEmpty { "Recording is off for this station (Settings → Saved songs)" }
+            if (s.pending != null) return "Already saving"
+            val now = System.currentTimeMillis()
+            status.value = s.copy(pending = Pending(marks.lastOrNull()?.title ?: "", total, false, station, now, s.format, "timed", name.trim(),
+                untilAt = now + minutes * 60_000L))
+            return "Saving for $minutes min"
+        }
+    }
+
+    /** Longer: by [ms] (timed: later end; the announced song: that much after it ends). */
+    fun extend(ms: Long): String {
+        synchronized(lock) {
+            val p = status.value.pending ?: return "Nothing is being saved"
+            status.value = status.value.copy(pending = when (p.manual) {
+                "timed" -> p.copy(untilAt = maxOf(p.untilAt, System.currentTimeMillis()) + ms)
+                "" -> p.copy(extraAfterSongMs = p.extraAfterSongMs + ms)
+                else -> return "Saving goes on until you stop it"
+            })
+            return "Extended by ${ms / 60_000} min"
+        }
+    }
+
+    /** The announced song: the next one too. */
+    fun addSong(): String {
+        synchronized(lock) {
+            val p = status.value.pending?.takeIf { it.manual.isEmpty() } ?: return "Only when saving to the end of a song"
+            status.value = status.value.copy(pending = p.copy(songsLeft = p.songsLeft + 1))
+            return "The next song is saved too"
+        }
+    }
+
+    /** Stop now: what's recorded so far is saved (end moved to the nearest gap). */
+    fun stopNow(): String {
+        synchronized(lock) {
+            val p = status.value.pending ?: return "Nothing is being saved"
+            status.value = status.value.copy(pending = null)
+            finishLater(p, total, partialEnd = false)
+            return "Stopped: saved up to now"
+        }
+    }
+
+    /** Timed saves end by themselves (checked every second). */
+    private fun tick() {
+        val p = status.value.pending ?: return
+        if (p.manual == "timed" && p.untilAt > 0 && System.currentTimeMillis() >= p.untilAt) synchronized(lock) {
+            if (status.value.pending === p) { status.value = status.value.copy(pending = null); finishLater(p, total, partialEnd = false) }
+        }
+    }
 
     /** Seconds of the station kept now (what "the last X minutes" can reach). */
     fun recordedSec(): Double = synchronized(lock) { (total - (segs.firstOrNull()?.start ?: total)) / bytesPerSec }

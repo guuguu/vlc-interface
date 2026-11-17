@@ -1773,7 +1773,7 @@ private fun StationMenu(item: PlayItem, open: Boolean, onClose: () -> Unit) {
     if (links) SongLinksDialog(npArtist, npTitle, 0, "", null) { links = false }
     val cap by app.vlcinterface.sources.RadioCapture.status.collectAsState()
     SDropdownMenu(open, onClose) {
-        SMenuItem({ Text(if (cap.pending != null) "Saving when it ends…" else "Save this song…") }, { onClose(); saveSong = true })
+        SMenuItem({ Text(if (cap.pending != null) "Saving… (stop / extend)" else "Save this song…") }, { onClose(); saveSong = true })
         if (npTitle.isNotBlank()) SMenuItem({ Text("YouTube / Spotify links…") }, { onClose(); links = true })
         SMenuItem({ Text("Open Shazam") }, { onClose(); openShazam(ctx) })
         SMenuItem({ Text(if (fav != null) "Remove from favourites" else "Add to favourites") }, {
