@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.launch
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import app.vlcinterface.App
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -281,14 +282,33 @@ fun UseNasButton() {
     val on by v.useNas.collectAsState()
     val vpn by v.vpnUp.collectAsState()
     var pick by remember { mutableStateOf(false) }
-    val active = on.isNotEmpty()
-    val label = when { active -> "Using NAS (${on.size})"; vpn -> "Use NAS"; else -> "Use NAS · VPN off" }
+    var needVpn by remember { mutableStateOf(false) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    // The NAS away from home goes only through the VPN: "VPN-NAS on" / "off". Tap: on/off (several servers: pick
+    // which); long-press: the list. Without the VPN: a 3 s note to start it.
+    val active = on.isNotEmpty() && vpn
+    val label = if (active) "VPN-NAS on" + (if (on.size > 1) " (${on.size})" else "") else "VPN-NAS off"
     Box(Modifier.padding(top = 4.dp).clip(RoundedCornerShape(16.dp))
         .background(if (active) accent() else C.tile)
         .border(1.dp, if (active) accent() else if (vpn) accent().copy(alpha = 0.6f) else C.muted.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
-        .clickable { pick = true }.padding(horizontal = 14.dp, vertical = 6.dp)) {
+        .combinedClickable(onClick = {
+            when {
+                !vpn -> needVpn = true
+                active -> v.setUse(emptySet()).also { app.vlcinterface.player.NetGuard.mobileOk = false }
+                v.lanServers().size == 1 -> app.vlcinterface.player.NetGuard.useNas(ctx, v.lanServers().map { it.id }.toSet())
+                else -> pick = true
+            }
+        }, onLongClick = { if (vpn) pick = true else needVpn = true }).padding(horizontal = 14.dp, vertical = 6.dp)) {
         Text(label, color = if (active) Color.Black else if (vpn) accent() else C.muted, fontSize = 13.sp,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+    }
+    if (needVpn) {
+        LaunchedEffect(Unit) { kotlinx.coroutines.delay(3_000); needVpn = false }
+        AlertDialog(onDismissRequest = { needVpn = false }, containerColor = C.panel,
+            title = { Text("Start the VPN", color = C.text) },
+            text = { Text("The NAS is used away from home only through the VPN. Start it, then press VPN-NAS again.", color = C.text, fontSize = 14.sp) },
+            confirmButton = { STextButton({ needVpn = false; android.widget.Toast.makeText(ctx, v.startVpn(ctx), android.widget.Toast.LENGTH_LONG).show() }) {
+                Text("Start the VPN", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) } })
     }
     if (pick) NasPickDialog { pick = false }
 }
