@@ -107,6 +107,25 @@ object NetIndex {
     fun internetBusy(): Boolean = inWork.values.any { (s, p) -> try { app.vlcinterface.player.NetGuard.needsInternet(Urls.forSource(s.copy(path = ""), p)) } catch (_: Exception) { false } }
     fun resume() { val l = held.values.toList(); held.clear(); l.forEach { (s, p) -> build(s, p) } }
 
+    /** Folders waiting because the VPN is on. */
+    private val vpnHeld = java.util.concurrent.ConcurrentHashMap<String, Pair<Source, String>>()
+
+    /** VPN up: indexing running now stops; it and anything asked meanwhile wait for the VPN to go off. */
+    fun vpnOn() {
+        val running = synchronized(jobs) { jobs.toList() }
+        if (running.isEmpty()) return
+        vpnHeld.putAll(inWork)
+        running.forEach { it.cancel() }
+        busy.value = ""
+        app.vlcinterface.data.ServerLog.log("vpn", "index", "", "", true, "Indexing stopped: VPN on (goes on when it's off)")
+    }
+
+    /** VPN off: the waiting folders are indexed. */
+    fun vpnOff() {
+        val l = vpnHeld.values.toList(); vpnHeld.clear()
+        l.forEach { (s, p) -> build(s, p) }
+    }
+
     /** Low battery: every indexing run stops (what was already indexed is kept). */
     fun stopAll() {
         val running = synchronized(jobs) { jobs.toList() }
@@ -120,6 +139,8 @@ object NetIndex {
         if (app.vlcinterface.player.BatteryGuard.busyBlocked(silent = true)) return   // battery 15 % or less: no indexing
         val k = key(src, pin)
         if (app.vlcinterface.player.BackgroundWork.paused.value) { held[k] = src to pin; return }   // paused: later
+        // VPN on: no indexing at all — it waits until the VPN is off.
+        if (VpnLink.vpnUp.value) { vpnHeld[k] = src to pin; return }
         if (!building.add(k)) return                     // already queued / running
         inWork[k] = src to pin
         lateinit var job: kotlinx.coroutines.Job

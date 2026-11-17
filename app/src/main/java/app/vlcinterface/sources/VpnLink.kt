@@ -129,10 +129,11 @@ object VpnLink {
             announceSwitches()
             if (vpnUp.value && !wasUp) {
                 ServerLog.log("vpn", "up", "vpn", "", true, "VPN / tunnel up: " + self.joinToString { ipStr(it) })
+                NetIndex.vpnOn()
                 if (on() || autoFor.isNotEmpty()) discover()
                 if (useNas.value.isNotEmpty()) try { App.instance.player.restoreNas() } catch (_: Exception) {}
             }
-            if (!vpnUp.value && wasUp) ServerLog.log("vpn", "down", "vpn", "", true, "VPN / tunnel down")
+            if (!vpnUp.value && wasUp) { ServerLog.log("vpn", "down", "vpn", "", true, "VPN / tunnel down"); NetIndex.vpnOff() }
             checkNeedVpn()
         }
     }
