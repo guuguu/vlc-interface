@@ -576,6 +576,8 @@ fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
     try { app.vlcinterface.sources.RadioCapture.wipe() } catch (_: Exception) {}
     try { app.vlcinterface.sources.Prefetch.clear() } catch (_: Exception) {}
     try { app.vlcinterface.sources.ParallelFetch.report() } catch (_: Exception) {}
+    // The queue and the position: kept for the next start.
+    try { app.vlcinterface.player.QueueKeeper.save(a.player.state.value, a.player.originalOrder()) } catch (_: Exception) {}
     try { a.player.stop() } catch (_: Exception) {}
     // Sleep closing the app keeps its "Player closed by sleep timer" notification; everything else is removed.
     try { val nm = a.getSystemService(android.app.NotificationManager::class.java); if (keepNotice) a.media.cancelAll() else nm.cancelAll() } catch (_: Exception) {}

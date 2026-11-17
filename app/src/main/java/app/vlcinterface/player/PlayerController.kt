@@ -925,6 +925,21 @@ class PlayerController(private val context: Context, private val store: Store) {
         app.vlcinterface.data.ServerLog.log("player", "nas-back", "", "", true, "NAS usable: list reloaded with its NAS songs (${ordered.size})")
     }
 
+    /** The list in its original order while shuffled (null when not shuffled). */
+    fun originalOrder(): List<PlayItem>? = orderedQueue
+
+    /** App start: the queue kept over the restart, its song ready and paused at [time]. */
+    fun restoreQueue(q: List<PlayItem>, index: Int, time: Long, origin: Origin, ordered: List<PlayItem>?) = main.post {
+        if (_state.value.item != null) return@post                  // something was started meanwhile: kept
+        orderedQueue = ordered
+        fullList = (ordered ?: q).filter { !it.isRadio }
+        _state.value = PlayerState(queue = q, index = index, origin = origin)
+        if (nasOff(q[index])) { pruneNas(); return@post }           // NAS not usable now: the next local song
+        startPaused = true
+        NativeAudio.appVolume(0f)
+        startItem(index, if (q[index].isRadio) -1 else time.coerceAtLeast(0))
+    }
+
     /** NAS not usable (VPN-NAS off, VPN down …): the queue is refreshed to local songs only. */
     fun pruneNas() = main.post {
         val s = _state.value
