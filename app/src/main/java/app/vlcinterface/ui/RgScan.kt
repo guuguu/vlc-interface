@@ -152,7 +152,7 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, initialM
                 val its = items ?: return@STextButton
                 RgScanner.start(ctx.applicationContext, its, mode, target, rescan)
                 onDone(); nav.go(Screen.RgScan)
-            }, enabled = !items.isNullOrEmpty() && !RgScanner.state.value.running) { Text("Scan", color = accent()) }
+            }, enabled = !items.isNullOrEmpty()) { Text(if (RgScanner.state.value.running) "Add to queue" else "Scan", color = accent()) }
         },
         dismissButton = { STextButton(onDone) { Text("Cancel") } },
     )
@@ -175,8 +175,18 @@ fun RgScanScreen(nav: Navigator) {
                 "Measured ${s.measured}/${s.total}", "Saved ${s.saved}", if (s.skipped > 0) "Skipped ${s.skipped}" else null,
                 if (s.problems > 0) "Problems ${s.problems}" else null).joinToString(" · "), color = C.text, fontSize = 13.sp)
             if (s.running) Text("You can leave this page, the scan continues. Results are listed per album once it's measured.", color = C.muted, fontSize = 12.sp)
+            val queued by RgScanner.queued.collectAsState()
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (s.running) Pill("Stop") { RgScanner.cancel() } else Pill("Close", filled = true) { nav.back() }
+                if (s.running) Pill(if (queued.isEmpty()) "Stop" else "Skip to next") { RgScanner.cancel() } else Pill("Close", filled = true) { nav.back() }
+                if (queued.isNotEmpty()) Pill("Stop all") { RgScanner.cancelAll() }
+            }
+            // Waiting scans, in order; tap one to take it out.
+            if (queued.isNotEmpty()) {
+                Text("Queue (${queued.size}) — tap to remove", color = accent(), fontSize = 13.sp)
+                queued.forEachIndexed { i, name ->
+                    Text("${i + 1}. $name", color = C.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth().clickable { RgScanner.dropQueued(i) }.padding(vertical = 2.dp))
+                }
             }
         }
         LazyColumn(Modifier.weight(1f).scrollbar(state).padding(horizontal = 16.dp, vertical = 8.dp), state = state) {

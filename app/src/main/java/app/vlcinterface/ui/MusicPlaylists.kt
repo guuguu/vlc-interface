@@ -151,7 +151,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.text) }
             // Jump to a song: search the queue and the Library; plays it (added after the current song if new).
             SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
-        }) { ScreenOnSign(C.text); OutputPill(openOutput); ExitButton() }
+        }) { BackgroundWorkButton(); ScreenOnSign(C.text); OutputPill(openOutput); ExitButton() }
         if (jump) JumpDialog { jump = false }
         if (playNextPick) JumpDialog(playNext = true) { playNextPick = false }
         // Upright: one scrolling page. Sideways: the same page split in two under the track / ReplayGain line —
@@ -182,8 +182,13 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (item.isRadio) RadioHeader(item, p, tk) else
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 // Tap the song name: its folder in Libraries.
-                Text(item.title, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clickable { openItemFolder(nav, item) })
+                // Long-press: the song's menu (ReplayGain scan, YouTube / Spotify links, file path).
+                var songMenu by remember { mutableStateOf(false) }
+                Box {
+                    Text(item.title, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.combinedClickable(onClick = { openItemFolder(nav, item) }, onLongClick = { songMenu = true }))
+                    SongTitleMenu(item.copy(album = p.metaAlbum.ifEmpty { item.album }), p.metaArtist.ifEmpty { item.artist }, p.length, songMenu) { songMenu = false }
+                }
                 // Long-press the album: ReplayGain scan of the whole album (its songs in the current folder / queue).
                 var rgAlbum by remember { mutableStateOf(false) }
                 val albumName = p.metaAlbum.ifEmpty { item.album }
@@ -784,14 +789,13 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                     SMenuItem({ Text("ReplayGain scan — songs without RG") }, {
                         menu = false
                         val its = pl.items.map { MusicLibrary.fromPlEntry(it) }.filter { it.isMusic }.distinctBy { it.uri }
-                        if (app.vlcinterface.sources.RgScanner.state.value.running)
-                            android.widget.Toast.makeText(ctx, "A ReplayGain scan is already running", android.widget.Toast.LENGTH_SHORT).show()
-                        else if (its.isEmpty())
+                        if (its.isEmpty())
                             android.widget.Toast.makeText(ctx, "No songs in this playlist", android.widget.Toast.LENGTH_SHORT).show()
                         else {
+                            val busy = app.vlcinterface.sources.RgScanner.state.value.running
                             app.vlcinterface.sources.RgScanner.start(ctx.applicationContext, its, app.vlcinterface.sources.RgMode.TRACK,
                                 app.vlcinterface.sources.RgTarget.FILES, rescanTagged = false, onlyWithoutRg = true, confirmTitle = pl.name)
-                            android.widget.Toast.makeText(ctx, "ReplayGain scan started: ${its.size} songs, those without RG get track gain",
+                            android.widget.Toast.makeText(ctx, if (busy) "Queued: ReplayGain scan of ${its.size} songs" else "ReplayGain scan started: ${its.size} songs, those without RG get track gain",
                                 android.widget.Toast.LENGTH_LONG).show()
                         }
                     })
@@ -1742,7 +1746,18 @@ private fun StationMenu(item: PlayItem, open: Boolean, onClose: () -> Unit) {
     var rename by remember { mutableStateOf(false) }
     if (details) StationDetailsDialog(fav ?: app.vlcinterface.data.Station(name = item.title, url = item.uri, meta = LastStationMeta.of(item.uri), favicon = item.artwork)) { details = false }
     if (rename && fav != null) StationRenameDialog(fav) { rename = false }
+    // The song now playing: save it, its links, Shazam.
+    val p by App.instance.player.state.collectAsState()
+    val (npArtist, npTitle) = app.vlcinterface.player.splitNowPlaying(p.nowPlaying)
+    var saveSong by remember { mutableStateOf(false) }
+    var links by remember { mutableStateOf(false) }
+    if (saveSong) SaveSongDialog { saveSong = false }
+    if (links) SongLinksDialog(npArtist, npTitle, 0, "", null) { links = false }
+    val cap by app.vlcinterface.sources.RadioCapture.status.collectAsState()
     SDropdownMenu(open, onClose) {
+        SMenuItem({ Text(if (cap.pending != null) "Saving when it ends…" else "Save this song…") }, { onClose(); saveSong = true })
+        if (npTitle.isNotBlank()) SMenuItem({ Text("YouTube / Spotify links…") }, { onClose(); links = true })
+        SMenuItem({ Text("Open Shazam") }, { onClose(); openShazam(ctx) })
         SMenuItem({ Text(if (fav != null) "Remove from favourites" else "Add to favourites") }, {
             onClose(); toggleFavourite(item.title, item.uri, LastStationMeta.of(item.uri), item.artwork) })
         if (fav != null) SMenuItem({ Text("Rename…") }, { onClose(); rename = true })

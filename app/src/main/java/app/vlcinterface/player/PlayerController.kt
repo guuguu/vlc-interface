@@ -1040,6 +1040,9 @@ class PlayerController(private val context: Context, private val store: Store) {
      * a specific song picked, a song skipped; a day of plain listening leaves no list (removed the next day).
      * One per day, never two; a normal playlist you can play, but it never starts by itself.
      */
+    /** Songs saved from the radio go into today's session playlist (a choice made by hand: the list is kept). */
+    fun addToSession(items: List<PlayItem>) = session(null, items, manual = true)
+
     private fun session(played: PlayItem?, added: List<PlayItem>, manual: Boolean = added.isNotEmpty()) {
         val add = added.filter { it.isMusic || it.isRadio }
         val c = java.util.Calendar.getInstance()

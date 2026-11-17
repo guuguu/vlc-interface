@@ -88,6 +88,17 @@ object NetIndex {
     private val building = java.util.Collections.synchronizedSet(HashSet<String>())
 
     private val jobs = java.util.Collections.synchronizedSet(HashSet<kotlinx.coroutines.Job>())
+    /** Folders being indexed (to resume them after "Pause background work"), and those waiting while paused. */
+    private val inWork = java.util.concurrent.ConcurrentHashMap<String, Pair<Source, String>>()
+    private val held = java.util.concurrent.ConcurrentHashMap<String, Pair<Source, String>>()
+
+    /** Player's pause button: indexing stops now; the folders it was doing are done again on resume. */
+    fun pause() {
+        held.putAll(inWork)
+        synchronized(jobs) { jobs.toList() }.forEach { it.cancel() }
+        busy.value = ""
+    }
+    fun resume() { val l = held.values.toList(); held.clear(); l.forEach { (s, p) -> build(s, p) } }
 
     /** Low battery: every indexing run stops (what was already indexed is kept). */
     fun stopAll() {
@@ -101,7 +112,9 @@ object NetIndex {
     fun build(src: Source, pin: String) {
         if (app.vlcinterface.player.BatteryGuard.busyBlocked(silent = true)) return   // battery 15 % or less: no indexing
         val k = key(src, pin)
+        if (app.vlcinterface.player.BackgroundWork.paused.value) { held[k] = src to pin; return }   // paused: later
         if (!building.add(k)) return                     // already queued / running
+        inWork[k] = src to pin
         lateinit var job: kotlinx.coroutines.Job
         job = scope.launch(start = kotlinx.coroutines.CoroutineStart.LAZY) {
             try { lock.withLock {
@@ -126,7 +139,7 @@ object NetIndex {
                         "Indexed $name: ${songs.size} songs", url)
                 }
                 busy.value = ""
-            } } finally { building.remove(k); jobs.remove(job); if (job.isCancelled) busy.value = "" }
+            } } finally { building.remove(k); inWork.remove(k); jobs.remove(job); if (job.isCancelled) busy.value = "" }
         }
         jobs.add(job); job.start()
     }

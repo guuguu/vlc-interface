@@ -93,6 +93,35 @@ fun SettingsScreen(nav: Navigator) {
                     else "Battery saver may stop playback between songs in the background", if (free) "Unrestricted ✓" else "Allow") { Battery.ask(bctx) }
             }
             SoundSettings(s, ::set)
+            // Radio songs saved from the player (station menu → Save this song).
+            SectionTitle("Saved songs")
+            CardBox {
+                val sctx = LocalContext.current
+                val pickSave = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
+                    if (uri != null) try {
+                        sctx.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                        set(s.copy(saveFolder = uri.toString()))
+                    } catch (_: Exception) {}
+                }
+                // Default: raw/ and mp3/ in the root of the phone music library (found from where its songs are).
+                var root by remember { mutableStateOf("") }
+                LaunchedEffect(Unit) { root = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { app.vlcinterface.sources.RadioCapture.libraryRoot(sctx).second } }
+                ValueRow("Folder", (if (s.saveFolder.isEmpty()) root.ifEmpty { "Library root" } else android.net.Uri.decode(s.saveFolder).substringAfterLast(':').ifEmpty { "Chosen folder" }.trimEnd('/') + "/") +
+                    "raw (original) · mp3 (re-encoded)", "Choose") { pickSave.launch(null) }
+                if (s.saveFolder.isNotEmpty()) { Divider(); ValueRow("Back to the library root", "", "Reset") { set(s.copy(saveFolder = "")) } }
+                Divider()
+                ValueRow("Format", if (s.saveFormat == "original") "As the station sends it (MP3 as is, AAC as .m4a)" else "Re-encoded, best VBR quality",
+                    if (s.saveFormat == "original") "Original" else "MP3 V0") { set(s.copy(saveFormat = if (s.saveFormat == "original") "mp3" else "original")) }
+                Divider()
+                ValueRow("Keep radio ready to save", "Records the playing station (a second connection: double data)",
+                    when (s.radioCapture) { "always" -> "Always"; "off" -> "Off"; else -> "Wi-Fi only" }) {
+                    set(s.copy(radioCapture = when (s.radioCapture) { "wifi" -> "always"; "always" -> "off"; else -> "wifi" }))
+                }
+                Divider()
+                ValueRow("Saved songs log", "Each song saved, or why not", "Open") { nav.go(Screen.LogPage("saved-songs")) }
+                Divider()
+                ValueRow("MP3 encoder", "LAME ${app.vlcinterface.sources.Mp3Encoder.version} — LGPL, bundled unchanged as libmp3lame.so (lame.sourceforge.io)", "") {}
+            }
             SectionTitle("Network")
             CardBox {
                 ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }

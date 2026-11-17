@@ -87,7 +87,37 @@ object RgScanner {
 
     fun reportSeen() { _state.value = _state.value.copy(reportPending = false, confirmTitle = "") }
 
+    /** Stops the scan running now; the queued ones follow. */
     fun cancel() { job?.cancel(); _state.value = _state.value.copy(running = false, finished = true, phase = "Cancelled") }
+    /** Stops the scan running now and drops the queue. */
+    fun cancelAll() { queue.clear(); queued.value = emptyList(); cancel() }
+
+    /** Scans asked for while one runs wait here and start one after the other. */
+    private class Queued(val ctx: Context, val items: List<PlayItem>, val mode: RgMode, val target: RgTarget, val rescan: Boolean,
+                         val onlyWithoutRg: Boolean, val confirmTitle: String, val label: String)
+    private val queue = java.util.concurrent.ConcurrentLinkedDeque<Queued>()
+    private var current: Queued? = null
+    /** What waits in the queue (shown on the scan page), oldest first. */
+    val queued = kotlinx.coroutines.flow.MutableStateFlow<List<String>>(emptyList())
+    fun dropQueued(i: Int) { queue.elementAtOrNull(i)?.let { queue.remove(it) }; queued.value = queue.map { it.label } }
+    /**
+     * Player's pause button: the scan running now stops and goes back to the front of the queue (files it already
+     * saved are skipped when it runs again); nothing starts until [resume].
+     */
+    fun pause() {
+        if (_state.value.running) {
+            current?.let { c -> queue.addFirst(Queued(c.ctx, c.items, c.mode, c.target, false, c.onlyWithoutRg, c.confirmTitle, c.label)) }
+            queued.value = queue.map { it.label }
+            job?.cancel(); _state.value = _state.value.copy(running = false, finished = true, phase = "Paused")
+        }
+    }
+    fun resume() = startNext()
+    private fun startNext() {
+        if (_state.value.running || app.vlcinterface.player.BackgroundWork.paused.value) return
+        val q = queue.poll() ?: return
+        queued.value = queue.map { it.label }
+        start(q.ctx, q.items, q.mode, q.target, q.rescan, q.onlyWithoutRg, q.confirmTitle)
+    }
 
     /**
      * [onlyWithoutRg]: only files with no ReplayGain record of any kind (file or app) are scanned; the rest are skipped.
@@ -95,10 +125,18 @@ object RgScanner {
      */
     fun start(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescanTagged: Boolean,
               onlyWithoutRg: Boolean = false, confirmTitle: String = "") {
-        if (_state.value.running) return
         if (app.vlcinterface.player.BatteryGuard.busyBlocked()) return     // battery 15 % or less: only playing
         val music = items.filter { it.isMusic && it.startMs < 0 }.distinctBy { it.uri }
+        if (_state.value.running || app.vlcinterface.player.BackgroundWork.paused.value) {
+            // Busy (or background work paused): queued, started when the scans before it are done.
+            val label = confirmTitle.ifEmpty { if (music.size == 1) music[0].title else "${music.size} songs" }
+            queue.add(Queued(ctx, items, mode, target, rescanTagged, onlyWithoutRg, confirmTitle, label))
+            queued.value = queue.map { it.label }
+            return
+        }
         val cueSkipped = items.count { it.isMusic && it.startMs >= 0 }
+        current = Queued(ctx, items, mode, target, rescanTagged, onlyWithoutRg, confirmTitle,
+            confirmTitle.ifEmpty { if (music.size == 1) music[0].title else "${music.size} songs" })
         _state.value = RgScanState(running = true, total = music.size, phase = "Preparing")
         RgScanService.start(ctx)
         job = scope.launch {
@@ -123,6 +161,8 @@ object RgScanner {
                 bad.take(200).forEach { r -> L.log(L.REPLAYGAIN, "file", "", "", false, "${r.name}: ${r.status}") }
             } catch (_: Exception) {}
         }
+        // Done or stopped: the next queued scan starts (a moment later, so the finished one's report is posted first).
+        job?.invokeOnCompletion { scope.launch { kotlinx.coroutines.delay(1500); startNext() } }
     }
 
     /** How many albums the items make in this mode (shown in the scan dialog). */

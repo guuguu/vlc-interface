@@ -95,7 +95,7 @@ object BatteryGuard {
     /** Every player / background service ends: playback stopped, ReplayGain scan cancelled, their notifications gone. */
     private fun killServices() {
         val a = App.instance
-        try { app.vlcinterface.sources.RgScanner.cancel() } catch (_: Exception) {}
+        try { app.vlcinterface.sources.RgScanner.cancelAll() } catch (_: Exception) {}
         try { a.player.stop() } catch (_: Exception) {}
         try { a.media.cancelAll() } catch (_: Exception) {}
         try { a.stopService(Intent(a, PlaybackService::class.java)) } catch (_: Exception) {}
@@ -118,7 +118,7 @@ object BatteryGuard {
         try { app.vlcinterface.sources.NetIndex.stopAll() } catch (_: Exception) {}
         try {
             if (app.vlcinterface.sources.RgScanner.state.value.running) {
-                app.vlcinterface.sources.RgScanner.cancel()
+                app.vlcinterface.sources.RgScanner.cancelAll()
                 a.stopService(Intent(a, app.vlcinterface.sources.RgScanService::class.java))
             }
         } catch (_: Exception) {}
