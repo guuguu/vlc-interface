@@ -183,6 +183,8 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** Gain in dB for the playing music item (ReplayGain + its pre-amp, clip-limited); 0 if untagged. */
     private var rgDb = 0f
+    /** The playing song's peak (ReplayGain tag, linear) for clip protection over the whole gain; 0 = unknown. */
+    @Volatile private var rgPeak = 0f
     private val bg = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
     private var rgJob: kotlinx.coroutines.Job? = null
 
@@ -206,7 +208,7 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     private fun loadReplayGain(item: PlayItem, s: PlayerState) {
         if (scannedRg?.first != item.uri) scannedRg = null      // next song: back to its own value
-        rgDb = 0f
+        rgDb = 0f; rgPeak = 0f
         rgJob?.cancel()
         val set = store.current.settings
         if (!item.isMusic || set.rgMode == "off") return
@@ -242,6 +244,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             var limited = false
             if (gain != null && set.rgClipProtect && peak != null && peak > 0f) { val cap = -20f * log10(peak); if (cap < db) { db = cap; limited = true } }
             rgDb = db
+            rgPeak = if (gain != null && peak != null && peak > 0f) peak else 0f
             if (gain == null) askRgScan(item)
             fun f(v: Float) = (if (v >= 0) "+" else "−") + "%.2f".format(java.util.Locale.US, kotlin.math.abs(v)) + " dB"
             // Shows the song's own value (exactly as in its tags / the scan: track or album). When what is played
@@ -334,7 +337,11 @@ class PlayerController(private val context: Context, private val store: Store) {
         val dev = currentOutputName
         val rg = (if (NativeAudio.active && _state.value.item?.isMusic == true) rgDb else 0f) +
             (if (st.settings.toneSliders && _state.value.item?.let { it.isRadio || it.isMusic } == true) _state.value.radioPreDb else 0f)
-        val total = (st.settings.preampDb + (st.devicePreamp[dev] ?: 0f) + rg).coerceIn(-36f, 12f)
+        var total = (st.settings.preampDb + (st.devicePreamp[dev] ?: 0f) + rg).coerceIn(-36f, 12f)
+        // Clip protection over the whole gain (ReplayGain + pre-amps), not ReplayGain alone: the song's loudest peak
+        // never goes over full scale, so the limiter has nothing to do and the sound stays untouched.
+        if (NativeAudio.active && st.settings.rgClipProtect && rgPeak > 0f && _state.value.item?.isMusic == true)
+            total = minOf(total, -20f * log10(rgPeak))
         val bal = (st.deviceBalance[dev] ?: 0).coerceIn(-100, 100)
         fun att(f: Float): Float = if (f <= 0.001f) -60f else (20f * log10(f)).coerceAtLeast(-60f)
         val left = total + if (bal > 0) att(1f - bal / 100f) else 0f

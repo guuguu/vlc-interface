@@ -14,6 +14,10 @@
 #include <android/log.h>
 #include <dlfcn.h>
 #include <math.h>
+#include <stdint.h>
+#if defined(__x86_64__) || defined(__i386__)
+#include <xmmintrin.h>
+#endif
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
@@ -187,13 +191,18 @@ static void ensure_started(void) {
     g_started = (r == AAUDIO_OK);
 }
 
-static inline float limit(float x) {
-    /* Soft knee above -0.5 dBFS so preamp boosts never clip harshly. */
-    const float k = 0.944f;
-    float a = fabsf(x);
-    if (a <= k) return x;
-    float y = k + (1.f - k) * tanhf((a - k) / (1.f - k));
-    return x < 0 ? -y : y;
+/*
+ * Peak limiter (both channels together): does nothing at all unless a sample would go over full scale (-0.01 dBFS).
+ * Then the level is lowered just enough at once and comes back smoothly (150 ms) — no waveshaping, so no added
+ * distortion; untouched sound passes bit for bit. (It used to bend every peak above -0.5 dBFS whenever a boost was
+ * on, which coloured loud passages.)
+ */
+static float g_lg = 1.f;
+static inline void limit2(float *l, float *r, float rel) {
+    float m = fmaxf(fabsf(*l), fabsf(*r));
+    if (m * g_lg > 0.999f) g_lg = 0.999f / m;
+    else if (g_lg < 1.f) { g_lg += (1.f - g_lg) * rel; if (g_lg > 0.99999f) g_lg = 1.f; }
+    if (g_lg != 1.f) { *l *= g_lg; *r *= g_lg; }
 }
 
 /* ---------- Tone (loudness / treble) equalizer, done here so it changes in the same place and at the same moment
@@ -295,6 +304,15 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     if (!t_prio_done) {
         t_prio_done = 1;
         int r = setpriority(PRIO_PROCESS, (id_t)gettid(), -19);
+        /* Tiny numbers (filter tails in quiet passages) flushed to zero: they are inaudible but very slow on the
+           CPU, and could make the sound stutter. */
+#if defined(__aarch64__)
+        { uint64_t fpcr; __asm__ volatile("mrs %0, fpcr" : "=r"(fpcr)); fpcr |= (1ULL << 24); __asm__ volatile("msr fpcr, %0" :: "r"(fpcr)); }
+#elif defined(__arm__)
+        { uint32_t fpscr; __asm__ volatile("vmrs %0, fpscr" : "=r"(fpscr)); fpscr |= (1u << 24); __asm__ volatile("vmsr fpscr, %0" :: "r"(fpscr)); }
+#elif defined(__x86_64__) || defined(__i386__)
+        _mm_setcsr(_mm_getcsr() | 0x8040);
+#endif
         __android_log_print(ANDROID_LOG_INFO, "vlciaudio", "audio thread priority -19: %s", r == 0 ? "ok" : strerror(errno));
     }
     pthread_mutex_lock(&g_lock);
@@ -322,8 +340,10 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     float gl = atomic_load(&g_gainL), gr = atomic_load(&g_gainR);
     float v = atomic_load(&g_mute) ? 0.f : atomic_load(&g_vol) * atomic_load(&g_appVol);
     gl *= v; gr *= v;
-    bool lim = atomic_load(&g_limit) || gl > 1.f || gr > 1.f || g_prevL > 1.f || g_prevR > 1.f;
     eq_update();
+    /* New stream (song start): the level starts where it should, not ramped from the last song's. */
+    if (g_prevL < 0.f) { g_prevL = gl; g_prevR = gr; }
+    const float rel = 1.f - expf(-1.f / (0.15f * (float)(g_src ? g_src : g_rate)));
     /* The level ramps from the last buffer's value to this one's over the buffer (no step). */
     float sl = g_prevL, sr = g_prevR;
     float dl = count ? (gl - sl) / (float)count : 0.f, dr = count ? (gr - sr) / (float)count : 0.f;
@@ -341,7 +361,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
             if (g_eqActive) { x = eq_run(x, 0); y = eq_run(y, 1); }
             float k = (float)(done + i);
             float l = x * (sl + dl * k), r = y * (sr + dr * k);
-            if (lim) { l = limit(l); r = limit(r); }
+            limit2(&l, &r, rel);                              /* only acts on overs */
             buf[i * 2] = l; buf[i * 2 + 1] = r;
             float al = fabsf(l), ar = fabsf(r);
             if (al > pl) pl = al;
@@ -415,6 +435,8 @@ static int cb_setup(void **opaque, char *format, unsigned *rate, unsigned *chann
     *channels = 2;
     if (*rate < 8000 || *rate > 192000) *rate = 48000;
     pthread_mutex_lock(&g_lock);
+    g_prevL = g_prevR = -1.f;                          /* level starts right (see cb_play) */
+    g_lg = 1.f;
     if (!g_stream || g_src != *rate) {
         g_src = *rate;
         if (!open_stream()) {
