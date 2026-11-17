@@ -29,7 +29,7 @@ object Prefetch {
     private var job: Job? = null
     @Volatile private var target = ""                            // uri being cached now
     private val done = java.util.concurrent.ConcurrentHashMap<String, File>()   // uri → complete copy
-    private const val MAX_BYTES = 400L * 1024 * 1024             // bigger songs aren't cached
+    private const val MAX_BYTES = 100L * 1024 * 1024             // bigger songs aren't cached
     private const val MIN_FREE = 2L * 1024 * 1024 * 1024         // never under 2 GB free
 
     fun init(ctx: Context) {
