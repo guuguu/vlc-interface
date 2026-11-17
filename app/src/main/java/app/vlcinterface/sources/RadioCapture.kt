@@ -345,7 +345,12 @@ object RadioCapture {
             } catch (e: Throwable) {
                 ServerLog.log("saved-songs", "save", "radio", "", false, p.title, e.message ?: e.javaClass.simpleName)
                 toast("Saving “${p.title}” failed: ${e.message ?: e.javaClass.simpleName}")
-            } finally { status.value = status.value.copy(busy = ""); saveQueue.value = saveQueue.value - p.title } }
+            } finally {
+                // Working copies (the cut, the part, the made file before it's stored) never stay, saved or not:
+                // only the one file in raw/ or mp3/ remains.
+                dir.listFiles { f -> f.name.startsWith("clip.") || f.name.startsWith("part.") || f.name.startsWith("out.") }?.forEach { it.delete() }
+                status.value = status.value.copy(busy = ""); saveQueue.value = saveQueue.value - p.title
+            } }
         }
     }
 
