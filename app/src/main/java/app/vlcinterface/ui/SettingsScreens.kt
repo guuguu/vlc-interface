@@ -238,7 +238,14 @@ fun SettingsScreen(nav: Navigator) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Home servers on the VPN", color = C.text, fontSize = 15.sp)
                     if (busy.isNotEmpty()) Text(busy, color = accent(), fontSize = 12.sp)
-                    else if (up && s.vpnNas) Pill("Search the VPN now") { vl.discover() }
+                    else {
+                        // Always here (special cases: a new NAS, an address changed on the VPN …).
+                        val sctx = androidx.compose.ui.platform.LocalContext.current
+                        Pill("Search the VPN now") {
+                            if (up) vl.discover() else android.widget.Toast.makeText(sctx, "Start the VPN first, then search", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                        if (!up) Text("VPN off — start it to search", color = C.muted, fontSize = 12.sp)
+                    }
                     val kept = st.sources.filter { it.vpnHost.isNotBlank() }
                     if (kept.isEmpty()) Text("None yet — found by themselves when the VPN starts", color = C.muted, fontSize = 12.sp)
                     var editing by remember { mutableStateOf<app.vlcinterface.data.Source?>(null) }
