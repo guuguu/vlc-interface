@@ -1,3 +1,4 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package app.vlcinterface.ui
 
 import androidx.compose.ui.Alignment
