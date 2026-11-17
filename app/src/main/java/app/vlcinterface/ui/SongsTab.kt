@@ -113,6 +113,7 @@ fun SongsTab(nav: Navigator) {
     var selected by remember { mutableStateOf(setOf<String>()) }
     var ask by remember { mutableStateOf(false) }
     var addPl by remember { mutableStateOf<List<PlayItem>?>(null) }
+    var showSel by remember { mutableStateOf(false) }
     var songMenu by remember { mutableStateOf<String?>(null) }
     fun sorted(l: List<PlayItem>) = l.distinctBy { it.uri }.sortedWith(compareBy<PlayItem>(
         { it.artist.ifEmpty { "￿" }.lowercase() }, { it.album.ifEmpty { "￿" }.lowercase() }, { it.trackNo }))
@@ -130,8 +131,10 @@ fun SongsTab(nav: Navigator) {
     val total = chosen.sumOf { it.durationMs.coerceAtLeast(0) }
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(if (selected.isEmpty()) "${songs.size} songs" else "${selected.size} selected · ${fmtLong(total)}",
-                color = if (selected.isEmpty()) C.muted else accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            // Tap "N selected": the selected songs listed (✕ takes one out).
+            Text(if (selected.isEmpty()) "${songs.size} songs" else "${selected.size} selected · ${fmtLong(total)}  ▾",
+                color = if (selected.isEmpty()) C.muted else accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f).clickable(enabled = selected.isNotEmpty()) { showSel = true })
             Pill(if (netBusy.isNotEmpty()) netBusy else "+ LAN / Internet") {
                 if (netBusy.isNotEmpty()) return@Pill
                 netBusy = "Reading…"
@@ -184,12 +187,14 @@ fun SongsTab(nav: Navigator) {
             if (selected.isNotEmpty()) Pill("Deselect all") { selected = emptySet() }
             if (selected.isNotEmpty()) Pill("▶  Play selected", filled = true) {
                 App.instance.player.playQueue(chosen, 0, app.vlcinterface.player.Origin("songs", title = "Songs"))
+                selected = emptySet()      // done with them: the next pick starts fresh
                 nav.go(Screen.Music)
             }
             if (selected.isNotEmpty()) Pill("+ Queue") {
                 val n = App.instance.player.addToQueue(chosen)
                 android.widget.Toast.makeText(ctx, "$n song${if (n == 1) "" else "s"} added to the queue" +
                     if (chosen.size > n) " (${chosen.size - n} already in it)" else "", android.widget.Toast.LENGTH_SHORT).show()
+                selected = emptySet()      // added: select the next song(s) and add again, no repeats
             }
             // Into an existing playlist (or a new one), without duplicates.
             if (selected.isNotEmpty()) Pill("+ Playlist…") { addPl = chosen }
@@ -264,7 +269,29 @@ fun SongsTab(nav: Navigator) {
             }
         }
     }
-    addPl?.let { its -> AddToPlaylistDialog({ its }) { addPl = null } }
+    addPl?.let { its -> AddToPlaylistDialog({ its }) { addPl = null; selected = emptySet() } }
+    // The selected songs, listed: ✕ takes one out; Deselect all.
+    if (showSel) {
+        val sel = songs.filter { it.uri in selected }
+        if (sel.isEmpty()) showSel = false
+        else AlertDialog(onDismissRequest = { showSel = false }, containerColor = C.panel,
+            title = { Text("${sel.size} selected · ${fmtLong(sel.sumOf { it.durationMs.coerceAtLeast(0) })}", color = C.text) },
+            text = {
+                val ls = androidx.compose.foundation.lazy.rememberLazyListState()
+                androidx.compose.foundation.lazy.LazyColumn(Modifier.heightIn(max = 420.dp).scrollbar(ls), state = ls) {
+                    items(sel, key = { it.uri }) { s ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(listOf(s.artist.ifEmpty { "Unknown artist" }, s.title).joinToString("  –  "), color = C.text, fontSize = 14.sp,
+                                maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                            Text("✕", color = C.muted, fontSize = 18.sp, modifier = Modifier.clickable { selected = selected - s.uri }.padding(horizontal = 10.dp, vertical = 4.dp))
+                        }
+                    }
+                }
+            },
+            confirmButton = { STextButton({ showSel = false }) { Text("Close", color = accent()) } },
+            dismissButton = { STextButton({ selected = emptySet(); showSel = false }) { Text("Deselect all") } },
+        )
+    }
     if (ask) QuickPlaylistDialog(nav, { songs.filter { it.uri in selected } }) { made -> ask = false; if (made) selected = emptySet() }
 }
 
