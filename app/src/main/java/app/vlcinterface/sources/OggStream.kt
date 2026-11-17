@@ -203,6 +203,59 @@ object OggStream {
         }
     }
 
+    /** Samples in one FLAC frame, from its header (block size); 0 when it isn't a frame header. */
+    private fun flacFrameSamples(f: ByteArray): Int {
+        if (f.size < 6 || (f[0].toInt() and 0xFF) != 0xFF || (f[1].toInt() and 0xFE) != 0xF8) return 0
+        val code = (f[2].toInt() and 0xFF) shr 4
+        // After byte 3: the frame / sample number in UTF-8 style (1–7 bytes), then the 8 / 16-bit block size.
+        val lead = f[4].toInt() and 0xFF
+        val n = when { lead < 0x80 -> 1; lead >= 0xFE -> 7; lead >= 0xFC -> 6; lead >= 0xF8 -> 5; lead >= 0xF0 -> 4; lead >= 0xE0 -> 3; lead >= 0xC0 -> 2; else -> 1 }
+        val at = 4 + n
+        return when (code) {
+            1 -> 192
+            in 2..5 -> 576 shl (code - 2)
+            6 -> if (at < f.size) (f[at].toInt() and 0xFF) + 1 else 0
+            7 -> if (at + 1 < f.size) (((f[at].toInt() and 0xFF) shl 8) or (f[at + 1].toInt() and 0xFF)) + 1 else 0
+            in 8..15 -> 256 shl (code - 8)
+            else -> 0
+        }
+    }
+
+    /** Samples (48 kHz) in one Opus packet, from its TOC byte. */
+    private fun opusPacketSamples(p: ByteArray): Int {
+        if (p.isEmpty()) return 0
+        val toc = p[0].toInt() and 0xFF
+        val cfg = toc shr 3
+        val per = when {
+            cfg < 12 -> intArrayOf(480, 960, 1920, 2880)[cfg and 3]
+            cfg < 16 -> intArrayOf(480, 960)[cfg and 1]
+            else -> intArrayOf(120, 240, 480, 960)[cfg and 3]
+        }
+        val frames = when (toc and 3) { 0 -> 1; 1, 2 -> 2; else -> if (p.size > 1) (p[1].toInt() and 0x3F) else 0 }
+        return per * frames
+    }
+
+    /**
+     * Samples ending in each page, counted from the audio itself (FLAC frame headers, Opus TOC bytes) — page
+     * positions are left aside, since some servers write them wrong (all 0, or never moving). Null for Vorbis.
+     */
+    fun pageSamples(c: Chain, d: ByteArray, pages: List<Page>): LongArray? {
+        if (c.codec != "flac" && c.codec != "opus") return null
+        val out = LongArray(pages.size)
+        val cur = ByteArrayOutputStream()
+        pages.forEachIndexed { i, p ->
+            var pos = p.bodyPos
+            for (l in p.lacing) {
+                cur.write(d, pos, l); pos += l
+                if (l < 255) {
+                    val pk = cur.toByteArray(); cur.reset()
+                    out[i] += (if (c.codec == "flac") flacFrameSamples(pk) else opusPacketSamples(pk)).toLong()
+                }
+            }
+        }
+        return out
+    }
+
     fun ext(codec: String) = when (codec) { "flac" -> "flac"; "opus" -> "opus"; else -> "ogg" }
     fun mime(codec: String) = if (codec == "flac") "audio/flac" else "audio/ogg"
 }

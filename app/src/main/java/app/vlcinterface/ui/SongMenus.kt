@@ -62,6 +62,21 @@ private fun share(ctx: Context, subject: String, text: String) {
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
 }
 
+/**
+ * A song name from the clipboard: Shazam's share text ("I used Shazam to discover Song by Artist. https://…")
+ * becomes "Artist - Song"; anything else: its first line without links.
+ */
+fun clipSong(ctx: Context): String? {
+    val t = try { ctx.getSystemService(ClipboardManager::class.java)?.primaryClip?.getItemAt(0)?.coerceToText(ctx)?.toString() } catch (_: Exception) { null }
+        ?.trim().orEmpty()
+    if (t.isEmpty()) return null
+    Regex("discover (.+?) by (.+?)(\\.\\s|\\.?\\s*https?://|\\.?$)", RegexOption.IGNORE_CASE).find(t)?.let { m ->
+        return "${m.groupValues[2].trim()} - ${m.groupValues[1].trim()}"
+    }
+    val line = t.lines().map { it.replace(Regex("https?://\\S+"), "").trim() }.firstOrNull { it.isNotEmpty() } ?: return null
+    return line.take(120)
+}
+
 /** Opens the Shazam app (it listens through the microphone); the Play Store page when it isn't installed. */
 fun openShazam(ctx: Context) {
     val pkg = "com.shazam.android"
@@ -162,6 +177,19 @@ fun SaveSongDialog(onDone: () -> Unit) {
     LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(1000); now = System.currentTimeMillis(); recSec = RadioCapture.recordedSec() } }
     val ctx = LocalContext.current
     fun say(t: String) { Toast.makeText(ctx, t, Toast.LENGTH_SHORT).show() }
+    // Back from Shazam: its song (copied or shared to the clipboard) goes into the name.
+    var shazamAt by remember { mutableStateOf(0L) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME && shazamAt > 0) {
+                shazamAt = 0
+                clipSong(ctx)?.let { name = it; say("Name pasted: $it") }
+            }
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
     val pend = s.pending
     val fmt = if (st.settings.saveFormat == "original") "as the station sends it" else "MP3 (LAME V0)"
     val sub = if (st.settings.saveFormat == "original") "raw" else "mp3"
@@ -200,6 +228,11 @@ fun SaveSongDialog(onDone: () -> Unit) {
                     Text("Saved $fmt to $where. Both ends go to the gap between songs, with all tags found.", color = C.muted, fontSize = 12.sp)
                     androidx.compose.material3.OutlinedTextField(name, { name = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         label = { Text("Name (optional)") }, placeholder = { Text("Artist - Title") })
+                    // Shazam: opens it; back here, the song it found (copied / shared from Shazam) is pasted in.
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Pill("Shazam") { shazamAt = System.currentTimeMillis(); openShazam(ctx) }
+                        Pill("Paste") { clipSong(ctx)?.let { name = it } ?: say("Nothing to paste") }
+                    }
                     label("Stop at the end of the song", C.text)
                     if (s.title.isNotBlank()) {
                         if (!s.titleStartKnown) Text("Recording began during this song: saved from then on.", color = C.muted, fontSize = 12.sp)

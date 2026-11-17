@@ -480,7 +480,8 @@ object RadioCapture {
                 ServerLog.log("saved-songs", "save", "radio", "", true, p.title, "From ${p.station} → $where" + (if (p.partialStart) " · beginning missing" else "") + (if (partialEnd) " · end missing" else ""))
                 toast((if (App.instance.store.current.settings.saveFormat == "original") "Saved: " else "Encoding ended: ") + where.substringAfterLast('/'), long = false)
             } catch (e: Throwable) {
-                ServerLog.log("saved-songs", "save", "radio", "", false, p.title, e.message ?: e.javaClass.simpleName)
+                ServerLog.log("saved-songs", "save", "radio", "", false, p.title.ifBlank { p.name.ifBlank { "(no title)" } },
+                    (e.message ?: e.javaClass.simpleName) + (if (diag.isNotEmpty()) " — $diag" else ""))
                 toast("Saving “${p.title}” failed: ${e.message ?: e.javaClass.simpleName}")
             } finally {
                 // Working copies (the cut, the part, the made file before it's stored) never stay, saved or not:
@@ -628,6 +629,9 @@ object RadioCapture {
      * A recorded part, in units the stream can be cut at (MP3 / AAC frames, Ogg pages): their place in the data,
      * the time each begins ([t], seconds; one more entry = the end), and how a run of them becomes a playable file.
      */
+    /** What the last cut was made of (in the Saved songs log when a save fails). */
+    @Volatile private var diag = ""
+
     private class Clip(val pos: IntArray, val t: DoubleArray, val cleanExt: String, val origExt: String, val origMime: String,
                        val write: (Int, Int, File) -> Unit, val remuxToM4a: Boolean = false) {
         val n get() = pos.size
@@ -642,6 +646,7 @@ object RadioCapture {
                 if (fr.size < 20) throw Exception("too little audio recorded")
                 val t = DoubleArray(fr.size + 1); for (i in fr.indices) t[i + 1] = t[i] + fr[i].samples.toDouble() / fr[i].rate
                 val raw = if (p.format == "mp3") "mp3" else "aac"
+                diag = "${p.format} ${fr.first().rate} Hz · ${fr.size} frames · ${"%.1f".format(java.util.Locale.US, t.last())} s"
                 return Clip(IntArray(fr.size) { fr[it].pos }, t, raw, if (p.format == "mp3") "mp3" else "m4a",
                     if (p.format == "mp3") "audio/mpeg" else "audio/mp4",
                     { a, b, f -> f.outputStream().buffered().use { o -> for (i in a until b) o.write(data, fr[i].pos, fr[i].len) } },
@@ -655,14 +660,26 @@ object RadioCapture {
                 // A part must start on a page that begins a packet.
                 val pg = all.dropWhile { (it.flags and 1) != 0 }
                 if (pg.size < 10) throw Exception("too little audio recorded")
-                val g = LongArray(pg.size); var last = -1L
-                for (i in pg.indices) { if (pg[i].granule != -1L) last = pg[i].granule; g[i] = last }
-                // Granule = position at the end of each page; the first page's start is estimated from the next one.
-                val first = g.indexOfFirst { it >= 0 }.coerceAtLeast(0)
-                val step = if (pg.size > first + 1 && g[first + 1] > g[first]) g[first + 1] - g[first] else 0L
-                val g0 = (g[first] - step).coerceAtLeast(0)
-                for (i in 0 until first) g[i] = g0
+                val g = LongArray(pg.size)
+                val counted = OggStream.pageSamples(c, data, pg)
+                val g0: Long
+                if (counted != null && counted.sum() > 0) {
+                    // FLAC / Opus: positions counted from the audio itself (sample count at the end of each page).
+                    var acc = 0L; for (i in pg.indices) { acc += counted[i]; g[i] = acc }
+                    g0 = 0
+                } else {
+                    // Vorbis: the page positions (granule = position at the end of each page).
+                    var last = -1L
+                    for (i in pg.indices) { if (pg[i].granule != -1L) last = pg[i].granule; g[i] = last }
+                    val first = g.indexOfFirst { it >= 0 }.coerceAtLeast(0)
+                    val step = if (pg.size > first + 1 && g[first + 1] > g[first]) g[first + 1] - g[first] else 0L
+                    g0 = (g[first] - step).coerceAtLeast(0)
+                    for (i in 0 until first) g[i] = g0
+                }
+                if ((g.last() - g0) <= 0) throw Exception("the stream's positions can't be read (${c.codec})")
                 val t = DoubleArray(pg.size + 1); for (i in pg.indices) t[i + 1] = maxOf(t[i], (g[i] - g0).toDouble() / c.rate)
+                diag = "ogg ${c.codec} ${c.rate} Hz · ${pg.size} pages · ${"%.1f".format(java.util.Locale.US, t.last())} s" +
+                    (if (counted != null) " (counted from frames)" else " (page positions)")
                 return Clip(IntArray(pg.size) { pg[it].pos }, t, OggStream.ext(c.codec), OggStream.ext(c.codec), OggStream.mime(c.codec), { a, b, f ->
                     val base = if (a == 0) g0 else g[a - 1]
                     val part = pg.subList(a, b)
@@ -675,6 +692,7 @@ object RadioCapture {
     }
 
     private fun save(ctx: Context, p: Pending, data: ByteArray, startByte: Int, endByte: Int, partialEnd: Boolean, from: Long = 0): String {
+        diag = ""
         val clip = clipOf(p, data, from)
         val t = clip.t
         val clean = File(dir, "clip.${clip.cleanExt}")
@@ -695,6 +713,9 @@ object RadioCapture {
             }
         }
         val rms = rmsList.toFloatArray()
+        val decodedSec = rms.size * step
+        diag += " · decoded ${"%.1f".format(java.util.Locale.US, decodedSec)} s"
+        if (decodedSec < 1) throw Exception("the recorded audio could not be decoded (${clip.cleanExt})")
         // Start: the gap within ±10 s (not when the song began before recording). End: the gap within ±10 s; for
         // "the last X minutes" only before now (nothing after it is recorded yet); none when recording stopped.
         var cutStart = if (p.partialStart) nomStart else quietest(rms, step, nomStart - 10, nomStart + 10) ?: nomStart
@@ -714,6 +735,10 @@ object RadioCapture {
             if (abs(cutEnd - want) > 12) quietest(rms, step, want - 8, want + 8)?.let { cutEnd = it }
         }
         if (cutEnd - cutStart < 10) { cutStart = nomStart; cutEnd = nomEnd }
+        // Never past what decodes (a part longer than the decoded audio would leave nothing to encode).
+        cutEnd = cutEnd.coerceAtMost(decodedSec); cutStart = cutStart.coerceIn(0.0, (cutEnd - 1).coerceAtLeast(0.0))
+        diag += " · song ${"%.1f".format(java.util.Locale.US, nomStart)}–${"%.1f".format(java.util.Locale.US, nomEnd)} s, cut ${"%.1f".format(java.util.Locale.US, cutStart)}–${"%.1f".format(java.util.Locale.US, cutEnd)} s"
+        if (cutEnd - cutStart < 1) throw Exception("nothing recorded between the song's start and end")
 
         val s = App.instance.store.current.settings
         val reencode = s.saveFormat != "original"
