@@ -150,6 +150,21 @@ fun SettingsScreen(nav: Navigator) {
             SectionTitle("Network")
             CardBox {
                 ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }
+                Divider()
+                // Song links: Spotify's own search with a free developer app (no Spotify login). Without it the
+                // links are found through MusicBrainz and a web search.
+                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Spotify links", color = C.text, fontSize = 15.sp)
+                    Text("Optional, most reliable: a free app at developer.spotify.com → Dashboard → Create app; paste its Client ID and Secret here",
+                        color = C.muted, fontSize = 12.sp)
+                    var id by remember { mutableStateOf(s.spotifyId) }
+                    var sec by remember { mutableStateOf(s.spotifySecret) }
+                    androidx.compose.material3.OutlinedTextField(id, { id = it.trim(); set(s.copy(spotifyId = id)) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(), label = { Text("Client ID") })
+                    androidx.compose.material3.OutlinedTextField(sec, { sec = it.trim(); set(s.copy(spotifySecret = sec)) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(), label = { Text("Client Secret") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                }
             }
             // Logs, by kind. Each page has Errors only / Empty log / Share / Save to NAS.
             SectionTitle("Logs")

@@ -81,42 +81,95 @@ object SongLinks {
         Net.http.newCall(rq).execute().use { r -> r.code to (if (r.isSuccessful) r.body?.string() else null) }
     } catch (e: Exception) { -1 to (e.message ?: e.javaClass.simpleName) }
 
-    /** song.link (Odesli): the Spotify page of the song at [from] (an Apple Music / YouTube / Deezer address). */
-    private fun odesli(from: String, label: String): String? {
-        val (code, body) = getCode("https://api.song.link/v1-alpha.1/links?userCountry=US&url=" + Uri.encode(from))
-        if (code != 200 || body == null) {
-            why += "$label: song.link " + when (code) { 429 -> "rate-limited (429)"; 404 -> "doesn't know it (404)"; -1 -> "not reachable ($body)"; else -> "answered $code" }
-            return null
-        }
-        val u = try { JSONObject(body).optJSONObject("linksByPlatform")?.optJSONObject("spotify")?.optString("url") } catch (_: Exception) { null }
-        if (u.isNullOrBlank()) why += "$label: song.link has no Spotify page for it"
-        return u?.takeIf { it.isNotBlank() }
-    }
-
-    /** The song on Deezer (free search, no key): its page, for song.link. */
-    private fun deezer(artist: String, title: String): String? {
+    /** The song on Deezer (free search, no key): (its page, its ISRC code). */
+    private fun deezer(artist: String, title: String): Pair<String, String>? {
         val q = Uri.encode("artist:\"$artist\" track:\"$title\"")
         val (code, body) = getCode("https://api.deezer.com/search?q=$q&limit=10")
         if (code != 200 || body == null) { why += "Deezer: answered $code"; return null }
         val arr = try { JSONObject(body).optJSONArray("data") } catch (_: Exception) { null } ?: return null
         for (i in 0 until arr.length()) {
             val o = arr.getJSONObject(i)
-            if (cover(title, o.optString("title")) >= 0.6 && cover(artist, o.optJSONObject("artist")?.optString("name") ?: "") >= 0.6)
-                return o.optString("link").takeIf { it.isNotBlank() }
+            if (cover(title, o.optString("title")) >= 0.6 && cover(artist, o.optJSONObject("artist")?.optString("name") ?: "") >= 0.6) {
+                val isrc = getCode("https://api.deezer.com/track/" + o.optLong("id")).second?.let { b ->
+                    try { JSONObject(b).optString("isrc") } catch (_: Exception) { "" } } ?: ""
+                return o.optString("link") to isrc
+            }
         }
         why += "Deezer: not found"
         return null
     }
 
+    private val spotifyTrack = Regex("""https?://open\.spotify\.com/(?:intl-[a-z]+/)?track/([A-Za-z0-9]{22})""")
+
+    // -------- 1. Spotify's own search (your free developer Client ID / Secret, Settings → Network)
+    @Volatile private var spToken = ""; @Volatile private var spTokenUntil = 0L
+    private fun spotifyApi(artist: String, title: String, isrc: String): String? {
+        val st = app.vlcinterface.App.instance.store.current.settings
+        if (st.spotifyId.isBlank() || st.spotifySecret.isBlank()) return null
+        try {
+            if (System.currentTimeMillis() > spTokenUntil) {
+                val rq = Request.Builder().url("https://accounts.spotify.com/api/token")
+                    .header("Authorization", okhttp3.Credentials.basic(st.spotifyId.trim(), st.spotifySecret.trim()))
+                    .post(okhttp3.FormBody.Builder().add("grant_type", "client_credentials").build()).build()
+                Net.http.newCall(rq).execute().use { r ->
+                    if (!r.isSuccessful) { why += "Spotify: sign-in refused (${r.code}) — check Client ID / Secret"; return null }
+                    val o = JSONObject(r.body?.string() ?: "{}")
+                    spToken = o.optString("access_token"); spTokenUntil = System.currentTimeMillis() + (o.optLong("expires_in", 3600) - 60) * 1000
+                }
+            }
+            for (q in listOfNotNull(isrc.takeIf { it.isNotBlank() }?.let { "isrc:$it" }, "track:\"$title\" artist:\"$artist\"", "$artist $title")) {
+                val rq = Request.Builder().url("https://api.spotify.com/v1/search?type=track&limit=10&q=" + Uri.encode(q))
+                    .header("Authorization", "Bearer $spToken").build()
+                val items = Net.http.newCall(rq).execute().use { r -> if (r.isSuccessful) JSONObject(r.body?.string() ?: "{}").optJSONObject("tracks")?.optJSONArray("items") else null } ?: continue
+                for (i in 0 until items.length()) {
+                    val o = items.getJSONObject(i)
+                    val a = o.optJSONArray("artists")?.let { arr -> (0 until arr.length()).joinToString(" ") { arr.getJSONObject(it).optString("name") } } ?: ""
+                    if (q.startsWith("isrc:") || (cover(title, o.optString("name")) >= 0.6 && cover(artist, a) >= 0.5))
+                        return o.optJSONObject("external_urls")?.optString("spotify")?.takeIf { it.isNotBlank() }
+                }
+            }
+            why += "Spotify: not found in its catalogue"
+        } catch (e: Exception) { why += "Spotify: ${e.message ?: e.javaClass.simpleName}" }
+        return null
+    }
+
+    // -------- 2. ISRC → MusicBrainz → its Spotify link
+    private fun musicBrainz(isrc: String): String? {
+        if (isrc.isBlank()) return null
+        val rq = Request.Builder().url("https://musicbrainz.org/ws/2/isrc/$isrc?inc=url-rels&fmt=json")
+            .header("User-Agent", "vlc-interface/1.0 ( https://github.com/guuguu/vlc-interface )").build()
+        val body = try { Net.http.newCall(rq).execute().use { r -> if (r.isSuccessful) r.body?.string() else null } } catch (_: Exception) { null }
+            ?: run { why += "MusicBrainz: ISRC $isrc not known"; return null }
+        spotifyTrack.find(body)?.let { return it.value }
+        why += "MusicBrainz: no Spotify link for ISRC $isrc"
+        return null
+    }
+
+    // -------- 3. Web search: the first open.spotify.com/track result for "artist title"
+    private fun webSearch(artist: String, title: String): String? {
+        val q = Uri.encode("$artist $title site:open.spotify.com/track")
+        for ((name, url) in listOf("DuckDuckGo" to "https://html.duckduckgo.com/html/?q=$q", "Bing" to "https://www.bing.com/search?q=$q")) {
+            val html = get(url, browser = true)
+            if (html == null) { why += "$name: no answer"; continue }
+            // DuckDuckGo wraps results (…?uddg=<address>): unwrapped first.
+            val text = Uri.decode(html.replace("&amp;", "&"))
+            spotifyTrack.find(text)?.let { return "https://open.spotify.com/track/" + it.groupValues[1] }
+            why += "$name: no Spotify track found"
+        }
+        return null
+    }
+
     /**
-     * Spotify page of the song: song.link from the iTunes page, else from the YouTube video, else from the song's
-     * Deezer page; when none knows it, a Spotify search link.
+     * Spotify page of the song: Spotify's own search (with your developer ID), else the ISRC through MusicBrainz,
+     * else a web search; when none finds it, a Spotify search link.
      */
-    private fun spotify(info: Info?, artist: String, title: String, yt: Video?): Pair<String, Boolean> {
+    private fun spotify(info: Info?, artist: String, title: String, @Suppress("UNUSED_PARAMETER") yt: Video?): Pair<String, Boolean> {
         why.clear()
-        info?.itunesUrl?.takeIf { it.isNotEmpty() }?.let { odesli(it, "iTunes")?.let { u -> return u to false } }
-        yt?.url?.let { odesli(it, "YouTube")?.let { u -> return u to false } }
-        deezer(info?.artist ?: artist, info?.title ?: title)?.let { d -> odesli(d, "Deezer")?.let { u -> return u to false } }
+        val a = info?.artist ?: artist; val t = info?.title ?: title
+        val isrc = deezer(a, t)?.second ?: ""
+        spotifyApi(a, t, isrc)?.let { return it to false }
+        musicBrainz(isrc)?.let { return it to false }
+        webSearch(a, t)?.let { return it to false }
         return "https://open.spotify.com/search/" + Uri.encode("$artist $title") to true
     }
 
