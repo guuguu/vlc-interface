@@ -84,7 +84,15 @@ class OutputRouter(private val context: Context) {
         val outs = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS)
         val mediaAttrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_MOVIE).build()
-        val routed = try { am.getAudioDevicesForAttributes(mediaAttrs).map { it.id }.toSet() } catch (e: Exception) { emptySet() }
+        // Where Android sends media now. Android 13+ says it directly; on Android 12 the usual order is used:
+        // Bluetooth, then USB, then wired, then the phone speaker.
+        val routed: Set<Int> = if (android.os.Build.VERSION.SDK_INT >= 33)
+            try { am.getAudioDevicesForAttributes(mediaAttrs).map { it.id }.toSet() } catch (e: Exception) { emptySet() }
+        else {
+            val order = listOf(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE,
+                AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
+            order.firstNotNullOfOrNull { t -> outs.firstOrNull { it.type == t } }?.let { setOf(it.id) } ?: emptySet()
+        }
 
         val list = ArrayList<OutputDevice>()
         val seen = HashSet<String>()

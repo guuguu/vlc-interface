@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "app.vlcinterface"
-        minSdk = 33
+        minSdk = 31          // Android 12 and newer
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName

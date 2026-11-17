@@ -29,10 +29,11 @@ class MainActivity : ComponentActivity() {
         instance = this
         // Volume buttons always control media volume in this app (not the ringer while playback is paused / resuming).
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC
-        permissions.launch(arrayOf(
+        // Android 13+: media + notification permissions; Android 12: the storage permission (notifications need none).
+        permissions.launch(if (android.os.Build.VERSION.SDK_INT >= 33) arrayOf(
             Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO,
             Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.BLUETOOTH_CONNECT,
-        ))
+        ) else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.BLUETOOTH_CONNECT))
         handleIntent(intent)
         setContent { AppRoot(nav) { finish() } }
     }
