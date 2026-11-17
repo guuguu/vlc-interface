@@ -90,6 +90,7 @@ object RgScanner {
     fun reportSeen() { _state.value = _state.value.copy(reportPending = false, confirmTitle = "") }
 
     /** Stops the scan running now; the queued ones follow. */
+    private fun cancelled() = job?.isActive == false
     fun cancel() { job?.cancel(); _state.value = _state.value.copy(running = false, finished = true, phase = "Cancelled") }
     /** Stops the scan running now and drops the queue. */
     fun cancelAll() { queue.clear(); queued.value = emptyList(); cancel() }
@@ -384,7 +385,11 @@ object RgScanner {
         var ds: MediaDataSource? = null
         try {
             val uri = item.uri
+            // Network file: copied first with several connections (tuned to the bandwidth), then read from the phone;
+            // kept for the tag update that follows. A cached copy (next song) is used as it is.
+            val local = netCopy(ctx, item)
             when {
+                local != null -> ex.setDataSource(local.path)
                 uri.startsWith("content://") -> ex.setDataSource(ctx, Uri.parse(uri), null)
                 uri.startsWith("file://") -> ex.setDataSource(Uri.parse(uri).path!!)
                 uri.startsWith("/") -> ex.setDataSource(uri)
@@ -521,8 +526,31 @@ object RgScanner {
         } finally { tmp.delete() }
     }
 
+    /** Last network file copied for a scan (uri → copy), reused by the tag update. */
+    @Volatile private var lastCopy: Pair<String, File>? = null
+
+    /** A phone copy of a network song for scanning (parallel connections), or null (read over the network). */
+    private fun netCopy(ctx: Context, item: PlayItem): File? {
+        val u = item.uri
+        if (!(u.startsWith("smb://") || u.startsWith("http"))) return null
+        Prefetch.localFor(u)?.let { return it }
+        lastCopy?.let { (k, f) -> if (k == u && f.isFile) return f; f.delete() }
+        lastCopy = null
+        if (ctx.cacheDir.usableSpace < 2L * 1024 * 1024 * 1024) return null
+        val f = File(ctx.cacheDir, "rgcopy-${Integer.toHexString(u.hashCode())}.${item.ext.ifEmpty { "bin" }}")
+        return try {
+            if (ParallelFetch.download(item, f, 300L * 1024 * 1024, keepGoing = { !cancelled() })) { lastCopy = u to f; f }
+            else { f.delete(); null }
+        } catch (_: Exception) { f.delete(); null }
+    }
+
     private fun download(ctx: Context, item: PlayItem, dst: File) {
         val u = item.uri
+        // Already copied for the scan (or cached ahead): taken from the phone.
+        (lastCopy?.takeIf { it.first == u && it.second.isFile }?.second ?: Prefetch.localFor(u))?.let { c ->
+            c.copyTo(dst, true); lastCopy?.let { if (it.first == u) { it.second.delete(); lastCopy = null } }; return
+        }
+        if ((u.startsWith("smb://") || u.startsWith("http")) && ParallelFetch.download(item, dst)) return
         val input = when {
             u.startsWith("content://") -> ctx.contentResolver.openInputStream(Uri.parse(u))
             u.startsWith("file://") -> File(Uri.parse(u).path!!).inputStream()
@@ -561,7 +589,9 @@ object RgScanner {
                 val cx = SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain)
                 val orig = SmbFile(VpnLink.route(Uri.decode(u)), cx)
                 val t = SmbFile(VpnLink.route(Uri.decode(u) + ".rgtmp"), cx)
-                t.outputStream.use { o -> tmp.inputStream().use { copy(it, o, "Saving to the server", tmp.length()) } }
+                // Several connections at once (tuned); one plain stream if that fails.
+                val par = try { ParallelFetch.uploadSmb(item, tmp, u + ".rgtmp") } catch (_: Exception) { false }
+                if (!par) t.outputStream.use { o -> tmp.inputStream().use { copy(it, o, "Saving to the server", tmp.length()) } }
                 if (t.length() != tmp.length()) { t.delete(); throw IllegalStateException("copy on the server is incomplete") }
                 try { orig.delete() } catch (e: Exception) { try { t.delete() } catch (_: Exception) {}; throw e }
                 t.renameTo(SmbFile(VpnLink.route(Uri.decode(u)), cx))

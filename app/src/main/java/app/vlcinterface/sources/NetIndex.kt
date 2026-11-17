@@ -150,16 +150,19 @@ object NetIndex {
                 busy.value = "Indexing $name…"
                 val url = Urls.forSource(src.copy(path = ""), pin)
                 // 8 at once: up to 8 files' tags read in parallel, and subfolders listed side by side.
-                val files = kotlinx.coroutines.sync.Semaphore(8)
+                // Files and folders read in parallel; how many at once is tuned to the server and the bandwidth.
+                val done = java.util.concurrent.atomic.AtomicLong(0)
+                val gate = ParallelFetch.Gate(Urls.hostOnly(src.host), done).also { it.start(this) }
+                val files = gate.sem
                 val dirs = kotlinx.coroutines.sync.Semaphore(8)
                 val count = java.util.concurrent.atomic.AtomicInteger(0)
                 val songs = try {
-                    crawl(src, url, 0, files, dirs) { k -> busy.value = "Indexing $name… ${count.addAndGet(k)} songs" }
+                    crawl(src, url, 0, files, dirs) { k -> done.addAndGet(k.toLong()); busy.value = "Indexing $name… ${count.addAndGet(k)} songs" }
                 } catch (e: Exception) {
                     app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, false,
                         "Index of $name not made: ${e.message ?: e.javaClass.simpleName}", url)
                     null
-                }
+                } finally { gate.stop() }
                 if (songs != null) {
                     byPin = byPin + (k to songs.map { MusicLibrary.toPlEntry(it) })
                     save(); version.value++

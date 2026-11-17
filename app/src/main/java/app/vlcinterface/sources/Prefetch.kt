@@ -5,7 +5,6 @@ import android.net.Uri
 import app.vlcinterface.App
 import app.vlcinterface.data.ServerLog
 import app.vlcinterface.player.PlayItem
-import jcifs.smb.SmbFile
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -116,30 +115,32 @@ object Prefetch {
         val tmp = File(dir, "$name.part"); val dst = File(dir, name)
         try {
             val u = p.uri
-            val (input, size) = when {
-                u.startsWith("smb://") -> {
-                    val f = SmbFile(VpnLink.route(Uri.decode(u)), SmbProbe.fileContext(p.smbVersion, p.user, p.password, p.domain))
-                    f.inputStream to f.length()
-                }
-                else -> {
-                    val r = Net.http.newCall(Request.Builder().url(u)
-                        .apply { if (p.user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(p.user, p.password)) }.build()).execute()
-                    if (!r.isSuccessful) { r.close(); throw IllegalStateException("HTTP ${r.code}") }
-                    r.body!!.byteStream() to (r.body?.contentLength() ?: -1L)
-                }
-            }
-            if (size > MAX_BYTES) { input.close(); return }
-            input.use { i -> tmp.outputStream().use { o ->
-                val buf = ByteArray(256 * 1024)
-                while (gen == g && !paused()) { val n = i.read(buf); if (n < 0) break; o.write(buf, 0, n) }
-            } }
-            if (gen != g || paused() || (size > 0 && tmp.length() != size)) { tmp.delete(); return }
+            // Several connections at once, tuned to the bandwidth; playback keeps priority (see ParallelFetch).
+            val ok = ParallelFetch.download(p, tmp, MAX_BYTES, keepGoing = { gen == g && !paused() }) { if (p.uri.startsWith("http")) single(p, tmp, g) else false }
+            if (!ok || gen != g || paused()) { tmp.delete(); return }
             tmp.renameTo(dst)
             done[u] = dst
             ServerLog.log("cache", "next", "", "", true, "Next song cached: ${p.title}", "${dst.length() / 1024} KB")
         } catch (e: Exception) {
             tmp.delete()
         } finally { if (gen == g) target = "" }
+    }
+
+    /** One plain connection (a web server that can't serve pieces). */
+    private fun single(p: PlayItem, tmp: File, g: Int): Boolean {
+        val u = p.uri
+        val r = Net.http.newCall(Request.Builder().url(u)
+            .apply { if (p.user.isNotEmpty()) header("Authorization", okhttp3.Credentials.basic(p.user, p.password)) }.build()).execute()
+        r.use {
+            if (!r.isSuccessful) return false
+            val size = r.body?.contentLength() ?: -1L
+            if (size > MAX_BYTES) return false
+            r.body!!.byteStream().use { i -> tmp.outputStream().use { o ->
+                val buf = ByteArray(256 * 1024)
+                while (gen == g && !paused()) { val n = i.read(buf); if (n < 0) break; o.write(buf, 0, n) }
+            } }
+            return gen == g && !paused() && (size <= 0 || tmp.length() == size)
+        }
     }
 
     /** Exit: copies removed. */
