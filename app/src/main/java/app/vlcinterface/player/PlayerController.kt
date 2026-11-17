@@ -43,7 +43,9 @@ data class Origin(
 )
 
 /** Gain for songs that carry no ReplayGain at all (when ReplayGain is on). */
-const val NO_RG_DB = 0f     // no ReplayGain: played as it is (no preamp either); the scan question handles it
+const val NO_RG_DB = 0f
+/** Songs without ReplayGain reached over the VPN: 6 dB lower (not scanned there). */
+const val VPN_NO_RG_DB = -6f     // no ReplayGain: played as it is (no preamp either); the scan question handles it
 
 data class PlayItem(
     val uri: String,
@@ -240,16 +242,21 @@ class PlayerController(private val context: Context, private val store: Store) {
             val used = if (gain == null) "" else if (album && rg?.albumGain != null || !album && rg?.trackGain == null) "album" else "track"
             // No ReplayGain in the song: played as it is — no preamp at all (the scan question takes care of it), and the
             // player line says so.
-            var db = if (gain == null) NO_RG_DB else gain + set.rgPreampDb
+            // Over the VPN (home NAS away from home) a missing ReplayGain isn't scanned (too slow there): the song
+            // plays 6 dB lower instead, so untagged loud songs don't jump out; songs with ReplayGain play as usual.
+            val overVpn = gain == null && item.uri.startsWith("smb://") &&
+                try { android.net.Uri.parse(item.uri).host?.let { h -> app.vlcinterface.sources.VpnLink.routeHost(h) != h } == true } catch (_: Exception) { false }
+            var db = if (gain == null) (if (overVpn) VPN_NO_RG_DB else NO_RG_DB) else gain + set.rgPreampDb
             var limited = false
             if (gain != null && set.rgClipProtect && peak != null && peak > 0f) { val cap = -20f * log10(peak); if (cap < db) { db = cap; limited = true } }
             rgDb = db
             rgPeak = if (gain != null && peak != null && peak > 0f) peak else 0f
-            if (gain == null) askRgScan(item)
+            if (gain == null && !overVpn) askRgScan(item)
             fun f(v: Float) = (if (v >= 0) "+" else "−") + "%.2f".format(java.util.Locale.US, kotlin.math.abs(v)) + " dB"
             // Shows the song's own value (exactly as in its tags / the scan: track or album). When what is played
             // differs — preamp added, or lowered so the loudest peak can't clip — that is said separately.
             val info = when {
+                (rg == null || gain == null) && overVpn -> "No RG · −6 dB (over VPN, no scan)"
                 rg == null || gain == null -> "No RG · plays as is"
                 kotlin.math.abs(db - gain) < 0.005f -> "RG $used ${f(gain)}"
                 else -> "RG $used ${f(gain)} · plays ${f(db)}" + when {
