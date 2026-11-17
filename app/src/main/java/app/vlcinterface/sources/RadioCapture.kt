@@ -794,7 +794,10 @@ object RadioCapture {
                 // The logical stream (song) the part begins in; pages of another one (the song before) are left out.
                 val c = synchronized(lock) { chains.lastOrNull { it.offset <= from + 1 + maxOf(0L, p.start - from) } ?: chains.lastOrNull() }
                     ?: throw Exception("the stream's start (Ogg headers) wasn't recorded")
-                val all = OggStream.pages(data).filter { it.serial == c.serial && it.granule != 0L }
+                // The song's audio pages: same logical stream, after its header pages (by place, not by page position:
+                // some servers write positions as 0 everywhere).
+                val hdrEnd = c.offset + c.headerLen
+                val all = OggStream.pages(data).filter { it.serial == c.serial && from + it.pos >= hdrEnd && (it.flags and 2) == 0 }
                 // A part must start on a page that begins a packet.
                 val pg = all.dropWhile { (it.flags and 1) != 0 }
                 if (pg.size < 10) throw Exception("too little audio recorded")
@@ -822,7 +825,7 @@ object RadioCapture {
                     val base = if (a == 0) g0 else g[a - 1]
                     val part = pg.subList(a, b)
                     if (c.codec == "flac") OggStream.writeFlac(c, data, part, (g[b - 1] - base).coerceAtLeast(0), f)
-                    else OggStream.writeOgg(c, data, part, base, f)
+                    else OggStream.writeOgg(c, data, part, base, f, g.copyOfRange(a, b))
                 })
             }
             else -> throw Exception("format not supported")

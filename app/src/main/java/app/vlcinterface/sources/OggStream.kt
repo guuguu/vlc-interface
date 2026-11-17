@@ -12,7 +12,7 @@ import java.io.File
  */
 object OggStream {
     class Chain(val offset: Long, val serial: Int, val codec: String, val rate: Int, val headerPages: ByteArray,
-                val headerPackets: List<ByteArray>, val title: String)
+                val headerPackets: List<ByteArray>, val title: String, val headerLen: Int = headerPages.size)
 
     class Page(val pos: Int, val len: Int, val flags: Int, val granule: Long, val serial: Int, val bodyPos: Int, val lacing: IntArray)
 
@@ -99,13 +99,28 @@ object OggStream {
         return Triple(codec, rate, listOf(a, t).filter { it.isNotBlank() }.joinToString(" - "))
     }
 
-    /** Follows the recorded stream: reports each new chain once its header pages are complete. */
+    /**
+     * Header packets a chain needs before its audio: Vorbis 3, Opus 2, FLAC 1 + the count in its first packet
+     * (0 = not given: until the first audio frame). Null when the first packet isn't known yet.
+     */
+    private fun headersNeeded(p0: ByteArray): Int? = when {
+        p0.size >= 7 && String(p0, 0, 7, Charsets.ISO_8859_1) == "\u0001vorbis" -> 3
+        p0.size >= 8 && String(p0, 0, 8, Charsets.ISO_8859_1) == "OpusHead" -> 2
+        p0.size >= 9 && String(p0, 0, 5, Charsets.ISO_8859_1) == "\u007FFLAC" ->
+            (((p0[7].toInt() and 0xFF) shl 8) or (p0[8].toInt() and 0xFF)).let { if (it == 0) 0 else it + 1 }
+        else -> null
+    }
+
+    /**
+     * Follows the recorded stream: reports each new chain (song) once its header packets are all there — counted
+     * from the codec's own headers, not from page positions (some servers write those as 0 everywhere).
+     */
     class Watcher(private val onChain: (Chain) -> Unit) {
         private val hdr = ByteArray(27 + 255); private var hlen = 0; private var need = 27
         private var pageStart = 0L; private var skip = 0
-        private var keep: ByteArrayOutputStream? = null       // bytes of the page now read, when it's a header page
+        private var keep: ByteArrayOutputStream? = null       // bytes of the page now read, when it belongs to the headers
         private var chainSerial = 0; private var chainOffset = 0L
-        private var headers: ByteArrayOutputStream? = null     // header pages of the chain being started
+        private var headers: ByteArrayOutputStream? = null     // pages of the chain being started
 
         fun feed(b: ByteArray, off: Int, n: Int, base: Long) {
             var i = off; val end = off + n
@@ -127,33 +142,43 @@ object OggStream {
                 if (hlen == 27) need = 27 + (hdr[26].toInt() and 0xFF)
                 if (hlen >= 27 && hlen == need) {
                     val flags = hdr[5].toInt() and 0xFF
-                    val granule = le64(hdr, 6); val serial = le32(hdr, 14)
+                    val serial = le32(hdr, 14)
                     val body = (0 until (hdr[26].toInt() and 0xFF)).sumOf { hdr[27 + it].toInt() and 0xFF }
                     if ((flags and 2) != 0) {             // BOS: a new chain (song) starts here
                         chainSerial = serial; chainOffset = pageStart; headers = ByteArrayOutputStream()
                     }
                     val h = headers
-                    if (h != null && serial == chainSerial && granule == 0L && h.size() < 2_000_000) {
-                        keep = ByteArrayOutputStream().also { it.write(hdr, 0, hlen) }
-                    } else {
-                        keep = null
-                        if (h != null && serial == chainSerial && granule != 0L) finishChain()
-                    }
+                    keep = if (h != null && serial == chainSerial && h.size() < 2_000_000) ByteArrayOutputStream().also { it.write(hdr, 0, hlen) } else null
+                    if (h != null && h.size() >= 2_000_000) headers = null      // never complete: given up
                     hlen = 0; skip = body
                     if (skip == 0) pageDone()
                 }
             }
         }
 
-        private fun pageDone() { keep?.let { headers?.write(it.toByteArray()) }; keep = null }
-
-        private fun finishChain() {
-            val raw = headers?.toByteArray() ?: return
+        private fun pageDone() {
+            val k = keep ?: return
+            keep = null
+            val h = headers ?: return
+            h.write(k.toByteArray())
+            val raw = h.toByteArray()
+            val pk = packets(raw, pages(raw))
+            val needed = pk.firstOrNull()?.let { headersNeeded(it) } ?: run { if (pk.isNotEmpty()) headers = null; return }
+            // FLAC without a count: the headers end where the first audio frame (0xFFF8…) begins.
+            val audioAt = if (needed == 0) pk.indexOfFirst { it.size >= 2 && (it[0].toInt() and 0xFF) == 0xFF && (it[1].toInt() and 0xFE) == 0xF8 } else -1
+            val count = if (needed == 0) (if (audioAt > 0) audioAt else return) else needed
+            if (pk.size < count) return
             headers = null
+            val hp = pk.take(count)
+            val (codec, rate, title) = describe(hp) ?: return
+            // The header pages alone (for .ogg / .opus): pages up to the one that ends the last header packet.
             val ps = pages(raw)
-            val pk = packets(raw, ps)
-            val (codec, rate, title) = describe(pk) ?: return
-            onChain(Chain(chainOffset, chainSerial, codec, rate, raw, pk, title))
+            var got = 0; var lastPage = ps.size - 1
+            run {
+                ps.forEachIndexed { idx, pg -> got += pg.lacing.count { it < 255 }; if (got >= count) { lastPage = idx; return@run } }
+            }
+            val hpBytes = raw.copyOfRange(0, ps[lastPage].pos + ps[lastPage].len)
+            onChain(Chain(chainOffset, chainSerial, codec, rate, hpBytes, hp, title, headerLen = hpBytes.size))
         }
     }
 
@@ -169,7 +194,7 @@ object OggStream {
     private fun putLe(b: ByteArray, at: Int, v: Long, n: Int) { for (k in 0 until n) b[at + k] = (v ushr (8 * k)).toByte() }
 
     /** Vorbis / Opus: the chain's header pages, then [audio] pages renumbered with positions counted from [g0]. */
-    fun writeOgg(c: Chain, d: ByteArray, audio: List<Page>, g0: Long, out: File) {
+    fun writeOgg(c: Chain, d: ByteArray, audio: List<Page>, g0: Long, out: File, ends: LongArray? = null) {
         out.outputStream().buffered().use { o ->
             o.write(c.headerPages)
             var seq = pages(c.headerPages).size
@@ -178,7 +203,10 @@ object OggStream {
                 var flags = p.flags and 0x01.inv() and 0x02.inv() and 0x04.inv()
                 if (idx == audio.size - 1) flags = flags or 0x04
                 b[5] = flags.toByte()
-                putLe(b, 6, if (p.granule == -1L) -1L else (p.granule - g0).coerceAtLeast(0), 8)
+                // Position at the end of the page: counted from the audio when given (servers may write 0), -1 when
+                // no packet ends on the page.
+                val pos = if (p.lacing.none { it < 255 }) -1L else if (ends != null) ends[idx] else p.granule
+                putLe(b, 6, if (pos == -1L) -1L else (pos - g0).coerceAtLeast(0), 8)
                 putLe(b, 14, c.serial.toLong(), 4)
                 putLe(b, 18, (seq++).toLong(), 4)
                 putLe(b, 22, 0, 4); putLe(b, 22, crc(b).toLong() and 0xFFFFFFFFL, 4)
