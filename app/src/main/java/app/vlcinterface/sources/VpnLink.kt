@@ -122,6 +122,9 @@ object VpnLink {
             val wasUp = vpnUp.value
             homeNets = home; vpnNets = vpn; vpnSelf = self
             vpnUp.value = vpn.isNotEmpty()
+            // Same storage, other road: the index (kept by server, with LAN addresses) is used as it is — only who
+            // answers now is checked again; nothing is indexed anew.
+            NetIndex.recheckReachable()
             learnLocal()
             announceSwitches()
             if (vpnUp.value && !wasUp) {

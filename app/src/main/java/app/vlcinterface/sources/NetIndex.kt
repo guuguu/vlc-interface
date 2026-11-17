@@ -61,6 +61,9 @@ object NetIndex {
 
     private val upAt = HashMap<String, Pair<Long, Boolean>>()   // source id → (checked at, reachable)
 
+    /** The network changed (Wi-Fi ↔ VPN): servers are checked again at once — the index itself stays as it is. */
+    fun recheckReachable() = synchronized(upAt) { upAt.clear() }
+
     /**
      * Indexed songs only from servers that answer right now (checked in parallel, ~1.5 s at most, remembered 20 s):
      * a NAS that's off or out of reach gives no search results.
