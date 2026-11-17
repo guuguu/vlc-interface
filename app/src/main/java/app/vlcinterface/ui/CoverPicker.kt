@@ -44,7 +44,8 @@ import kotlinx.coroutines.launch
  * The chosen one is saved as cover.jpg in the album folder. [onDone] gets a note to show under the picture.
  */
 @Composable
-fun CoverPicker(item: PlayItem, onNone: () -> Unit, onDone: (note: String, changed: Boolean) -> Unit) {
+fun CoverPicker(item: PlayItem, onNone: () -> Unit, onDone: (note: String, changed: Boolean) -> Unit,
+                artPath: String = "", onBan: ((clear: Boolean) -> Unit)? = null) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     var list by remember { mutableStateOf<List<CoverArt.Candidate>?>(null) }
@@ -56,8 +57,9 @@ fun CoverPicker(item: PlayItem, onNone: () -> Unit, onDone: (note: String, chang
     LaunchedEffect(item.uri) {
         if (CoverArt.onMobile()) { onDone("Pictures are downloaded only on Wi-Fi", false); return@LaunchedEffect }
         val l = CoverArt.candidates(item.artist, item.album)
+            .filter { c -> CoverArt.notBanned(item.artist, item.album, if (c.kind == "web") c.id else "https://coverartarchive.org/${c.kind}/${c.id}/front-500") }
         when (l.size) {
-            0 -> onNone()
+            0 -> if (onBan != null && (CoverArt.canBan(item.uri, artPath) || CoverArt.hasBans(item.artist, item.album))) list = l else onNone()
             else -> list = l
         }
     }
@@ -69,7 +71,13 @@ fun CoverPicker(item: PlayItem, onNone: () -> Unit, onDone: (note: String, chang
                 CircularProgressIndicator(color = accent())
                 Text(if (saving) "Saving the picture in the album folder…" else "Looking for \"${item.album}\"" + if (item.artist.isNotBlank()) " by ${item.artist}…" else "…",
                     color = C.muted, fontSize = 13.sp)
-            } else {
+            } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // The picture shown is wrong for this album: never used for it again (another is found, or the
+                // artist's photo). Or: pictures marked wrong allowed again.
+                if (onBan != null) {
+                    if (CoverArt.canBan(item.uri, artPath)) STextButton({ onBan(false) }) { Text("Wrong picture — never use it for this album", color = C.bad, fontWeight = FontWeight.SemiBold) }
+                    if (CoverArt.hasBans(item.artist, item.album)) STextButton({ onBan(true) }) { Text("Allow pictures marked wrong again") }
+                }
                 val state = rememberLazyListState()
                 LazyColumn(Modifier.heightIn(max = 460.dp).scrollbar(state), state = state, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     items(l) { c ->

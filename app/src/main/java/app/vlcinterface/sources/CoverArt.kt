@@ -62,7 +62,83 @@ object CoverArt {
         // The search got better: forget every "not found online" from earlier versions once, so those albums are tried again.
         val v2 = File(miss, ".search-v2")
         if (!v2.exists()) { miss.listFiles { f -> f.name.endsWith(".none") }?.forEach { it.delete() }; v2.writeText("") }
+        banFile = File(ctx.filesDir, "covers-banned.json"); loadBans()
     }
+
+    // ---------- pictures marked wrong for an album ----------
+    // Album key → fingerprints ("h:" + SHA-1 of the picture) and addresses ("u:" + URL) never to use for it again.
+    private lateinit var banFile: File
+    private val banned = HashMap<String, MutableSet<String>>()
+    /** What each song shows now: album key and the picture's tags (to mark it wrong). */
+    private val shown = java.util.concurrent.ConcurrentHashMap<String, Pair<String, List<String>>>()
+    private fun sha(b: ByteArray) = java.security.MessageDigest.getInstance("SHA-1").digest(b).joinToString("") { "%02x".format(it) }
+
+    @Synchronized private fun loadBans() = try {
+        if (banFile.isFile) { val o = JSONObject(banFile.readText()); o.keys().forEach { k -> val a = o.getJSONArray(k); banned[k] = (0 until a.length()).map { a.getString(it) }.toMutableSet() } }
+    } catch (_: Exception) {}
+    @Synchronized private fun saveBans() = try {
+        val o = JSONObject(); banned.forEach { (k, v) -> o.put(k, org.json.JSONArray(v.toList())) }; banFile.writeText(o.toString())
+    } catch (_: Exception) {}
+    @Synchronized private fun isBanned(ak: String, vararg tags: String) = banned[ak]?.let { b -> tags.any { it.isNotEmpty() && it in b } } == true
+
+    /** The picture a song shows can be marked wrong (one was shown by the app or from its file). */
+    fun canBan(uri: String, artPath: String = "") = shown.containsKey(uri) || localPath(artPath) != null
+    private fun localPath(p: String) = p.removePrefix("file://").takeIf { it.startsWith("/") && File(it).isFile }
+
+    /** Albums with pictures marked wrong (to allow them again). */
+    @Synchronized fun hasBans(artist: String, album: String) = banned[albumKey(canonicalArtist(artist), album)]?.isNotEmpty() == true
+
+    /**
+     * "Wrong picture": the picture shown for this song is never used again for its album (it's remembered by its
+     * content and its address). The album's stored picture is dropped, so the next look-up finds another one —
+     * or the artist's photo when there is no other.
+     */
+    fun banShown(ctx: Context, item: PlayItem, artist: String, album: String, artPath: String): Boolean {
+        val ak = shown[item.uri]?.first ?: albumKey(canonicalArtist(artist), album)
+        val tags = ArrayList<String>()
+        shown[item.uri]?.let { tags += it.second }
+        localPath(artPath)?.let { tags += "h:" + sha(File(it).readBytes()) }
+        if (tags.isEmpty()) return false
+        synchronized(this) { banned.getOrPut(ak) { mutableSetOf() }.addAll(tags); saveBans() }
+        forgetShown(ctx, item, ak)
+        return true
+    }
+
+    /** Pictures marked wrong for this album allowed again. */
+    fun clearBans(ctx: Context, item: PlayItem, artist: String, album: String) {
+        val ak = albumKey(canonicalArtist(artist), album)
+        synchronized(this) { banned.remove(ak); saveBans() }
+        forgetShown(ctx, item, ak)
+    }
+
+    /** A picture from the song's own file (embedded) that was marked wrong for its album. */
+    fun bannedFile(item: PlayItem, path: String): Boolean {
+        val f = localPath(path) ?: return false
+        // A song's own picture is the same bytes whatever its tags say: marked wrong under any album key counts.
+        val h = try { "h:" + sha(File(f).readBytes()) } catch (_: Exception) { return false }
+        return synchronized(this) { banned.values.any { h in it } }
+    }
+
+    /** The picker's list without the pictures marked wrong for this album. */
+    fun notBanned(artist: String, album: String, url: String) = !isBanned(albumKey(canonicalArtist(artist), album), "u:$url")
+
+    private fun forgetShown(ctx: Context, item: PlayItem, ak: String) {
+        shown.remove(item.uri)
+        place(ctx, item)?.let { mem.remove(it.key) }
+        mem.remove("store:" + item.uri); mem.remove(item.uri)
+        synchronized(this) { loadIndex(); songPic.remove(item.uri); keyPic.remove(ak); saveIndex() }
+        try { File(miss, "al2" + key(ak.removePrefix("album:")) + ".none").delete() } catch (_: Exception) {}
+    }
+
+    /** A picture from the internet, unless marked wrong for this album (by address or content). */
+    private fun getOk(url: String, ak: String): ByteArray? {
+        if (ak.isNotEmpty() && isBanned(ak, "u:$url")) return null
+        val b = get(url) ?: return null
+        if (ak.isNotEmpty()) { val j = resize(b)?.second; if (isBanned(ak, "h:" + sha(b)) || (j != null && isBanned(ak, "h:" + sha(j)))) return null }
+        lastUrl = url
+        return b
+    }
+    @Volatile private var lastUrl = ""
 
     /** In-memory picture for the notification / lock screen ("mem:" + key). */
     fun memory(key: String): Bitmap? = mem.get(key)
@@ -266,15 +342,25 @@ object CoverArt {
         val memKey = if (inFolder) pl!!.key else "store:" + item.uri
         if (!force) mem.get(memKey)?.let { mem.put(item.uri, it); return@withContext Result(it, "") }
         // A one-album folder on a read-only share keeps its picture in the pictures folder: looked for there too.
-        val local = if (inFolder) readFolder(ctx, pl!!) ?: storeFind(item, artist, album)?.readBytes()
+        val ak = albumKey(artist, album)
+        var local = if (inFolder) readFolder(ctx, pl!!) ?: storeFind(item, artist, album)?.readBytes()
             else storeFind(item, artist, album)?.readBytes()
-        local?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.let { mem.put(memKey, it); mem.put(item.uri, it); return@withContext Result(it, "") }
+        // A picture marked wrong for this album isn't shown (a better one is looked for below).
+        if (local != null && isBanned(ak, "h:" + sha(local))) local = null
+        local?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.let {
+            shown[item.uri] = ak to listOf("h:" + sha(local!!))
+            mem.put(memKey, it); mem.put(item.uri, it); return@withContext Result(it, "")
+        }
         if (!online) return@withContext Result(null, "")
         // Pictures are downloaded only over Wi-Fi (never on mobile data).
         if (onMobile()) return@withContext Result(null, if (force) "Pictures are downloaded only on Wi-Fi" else "")
-        val (bytes, name) = albumPicture(artist, album, force)?.let { it to "cover.jpg" } ?: artistPicture(artist, force)?.let { it to "artist.jpg" }
+        // Album picture first; none (or only ones marked wrong): the artist's photo — tried under several forms of
+        // the name and from several sources.
+        lastUrl = ""
+        val (bytes, name) = albumPicture(artist, album, force, ak)?.let { it to "cover.jpg" } ?: artistPicture(artist, force, ak)?.let { it to "artist.jpg" }
             ?: return@withContext Result(null, if (force) "No picture found online for \"$album\"" + if (artist.isNotBlank()) " by $artist" else "" else "")
         val (bmp, jpeg) = resize(bytes) ?: return@withContext Result(null, "")
+        shown[item.uri] = ak to listOfNotNull("h:" + sha(jpeg), "h:" + sha(bytes), lastUrl.takeIf { it.isNotEmpty() }?.let { "u:$it" })
         mem.put(memKey, bmp); mem.put(item.uri, bmp)
         val isArtist = name == "artist.jpg"
         val what = if (isArtist) "Artist photo" else "Album picture"
@@ -350,7 +436,7 @@ object CoverArt {
      * without it (checking the artist afterwards, so "ELO" finds "Electric Light Orchestra"), release groups and
      * single releases. [force]: also when this album was marked "not found" before.
      */
-    private suspend fun albumPicture(artist: String, album: String, force: Boolean = false): ByteArray? {
+    private suspend fun albumPicture(artist: String, album: String, force: Boolean = false, ak: String = ""): ByteArray? {
         if (album.isBlank()) return null
         val k = "al2" + key("$artist|$album"); if (!force && missed(k)) return null
         return lock.withLock {
@@ -368,7 +454,7 @@ object CoverArt {
                             ?.optJSONArray(if (kind == "release-group") "release-groups" else "releases") ?: continue
                         val ids = (0 until arr.length()).map { arr.getJSONObject(it) }
                             .filter { it.optInt("score") >= 85 && artistFits(artist, credit(it)) }.map { it.getString("id") }.take(4)
-                        ids.firstNotNullOfOrNull { id -> get("https://coverartarchive.org/$kind/$id/front-500") }?.let { return@withLock it }
+                        ids.firstNotNullOfOrNull { id -> getOk("https://coverartarchive.org/$kind/$id/front-500", ak) }?.let { return@withLock it }
                     }
                 }
                 // Last try: loose word search (no exact phrase), punctuation dropped — "If You Want Blood, You've Got It"
@@ -383,10 +469,10 @@ object CoverArt {
                     val want = norm(base)
                     val ids = (0 until arr.length()).map { arr.getJSONObject(it) }
                         .filter { it.optInt("score") >= 80 && artistFits(artist, credit(it)) && norm(it.optString("title")) == want }.map { it.getString("id") }.take(4)
-                    ids.firstNotNullOfOrNull { id -> get("https://coverartarchive.org/$kind/$id/front-500") }?.let { return@withLock it }
+                    ids.firstNotNullOfOrNull { id -> getOk("https://coverartarchive.org/$kind/$id/front-500", ak) }?.let { return@withLock it }
                 }
                 // Not in MusicBrainz / Cover Art Archive: the big shops' catalogues (iTunes, Deezer).
-                webAlbums(artist, album).firstOrNull()?.let { (big, _) -> get(big)?.let { return@withLock it } }
+                webAlbums(artist, album).firstNotNullOfOrNull { (big, _) -> getOk(big, ak) }?.let { return@withLock it }
                 markMissed(k); null
             } catch (_: Exception) { null }
         }
@@ -601,6 +687,8 @@ object CoverArt {
         } catch (_: Exception) { null }
             ?: return@withContext Result(null, "Couldn't download that picture")
         val (bmp, jpeg) = resize(bytes) ?: return@withContext Result(null, "Couldn't read that picture")
+        shown[item.uri] = albumKey(canonicalArtist(item.artist), item.album) to listOf("h:" + sha(jpeg), "h:" + sha(bytes),
+            "u:" + if (c.kind == "web") c.id else "https://coverartarchive.org/${c.kind}/${c.id}/front-500")
         val pl = place(ctx, item)
         if (!inAlbumFolder(ctx, item, pl)) {
             // Not a one-album folder: the chosen picture goes to the pictures store, named after the album.
@@ -629,9 +717,22 @@ object CoverArt {
 
     private fun usableArtist(a: String) = a.isNotBlank() && a.trim().lowercase() !in setOf("various artists", "various", "va", "unknown", "<unknown>")
 
-    private suspend fun artistPicture(artist: String, force: Boolean = false): ByteArray? {
+    /** Forms of an artist name to try: as tagged, the main artist of "A feat. B" / "A & B" / "A, B", without "The". */
+    private fun artistVariants(artist: String): List<String> {
+        val a = artist.trim()
+        val main = a.split(Regex("""\s+(feat\.?|ft\.?|featuring|with|vs\.?|x)\s+|\s*[&,;/+]\s*|\s+and\s+""", RegexOption.IGNORE_CASE)).first().trim()
+        return listOf(a, main, main.replace(Regex("^the\\s+", RegexOption.IGNORE_CASE), "")).filter { usableArtist(it) }.distinct()
+    }
+
+    /** The artist's photo (album picture missing): every form of the name, each through Wikimedia, Deezer, TheAudioDB. */
+    private suspend fun artistPicture(artist: String, force: Boolean = false, ak: String = ""): ByteArray? {
+        for (v in artistVariants(artist)) artistOne(v, force, ak)?.let { return it }
+        return null
+    }
+
+    private suspend fun artistOne(artist: String, force: Boolean, ak: String): ByteArray? {
         if (!usableArtist(artist)) return null
-        val k = "ar2" + key(artist); if (!force && missed(k)) return null
+        val k = "ar3" + key(artist); if (!force && missed(k)) return null
         return lock.withLock {
             try {
                 val found = mb("https://musicbrainz.org/ws/2/artist/?fmt=json&limit=5&query=" + URLEncoder.encode("artist:\"${artist.replace("\"", "")}\"", "UTF-8"))
@@ -653,9 +754,19 @@ object CoverArt {
                 }
                 file?.let { f ->
                     val name = java.net.URLDecoder.decode(f, "UTF-8").replace(' ', '_')
-                    get("https://commons.wikimedia.org/wiki/Special:FilePath/" + URLEncoder.encode(name, "UTF-8").replace("+", "%20") + "?width=$MAX")
-                } ?: deezerArtist(artist)?.let { get(it.first) } ?: null.also { markMissed(k) }
+                    getOk("https://commons.wikimedia.org/wiki/Special:FilePath/" + URLEncoder.encode(name, "UTF-8").replace("+", "%20") + "?width=$MAX", ak)
+                } ?: deezerArtist(artist)?.let { getOk(it.first, ak) }
+                  ?: audioDbArtist(artist)?.let { getOk(it, ak) }
+                  ?: null.also { markMissed(k) }
             } catch (_: Exception) { null }
         }
     }
+
+    /** TheAudioDB (free key): artist photo, when the name fits. */
+    private fun audioDbArtist(artist: String): String? = try {
+        val a = json("https://www.theaudiodb.com/api/v1/json/2/search.php?s=" + URLEncoder.encode(artist, "UTF-8"))?.optJSONArray("artists")
+        (0 until (a?.length() ?: 0)).map { a!!.getJSONObject(it) }
+            .firstOrNull { artistFits(artist, it.optString("strArtist")) }
+            ?.let { o -> listOf("strArtistThumb", "strArtistFanart", "strArtistWideThumb").map { o.optString(it) }.firstOrNull { it.startsWith("http") } }
+    } catch (_: Exception) { null }
 }

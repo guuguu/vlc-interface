@@ -181,6 +181,11 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     coverPick = false
                     if (note.isNotEmpty()) coverNote = note
                     if (changed) { coverRefresh++; player.useDownloadedArtwork(item, "mem:" + item.uri + "#v" + System.currentTimeMillis()) }
+                }, artPath = p.artworkUrl.ifEmpty { item.artwork },
+                onBan = { clear ->
+                    coverPick = false
+                    coverNote = if (clear) "Allowing the pictures again…" else "Looking for another picture…"
+                    player.replacePicture(coverItem, clear) { note -> coverNote = note; coverRefresh++ }
                 })
             if (coverNote.isNotEmpty()) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)
             if (item.isRadio) RadioHeader(item, p, tk) else

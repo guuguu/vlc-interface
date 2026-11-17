@@ -639,6 +639,32 @@ class PlayerController(private val context: Context, private val store: Store) {
         applyPicture(hue, sat, store.current.settings.pictureHighlights, commit)
     }
 
+    /** A picture (from the song's file) marked wrong for its album. */
+    private fun artBanned(item: PlayItem, path: String) = path.isNotEmpty() && try { app.vlcinterface.sources.CoverArt.bannedFile(item, path) } catch (_: Exception) { false }
+
+    /**
+     * "Wrong picture" on the playing song: that picture is never used for its album again; another is looked for
+     * (album, else the artist's photo). [clear]: pictures marked wrong for the album allowed again.
+     */
+    fun replacePicture(item: PlayItem, clear: Boolean = false, onDone: (String) -> Unit) {
+        val ca = app.vlcinterface.sources.CoverArt
+        bg.launch {
+            val note = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                if (clear) ca.clearBans(context, item, item.artist, item.album)
+                else if (!ca.banShown(context, item, item.artist, item.album, _state.value.artworkUrl)) return@withContext "No picture to mark"
+                val r = try { ca.forPlayer(context, item, item.artist, item.album, true, force = true) } catch (_: Exception) { null }
+                val s = _state.value
+                if (s.item === item) _state.value = s.copy(artworkUrl = if (r?.bitmap != null) "mem:" + item.uri + "#v" + System.currentTimeMillis() else "")
+                when {
+                    r?.bitmap != null -> if (clear) "Pictures allowed again" else "Another picture found"
+                    clear -> "Pictures allowed again — none found now"
+                    else -> r?.note?.ifEmpty { null } ?: "No other picture found for this album or artist"
+                }
+            }
+            onDone(note)
+        }
+    }
+
     /** Album picture found online for a song with none in its files: also shown in the notification and on the lock screen. */
     fun useDownloadedArtwork(item: PlayItem, path: String) {
         val s = _state.value
@@ -1446,7 +1472,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         pendingSeek = resume
         _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, videoW = 0, videoH = 0,
             audioTracks = emptyList(), spuTracks = emptyList(), audioDelayMs = 0, spuDelayMs = 0, rate = 1f, nowPlaying = "",
-            metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, buffering = 0f, error = "", ended = false,
+            metaArtist = item.artist, metaAlbum = item.album, artworkUrl = if (artBanned(item, item.artwork)) "" else item.artwork, buffering = 0f, error = "", ended = false,
             rgInfo = "", userPaused = false, songOver = false)
         // Loudness / treble: the song's (station's) own values at once, else the last ones; videos: none.
         val tone = if (item.isMusic || item.isRadio) toneFor(item) else Triple(0f, 0f, false)
@@ -1459,7 +1485,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         loadReplayGain(item, _state.value)
         // No picture in the file: looked up here too (folder, pictures store, online), so the notification and lock
         // screen get it even while the app is in the background.
-        if (item.isMusic && !item.artwork.startsWith("/") && !item.artwork.startsWith("file://") && !item.artwork.startsWith("content://")) bg.launch {
+        if (item.isMusic && (artBanned(item, item.artwork) || !item.artwork.startsWith("/") && !item.artwork.startsWith("file://") && !item.artwork.startsWith("content://"))) bg.launch {
             val r = try { app.vlcinterface.sources.CoverArt.forPlayer(context, item, item.artist, item.album, store.current.settings.coverDownload) } catch (_: Exception) { null }
             if (r?.bitmap != null) useDownloadedArtwork(item, "mem:" + item.uri)
         }
@@ -1909,7 +1935,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             val s = _state.value
             _state.value = s.copy(
                 metaArtist = s.metaArtist.ifEmpty { artist }, metaAlbum = s.metaAlbum.ifEmpty { album },
-                artworkUrl = s.artworkUrl.ifEmpty { art },
+                artworkUrl = s.artworkUrl.ifEmpty { if (s.item?.let { artBanned(it, art) } == true) "" else art },
             )
         } catch (_: Exception) {
         }

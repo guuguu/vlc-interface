@@ -81,7 +81,7 @@ fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayIte
         value = null          // a new song: the old picture goes at once, not when the new one has loaded
         value = withContext(Dispatchers.IO) {
             // A picture chosen by hand (refresh) wins over the one inside the file.
-            val own = if (refresh > 0) null else try {
+            val own = if (refresh > 0 || (item != null && app.vlcinterface.sources.CoverArt.bannedFile(item, url))) null else try {
                 when {
                     url.startsWith("content://") -> ctx.contentResolver.loadThumbnail(Uri.parse(url), Size(512, 512), null)
                     url.startsWith("file://") -> BitmapFactory.decodeFile(Uri.parse(url).path)
