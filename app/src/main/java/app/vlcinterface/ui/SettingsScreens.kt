@@ -103,12 +103,16 @@ fun SettingsScreen(nav: Navigator) {
                         set(s.copy(saveFolder = uri.toString()))
                     } catch (_: Exception) {}
                 }
-                // Default: raw/ and mp3/ in the root of the phone music library (found from where its songs are).
+                // Saving root: raw/ and mp3/ are made inside it. Default: the root of the phone music library.
                 var root by remember { mutableStateOf("") }
                 LaunchedEffect(Unit) { root = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { app.vlcinterface.sources.RadioCapture.libraryRoot(sctx).second } }
-                ValueRow("Folder", (if (s.saveFolder.isEmpty()) root.ifEmpty { "Library root" } else android.net.Uri.decode(s.saveFolder).substringAfterLast(':').ifEmpty { "Chosen folder" }.trimEnd('/') + "/") +
-                    "raw (original) · mp3 (re-encoded)", "Choose") { pickSave.launch(null) }
-                if (s.saveFolder.isNotEmpty()) { Divider(); ValueRow("Back to the library root", "", "Reset") { set(s.copy(saveFolder = "")) } }
+                val chosen = s.saveFolder.isNotEmpty()
+                val rootShown = (if (chosen) android.net.Uri.decode(s.saveFolder).substringAfterLast(':').ifEmpty { "Chosen folder" } else root.ifEmpty { "…" }).trimEnd('/') + "/"
+                ValueRow("Saving root: $rootShown",
+                    "Saved radio songs go into two folders here: ${rootShown}raw (as the station sends them) and ${rootShown}mp3 (re-encoded, LAME V0). " +
+                        if (chosen) "Chosen by you." else "Now the root of your phone music library, found from where its songs are.",
+                    "Change") { pickSave.launch(null) }
+                if (chosen) { Divider(); ValueRow("Use the library root again", "Back to ${root.ifEmpty { "the library root" }.trimEnd('/')}/", "Reset") { set(s.copy(saveFolder = "")) } }
                 Divider()
                 ValueRow("Format", if (s.saveFormat == "original") "As the station sends it (MP3 as is, AAC as .m4a)" else "Re-encoded, best VBR quality",
                     if (s.saveFormat == "original") "Original" else "MP3 V0") { set(s.copy(saveFormat = if (s.saveFormat == "original") "mp3" else "original")) }
