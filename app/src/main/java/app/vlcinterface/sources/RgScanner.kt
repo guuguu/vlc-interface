@@ -620,7 +620,7 @@ object RgScanner {
         if (u.startsWith("smb://") && orig != null && orig.length() == tmp.length() && patchInPlace(ctx, item, orig, tmp)) return
         // Whole file replaced: the untagged copy must be exactly the file on the server (checked whole).
         if (orig != null && (u.startsWith("smb://") || u.startsWith("http")) &&
-            !ParallelFetch.matchesRemote(item, u, orig) { d, t -> if (t > 0) update { s -> s.copy(current = item.title, phase = "Checking the copy against the server ${d * 100 / t}%") } })
+            !ParallelFetch.matchesRemote(item, u, orig, progress = { d, t -> if (t > 0) update { s -> s.copy(current = item.title, phase = "Checking the copy against the server ${d * 100 / t}%") } }))
             throw IllegalStateException("the copy read from the server didn't match it — nothing changed")
         when {
             u.startsWith("content://") -> ctx.contentResolver.openOutputStream(Uri.parse(u), "wt")!!.use { o -> tmp.inputStream().use { copy(it, o, "Saving", tmp.length()) } }
