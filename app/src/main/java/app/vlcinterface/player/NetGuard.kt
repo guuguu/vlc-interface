@@ -112,9 +112,10 @@ object NetGuard {
         val s = p.state.value
         val list = ArrayList<String>()
         val item = s.item
-        if (item != null && s.isPlaying && (item.isRadio || needsInternet(item.uri))) {
+        // Radio goes on over mobile data: the player just shows it and counts the data (no pause, no question).
+        if (item != null && s.isPlaying && !item.isRadio && needsInternet(item.uri)) {
             stoppedPlayback = true; p.pause()
-            list += (if (item.isRadio) "Radio: " else "Playing: ") + item.title
+            list += "Playing: " + item.title
         }
         val rg = app.vlcinterface.sources.RgScanner
         if (rg.state.value.running && rg.currentNeedsInternet()) { list += "ReplayGain scan (queue kept)" }
@@ -190,7 +191,7 @@ object NetGuard {
         val p = App.instance.player
         val s = p.state.value
         val item = s.item
-        if (item != null && s.isPlaying && (item.isRadio || needsInternet(item.uri))) { stoppedPlayback = true; p.pause() }
+        if (item != null && s.isPlaying && !item.isRadio && needsInternet(item.uri)) { stoppedPlayback = true; p.pause() }
         val rg = app.vlcinterface.sources.RgScanner
         if ((rg.state.value.running && rg.currentNeedsInternet() || app.vlcinterface.sources.NetIndex.internetBusy()) && !BackgroundWork.paused.value) {
             BackgroundWork.pause(); pausedWork = true
@@ -230,12 +231,19 @@ object NetGuard {
     fun stationBytes(): Long {
         val s = App.instance.player.state.value
         val item = s.item
-        if (!cellular.value || item?.isRadio != true) { startBytes = -1; startKey = ""; return -1 }
         val now = TrafficStats.getUidRxBytes(android.os.Process.myUid()).takeIf { it >= 0 } ?: return -1
+        if (!cellular.value || item?.isRadio != true) {
+            if (startBytes >= 0) radioTotal += now - startBytes          // what the last station used is kept in the total
+            startBytes = -1; startKey = ""; return -1
+        }
         val key = item.uri
-        if (key != startKey || startBytes < 0) { startKey = key; startBytes = now }
+        if (key != startKey || startBytes < 0) { if (startBytes >= 0) radioTotal += now - startBytes; startKey = key; startBytes = now }
         return now - startBytes
     }
+
+    /** Radio over mobile data since the app started (all stations, the playing one included). */
+    @Volatile private var radioTotal = 0L
+    fun radioMobileTotal(): Long = radioTotal + stationBytes().coerceAtLeast(0)
 
     /** "1.2 MB" style. */
     fun fmt(b: Long): String = when {

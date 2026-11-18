@@ -1355,9 +1355,12 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
         val cell by app.vlcinterface.player.NetGuard.cellular.collectAsState()
         if (cell) {
             var used by remember { mutableStateOf(0L) }
-            LaunchedEffect(item.uri) { while (true) { used = app.vlcinterface.player.NetGuard.stationBytes().coerceAtLeast(0); kotlinx.coroutines.delay(1000) } }
-            Text("Mobile data: ${app.vlcinterface.player.NetGuard.fmt(used)}" + if (fav?.meta?.contains("flac", true) == true) " · FLAC uses a lot of data" else "",
-                color = C.bad, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            var total by remember { mutableStateOf(0L) }
+            LaunchedEffect(item.uri) { while (true) { used = app.vlcinterface.player.NetGuard.stationBytes().coerceAtLeast(0)
+                total = app.vlcinterface.player.NetGuard.radioMobileTotal(); kotlinx.coroutines.delay(1000) } }
+            Text("On mobile data · this station ${app.vlcinterface.player.NetGuard.fmt(used)} · radio total ${app.vlcinterface.player.NetGuard.fmt(total)}" +
+                if (fav?.meta?.contains("flac", true) == true) " · FLAC uses a lot of data" else "",
+                color = C.bad, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         }
     }
 }
