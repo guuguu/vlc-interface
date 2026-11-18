@@ -478,3 +478,29 @@ fun NasScanNoteHost() {
         }
     }
 }
+
+
+/** NAS not found on the VPN: which network should be searched? The phone's networks now are offered, or type one. */
+@Composable
+fun SubnetQuestionHost() {
+    val v = app.vlcinterface.sources.VpnLink
+    val choices by v.askSubnet.collectAsState()
+    if (choices.isEmpty()) return
+    var typed by remember(choices) { mutableStateOf(choices.first()) }
+    val ok = v.validSubnet(typed)
+    AlertDialog(onDismissRequest = { v.askSubnet.value = emptyList() }, containerColor = C.panel,
+        title = { Text("NAS not found — which network to search?", color = C.text) },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Networks on this phone now (tap one), or type the subnet your NAS is on, e.g. its ZeroTier network:", color = C.muted, fontSize = 13.sp)
+            choices.forEach { c ->
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (c == typed) accent().copy(alpha = 0.18f) else C.tile)
+                    .clickable { typed = c }.padding(horizontal = 10.dp, vertical = 8.dp)) { Text(c, color = C.text, fontSize = 14.sp) }
+            }
+            androidx.compose.material3.OutlinedTextField(typed, { typed = it.trim() }, singleLine = true, label = { Text("Subnet (/20 … /32)") },
+                isError = !ok)
+            if (!ok) Text("Write it as address/size, e.g. 10.147.17.0/24 (at most 4096 addresses)", color = C.bad, fontSize = 12.sp)
+            Text("It's remembered and searched again next times.", color = C.muted, fontSize = 12.sp)
+        } },
+        confirmButton = { STextButton({ v.searchSubnet(typed) }, enabled = ok) { Text("Search", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) } },
+        dismissButton = { STextButton({ v.askSubnet.value = emptyList() }) { Text("Cancel") } })
+}

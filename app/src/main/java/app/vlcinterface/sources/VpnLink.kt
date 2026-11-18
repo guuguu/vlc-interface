@@ -643,10 +643,45 @@ object VpnLink {
      */
     fun rescan() = discover(fresh = true)
 
-    fun discover(fresh: Boolean = false) {
+    /**
+     * NAS not found on the VPN: which network to search is asked — offered: the VPN networks the phone has now
+     * (and its other networks), or one typed. Kept and searched again next times (see [extraNets]).
+     */
+    val askSubnet = MutableStateFlow<List<String>>(emptyList())
+    private fun extraFile() = File(App.instance.filesDir, "vpn-extra-subnets.txt")
+    /** Networks added by hand: searched together with the VPN's own. */
+    fun extraNets(): List<String> = try { extraFile().readLines().map { it.trim() }.filter { it.isNotEmpty() } } catch (_: Exception) { emptyList() }
+
+    /** "a.b.c.d/nn" → Net (prefix 20…32: at most 4096 addresses). */
+    fun validSubnet(t: String) = parseNet(t) != null
+    private fun parseNet(t: String): Net? {
+        val m = Regex("""^\s*(\d{1,3}(?:\.\d{1,3}){3})\s*/\s*(\d{1,2})\s*$""").find(t) ?: return null
+        val ip = ipInt(m.groupValues[1]) ?: return null
+        val p = m.groupValues[2].toInt(); if (p !in 20..32) return null
+        return Net(ip, p)
+    }
+
+    /** Search this network (typed or picked) now; kept for later searches. */
+    fun searchSubnet(cidr: String): Boolean {
+        val n = parseNet(cidr) ?: return false
+        askSubnet.value = emptyList()
+        val norm = "${ipStr(n.addr and (if (n.prefix == 0) 0 else (-1 shl (32 - n.prefix))))}/${n.prefix}"
+        if (norm !in extraNets()) try { extraFile().appendText(norm + "\n") } catch (_: Exception) {}
+        ServerLog.log("vpn", "subnet", "", "", true, "Network to search added by hand: $norm")
+        discover(fresh = true, only = listOf(n))
+        return true
+    }
+
+    /** What the phone has now, to offer in the question. */
+    private fun subnetChoices(): List<String> {
+        fun cidr(n: Net): String { val p = if (n.prefix >= 20) n.prefix else 24; return "${ipStr(n.addr and (if (p == 0) 0 else (-1 shl (32 - p))))}/$p" }
+        return (vpnNets.map { cidr(it) } + extraNets() + homeNets.map { cidr(it) }).distinct()
+    }
+
+    fun discover(fresh: Boolean = false, only: List<Net>? = null) {
         scope.launch {
-            if (searching.value.isNotEmpty()) { if (autoFor.isNotEmpty() || fresh) { while (searching.value.isNotEmpty()) delay(500); discover(fresh) }; return@launch }
-            val nets = vpnNets
+            if (searching.value.isNotEmpty()) { if (autoFor.isNotEmpty() || fresh) { while (searching.value.isNotEmpty()) delay(500); discover(fresh, only) }; return@launch }
+            val nets = only ?: (vpnNets + extraNets().mapNotNull { parseNet(it) })
             if (nets.isEmpty()) return@launch
             // The VPN's own /24s (and routed nets up to /22): at most ~1000 addresses.
             val targets = LinkedHashSet<Int>()
@@ -675,6 +710,7 @@ object VpnLink {
             val srcs = App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }
             var asked = 0
             if (fresh) {
+                var notFound = false
                 // Each server found is identified; each home server takes the best match found now.
                 val found = open.map { identify(it) }
                 found.forEach { f -> ServerLog.log("vpn", "found", "smb", "", f.nbName.isNotEmpty() || f.guid.isNotEmpty(), "Server on the VPN: ${f.ip}" +
@@ -689,7 +725,9 @@ object VpnLink {
                     val pick = byName ?: scored.firstOrNull()?.first
                         ?: found.singleOrNull()?.takeIf { srcs.size == 1 && s.id in (useNas.value + autoFor) }   // the only server there, and you chose this NAS
                     if (pick == null) { ServerLog.log("vpn", "match", "smb", "", false, "${s.name.ifBlank { s.host }}: not found on the VPN" +
-                        (if (s.nbName.isNotBlank()) " (looked for host name ${s.nbName})" else " (its host name isn't known yet — learned at home)")); continue }
+                        (if (s.nbName.isNotBlank()) " (looked for host name ${s.nbName})" else " (its host name isn't known yet — learned at home)"))
+                        if (!atHome(s)) notFound = true
+                        continue }
                     ServerLog.log("vpn", "match", "smb", "", true, "${s.name.ifBlank { s.host }} = ${pick.ip}" +
                         (if (byName != null) " (same host name ${byName.nbName})" else " (same server ID)"))
                     if (s.vpnHost == pick.ip) continue                               // already right
@@ -705,6 +743,8 @@ object VpnLink {
                 val matched = srcs.mapNotNull { s -> found.firstOrNull { f -> (s.nbName.isNotBlank() && f.nbName.equals(s.nbName, true)) || likeness(f, s) >= 2 } }.map { it.ip }.toSet()
                 offerNew(found.filter { it.ip !in matched && it.ip !in stored })
                 searching.value = ""; autoFor = emptySet()
+                // A NAS away from home still not found: ask which network to search, offering what the phone has now.
+                if (notFound) askSubnet.value = subnetChoices()
                 if (open.isEmpty()) { ServerLog.log("vpn", "search", "smb", "", false, "No file server found on the VPN"); toast("No file server (SMB) found on the VPN network") }
                 NetIndex.recheckReachable()
                 return@launch

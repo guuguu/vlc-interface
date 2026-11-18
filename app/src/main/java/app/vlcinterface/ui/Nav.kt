@@ -169,6 +169,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 NasLinkQuestionHost()
                 NewVpnServerHost()
                 NasScanNoteHost()
+                SubnetQuestionHost()
                 SaveEndQuestionHost()
                 ExitSavingHost()
                 VpnQuestionsHost()
