@@ -527,8 +527,12 @@ object VpnLink {
                 val found = open.map { identify(it) }
                 found.forEach { f -> ServerLog.log("vpn", "found", "smb", "", true, "Server on the VPN: ${f.ip}", "guid ${f.guid} · name ${f.nbName} · mac ${f.mac}") }
                 for (s in srcs) {
+                    // Host name first: the same NAS name as the one learned at home → that's it, its address is
+                    // simply added (an alias). Then server ID / network card, as before.
+                    val byName = if (s.nbName.isNotBlank()) found.firstOrNull { it.nbName.isNotEmpty() && it.nbName.equals(s.nbName, true) } else null
+                    if (byName != null) ServerLog.log("vpn", "found", "smb", "", true, "${s.name.ifBlank { s.host }}: same host name ${byName.nbName} at ${byName.ip}")
                     val scored = found.map { it to likeness(it, s) }.filter { it.second > 0 }.sortedByDescending { it.second }
-                    val pick = scored.firstOrNull()?.first
+                    val pick = byName ?: scored.firstOrNull()?.first
                         ?: found.singleOrNull()?.takeIf { srcs.size == 1 && s.id in (useNas.value + autoFor) }   // the only server there, and you chose this NAS
                     if (pick == null) continue
                     if (s.vpnHost == pick.ip) continue                               // already right
