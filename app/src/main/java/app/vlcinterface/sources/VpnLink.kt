@@ -94,11 +94,16 @@ object VpnLink {
             delay(1500)          // let the change settle (several callbacks come at once)
             refreshing = false
             val home = ArrayList<Net>(); val vpn = ArrayList<Net>(); val self = HashSet<Int>()
+            val seen = ArrayList<String>()                       // for the VPN log: interface, kind, addresses, routes
             @Suppress("DEPRECATION")
             for (n in cm.allNetworks) {
                 val caps = cm.getNetworkCapabilities(n) ?: continue
                 val lp = cm.getLinkProperties(n) ?: continue
                 val isVpn = caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                val kind = when { isVpn -> "VPN"; caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "Wi-Fi"
+                    caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile data"; caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "Ethernet"; else -> "other" }
+                seen += "$kind (${lp.interfaceName ?: "?"}): " + lp.linkAddresses.joinToString { "${it.address.hostAddress}/${it.prefixLength}" } +
+                    if (isVpn) " · routes " + lp.routes.mapNotNull { rt -> rt.destination.takeIf { it.prefixLength in 1..32 }?.toString() }.distinct().joinToString() else ""
                 for (la in lp.linkAddresses) {
                     val a = la.address as? Inet4Address ?: continue
                     val ip = ipInt(a.hostAddress ?: continue) ?: continue
@@ -116,13 +121,16 @@ object VpnLink {
                     for (ia in ni.interfaceAddresses) {
                         val a = ia.address as? Inet4Address ?: continue
                         val ip = ipInt(a.hostAddress ?: continue) ?: continue
-                        if (ip !in self) { vpn += Net(ip, ia.networkPrefixLength.toInt()); self += ip }
+                        if (ip !in self) { vpn += Net(ip, ia.networkPrefixLength.toInt()); self += ip; seen += "tunnel ${ni.name}: ${a.hostAddress}/${ia.networkPrefixLength}" }
                     }
                 }
             } catch (_: Exception) {}
             val wasUp = vpnUp.value
             val netKey = (home + vpn).joinToString { "${it.addr}/${it.prefix}" }
             val netChanged = netKey != lastNetKey; lastNetKey = netKey
+            // VPN log: the phone's own addresses (Wi-Fi / mobile / VPN) each time they change.
+            if (netChanged) ServerLog.log("vpn", "phone", "", "", true,
+                "Phone addresses: " + (if (self.isEmpty()) "no VPN" else "VPN ${self.joinToString { ipStr(it) }}"), seen.joinToString("\n"))
             homeNets = home; vpnNets = vpn; vpnSelf = self
             vpnUp.value = vpn.isNotEmpty()
             // Same storage, other road: the index (kept by server, with LAN addresses) is used as it is — only who
@@ -653,15 +661,25 @@ object VpnLink {
             // Which network is searched: shown for 3 s.
             val nets2 = nets.map { n -> val p = if (n.prefix >= 22) n.prefix else 24; "${ipStr(n.addr and (if (p == 0) 0 else (-1 shl (32 - p))))}/$p" }.distinct()
             scanNote.value = "Searching for NAS on ${nets2.joinToString()} (${targets.size} addresses)"
+            val scanStart = System.currentTimeMillis()
+            ServerLog.log("vpn", "scan", "TCP 445", "", true, "Search for NAS started on ${nets2.joinToString()}: ${targets.size} addresses",
+                "from this phone's VPN address ${vpnSelf.joinToString { ipStr(it) }} · " +
+                (if (targets.isEmpty()) "" else "${ipStr(targets.min())} … ${ipStr(targets.max())}") + (if (fresh) " · fresh search" else ""))
             searching.value = "Searching for NAS… (${nets2.joinToString()})"
             val sem = Semaphore(64)
             val open = targets.map { ip -> async { sem.withPermit { if (reachable(ipStr(ip), 445, 400)) ipStr(ip) else null } } }.awaitAll().filterNotNull()
+            ServerLog.log("vpn", "scan", "TCP 445", "", open.isNotEmpty(),
+                "Scanned ${targets.size} addresses on ${nets2.joinToString()} in ${"%.1f".format(java.util.Locale.US, (System.currentTimeMillis() - scanStart) / 1000.0)} s: " +
+                    (if (open.isEmpty()) "no file server (port 445) answered" else "${open.size} answered: ${open.joinToString()}"),
+                "addresses that didn't answer on 445 within 0.4 s: ${targets.size - open.size}", scanStart)
             val srcs = App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }
             var asked = 0
             if (fresh) {
                 // Each server found is identified; each home server takes the best match found now.
                 val found = open.map { identify(it) }
-                found.forEach { f -> ServerLog.log("vpn", "found", "smb", "", true, "Server on the VPN: ${f.ip}", "guid ${f.guid} · name ${f.nbName} · mac ${f.mac}") }
+                found.forEach { f -> ServerLog.log("vpn", "found", "smb", "", f.nbName.isNotEmpty() || f.guid.isNotEmpty(), "Server on the VPN: ${f.ip}" +
+                    (if (f.nbName.isNotEmpty()) " · name ${f.nbName}" else " · name not given"),
+                    "server ID ${f.guid.ifEmpty { "—" }} (read over TCP 445: SMB negotiate + NTLM challenge)") }
                 for (s in srcs) {
                     // Host name first: the same NAS name as the one learned at home → that's it, its address is
                     // simply added (an alias). Then server ID / network card, as before.
@@ -670,7 +688,10 @@ object VpnLink {
                     val scored = found.map { it to likeness(it, s) }.filter { it.second > 0 }.sortedByDescending { it.second }
                     val pick = byName ?: scored.firstOrNull()?.first
                         ?: found.singleOrNull()?.takeIf { srcs.size == 1 && s.id in (useNas.value + autoFor) }   // the only server there, and you chose this NAS
-                    if (pick == null) continue
+                    if (pick == null) { ServerLog.log("vpn", "match", "smb", "", false, "${s.name.ifBlank { s.host }}: not found on the VPN" +
+                        (if (s.nbName.isNotBlank()) " (looked for host name ${s.nbName})" else " (its host name isn't known yet — learned at home)")); continue }
+                    ServerLog.log("vpn", "match", "smb", "", true, "${s.name.ifBlank { s.host }} = ${pick.ip}" +
+                        (if (byName != null) " (same host name ${byName.nbName})" else " (same server ID)"))
                     if (s.vpnHost == pick.ip) continue                               // already right
                     App.instance.store.update { x -> x.copy(sources = x.sources.map {
                         if (it.id == s.id) it.copy(vpnHost = pick.ip, altHosts = (it.altHosts + pick.ip).distinct(),
