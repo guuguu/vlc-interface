@@ -20,3 +20,4 @@
 - Colour combinations set in a new Settings section named "Visualisation".
 - Music or radio already playing when an alarm rings: the music stops completely and only the phone's alarm
   sound plays (the alarm tone chosen), not the alarm's music. Replaces "Music already playing: fades into the alarm".
+- Setting: maximum level of an alarm (volume cap no alarm ever goes above: target, wake-check restart, alarm tone).
