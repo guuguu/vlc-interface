@@ -923,6 +923,21 @@ class PlayerController(private val context: Context, private val store: Store) {
      */
     fun loadQueue(items: List<PlayItem>, origin: Origin) {
         if (items.isEmpty()) return
+        // A song is playing: it plays to its end; the new list comes right after it (nothing cut off).
+        val s = _state.value
+        val cur = s.queue.getOrNull(s.index)
+        if (s.isPlaying && cur != null && !cur.isRadio) {
+            main.post {
+                val list = items.filterNot { nasOff(it) || qKey(it) == qKey(cur) }.distinctBy { qKey(it) }
+                if (list.isEmpty()) return@post
+                fullList = list.filter { !it.isRadio }
+                val shuffled = store.current.settings.shuffle
+                orderedQueue = if (shuffled) listOf(cur) + list else null
+                val q = listOf(cur) + if (shuffled) list.shuffled() else list
+                _state.value = _state.value.copy(queue = q, index = 0, origin = origin)
+            }
+            return
+        }
         startPaused = true
         NativeAudio.appVolume(0f)
         playQueue(items, 0, origin, random = false)
