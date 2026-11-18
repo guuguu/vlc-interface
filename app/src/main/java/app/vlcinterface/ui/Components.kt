@@ -602,7 +602,7 @@ fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
     val a = app.vlcinterface.App.instance
     // Exit: the volume now is kept for a start within 30 min.
     try { a.getSharedPreferences("volkeep", android.content.Context.MODE_PRIVATE).edit().putLong("alive", System.currentTimeMillis())
-        .putInt("pct", a.output.volumePercent()).commit() } catch (_: Exception) {}
+        .putInt("pct", a.output.volumePercent()).putBoolean("cleanExit", true).commit() } catch (_: Exception) {}
     try { a.store.flush() } catch (_: Exception) {}
     try { app.vlcinterface.sources.RgScanner.cancel() } catch (_: Exception) {}
     // The radio buffer and any working copy: deleted.

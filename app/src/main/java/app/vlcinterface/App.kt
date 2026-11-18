@@ -41,11 +41,12 @@ class App : Application() {
         app.vlcinterface.sources.CoverArt.init(this)
         app.vlcinterface.sources.NetIndex.init(this)
         app.vlcinterface.sources.NetIndex.buildMissing()      // pinned LAN folders not indexed yet: in the background
-        // Start volume only after more than 30 min asleep (or the very first start). Any restart within 30 min —
-        // by hand, or by something else such as a Bluetooth app restarting the stack — keeps the volume.
+        // The volume is kept only: after Exit and opened again (within 30 min), or when the app was restarted by a
+        // short hiccup of Bluetooth / the sound system (back within 2 min). Otherwise: the start volume.
         val vk = getSharedPreferences("volkeep", MODE_PRIVATE)
         val asleep = System.currentTimeMillis() - vk.getLong("alive", 0)
-        if (vk.getLong("alive", 0) == 0L || asleep > KEEP_MS) applyStartVolume()
+        val keep = vk.getLong("alive", 0) > 0L && (if (vk.getBoolean("cleanExit", false)) asleep <= KEEP_MS else asleep <= BLIP_MS)
+        if (!keep) applyStartVolume()
         else vk.getInt("pct", -1).takeIf { it >= 0 }?.let { p -> try {
             val am = getSystemService(AudioManager::class.java); val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(p * max / 100f), 0) } catch (_: Exception) {} }
@@ -75,7 +76,7 @@ class App : Application() {
             if (before != null && (after == null || after.name != before.name)) {
                 lostName = before.name; lostAt = now; lostPct = try { output.volumePercent() } catch (_: Exception) { -1 }; lostApp = player.appVolume
             }
-            val back = after != null && after.name == lostName && now - lostAt < KEEP_MS
+            val back = after != null && after.name == lostName && now - lostAt < BLIP_MS     // a short drop only
             if (back) {
                 if (lostPct >= 0) try { output.setVolumePercent(lostPct) } catch (_: Exception) {}
                 player.setAppVolume(lostApp)
@@ -109,8 +110,10 @@ class App : Application() {
     @Volatile private var lostApp = 1f
 
     companion object {
-        /** Volumes kept over a Bluetooth drop / process restart shorter than this. */
+        /** After Exit: the volume is kept if the app is opened again within this. */
         const val KEEP_MS = 30 * 60_000L
+        /** Bluetooth / sound system hiccup (output gone and back, app restarted by it): kept if shorter than this. */
+        const val BLIP_MS = 2 * 60_000L
         lateinit var instance: App
             private set
         const val VERSION = "0.3.0"
