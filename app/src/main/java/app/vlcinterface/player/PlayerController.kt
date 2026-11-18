@@ -1416,8 +1416,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         val oldPfd = currentPfd
         currentPfd = null
         // No Wi-Fi and mobile data not allowed yet: what needs internet waits for "Use NAS" on the player.
-        if (!app.vlcinterface.sources.VpnLink.ignored(item.uri) &&
-            (app.vlcinterface.sources.VpnLink.waitsForUse(item.uri) || NetGuard.blocked() && (item.isRadio || NetGuard.needsInternet(item.uri)))) {
+        // Radio isn't NAS: it never waits for "Use NAS" (mobile data for radio follows its own Wi-Fi / mobile rules).
+        if (!item.isRadio && !app.vlcinterface.sources.VpnLink.ignored(item.uri) &&
+            (app.vlcinterface.sources.VpnLink.waitsForUse(item.uri) || NetGuard.blocked() && NetGuard.needsInternet(item.uri))) {
             stopping = true; mp.stop(); main.postDelayed({ stopping = false }, 300)
             _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, ended = false,
                 metaArtist = item.artist, metaAlbum = item.album, artworkUrl = item.artwork, rgInfo = "",
