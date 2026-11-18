@@ -53,3 +53,4 @@
   (exact alarms off, full-screen alarm off, battery Restricted, notifications off, phone maker sleep lists),
   with a fix button for each.
 - "Test alarm in 1 minute" button (works after Exit with the phone locked).
+- Alarm settings: double tap or long-press any setting → an explanatory pop-up for that setting.
