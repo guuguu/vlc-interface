@@ -861,7 +861,8 @@ class PlayerController(private val context: Context, private val store: Store) {
             when (change) {
                 AudioManager.AUDIOFOCUS_LOSS -> { resumeOnGain = false; pause() }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> { if (mp.isPlaying) { resumeOnGain = true; mp.pause() } }
-                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> { ducked = true; mp.setVolume(30) }
+                // Pop-ups and notifications never lower the sound.
+                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {}
                 AudioManager.AUDIOFOCUS_GAIN -> { ducked = false; mp.setVolume((100 * fadeK).toInt()); if (resumeOnGain) { resumeOnGain = false; if (!BatteryGuard.blocked(silent = true)) mp.play() } }
             }
         }, main)
@@ -1645,9 +1646,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         try { mp.pause() } catch (_: Exception) {}
         try {
             val nm = context.getSystemService(android.app.NotificationManager::class.java)
-            nm.createNotificationChannel(android.app.NotificationChannel("sleep", "Sleep timer", android.app.NotificationManager.IMPORTANCE_DEFAULT))
+            nm.createNotificationChannel(android.app.NotificationChannel("sleep_quiet", "Sleep timer", android.app.NotificationManager.IMPORTANCE_DEFAULT).apply { setSound(null, null); enableVibration(false) })
             val t = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(now))
-            nm.notify(7301, android.app.Notification.Builder(context, "sleep").setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            nm.notify(7301, android.app.Notification.Builder(context, "sleep_quiet").setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
                 .setContentTitle("Sleep").setContentText("Player closed by sleep timer at $t").setAutoCancel(true).build())
         } catch (_: Exception) {}
         main.postDelayed({ app.vlcinterface.ui.exitApp(keepNotice = true) }, 250)

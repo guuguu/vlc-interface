@@ -57,8 +57,8 @@ object BatteryGuard {
         try { a.getSharedPreferences("battery", Context.MODE_PRIVATE).edit().putBoolean("closed", true).commit() } catch (_: Exception) {}
         try {
             val nm = a.getSystemService(android.app.NotificationManager::class.java)
-            nm.createNotificationChannel(android.app.NotificationChannel("battery", "Low battery", android.app.NotificationManager.IMPORTANCE_HIGH))
-            nm.notify(7302, android.app.Notification.Builder(a, "battery").setSmallIcon(android.R.drawable.ic_lock_idle_low_battery)
+            nm.createNotificationChannel(android.app.NotificationChannel("battery_quiet", "Low battery", android.app.NotificationManager.IMPORTANCE_HIGH).apply { setSound(null, null); enableVibration(false) })
+            nm.notify(7302, android.app.Notification.Builder(a, "battery_quiet").setSmallIcon(android.R.drawable.ic_lock_idle_low_battery)
                 .setContentTitle("vlc interface stopped").setContentText(TEXT)
                 .setStyle(android.app.Notification.BigTextStyle().bigText(TEXT)).setAutoCancel(true).build())
         } catch (_: Exception) {}

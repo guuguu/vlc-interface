@@ -61,7 +61,7 @@ class RgScanService : Service() {
 
     companion object {
         private const val CH_PROGRESS = "rgscan"
-        private const val CH_DONE = "rgscan_done"
+        private const val CH_DONE = "rgscan_done_quiet"
         private const val ID_PROGRESS = 51
         private const val ID_DONE = 52
         const val EXTRA_OPEN_RGSCAN = "open_rgscan"
@@ -73,7 +73,7 @@ class RgScanService : Service() {
         private fun channels(ctx: Context) {
             val nm = ctx.getSystemService(NotificationManager::class.java)
             nm.createNotificationChannel(NotificationChannel(CH_PROGRESS, "ReplayGain scan progress", NotificationManager.IMPORTANCE_LOW))
-            nm.createNotificationChannel(NotificationChannel(CH_DONE, "ReplayGain scan finished", NotificationManager.IMPORTANCE_DEFAULT))
+            nm.createNotificationChannel(NotificationChannel(CH_DONE, "ReplayGain scan finished", NotificationManager.IMPORTANCE_DEFAULT).apply { setSound(null, null); enableVibration(false) })
         }
 
         private fun open(ctx: Context): PendingIntent = PendingIntent.getActivity(ctx, 52,
