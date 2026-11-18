@@ -451,7 +451,86 @@ object VpnLink {
         } catch (_: Exception) { return "" }
     }
 
-    fun identify(ip: String): Found { val (nb, mac) = netbios(ip); return Found(ip, smbGuid(ip), nb, mac) }
+    /**
+     * The server's host name from its SMB login (TCP 445): SMB2 NEGOTIATE, then SESSION_SETUP with an NTLM
+     * "negotiate" message — the server's NTLM challenge lists its NetBIOS computer name (and DNS name). No password
+     * is sent and no session is opened. Works wherever file sharing works (over a VPN too), unlike the UDP 137
+     * name query. Returns "" when it can't be read.
+     */
+    fun smbHostName(ip: String): String {
+        try {
+            Socket().use { s ->
+                s.connect(InetSocketAddress(ip, 445), 1500); s.soTimeout = 2500
+                val out = s.getOutputStream(); val inp = java.io.DataInputStream(s.getInputStream())
+                fun send(msg: ByteArray) { out.write(byteArrayOf(0, 0, (msg.size shr 8).toByte(), msg.size.toByte())); out.write(msg); out.flush() }
+                fun recv(): ByteArray {
+                    val h = ByteArray(4); inp.readFully(h)
+                    val len = ((h[1].toInt() and 0xFF) shl 16) or ((h[2].toInt() and 0xFF) shl 8) or (h[3].toInt() and 0xFF)
+                    return ByteArray(len).also { inp.readFully(it) }
+                }
+                fun header(b: java.nio.ByteBuffer, command: Int, messageId: Long) {
+                    b.put(byteArrayOf(0xFE.toByte(), 'S'.code.toByte(), 'M'.code.toByte(), 'B'.code.toByte()))
+                    b.putShort(64); b.putShort(1)                    // header size, credit charge
+                    b.putInt(0)                                      // status
+                    b.putShort(command.toShort()); b.putShort(1)     // command, credits asked
+                    b.putInt(0); b.putInt(0)                         // flags, next command
+                    b.putLong(messageId); b.putInt(0); b.putInt(0)   // message id, reserved, tree id
+                    b.putLong(0); b.put(ByteArray(16))               // session id, signature
+                }
+                // 1. NEGOTIATE (SMB 2.0.2 / 2.1 / 3.0 / 3.0.2)
+                val neg = java.nio.ByteBuffer.allocate(64 + 36 + 8).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                header(neg, 0, 0)
+                neg.putShort(36); neg.putShort(4); neg.putShort(1); neg.putShort(0); neg.putInt(0)
+                neg.put(ByteArray(16) { (it * 7 + 3).toByte() }); neg.putLong(0)
+                neg.putShort(0x0202); neg.putShort(0x0210); neg.putShort(0x0300); neg.putShort(0x0302)
+                send(neg.array())
+                val nr = recv(); if (nr.size < 64 || nr[0] != 0xFE.toByte()) return ""
+                // 2. SESSION_SETUP with NTLMSSP NEGOTIATE (type 1)
+                val ntlm = java.nio.ByteBuffer.allocate(32).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                ntlm.put("NTLMSSP".toByteArray()); ntlm.put(0); ntlm.putInt(1)
+                ntlm.putInt(0xE2088297.toInt())                       // unicode, OEM, request target, NTLM, ext. security …
+                ntlm.put(ByteArray(16))                              // domain / workstation fields: empty
+                val blob = ntlm.array()
+                val ss = java.nio.ByteBuffer.allocate(64 + 24 + blob.size).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+                header(ss, 1, 1)
+                ss.putShort(25); ss.put(0); ss.put(1); ss.putInt(0); ss.putInt(0)
+                ss.putShort((64 + 24).toShort()); ss.putShort(blob.size.toShort()); ss.putLong(0)
+                ss.put(blob)
+                send(ss.array())
+                val r = recv(); if (r.size < 64 + 8) return ""
+                return ntlmTargetName(r)
+            }
+        } catch (_: Exception) { return "" }
+    }
+
+    /** NetBIOS computer name (else DNS host name) from the NTLM challenge found in [r] (raw or in SPNEGO). */
+    fun ntlmTargetName(r: ByteArray): String {
+        val sig = "NTLMSSP".toByteArray() + 0
+        var at = -1
+        for (i in 0..r.size - sig.size) if ((sig.indices).all { r[i + it] == sig[it] }) { at = i; break }
+        if (at < 0 || at + 48 > r.size) return ""
+        fun u16(o: Int) = (r[o].toInt() and 0xFF) or ((r[o + 1].toInt() and 0xFF) shl 8)
+        fun u32(o: Int) = u16(o) or (u16(o + 2) shl 16)
+        if (u32(at + 8) != 2) return ""                          // a CHALLENGE message
+        val tiLen = u16(at + 40); val tiOff = u32(at + 44)
+        var p = at + tiOff; val end = minOf(r.size, p + tiLen)
+        var nb = ""; var dns = ""
+        while (p + 4 <= end) {
+            val id = u16(p); val len = u16(p + 2); p += 4
+            if (id == 0 || p + len > end) break
+            val v = String(r, p, len, Charsets.UTF_16LE)
+            if (id == 1) nb = v else if (id == 3) dns = v
+            p += len
+        }
+        return nb.ifEmpty { dns.substringBefore('.') }.uppercase()
+    }
+
+    /** Host name: from the SMB login (TCP 445) first, else the NetBIOS name query (UDP 137). */
+    fun identify(ip: String): Found {
+        val (nb, mac) = netbios(ip)
+        val host = smbHostName(ip).ifEmpty { nb }
+        return Found(ip, smbGuid(ip), host, mac)
+    }
 
     /** At home: the LAN servers' own identity is noted (to recognise them on the VPN later). */
     private fun learnLocal() {
