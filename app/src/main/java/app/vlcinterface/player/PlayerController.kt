@@ -857,6 +857,9 @@ class PlayerController(private val context: Context, private val store: Store) {
     @Volatile private var ducked = false
     private val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
         .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+        // Android lowers the sound by itself for notifications unless the app says it handles ducking: it does
+        // (and ignores it), so pop-ups and notifications of any app never lower the volume.
+        .setWillPauseWhenDucked(true)
         .setOnAudioFocusChangeListener({ change ->
             when (change) {
                 AudioManager.AUDIOFOCUS_LOSS -> { resumeOnGain = false; pause() }
