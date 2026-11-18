@@ -739,3 +739,33 @@ fun rememberKeptScroll(key: String, ready: Boolean = true): androidx.compose.fou
     }
     return sc
 }
+
+
+/**
+ * A pop-up that only informs (no choice to make): it closes by itself after 3 s; touched, it stays until its OK
+ * button is pressed. Same arguments as AlertDialog.
+ */
+@Composable
+fun AutoInfoDialog(
+    onDismissRequest: () -> Unit,
+    confirmButton: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+    title: (@Composable () -> Unit)? = null,
+    text: (@Composable () -> Unit)? = null,
+    containerColor: Color = C.panel,
+) {
+    var pinned by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(pinned) { if (!pinned) { kotlinx.coroutines.delay(3000); if (!pinned) onDismissRequest() } }
+    androidx.compose.material3.AlertDialog(onDismissRequest = { if (!pinned) onDismissRequest() }, confirmButton = confirmButton,
+        modifier = modifier.pointerInput(Unit) {
+            awaitEachGesture { awaitFirstDown(requireUnconsumed = false); pinned = true }
+        },
+        title = title, containerColor = containerColor,
+        text = {
+            androidx.compose.foundation.layout.Column {
+                text?.invoke()
+                if (!pinned) Text("Closes in 3 s · touch to keep it open", color = C.muted, fontSize = 11.sp,
+                    modifier = Modifier.padding(top = 8.dp))
+            }
+        })
+}

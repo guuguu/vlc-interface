@@ -283,7 +283,7 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     }
     // Confirmation of what was deleted, with its full path.
     done?.let { path ->
-        AlertDialog(onDismissRequest = { done = null }, containerColor = C.panel,
+        AutoInfoDialog(onDismissRequest = { done = null }, containerColor = C.panel,
             title = { Text("File deleted", color = C.text) },
             text = { Text("Deleted for good:\n\n$path", color = C.text) },
             confirmButton = { STextButton({ done = null }) { Text("OK", color = accent()) } })

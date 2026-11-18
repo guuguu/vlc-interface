@@ -318,7 +318,7 @@ fun RgFailureReport(nav: Navigator) {
     val fails = s.results.filter { !it.ok }
     // Quick scan (playlist): confirmation of what was done, failures listed under it.
     if (s.confirmTitle.isNotEmpty()) {
-        AlertDialog(onDismissRequest = { RgScanner.reportSeen() }, containerColor = C.panel,
+        AutoInfoDialog(onDismissRequest = { RgScanner.reportSeen() }, containerColor = C.panel,
             title = { Text("ReplayGain done — ${s.confirmTitle}", color = C.text) },
             text = {
                 val scroll = rememberScrollState()

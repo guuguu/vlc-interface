@@ -89,7 +89,7 @@ fun SleepClosedHost() {
     val at by App.instance.player.sleptAt.collectAsState()
     if (at <= 0L) return
     val time = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(at))
-    AlertDialog(onDismissRequest = { App.instance.player.sleepSeen() }, containerColor = C.panel,
+    AutoInfoDialog(onDismissRequest = { App.instance.player.sleepSeen() }, containerColor = C.panel,
         title = { Text("Sleep", color = C.text) },
         text = { Text("Player closed by sleep timer at $time.", color = C.text) },
         confirmButton = { STextButton({ App.instance.player.sleepSeen() }) { Text("OK", color = accent()) } },
@@ -181,7 +181,7 @@ fun LowBatteryHost() {
     val n by app.vlcinterface.player.BatteryGuard.notice.collectAsState()
     if (n == 0) return
     val g = app.vlcinterface.player.BatteryGuard
-    AlertDialog(onDismissRequest = { g.seen() }, containerColor = C.panel,
+    AutoInfoDialog(onDismissRequest = { g.seen() }, containerColor = C.panel,
         title = { Text("Battery ${g.level} %", color = C.text) },
         text = { Text(when (n) {
             15 -> "Indexing and scans stopped, only playing goes on. Playback stops at 10 %. Screen-on turns off then too."
@@ -422,7 +422,7 @@ fun OutputFallbackHost() {
     val player = App.instance.player
     val why by player.fallbackNotice.collectAsState()
     if (why.isEmpty()) return
-    AlertDialog(onDismissRequest = { player.fallbackNotice.value = "" }, containerColor = C.panel,
+    AutoInfoDialog(onDismissRequest = { player.fallbackNotice.value = "" }, containerColor = C.panel,
         title = { Text("Sound output", color = C.text) },
         text = { Text("The output is set on libVLC because: $why", color = C.text) },
         confirmButton = { STextButton({ player.fallbackNotice.value = "" }) { Text("OK", color = accent()) } },
