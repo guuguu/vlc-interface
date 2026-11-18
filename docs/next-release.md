@@ -19,6 +19,7 @@
   full-screen visualisation: only colours dancing and blending to the music's rhythm.
 - Colour combinations set in a new Settings section named "Visualisation".
 - Visualisation brightness setting (same section).
+- The visualisation screen keeps the display on; a double tap on the screen exits it.
 - Music or radio already playing when an alarm rings: the music stops completely and only the phone's alarm
   sound plays (the alarm tone chosen), not the alarm's music. Replaces "Music already playing: fades into the alarm".
 - Setting: maximum level of an alarm (volume cap no alarm ever goes above: target, wake-check restart, alarm tone).
