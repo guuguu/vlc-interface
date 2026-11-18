@@ -47,3 +47,9 @@
   fallback not reachable either → alarm sound.
 - Alarm sound chosen in settings: the default or any other available one, each previewed for 3 seconds when picked.
 - Every one of these choices is explained to the user while setting the alarm up.
+
+## Alarm certainty (2026-11-19)
+- Alarm health check: a warning on the alarm page and on the clock area when anything could block an alarm
+  (exact alarms off, full-screen alarm off, battery Restricted, notifications off, phone maker sleep lists),
+  with a fix button for each.
+- "Test alarm in 1 minute" button (works after Exit with the phone locked).
