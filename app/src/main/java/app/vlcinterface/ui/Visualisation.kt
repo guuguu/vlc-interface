@@ -55,15 +55,17 @@ import kotlin.math.sin
 private val PALETTES: List<Pair<String, String>> = listOf("sunset" to "Sunset", "ocean" to "Ocean", "forest" to "Forest",
     "neon" to "Neon", "fire" to "Fire", "aurora" to "Aurora", "custom" to "Custom")
 
-fun visColours(v: VisSettings): List<Color> = when (v.palette) {
+fun visColours(v: VisSettings): List<Color> {
+    if (v.palette == "custom") return listOf(v.hue1, v.hue2, v.hue3).map { Color.hsl(it.coerceIn(0f, 359.9f), 0.9f, 0.55f) }
+    return when (v.palette) {
     "ocean" -> listOf(0xFF0077B6, 0xFF00B4D8, 0xFF90E0EF, 0xFF3A0CA3)
     "forest" -> listOf(0xFF2D6A4F, 0xFF52B788, 0xFFB7E4C7, 0xFFFFD60A)
     "neon" -> listOf(0xFFFF00FF, 0xFF00FFFF, 0xFF39FF14, 0xFFFFFF00)
     "fire" -> listOf(0xFFD00000, 0xFFFF5400, 0xFFFFBD00, 0xFFFF0054)
     "aurora" -> listOf(0xFF00F5D4, 0xFF9B5DE5, 0xFFF15BB5, 0xFF00BBF9)
-    "custom" -> return listOf(v.hue1, v.hue2, v.hue3).map { Color.hsl(it.coerceIn(0f, 359.9f), 0.9f, 0.55f) }
     else -> listOf(0xFFFF6B35, 0xFFF72585, 0xFF7209B7, 0xFFFFD166)
-}.map { Color(it) }
+    }.map { Color(it) }
+}
 
 /** Button under the clock button: the full-screen visualisation. */
 @Composable
