@@ -16,11 +16,13 @@ data class Alarm(
     val minute: Int = 0,
     /** Days: bit 0 = Monday … bit 6 = Sunday. 0 = once. */
     val days: Int = 0,
-    /** "queue" (last audio queue), "playlist", "radio", "tone". */
-    val source: String = "queue",
+    /** "local" (music stored on the phone, under the root folder), "radio" (preferred → fallback station), "tone". */
+    val source: String = "local",
     val playlistId: String = "",
     val stationUrl: String = "",
     val stationName: String = "",
+    val fallbackUrl: String = "",
+    val fallbackName: String = "",
     val volStart: Int = 10,
     val volTarget: Int = 60,
     /** Fade-in (crescendo) time in seconds. */
@@ -35,7 +37,7 @@ data class Alarm(
     val localFallback: Boolean = true,
 ) {
     fun toJson(): JSONObject = JSONObject().put("id", id).put("on", on).put("name", name).put("hour", hour).put("minute", minute)
-        .put("days", days).put("source", source).put("playlistId", playlistId).put("stationUrl", stationUrl).put("stationName", stationName)
+        .put("days", days).put("source", source).put("playlistId", playlistId).put("stationUrl", stationUrl).put("stationName", stationName).put("fallbackUrl", fallbackUrl).put("fallbackName", fallbackName)
         .put("volStart", volStart).put("volTarget", volTarget).put("fadeSec", fadeSec).put("maxSnoozes", maxSnoozes)
         .put("stopAfterMin", stopAfterMin).put("output", output).put("localFallback", localFallback)
 
@@ -43,8 +45,8 @@ data class Alarm(
 
     companion object {
         fun fromJson(o: JSONObject) = Alarm(o.optString("id", UUID.randomUUID().toString()), o.optBoolean("on", true), o.optString("name"),
-            o.optInt("hour", 7), o.optInt("minute"), o.optInt("days"), o.optString("source", "queue"), o.optString("playlistId"),
-            o.optString("stationUrl"), o.optString("stationName"), o.optInt("volStart", 10), o.optInt("volTarget", 60),
+            o.optInt("hour", 7), o.optInt("minute"), o.optInt("days"), o.optString("source", "local").let { if (it == "radio" || it == "tone") it else "local" }, o.optString("playlistId"),
+            o.optString("stationUrl"), o.optString("stationName"), o.optString("fallbackUrl"), o.optString("fallbackName"), o.optInt("volStart", 10), o.optInt("volTarget", 60),
             o.optInt("fadeSec", 60), o.optInt("maxSnoozes", 3), o.optInt("stopAfterMin", 30), o.optString("output"),
             o.optBoolean("localFallback", true))
 
@@ -98,6 +100,9 @@ data class AlarmGlobal(
     val cityLon: Double = 0.0,
     val cityTz: String = "",
     val showWeather: Boolean = true,
+    /** Phone music root folder for the alarms (relative path, e.g. "Music/"; "" = not chosen yet) and its volume. */
+    val localRoot: String = "",
+    val localVolume: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().put("vibrate", vibrate).put("led", led).put("crescendo", crescendo)
         .put("snooze1", snooze1).put("snooze2", snooze2).put("snooze3", snooze3).put("pattern", pattern)
@@ -105,7 +110,7 @@ data class AlarmGlobal(
         .put("volumeKeys", volumeKeys).put("maxLevel", maxLevel).put("toneUri", toneUri).put("toneName", toneName).put("callWait", callWait)
         .put("missed", missed).put("lowBattery", lowBattery).put("nextInNotif", nextInNotif)
         .put("cityName", cityName).put("cityShort", cityShort).put("cityLat", cityLat).put("cityLon", cityLon).put("cityTz", cityTz)
-        .put("showWeather", showWeather)
+        .put("showWeather", showWeather).put("localRoot", localRoot).put("localVolume", localVolume)
 
     val snoozes: List<Int> get() = listOf(snooze1, snooze2, snooze3)
 
@@ -116,7 +121,7 @@ data class AlarmGlobal(
             o.optString("volumeKeys", "snooze"), o.optInt("maxLevel", 100), o.optString("toneUri"), o.optString("toneName"), o.optBoolean("callWait", true),
             o.optString("missed", "ring30"), o.optString("lowBattery", "normal"), o.optBoolean("nextInNotif", true),
             o.optString("cityName"), o.optString("cityShort"), o.optDouble("cityLat", 0.0), o.optDouble("cityLon", 0.0), o.optString("cityTz"),
-            o.optBoolean("showWeather", true))
+            o.optBoolean("showWeather", true), o.optString("localRoot"), o.optString("localVolume"))
     }
 }
 
@@ -174,13 +179,15 @@ data class VisSettings(
     val hue3: Float = 300f,
     /** Colour brightness 0.2…1. */
     val brightness: Float = 0.85f,
+    /** Effect: "blobs", "bars", "waves", "rings", "particles", "kaleido". */
+    val effect: String = "blobs",
 ) {
     fun toJson(): JSONObject = JSONObject().put("palette", palette).put("hue1", hue1.toDouble()).put("hue2", hue2.toDouble())
-        .put("hue3", hue3.toDouble()).put("brightness", brightness.toDouble())
+        .put("hue3", hue3.toDouble()).put("brightness", brightness.toDouble()).put("effect", effect)
     companion object {
         fun fromJson(o: JSONObject?) = if (o == null) VisSettings() else VisSettings(o.optString("palette", "sunset"),
             o.optDouble("hue1", 20.0).toFloat(), o.optDouble("hue2", 200.0).toFloat(), o.optDouble("hue3", 300.0).toFloat(),
-            o.optDouble("brightness", 0.85).toFloat())
+            o.optDouble("brightness", 0.85).toFloat(), o.optString("effect", "blobs"))
     }
 }
 

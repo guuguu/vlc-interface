@@ -10,6 +10,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -78,7 +80,11 @@ fun ClockArea(nav: Navigator, sizeDp: Int) {
     val d by Alarms.state.collectAsState()
     ClockFace(d.aspect, Modifier.padding(top = 8.dp).size(sizeDp.dp))
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x14FFFFFF))) {
-        d.alarms.sortedBy { it.hour * 60 + it.minute }.forEach { al ->
+        val ctxH = LocalContext.current
+        val issues = remember(resumeTick()) { alarmIssues(ctxH) }
+        if (issues.isNotEmpty() && d.alarms.any { it.on }) Text("⚠  Alarms may not ring: " + issues.joinToString(" · ") { it.title } + "  ›", color = C.bad, fontSize = 13.sp,
+            modifier = Modifier.fillMaxWidth().clickable { nav.go(Screen.AlarmSettings) }.padding(12.dp))
+        d.alarms.filter { it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID }.sortedBy { it.hour * 60 + it.minute }.forEach { al ->
             Row(Modifier.fillMaxWidth().clickable { nav.go(Screen.AlarmEdit(al.id)) }.padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(al.timeText, color = if (al.on) C.text else C.muted, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
@@ -109,7 +115,7 @@ private fun <T> Choices(options: List<Pair<String, T>>, selected: T, onPick: (T)
 
 @Composable
 private fun Label(text: String, hint: String = "") {
-    Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 10.dp)) {
+    Column(Modifier.fillMaxWidth().helpOn(text).padding(start = 16.dp, end = 16.dp, top = 10.dp)) {
         Text(text, color = C.text, fontSize = 15.sp)
         if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 12.sp)
     }
@@ -118,7 +124,7 @@ private fun Label(text: String, hint: String = "") {
 @Composable
 private fun SliderRow(label: String, value: Float, range: ClosedFloatingPointRange<Float>, shown: String, steps: Int = 0, onChange: (Float) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp))
+        Text(label, color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).helpOn(label))
         Slider(value, onChange, Modifier.weight(1f), valueRange = range, steps = steps,
             colors = SliderDefaults.colors(thumbColor = accent(), activeTrackColor = accent()))
         Text(shown, color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
@@ -135,12 +141,19 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     val start = remember(id) { Alarms.get(id) ?: Alarm() }
     var a by remember(id) { mutableStateOf(start) }
     var timeAsk by remember { mutableStateOf(false) }
+    var rootAsk by remember { mutableStateOf(false) }
+    var soundAsk by remember { mutableStateOf(false) }
+    var rootNote by remember { mutableStateOf("") }
+    val gl = Alarms.state.collectAsState().value.global
+    if (rootAsk) RootFolderDialog { rootAsk = false; rootNote = "" }
+    if (soundAsk) AlarmSoundDialog { soundAsk = false }
     val scroll = rememberScrollState()
+    HelpHost {
     Column(Modifier.fillMaxSize()) {
         BackHeader(if (Alarms.get(id) == null) "New alarm" else "Alarm", nav)
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             CardBox {
-                ToggleRow("Alarm on", "", a.on) { a = a.copy(on = it) }; Divider()
+                HToggleRow("Alarm on", "", a.on) { a = a.copy(on = it) }; Divider()
                 Row(Modifier.fillMaxWidth().clickable { timeAsk = true }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Time", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                     Text(a.timeText, color = accent(), fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
@@ -163,17 +176,34 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
             }
             SectionTitle("What plays")
             CardBox {
-                Choices(listOf("Last queue" to "queue", "Playlist" to "playlist", "Radio" to "radio", "Alarm tone" to "tone"), a.source) { a = a.copy(source = it) }
-                if (a.source == "playlist") {
-                    if (st.playlists.isEmpty()) Label("No playlists yet")
-                    Choices(st.playlists.map { it.name to it.id }, a.playlistId) { a = a.copy(playlistId = it) }
+                Label("What plays", "Only music stored on the phone, a radio station or the alarm sound: an alarm never depends on the NAS")
+                Choices(listOf("Phone music" to "local", "Radio" to "radio", "Alarm sound" to "tone"), a.source) { v ->
+                    a = a.copy(source = v)
+                    if (v == "local" && Alarms.current.global.localRoot.isEmpty()) {
+                        val known = knownMusicRoot()
+                        if (known != null) { Alarms.setGlobal(Alarms.current.global.copy(localRoot = known.first, localVolume = known.second)); rootNote = "Music folder taken from the audio player: ${known.first}" }
+                        else rootAsk = true
+                    }
                 }
-                if (a.source == "radio") {
-                    if (st.stations.isEmpty()) Label("No favourite stations yet")
-                    Choices(st.stations.map { it.name to it.url }, a.stationUrl) { u -> a = a.copy(stationUrl = u, stationName = st.stations.firstOrNull { it.url == u }?.name ?: "") }
+                when (a.source) {
+                    "local" -> {
+                        Explain("Songs from the music folder below and all its subfolders, in random order. If none plays within 15 s, the alarm sound rings.")
+                        HValueRow("Music folder", rootNote.ifEmpty { "Phone music for all alarms" }, gl.localRoot.ifEmpty { "Choose" }) { rootAsk = true }
+                    }
+                    "radio" -> {
+                        Explain("The preferred station plays live (no buffer). Not heard within 15 s → the fallback station; not heard either → the alarm sound.")
+                        if (st.stations.isEmpty()) Explain("No favourite stations yet: add some in the radio player first.")
+                        Label("Preferred station")
+                        Choices(st.stations.map { it.name to it.url }, a.stationUrl) { u -> a = a.copy(stationUrl = u, stationName = st.stations.firstOrNull { it.url == u }?.name ?: "",
+                            fallbackUrl = if (a.fallbackUrl == u) "" else a.fallbackUrl, fallbackName = if (a.fallbackUrl == u) "" else a.fallbackName) }
+                        Label("Fallback station", "Used when the preferred one can't be reached")
+                        Choices(listOf("None" to "") + st.stations.filter { it.url != a.stationUrl }.map { it.name to it.url }, a.fallbackUrl) { u ->
+                            a = a.copy(fallbackUrl = u, fallbackName = st.stations.firstOrNull { it.url == u }?.name ?: "") }
+                    }
+                    else -> Explain("Only the alarm sound below.")
                 }
                 Divider()
-                ToggleRow("Network fallback", "Network not reachable: phone songs, then the alarm tone", a.localFallback) { a = a.copy(localFallback = it) }
+                HValueRow("Alarm sound", "The last fallback, and what rings when music was already playing (all alarms)", gl.toneName.ifEmpty { "Phone's alarm" }) { soundAsk = true }
             }
             SectionTitle("Volume")
             CardBox {
@@ -203,6 +233,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
             }
         }
     }
+    }
     if (timeAsk) {
         val tp = rememberTimePickerState(a.hour, a.minute, Alarms.current.aspect.h24)
         AlertDialog(onDismissRequest = { timeAsk = false }, containerColor = C.panel,
@@ -224,27 +255,27 @@ fun AlarmSettingsScreen(nav: Navigator) {
         if (r.values.any { it }) set(Alarms.current.global.copy(useLocation = true))
     }
     var cityAsk by remember { mutableStateOf(false) }
-    val toneAsk = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        @Suppress("DEPRECATION") val uri: Uri? = r.data?.getParcelableExtra(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
-        if (r.resultCode == android.app.Activity.RESULT_OK) {
-            val name = uri?.let { try { android.media.RingtoneManager.getRingtone(ctx, it)?.getTitle(ctx) } catch (_: Exception) { null } } ?: ""
-            val isDefault = uri == null || uri == android.provider.Settings.System.DEFAULT_ALARM_ALERT_URI
-            set(Alarms.current.global.copy(toneUri = if (isDefault) "" else uri.toString(), toneName = if (isDefault) "" else name))
-        }
-    }
     if (cityAsk) CityDialog { cityAsk = false }
+    var soundAsk by remember { mutableStateOf(false) }
+    var rootAsk by remember { mutableStateOf(false) }
+    if (soundAsk) AlarmSoundDialog { soundAsk = false }
+    if (rootAsk) RootFolderDialog { rootAsk = false }
     val scroll = rememberScrollState()
+    HelpHost {
     Column(Modifier.fillMaxSize()) {
         BackHeader("Alarm clock", nav)
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SectionTitle("Alarm health")
+            HealthCard()
+            Text("Tip: double tap or long-press any setting for an explanation", color = C.muted, fontSize = 12.sp)
             SectionTitle("Display")
-            CardBox { ValueRow("Clock aspect", "Designs, colours, thickness, size, date, digital", "›") { nav.go(Screen.ClockAspect) } }
+            CardBox { HValueRow("Clock aspect", "Designs, colours, thickness, size, date, digital", "›") { nav.go(Screen.ClockAspect) } }
             SectionTitle("Location (clock and weather)")
             CardBox {
-                ValueRow("City", if (g.cityName.isEmpty()) "Not chosen: the phone's time zone" else "Clock time, alarms and weather follow it, also when the phone's time zone isn't automatic",
+                HValueRow("City", if (g.cityName.isEmpty()) "Not chosen: the phone's time zone" else "Clock time, alarms and weather follow it, also when the phone's time zone isn't automatic",
                     if (g.cityName.isEmpty()) "Choose" else g.cityName) { cityAsk = true }
                 Divider()
-                ToggleRow("Weather on the clock", "Sunny, cloudy, rainy or storm, with the city's short name and time zone", g.showWeather) {
+                HToggleRow("Weather on the clock", "Sunny, cloudy, rainy or storm, with the city's short name and time zone", g.showWeather) {
                     set(g.copy(showWeather = it)); if (it) app.vlcinterface.alarm.Weather.refresh(force = true) }
             }
             SectionTitle("Ringing")
@@ -252,15 +283,11 @@ fun AlarmSettingsScreen(nav: Navigator) {
                 SliderRow("Maximum level", g.maxLevel.toFloat(), 10f..100f, "${g.maxLevel} %") { set(g.copy(maxLevel = it.toInt())) }
                 Text("No alarm goes above it", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
                 Divider()
-                ValueRow("Alarm tone", "When nothing else can play, or music was already playing", g.toneName.ifEmpty { "Phone's alarm" }) {
-                    toneAsk.launch(Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER)
-                        .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_ALARM)
-                        .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
-                        .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
-                        .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, g.toneUri.takeIf { it.isNotEmpty() }?.let { Uri.parse(it) }))
-                }
+                HValueRow("Alarm sound", "When nothing else can play, or music was already playing", g.toneName.ifEmpty { "Phone's alarm" }) { soundAsk = true }
                 Divider()
-                ToggleRow("Vibrate", "", g.vibrate) { set(g.copy(vibrate = it)) }; Divider()
+                HValueRow("Music folder", "Phone music played by the alarms (with its subfolders)", g.localRoot.ifEmpty { "Choose" }) { rootAsk = true }
+                Divider()
+                HToggleRow("Vibrate", "", g.vibrate) { set(g.copy(vibrate = it)) }; Divider()
                 Label("Light blinking")
                 Choices(listOf("Off" to "off", "Notification light" to "notif", "Flash light" to "flash"), g.led) { set(g.copy(led = it)) }
                 Divider()
@@ -274,17 +301,17 @@ fun AlarmSettingsScreen(nav: Navigator) {
                         val n = f.toInt(); set(when (i) { 0 -> g.copy(snooze1 = n); 1 -> g.copy(snooze2 = n); else -> g.copy(snooze3 = n) }) }
                 }
                 Divider()
-                ToggleRow("Snooze buttons on the lock screen", "In the alarm notification", g.lockActions) { set(g.copy(lockActions = it)) }; Divider()
+                HToggleRow("Snooze buttons on the lock screen", "In the alarm notification", g.lockActions) { set(g.copy(lockActions = it)) }; Divider()
                 Label("Volume buttons while ringing")
                 Choices(listOf("Snooze" to "snooze", "Nothing" to "nothing", "Change volume" to "volume"), g.volumeKeys) { set(g.copy(volumeKeys = it)) }
             }
             SectionTitle("Waking up")
             CardBox {
-                ToggleRow("Random pattern to stop", "Tap 4 numbered dots in order", g.pattern) { set(g.copy(pattern = it)) }; Divider()
+                HToggleRow("Random pattern to stop", "Tap 4 numbered dots in order", g.pattern) { set(g.copy(pattern = it)) }; Divider()
                 Label("Wake check after Stop", "No sign of being awake for this long (movement, unlocking, network or place change) → a silent, vibrating question; no movement for 30 s → rings again at once, no crescendo")
                 Choices(listOf("Off" to 0, "5 min" to 5, "10 min" to 10, "15 min" to 15, "20 min" to 20, "30 min" to 30), g.wakeCheckMin) { set(g.copy(wakeCheckMin = it)) }
                 Divider()
-                ToggleRow("Use the phone's location", "Moving more than 150 m counts as awake", g.useLocation) { on ->
+                HToggleRow("Use the phone's location", "Moving more than 150 m counts as awake", g.useLocation) { on ->
                     if (!on) set(g.copy(useLocation = false))
                     else if (ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) set(g.copy(useLocation = true))
                     else locAsk.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
@@ -294,7 +321,7 @@ fun AlarmSettingsScreen(nav: Navigator) {
             CardBox {
                 Label("Music already playing", "Stops completely: only the alarm tone rings")
                 Divider()
-                ToggleRow("During a call", "Waits for the end of the call", g.callWait) { set(g.copy(callWait = it)) }; Divider()
+                HToggleRow("During a call", "Waits for the end of the call", g.callWait) { set(g.copy(callWait = it)) }; Divider()
                 Label("Missed alarm", "Phone off or restarting at the alarm time")
                 Choices(listOf("Ring if under 30 min late" to "ring30", "Notification only" to "notify"), g.missed) { set(g.copy(missed = it)) }
                 Divider()
@@ -303,25 +330,26 @@ fun AlarmSettingsScreen(nav: Navigator) {
             }
             SectionTitle("System")
             CardBox {
-                ToggleRow("Next alarm in a notification", "", g.nextInNotif) { set(g.copy(nextInNotif = it)) }; Divider()
+                HToggleRow("Next alarm in a notification", "", g.nextInNotif) { set(g.copy(nextInNotif = it)) }; Divider()
                 val exact = AlarmScheduler.canExact(ctx)
-                ValueRow("Exact alarms", if (exact) "Allowed: alarms ring on the minute, also in battery saving" else "Not allowed: alarms may be late",
+                HValueRow("Exact alarms", if (exact) "Allowed: alarms ring on the minute, also in battery saving" else "Not allowed: alarms may be late",
                     if (exact) "✓" else "Allow") {
                     try { ctx.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + ctx.packageName))) } catch (_: Exception) {}
                 }
                 if (Build.VERSION.SDK_INT >= 34) {
                     Divider()
                     val fs = ctx.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()
-                    ValueRow("Full-screen alarm", if (fs) "The ringing screen shows over the lock screen" else "Not allowed: only a notification", if (fs) "✓" else "Allow") {
+                    HValueRow("Full-screen alarm", if (fs) "The ringing screen shows over the lock screen" else "Not allowed: only a notification", if (fs) "✓" else "Allow") {
                         try { ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:" + ctx.packageName))) } catch (_: Exception) {}
                     }
                 }
                 Divider()
                 val free = Battery.unrestricted(ctx)
-                ValueRow("Battery", if (free) "Unrestricted" else "Battery saving may delay the app after the alarm", if (free) "✓" else "Allow") { Battery.ask(ctx) }
+                HValueRow("Battery", if (free) "Unrestricted" else "Battery saving may delay the app after the alarm", if (free) "✓" else "Allow") { Battery.ask(ctx) }
             }
             Box(Modifier.height(24.dp))
         }
+    }
     }
 }
 
@@ -345,8 +373,8 @@ fun ClockAspectScreen(nav: Navigator) {
                 Choices(listOf("1" to 1, "2" to 2, "4" to 4, "5" to 5, "8" to 8, "Digital" to 0), if (a.analog) a.design else 0) {
                     set(if (it == 0) a.copy(analog = false) else a.copy(analog = true, design = it)) }
                 Divider()
-                ToggleRow("24-hour", "", a.h24) { set(a.copy(h24 = it)) }; Divider()
-                ToggleRow("Seconds", "Second hand / seconds", a.seconds) { set(a.copy(seconds = it)) }
+                HToggleRow("24-hour", "", a.h24) { set(a.copy(h24 = it)) }; Divider()
+                HToggleRow("Seconds", "Second hand / seconds", a.seconds) { set(a.copy(seconds = it)) }
             }
             SectionTitle("Colours")
             CardBox {
@@ -374,8 +402,8 @@ fun ClockAspectScreen(nav: Navigator) {
             SectionTitle("Digital clock")
             CardBox {
                 SliderRow("Digits size", a.digitalSize, 0.5f..1.4f, "${(a.digitalSize * 100).toInt()} %") { set(a.copy(digitalSize = it)) }
-                ToggleRow("Bold digits", "", a.digitalBold) { set(a.copy(digitalBold = it)) }; Divider()
-                ToggleRow("Date under the time", "", a.digitalDate) { set(a.copy(digitalDate = it)) }
+                HToggleRow("Bold digits", "", a.digitalBold) { set(a.copy(digitalBold = it)) }; Divider()
+                HToggleRow("Date under the time", "", a.digitalDate) { set(a.copy(digitalDate = it)) }
             }
             SectionTitle("Night")
             CardBox {
@@ -427,4 +455,282 @@ private fun CityDialog(onDone: () -> Unit) {
         dismissButton = { STextButton({
             Alarms.setGlobal(Alarms.current.global.copy(cityName = "", cityShort = "", cityLat = 0.0, cityLon = 0.0, cityTz = "")); onDone() }) {
             Text("Phone's time zone") } })
+}
+
+// ---------------------------------------------------------------- explanations (double tap / long-press)
+
+private val LocalHelp = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Unit> { {} }
+
+private val HELP: Map<String, String> = mapOf(
+    "Alarm on" to "Switches this alarm on or off without deleting it. A one-time alarm switches itself off after ringing.",
+    "Time" to "When the alarm rings, in the time zone of the city chosen in the alarm clock settings (or the phone's).",
+    "Days" to "The days it repeats. No day selected: it rings once, at the next time shown.",
+    "What plays" to "Phone music: songs stored on the phone under the music folder. Radio: a live station, with a fallback station. Alarm sound: only the sound chosen below. Network songs from the NAS are never used, so a NAS or Wi-Fi problem can't silence an alarm.",
+    "Music folder" to "The phone folder the alarms take songs from (all its subfolders too), in random order. Asked once; it is taken from the audio player when the player already plays phone music.",
+    "Preferred station" to "The radio station the alarm starts with, played live without a network buffer.",
+    "Fallback station" to "Played when the preferred station isn't heard within 15 s. If this one isn't heard either, the alarm sound rings.",
+    "Alarm sound" to "The sound for every alarm when nothing else can play, when music was already playing, and with low battery (if chosen). Pick one in the list: each plays for 3 s so you can hear it.",
+    "Start" to "Volume when the alarm begins.",
+    "Target" to "Volume reached at the end of the fade-in. Never above the maximum level of the alarm clock settings.",
+    "Fade-in time" to "How long the volume takes to rise from start to target (the crescendo).",
+    "Snoozes allowed" to "How many times the snooze buttons can be used for this alarm. After that only Stop is offered.",
+    "Stop by itself after" to "The alarm stops on its own after this time if nobody stops it. Never: it rings until stopped.",
+    "Output" to "Where the alarm plays: as it is now, the phone speaker, or a connected device.",
+    "City" to "The clock, the alarm times and the weather follow this city, also when the phone's time zone isn't automatic. Not chosen: the phone's time zone.",
+    "Weather on the clock" to "A small icon (sunny, cloudy, rainy, storm) with the city's short name and time zone, refreshed every 30 min from Open-Meteo.",
+    "Maximum level" to "No alarm ever goes above this volume: not the target, not the ring after the wake check, not the alarm sound.",
+    "Vibrate" to "The phone vibrates while the alarm rings.",
+    "Light blinking" to "Notification light (phones that have one) or the camera's flash light blinking while the alarm rings.",
+    "Crescendo" to "How the volume rises: steady, gentle (slow at first) or quick (fast at first).",
+    "Snooze buttons" to "The times of the 3 snooze buttons on the ringing screen.",
+    "Button 1" to "Snooze time of the first button.", "Button 2" to "Snooze time of the second button.", "Button 3" to "Snooze time of the third button.",
+    "Snooze buttons on the lock screen" to "The alarm notification gets the 3 snooze buttons, usable without unlocking.",
+    "Volume buttons while ringing" to "Snooze: a volume button snoozes with the first snooze time. Nothing: they are ignored. Change volume: they change the volume (the crescendo then stops).",
+    "Random pattern to stop" to "To stop, tap 4 numbered dots in order (a new pattern each time): proof you are awake enough.",
+    "Wake check after Stop" to "After you stop the alarm, the app watches for signs of being awake (movement, unlocking, charger, network or place change). None for this long: a silent, vibrating 'Are you awake?' for 30 s; no movement → the alarm rings again at once, without crescendo.",
+    "Use the phone's location" to "Wake check: moving more than 150 m counts as awake. Needs the location permission.",
+    "Music already playing" to "When music or radio is playing as an alarm starts, it stops completely and only the alarm sound rings.",
+    "During a call" to "The alarm waits for the end of the call before ringing.",
+    "Missed alarm" to "If the phone was off or restarting at the alarm time: ring when it's back (if less than 30 min late), or only a notification.",
+    "Low battery (15 % or less)" to "Normal, or only the alarm sound (no network) to save the battery.",
+    "Next alarm in a notification" to "A quiet notification shows the next alarm.",
+    "Exact alarms" to "Android permission needed for alarms to ring on the minute, also in battery saving.",
+    "Full-screen alarm" to "Android permission for the ringing screen to turn the screen on over the lock screen. Without it the alarm still rings, but you only get a notification.",
+    "Battery" to "Unrestricted battery use keeps the app from being held back after the alarm.",
+    "Clock aspect" to "How the clock looks: designs, colours, thickness, sizes, date and digital options.",
+    "Alarm health" to "Everything Android needs so alarms always ring. A red line has a button to fix it.",
+    "Test alarm in 1 minute" to "Rings in 1 minute with the first alarm's settings. Press Exit and lock the phone to check that alarms ring on your phone.",
+)
+
+/** Screen with explanation pop-ups: double tap or long-press a setting. */
+@Composable
+private fun HelpHost(content: @Composable () -> Unit) {
+    var key by remember { mutableStateOf("") }
+    androidx.compose.runtime.CompositionLocalProvider(LocalHelp provides { k -> if (HELP.containsKey(k)) key = k }) { content() }
+    if (key.isNotEmpty()) AlertDialog(onDismissRequest = { key = "" }, containerColor = C.panel,
+        title = { Text(key, color = C.text) }, text = { Text(HELP[key] ?: "", color = C.muted, fontSize = 14.sp) },
+        confirmButton = { STextButton({ key = "" }) { Text("OK", color = accent()) } })
+}
+
+@Composable
+private fun Modifier.helpOn(key: String): Modifier {
+    val help = LocalHelp.current
+    if (!HELP.containsKey(key)) return this
+    return this.combinedClickable(interactionSource = null, indication = null, onClick = {}, onDoubleClick = { help(key) }, onLongClick = { help(key) })
+}
+
+/** ToggleRow with the explanation on double tap / long-press (a single tap still switches). */
+@Composable
+private fun HToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boolean) -> Unit) {
+    val help = LocalHelp.current
+    val has = HELP.containsKey(label)
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+        .then(if (has) Modifier.combinedClickable(onClick = { onChange(!checked) }, onDoubleClick = { help(label) }, onLongClick = { help(label) })
+            else Modifier.clickable { onChange(!checked) })
+        .padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(label, color = C.text, fontSize = 15.sp)
+            if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
+        }
+        Switch(checked, onChange, colors = SwitchDefaults.colors(checkedTrackColor = accent()))
+    }
+}
+
+@Composable
+private fun HValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) {
+    val help = LocalHelp.current
+    val has = HELP.containsKey(label)
+    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+        .then(if (has) Modifier.combinedClickable(onClick = onClick, onDoubleClick = { help(label) }, onLongClick = { help(label) }) else Modifier.clickable(onClick = onClick))
+        .padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(label, color = C.text, fontSize = 15.sp)
+            if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
+        }
+        Text(value, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 8.dp).widthIn(max = 160.dp))
+    }
+}
+
+@Composable
+private fun Explain(text: String) = Text(text, color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+
+// ---------------------------------------------------------------- music folder, alarm sound
+
+/** Phone music folder already used by the audio player (top folder of its phone songs), with its volume. */
+fun knownMusicRoot(): Pair<String, String>? {
+    val p = App.instance.player.state.value
+    val fk = (listOfNotNull(p.item) + p.queue).firstOrNull { it.folderKey.startsWith("local:") }?.folderKey ?: return null
+    val vol = fk.removePrefix("local:").substringBefore(':')
+    val rel = fk.removePrefix("local:").substringAfter(':')
+    val top = rel.substringBefore('/').takeIf { it.isNotEmpty() } ?: return null
+    return ("$top/") to vol
+}
+
+@Composable
+private fun RootFolderDialog(onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    var folders by remember { mutableStateOf<List<app.vlcinterface.sources.LocalFolder>?>(null) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        folders = try { app.vlcinterface.sources.InternalSource.folders(ctx).filter { it.songs > 0 } } catch (_: Exception) { emptyList() }
+    }
+    val g = Alarms.current.global
+    // Top folders first (with all their songs), then each folder with songs.
+    val roots = folders.orEmpty().groupBy { it.volume to (it.relativePath.substringBefore('/') + "/") }
+        .map { (k, l) -> Triple(k.second, k.first, l.sumOf { it.songs }) }.sortedByDescending { it.third }
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("Music folder for alarms", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Alarms play songs stored on the phone from this folder and all its subfolders, in random order — no network needed. " +
+                    "If none of them can play, the alarm sound rings.", color = C.muted, fontSize = 13.sp)
+                if (folders == null) Text("Looking for music on the phone…", color = C.muted, fontSize = 13.sp)
+                else if (roots.isEmpty()) Text("No music found on the phone.", color = C.bad, fontSize = 13.sp)
+                Column(Modifier.heightIn(max = 320.dp).verticalScroll(rememberScrollState())) {
+                    (roots + folders.orEmpty().filter { it.relativePath.trimEnd('/').contains('/') }
+                        .map { Triple(it.relativePath, it.volume, it.songs) }).distinctBy { it.second + it.first }.forEach { (rel, vol, n) ->
+                        val on = g.localRoot == rel && g.localVolume == vol
+                        Row(Modifier.fillMaxWidth().clickable {
+                            Alarms.setGlobal(Alarms.current.global.copy(localRoot = rel, localVolume = vol)); onDone()
+                        }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(rel, color = if (on) accent() else C.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                            Text("$n songs", color = C.muted, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton(onDone) { Text("Close") } })
+}
+
+/** Alarm sound: the phone's default or any other alarm sound; each one plays for 3 s when picked. */
+@Composable
+private fun AlarmSoundDialog(onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    val sounds = remember {
+        val out = ArrayList<Pair<String, String>>()
+        try {
+            val rm = android.media.RingtoneManager(ctx).apply { setType(android.media.RingtoneManager.TYPE_ALARM) }
+            val c = rm.cursor
+            while (c.moveToNext()) out += c.getString(android.media.RingtoneManager.TITLE_COLUMN_INDEX) to rm.getRingtoneUri(c.position).toString()
+        } catch (_: Exception) {}
+        out
+    }
+    val preview = remember { arrayOfNulls<android.media.MediaPlayer>(1) }
+    val main = remember { android.os.Handler(android.os.Looper.getMainLooper()) }
+    fun stopPreview() { main.removeCallbacksAndMessages(null); preview[0]?.let { try { it.stop(); it.release() } catch (_: Exception) {} }; preview[0] = null }
+    fun play(uri: String) {
+        stopPreview()
+        val u = if (uri.isEmpty()) android.media.RingtoneManager.getActualDefaultRingtoneUri(ctx, android.media.RingtoneManager.TYPE_ALARM)
+            ?: android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_ALARM) else Uri.parse(uri)
+        try {
+            preview[0] = android.media.MediaPlayer().apply {
+                setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_ALARM)
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                setDataSource(ctx, u); prepare(); start()
+            }
+            main.postDelayed({ stopPreview() }, 3000)
+        } catch (_: Exception) {}
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { stopPreview() } }
+    val g = Alarms.state.collectAsState().value.global
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("Alarm sound", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("Rings when nothing else can play, when music was already playing, and with low battery (if chosen). " +
+                    "Tap a sound: it is chosen and plays for 3 s.", color = C.muted, fontSize = 13.sp)
+                Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
+                    (listOf("Phone's alarm (default)" to "") + sounds).forEach { (title, uri) ->
+                        val on = g.toneUri == uri
+                        Row(Modifier.fillMaxWidth().clickable {
+                            Alarms.setGlobal(Alarms.current.global.copy(toneUri = uri, toneName = if (uri.isEmpty()) "" else title)); play(uri)
+                        }.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                            SRadioButton(on, null)
+                            Text(title, color = if (on) accent() else C.text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton({ stopPreview(); onDone() }) { Text("OK", color = accent()) } })
+}
+
+// ---------------------------------------------------------------- alarm health
+
+class AlarmIssue(val title: String, val text: String, val fix: (android.content.Context) -> Unit)
+
+/** What could stop an alarm from ringing, each with its fix. */
+fun alarmIssues(ctx: android.content.Context): List<AlarmIssue> {
+    val out = ArrayList<AlarmIssue>()
+    fun open(c: android.content.Context, i: Intent) = try { c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+    val pkg = Uri.parse("package:" + ctx.packageName)
+    if (!AlarmScheduler.canExact(ctx)) out += AlarmIssue("Exact alarms", "Not allowed: alarms may be late") { open(it, Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg)) }
+    val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+    if (!nm.areNotificationsEnabled()) out += AlarmIssue("Notifications", "Off: no ringing screen, no snooze buttons") {
+        open(it, Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, it.packageName)) }
+    if (Build.VERSION.SDK_INT >= 34 && !nm.canUseFullScreenIntent()) out += AlarmIssue("Full-screen alarm", "Not allowed: only a notification") {
+        open(it, Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg)) }
+    if (ctx.getSystemService(android.app.ActivityManager::class.java).isBackgroundRestricted) out += AlarmIssue("Battery: Restricted", "Android may block the app at alarm time") {
+        open(it, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)) }
+    return out
+}
+
+/** Bumps every time the app comes back to the front (permissions may have changed in Android's settings). */
+@Composable
+fun resumeTick(): Int {
+    var tick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) tick++ }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    return tick
+}
+
+@Composable
+private fun HealthCard() {
+    val ctx = LocalContext.current
+    val issues = remember(resumeTick()) { alarmIssues(ctx) }
+    var testNote by remember { mutableStateOf("") }
+    CardBox {
+        if (issues.isEmpty()) Text("✓  Everything Android needs for the alarms is allowed", color = C.ok, fontSize = 14.sp,
+            modifier = Modifier.fillMaxWidth().helpOn("Alarm health").padding(16.dp))
+        issues.forEach { i ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("⚠  " + i.title, color = C.bad, fontSize = 15.sp)
+                    Text(i.text, color = C.muted, fontSize = 12.sp)
+                }
+                Pill("Fix") { i.fix(ctx) }
+            }
+            Divider()
+        }
+        val brand = Build.MANUFACTURER.lowercase()
+        val sleepList = when {
+            "samsung" in brand -> "Samsung: Settings → Battery → Background usage limits — keep the app out of \"Sleeping\" / \"Deep sleeping\" apps."
+            brand in listOf("xiaomi", "redmi", "poco") -> "Xiaomi: allow \"Autostart\" and set Battery saver to \"No restrictions\" for the app."
+            brand in listOf("huawei", "honor") -> "Huawei / Honor: App launch → manage manually, allow all for the app."
+            brand in listOf("oppo", "realme", "oneplus", "vivo") -> "Allow auto-launch / background activity for the app in the phone's battery settings."
+            else -> ""
+        }
+        if (sleepList.isNotEmpty()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(sleepList, color = C.muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Pill("Open") { try { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName))) } catch (_: Exception) {} }
+            }
+            Divider()
+        }
+        Row(Modifier.fillMaxWidth().helpOn("Test alarm in 1 minute").padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Test alarm in 1 minute", color = C.text, fontSize = 15.sp)
+                Text(testNote.ifEmpty { "Then press Exit and lock the phone" }, color = if (testNote.isEmpty()) C.muted else accent(), fontSize = 12.sp)
+            }
+            Pill("Test") {
+                app.vlcinterface.alarm.testAlarm(ctx)
+                testNote = "Rings at " + AlarmScheduler.whenText(System.currentTimeMillis() + 60_000).substringAfter(' ') + " — you can press Exit and lock the phone"
+            }
+        }
+    }
 }

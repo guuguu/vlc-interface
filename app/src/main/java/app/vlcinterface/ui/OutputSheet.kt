@@ -81,6 +81,24 @@ fun OutputSheet(onDismiss: () -> Unit) {
             }
             Text("Tap a device to switch with Android's output switcher. Android plays media on one Bluetooth device at a time.",
                 color = C.muted, fontSize = 12.sp)
+            // Bluetooth: the codec in use (read only), and Android's codec settings in Developer options.
+            devices.firstOrNull { it.active && it.kind == OutputKind.BLUETOOTH }?.let { d ->
+                val ctxB = androidx.compose.ui.platform.LocalContext.current
+                var codec by remember(d.key) { androidx.compose.runtime.mutableStateOf<String?>("…") }
+                LaunchedEffect(d.key) { codec = app.vlcinterface.player.BtCodec.info(ctxB) }
+                CardBox {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Bluetooth codec: " + (codec ?: "not reported by Android"), color = C.text, fontSize = 14.sp)
+                            Text("Apps can't change the codec or SBC's bitrate. Best quality: Developer options → Bluetooth audio codec / sample rate / LDAC quality.",
+                                color = C.muted, fontSize = 12.sp)
+                        }
+                        Pill("Codec settings") {
+                            try { ctxB.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                        }
+                    }
+                }
+            }
             devices.firstOrNull { it.active }?.let { d ->
                 Text("Preamp and balance for ${d.name}", color = C.muted, fontSize = 13.sp)
                 DeviceSoundControls(d.name)

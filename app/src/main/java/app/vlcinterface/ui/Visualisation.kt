@@ -41,6 +41,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -84,7 +85,7 @@ fun VisButton(nav: Navigator, size: Int = 30) {
 
 /**
  * Full screen: only colours dancing and blending to the music (levels of the app's own sound output).
- * The screen stays on. Double tap anywhere: back. Slide in any direction: screen brightness (up / right brighter).
+ * The screen stays on. Double tap anywhere: back. Slide along the long side: colours; along the short side: brightness.
  */
 @Composable
 fun VisualisationScreen(nav: Navigator) {
@@ -97,9 +98,9 @@ fun VisualisationScreen(nav: Navigator) {
     DisposableEffect(Unit) {
         val w = act?.window
         w?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        try { w?.insetsController?.hide(WindowInsets.Type.systemBars()) } catch (_: Exception) {}
+        try { w?.insetsController?.hide(WindowInsets.Type.statusBars()) } catch (_: Exception) {}   // bottom navigation bar stays usable
         onDispose {
-            try { w?.insetsController?.show(WindowInsets.Type.systemBars()) } catch (_: Exception) {}
+            try { w?.insetsController?.show(WindowInsets.Type.statusBars()) } catch (_: Exception) {}
             w?.attributes = w?.attributes?.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
         }
     }
@@ -130,25 +131,139 @@ fun VisualisationScreen(nav: Navigator) {
             }
         }
     }
+    // Slides: along the screen's long side → next / previous colour combination; along the short side → brightness.
+    var paletteNote by remember { androidx.compose.runtime.mutableStateOf("") }
+    var noteAt by remember { mutableLongStateOf(0L) }
     Box(Modifier.fillMaxSize().background(Color.Black)
         .pointerInput(Unit) { detectTapGestures(onDoubleTap = { nav.back() }) }
-        .pointerInput(Unit) { detectDragGestures { ch, d -> ch.consume(); setBright(bright + (d.x - d.y) / 900f) } }) {
+        .pointerInput(Unit) {
+            var axis = 0          // 0 undecided, 1 long, 2 short
+            var acc = 0f
+            var sx = 0f; var sy = 0f
+            detectDragGestures(onDragStart = { axis = 0; acc = 0f; sx = 0f; sy = 0f }) { ch, d ->
+                ch.consume()
+                val portrait = size.height >= size.width
+                sx += d.x; sy += d.y
+                if (axis == 0 && (kotlin.math.abs(sx) > 24f || kotlin.math.abs(sy) > 24f)) {
+                    val vertical = kotlin.math.abs(sy) > kotlin.math.abs(sx)
+                    axis = if (vertical == portrait) 1 else 2
+                }
+                if (axis == 1) {
+                    acc += if (portrait) d.y else d.x
+                    val stepPx = 140.dp.toPx()
+                    if (kotlin.math.abs(acc) > stepPx) {
+                        val dir = if (acc > 0) 1 else -1; acc = 0f
+                        val keys = PALETTES.map { it.first }
+                        val cur = Alarms.current.vis
+                        val next = keys[(keys.indexOf(cur.palette).coerceAtLeast(0) + dir + keys.size) % keys.size]
+                        Alarms.setVis(cur.copy(palette = next))
+                        paletteNote = PALETTES.first { it.first == next }.second; noteAt = System.currentTimeMillis()
+                    }
+                } else if (axis == 2) setBright(bright + (if (portrait) d.x else -d.y) / 700f)
+            }
+        }) {
         Canvas(Modifier.fillMaxSize()) {
-            val w = size.width; val h = size.height; val m = size.minDimension
             val a = v.brightness.coerceIn(0.2f, 1f)
-            for (i in 0 until 7) {
-                val c = cols[i % cols.size]
-                val fx = 0.37f + i * 0.11f; val fy = 0.29f + i * 0.07f
-                val x = w * (0.5f + 0.36f * sin(t * fx + i * 1.7f))
-                val y = h * (0.5f + 0.36f * cos(t * fy + i * 2.3f))
-                val r = m * (0.22f + 0.3f * level + 0.35f * beat) * (0.8f + 0.25f * sin(t * 0.9f + i))
-                drawCircle(Brush.radialGradient(listOf(c.copy(alpha = a), c.copy(alpha = a * 0.35f), Color.Transparent), Offset(x, y), r.coerceAtLeast(1f)),
-                    r.coerceAtLeast(1f), Offset(x, y), blendMode = BlendMode.Plus)
+            when (v.effect) {
+                "bars" -> visBars(t, level, beat, cols, a)
+                "waves" -> visWaves(t, level, beat, cols, a)
+                "rings" -> visRings(t, level, beat, cols, a)
+                "particles" -> visParticles(t, level, beat, cols, a)
+                "kaleido" -> visKaleido(t, level, beat, cols, a)
+                else -> visBlobs(t, level, beat, cols, a)
             }
         }
         if (showB) Text("☀ ${(bright * 100).toInt()} %", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp,
             modifier = Modifier.align(Alignment.Center))
+        if (paletteNote.isNotEmpty()) Text(paletteNote, color = Color.White.copy(alpha = 0.85f), fontSize = 20.sp,
+            modifier = Modifier.align(Alignment.Center).padding(top = 60.dp))
         LaunchedEffect(shownAt) { kotlinx.coroutines.delay(1300); showB = false }
+        LaunchedEffect(noteAt) { kotlinx.coroutines.delay(1300); paletteNote = "" }
+    }
+}
+
+// ---------------------------------------------------------------- effects
+
+private fun DrawScope.blob(c: Color, a: Float, center: Offset, r: Float) {
+    val rr = r.coerceAtLeast(1f)
+    drawCircle(Brush.radialGradient(listOf(c.copy(alpha = a), c.copy(alpha = a * 0.35f), Color.Transparent), center, rr), rr, center, blendMode = BlendMode.Plus)
+}
+
+private fun DrawScope.visBlobs(t: Float, level: Float, beat: Float, cols: List<Color>, a: Float) {
+    val w = size.width; val h = size.height; val m = size.minDimension
+    for (i in 0 until 7) {
+        val x = w * (0.5f + 0.36f * sin(t * (0.37f + i * 0.11f) + i * 1.7f))
+        val y = h * (0.5f + 0.36f * cos(t * (0.29f + i * 0.07f) + i * 2.3f))
+        blob(cols[i % cols.size], a, Offset(x, y), m * (0.22f + 0.3f * level + 0.35f * beat) * (0.8f + 0.25f * sin(t * 0.9f + i)))
+    }
+}
+
+private fun DrawScope.visBars(t: Float, level: Float, beat: Float, cols: List<Color>, a: Float) {
+    val n = 28
+    val bw = size.width / n
+    val mid = size.height / 2
+    for (i in 0 until n) {
+        val wob = 0.5f + 0.5f * sin(t * 3.1f + i * 0.73f) * cos(t * 1.7f + i * 0.31f)
+        val hh = size.height * (0.03f + level * 0.38f * wob + beat * 0.22f * (0.5f + 0.5f * sin(i * 1.9f + t * 5f)))
+        val c = cols[(i * cols.size / n).coerceAtMost(cols.size - 1)]
+        drawRect(Brush.verticalGradient(listOf(c.copy(alpha = a), c.copy(alpha = a * 0.25f)), mid - hh, mid), Offset(i * bw + bw * 0.12f, mid - hh),
+            androidx.compose.ui.geometry.Size(bw * 0.76f, hh), blendMode = BlendMode.Plus)
+        drawRect(Brush.verticalGradient(listOf(c.copy(alpha = a * 0.25f), c.copy(alpha = a * 0.7f)), mid, mid + hh * 0.7f), Offset(i * bw + bw * 0.12f, mid),
+            androidx.compose.ui.geometry.Size(bw * 0.76f, hh * 0.7f), blendMode = BlendMode.Plus)
+    }
+}
+
+private fun DrawScope.visWaves(t: Float, level: Float, beat: Float, cols: List<Color>, a: Float) {
+    val w = size.width; val h = size.height
+    for (k in 0 until 5) {
+        val path = androidx.compose.ui.graphics.Path()
+        val amp = h * (0.04f + 0.18f * level + 0.15f * beat) * (1f - k * 0.12f)
+        var x = 0f
+        while (x <= w) {
+            val y = h / 2 + (k - 2) * h * 0.06f + amp * sin(x / w * 6.28f * (1.2f + k * 0.35f) + t * (1.5f + k * 0.4f)) * cos(t * 0.6f + k)
+            if (x == 0f) path.moveTo(x, y) else path.lineTo(x, y)
+            x += 8f
+        }
+        drawPath(path, cols[k % cols.size].copy(alpha = a), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f + 18f * beat + 6f * level,
+            cap = androidx.compose.ui.graphics.StrokeCap.Round), blendMode = BlendMode.Plus)
+    }
+}
+
+private fun DrawScope.visRings(t: Float, level: Float, beat: Float, cols: List<Color>, a: Float) {
+    val c = Offset(size.width / 2, size.height / 2)
+    val maxR = size.maxDimension * 0.65f
+    for (i in 0 until 8) {
+        val f = ((t * 0.35f + i / 8f) % 1f)
+        drawCircle(cols[i % cols.size].copy(alpha = a * (1f - f)), maxR * f * (0.85f + 0.3f * level), c,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6f + 40f * beat + 14f * level), blendMode = BlendMode.Plus)
+    }
+    blob(cols[0], a, c, size.minDimension * (0.12f + 0.25f * beat + 0.1f * level))
+}
+
+private fun DrawScope.visParticles(t: Float, level: Float, beat: Float, cols: List<Color>, a: Float) {
+    val c = Offset(size.width / 2, size.height / 2)
+    val maxR = size.maxDimension * 0.6f
+    for (i in 0 until 90) {
+        val ang = i * 2.39996f + t * 0.15f
+        val f = ((t * 0.22f * (0.6f + (i % 5) * 0.2f) + i * 0.137f) % 1f)
+        val d = maxR * f * (0.7f + 0.5f * level)
+        val p = Offset(c.x + cos(ang) * d, c.y + sin(ang) * d)
+        val r = (2f + 10f * beat + 6f * level) * (0.5f + f)
+        blob(cols[i % cols.size], a * (1f - f * 0.6f), p, r * 3f)
+    }
+}
+
+private fun DrawScope.visKaleido(t: Float, level: Float, beat: Float, cols: List<Color>, a: Float) {
+    val c = Offset(size.width / 2, size.height / 2)
+    val m = size.minDimension
+    for (k in 0 until 6) for (j in 0 until 3) {
+        val base = k * 1.0472f
+        val d = m * (0.12f + 0.12f * j + 0.12f * level) * (1f + 0.25f * sin(t * (0.7f + j * 0.3f) + j))
+        val off = 0.35f * sin(t * (0.5f + j * 0.2f) + j * 2f)
+        for (mirror in listOf(1f, -1f)) {
+            val ang = base + mirror * off
+            blob(cols[(j + k) % cols.size], a * 0.8f, Offset(c.x + cos(ang) * d, c.y + sin(ang) * d), m * (0.07f + 0.08f * level + 0.12f * beat))
+        }
     }
 }
 
@@ -158,6 +273,12 @@ fun VisualisationSettings() {
     val v = Alarms.state.collectAsState().value.vis
     fun set(n: VisSettings) = Alarms.setVis(n)
     CardBox {
+        Text("Effect", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 10.dp))
+        FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf("blobs" to "Colour clouds", "bars" to "Bars", "waves" to "Waves", "rings" to "Rings", "particles" to "Particles", "kaleido" to "Kaleidoscope")
+                .forEach { (k, l) -> Pill(l, selected = v.effect == k) { set(v.copy(effect = k)) } }
+        }
+        Divider()
         Text("Colours", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 10.dp))
         FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             PALETTES.forEach { (key, label) ->
@@ -187,7 +308,7 @@ fun VisualisationSettings() {
                 colors = SliderDefaults.colors(thumbColor = accent(), activeTrackColor = accent()))
             Text("${(v.brightness * 100).toInt()} %", color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
         }
-        Text("On the visualisation: double tap to leave, slide in any direction for the screen brightness", color = C.muted, fontSize = 12.sp,
+        Text("On the visualisation: double tap to leave · slide along the long side for the colours, along the short side for the brightness", color = C.muted, fontSize = 12.sp,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp))
         Box(Modifier.height(2.dp))
     }

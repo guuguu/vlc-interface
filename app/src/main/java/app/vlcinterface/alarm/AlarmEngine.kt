@@ -43,8 +43,6 @@ import app.vlcinterface.data.ServerLog
 import app.vlcinterface.player.OutputKind
 import app.vlcinterface.player.Origin
 import app.vlcinterface.player.PlayItem
-import app.vlcinterface.player.QueueKeeper
-import app.vlcinterface.sources.MusicLibrary
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -76,6 +74,8 @@ data class AlarmUi(
  */
 object AlarmEngine {
     const val NOTIF_ID = 7310
+    /** "Test alarm in 1 minute". */
+    const val TEST_ID = "test"
     const val SNOOZE_NOTIF_ID = 7311
     private const val CH_RING = "alarm_ring_quiet"
     private const val CH_RING_LED = "alarm_ring_led_quiet"
@@ -150,11 +150,18 @@ object AlarmEngine {
         val wasPlaying = player.state.value.isPlaying && !restart && !snoozed
         if (wasPlaying) { try { player.pause() } catch (_: Exception) {}; log("music was playing: stopped, alarm tone only") }
         selectOutput(a)
-        var step = if (low || a.source == "tone" || wasPlaying) 2 else 0
-        if (step == 2) tonePending = true
+        // What plays, in order: phone music (root folder) → alarm sound; preferred station → fallback station →
+        // alarm sound; each step taken when nothing is heard for 15 s.
+        val steps = when {
+            low || wasPlaying || a.source == "tone" -> listOf("tone")
+            a.source == "radio" -> listOfNotNull(if (a.stationUrl.isNotEmpty()) "radio1" else null, if (a.fallbackUrl.isNotEmpty()) "radio2" else null, "tone")
+            else -> listOf("local", "tone")
+        }
+        var step = 0
+        if (steps[0] == "tone") tonePending = true
         var vol = if (restart) a.volTarget else a.volStart
         setVol(am, vol)
-        if (step == 2) startTone() else startSource(a, snoozed)
+        if (!startStep(steps[0], a, snoozed)) { step = steps.lastIndex; tonePending = true; setVol(am, vol); startTone() }
         val t0 = System.currentTimeMillis()
         var quietSince = 0L
         while (scope.isActive && _ui.value.phase == "ringing") {
@@ -165,16 +172,18 @@ object AlarmEngine {
                 val v = (a.volStart + (a.volTarget - a.volStart) * c).toInt()
                 if (v != vol) { vol = v; setVol(am, v) }
             }
-            // Watchdog: nothing heard for 15 s → phone songs → alarm tone.
-            if (step < 2) {
+            // Watchdog: nothing heard for 15 s → the next step.
+            if (steps[step] != "tone") {
                 if (!player.state.value.isPlaying) {
                     if (quietSince == 0L) quietSince = System.currentTimeMillis()
                     else if (System.currentTimeMillis() - quietSince > 15_000) {
                         quietSince = 0L
-                        step = if (step == 0 && a.localFallback && a.source != "tone") 1 else 2
-                        log(if (step == 1) "nothing plays: phone songs" else "nothing plays: alarm tone")
-                        if (step == 1 && !playLocal()) step = 2
-                        if (step == 2) { try { player.pause() } catch (_: Exception) {}; tonePending = true; setVol(am, vol); startTone() }
+                        step++
+                        log("nothing plays: " + when (steps[step]) { "radio2" -> "fallback station"; "tone" -> "alarm sound"; else -> steps[step] })
+                        if (steps[step] == "tone" || !startStep(steps[step], a, snoozed)) {
+                            step = steps.lastIndex
+                            try { player.pause() } catch (_: Exception) {}; tonePending = true; setVol(am, vol); startTone()
+                        }
                     }
                 } else quietSince = 0L
             }
@@ -209,28 +218,22 @@ object AlarmEngine {
 
     @Volatile private var tonePending = false
 
-    private suspend fun startSource(a: Alarm, snoozed: Boolean) {
+    /** Starts one step; false = can't (nothing to play there). */
+    private suspend fun startStep(step: String, a: Alarm, snoozed: Boolean): Boolean {
         val player = App.instance.player
-        val store = App.instance.store
-        when (a.source) {
-            "playlist" -> {
-                val pl = store.current.playlists.firstOrNull { it.id == a.playlistId }
-                if (pl != null && pl.items.isNotEmpty()) {
-                    player.playQueue(pl.items.map { MusicLibrary.fromPlEntry(it) }, 0, Origin("playlist", playlistId = pl.id, title = pl.name))
-                    if (snoozed) otherPart()
-                    return
+        return when (step) {
+            "radio1", "radio2" -> {
+                val url = if (step == "radio1") a.stationUrl else a.fallbackUrl
+                val name = if (step == "radio1") a.stationName else a.fallbackName
+                if (url.isEmpty()) false else {
+                    player.alarmLive = true   // live: no network buffer
+                    player.playQueue(listOf(PlayItem(url, name.ifEmpty { "Radio" }, isRadio = true)), 0, Origin("radio", "", url, name), keepOrder = true)
+                    true
                 }
             }
-            "radio" -> if (a.stationUrl.isNotEmpty()) {
-                player.alarmLive = true   // live: no network buffer
-                player.playStation(a.stationName.ifEmpty { "Radio" }, a.stationUrl); return
-            }
+            "local" -> playLocal(Alarms.current.global.localRoot, Alarms.current.global.localVolume).also { if (it && snoozed) otherPart() }
+            else -> false
         }
-        // The last audio queue, where it was.
-        val s = player.state.value
-        if (s.item?.isMusic != true) { QueueKeeper.restore(player, "audio", force = true); delay(1200) }
-        player.resume()
-        if (snoozed) otherPart()
     }
 
     /** After a snooze: a different song, from a different part of it. */
@@ -249,15 +252,17 @@ object AlarmEngine {
         if (player.state.value.length > 30_000) player.seekFraction((15..70).random() / 100f)
     }
 
-    /** Phone songs (no network), in random order. */
-    private suspend fun playLocal(): Boolean {
+    /** Phone songs under the music root folder (no network), in random order. */
+    private suspend fun playLocal(root: String, volume: String): Boolean {
         val items = withContext(Dispatchers.IO) {
             val out = ArrayList<PlayItem>()
             try {
                 app.contentResolver.query(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                     arrayOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE, MediaStore.Audio.Media.DISPLAY_NAME,
                         MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.DURATION),
-                    MediaStore.Audio.Media.IS_MUSIC + "!=0", null, null)?.use { c ->
+                    MediaStore.Audio.Media.IS_MUSIC + "!=0" + (if (root.isNotEmpty()) " AND " + MediaStore.MediaColumns.RELATIVE_PATH + " LIKE ?" +
+                        (if (volume.isNotEmpty()) " AND " + MediaStore.MediaColumns.VOLUME_NAME + "=?" else "") else ""),
+                    if (root.isEmpty()) null else listOfNotNull("$root%", volume.ifEmpty { null }).toTypedArray(), null)?.use { c ->
                     while (c.moveToNext()) {
                         val uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, c.getLong(0)).toString()
                         out += PlayItem(uri, c.getString(1) ?: "", artist = c.getString(3) ?: "", album = c.getString(4) ?: "",
@@ -265,7 +270,7 @@ object AlarmEngine {
                     }
                 }
             } catch (_: Exception) {}
-            out.filter { it.isMusic }.shuffled().take(60)
+            out.filter { it.isMusic }.shuffled().take(80)
         }
         if (items.isEmpty()) return false
         App.instance.player.playQueue(items, 0, Origin("single", title = "Alarm: phone songs"), keepOrder = true)
@@ -381,6 +386,7 @@ object AlarmEngine {
     }
 
     private fun finishAll() {
+        if (_ui.value.alarmId == TEST_ID || Alarms.active == TEST_ID) try { Alarms.delete(TEST_ID) } catch (_: Exception) {}
         stopWatch()
         stopEffects()
         ringJob?.cancel(); ringJob = null
@@ -612,4 +618,11 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() { running = false; super.onDestroy() }
+}
+
+/** Test alarm: rings in 1 minute with the settings of the first alarm (or the alarm sound), also after Exit. */
+fun testAlarm(ctx: Context) {
+    val base = Alarms.current.alarms.firstOrNull { it.id != AlarmEngine.TEST_ID }
+    Alarms.put((base ?: Alarm()).copy(id = AlarmEngine.TEST_ID, on = false, name = "Test alarm", days = 0, stopAfterMin = 5, maxSnoozes = 0))
+    AlarmScheduler.snooze(ctx.applicationContext, AlarmEngine.TEST_ID, 1)
 }
