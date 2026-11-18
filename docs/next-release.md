@@ -25,3 +25,17 @@
 - Music or radio already playing when an alarm rings: the music stops completely and only the phone's alarm
   sound plays (the alarm tone chosen), not the alarm's music. Replaces "Music already playing: fades into the alarm".
 - Setting: maximum level of an alarm (volume cap no alarm ever goes above: target, wake-check restart, alarm tone).
+
+## Bluetooth SBC at maximum quality (asked 2026-11-19): ideas for the next iteration
+- An app can't change the Bluetooth codec or the SBC bitpool: that is a system-only call (privileged).
+  Android's stock SBC tops out at bitpool 53 (~328 kbps, "high quality" joint stereo); SBC XQ / dual channel
+  exists only on some phone ROMs.
+- What the app can do:
+  - Read the active codec (Android 13+, BluetoothA2dp codec status): show "SBC · 44.1 kHz · 16-bit" in the
+    sound-output sheet, and warn when the link has fallen back to a lower quality.
+  - Shortcut to Developer options → Bluetooth audio codec / sample rate / bits / LDAC quality ("Best effort" →
+    "Optimised for audio quality").
+  - Send audio at the rate the Bluetooth link uses (44.1 or 48 kHz), so the phone doesn't resample a second
+    time; keep the peak limiter so SBC never gets clipped input.
+  - Optional "Bluetooth quality" mode: no other app sounds mixed in, no volume steps below 100 % in the app's
+    digital chain (SBC loses detail at low digital levels — use the device volume instead).
