@@ -78,8 +78,11 @@ data class AlarmGlobal(
     val lockActions: Boolean = true,
     /** Volume buttons while ringing: "snooze", "nothing", "volume". */
     val volumeKeys: String = "snooze",
-    /** Music already playing: fades out into the alarm. */
-    val fadeIntoAlarm: Boolean = true,
+    /** No alarm goes above this volume (%). */
+    val maxLevel: Int = 100,
+    /** Alarm tone: "" = the phone's alarm sound, else a ringtone address picked by hand. */
+    val toneUri: String = "",
+    val toneName: String = "",
     /** During a call: waits for the end of the call. */
     val callWait: Boolean = true,
     /** Missed alarm (phone off / restarted): "ring30" = rings if less than 30 min late, "notify" = notification only. */
@@ -88,12 +91,21 @@ data class AlarmGlobal(
     val lowBattery: String = "normal",
     /** Next alarm shown in a notification. */
     val nextInNotif: Boolean = true,
+    /** City chosen by hand: the clock's time zone, the alarms' times and the weather follow it ("" = the phone's). */
+    val cityName: String = "",
+    val cityShort: String = "",
+    val cityLat: Double = 0.0,
+    val cityLon: Double = 0.0,
+    val cityTz: String = "",
+    val showWeather: Boolean = true,
 ) {
     fun toJson(): JSONObject = JSONObject().put("vibrate", vibrate).put("led", led).put("crescendo", crescendo)
         .put("snooze1", snooze1).put("snooze2", snooze2).put("snooze3", snooze3).put("pattern", pattern)
         .put("wakeCheckMin", wakeCheckMin).put("useLocation", useLocation).put("lockActions", lockActions)
-        .put("volumeKeys", volumeKeys).put("fadeIntoAlarm", fadeIntoAlarm).put("callWait", callWait)
+        .put("volumeKeys", volumeKeys).put("maxLevel", maxLevel).put("toneUri", toneUri).put("toneName", toneName).put("callWait", callWait)
         .put("missed", missed).put("lowBattery", lowBattery).put("nextInNotif", nextInNotif)
+        .put("cityName", cityName).put("cityShort", cityShort).put("cityLat", cityLat).put("cityLon", cityLon).put("cityTz", cityTz)
+        .put("showWeather", showWeather)
 
     val snoozes: List<Int> get() = listOf(snooze1, snooze2, snooze3)
 
@@ -101,8 +113,10 @@ data class AlarmGlobal(
         fun fromJson(o: JSONObject?) = if (o == null) AlarmGlobal() else AlarmGlobal(o.optBoolean("vibrate", true), o.optString("led", "off"),
             o.optString("crescendo", "linear"), o.optInt("snooze1", 5), o.optInt("snooze2", 10), o.optInt("snooze3", 15),
             o.optBoolean("pattern", true), o.optInt("wakeCheckMin", 10), o.optBoolean("useLocation"), o.optBoolean("lockActions", true),
-            o.optString("volumeKeys", "snooze"), o.optBoolean("fadeIntoAlarm", true), o.optBoolean("callWait", true),
-            o.optString("missed", "ring30"), o.optString("lowBattery", "normal"), o.optBoolean("nextInNotif", true))
+            o.optString("volumeKeys", "snooze"), o.optInt("maxLevel", 100), o.optString("toneUri"), o.optString("toneName"), o.optBoolean("callWait", true),
+            o.optString("missed", "ring30"), o.optString("lowBattery", "normal"), o.optBoolean("nextInNotif", true),
+            o.optString("cityName"), o.optString("cityShort"), o.optDouble("cityLat", 0.0), o.optDouble("cityLon", 0.0), o.optString("cityTz"),
+            o.optBoolean("showWeather", true))
     }
 }
 
@@ -151,12 +165,32 @@ data class ClockAspect(
     }
 }
 
+/** Full-screen visualisation (Settings → Visualisation). */
+data class VisSettings(
+    /** "sunset", "ocean", "forest", "neon", "fire", "aurora", "custom". */
+    val palette: String = "sunset",
+    val hue1: Float = 20f,
+    val hue2: Float = 200f,
+    val hue3: Float = 300f,
+    /** Colour brightness 0.2…1. */
+    val brightness: Float = 0.85f,
+) {
+    fun toJson(): JSONObject = JSONObject().put("palette", palette).put("hue1", hue1.toDouble()).put("hue2", hue2.toDouble())
+        .put("hue3", hue3.toDouble()).put("brightness", brightness.toDouble())
+    companion object {
+        fun fromJson(o: JSONObject?) = if (o == null) VisSettings() else VisSettings(o.optString("palette", "sunset"),
+            o.optDouble("hue1", 20.0).toFloat(), o.optDouble("hue2", 200.0).toFloat(), o.optDouble("hue3", 300.0).toFloat(),
+            o.optDouble("brightness", 0.85).toFloat())
+    }
+}
+
 data class AlarmData(
     val alarms: List<Alarm> = emptyList(),
     val global: AlarmGlobal = AlarmGlobal(),
     val aspect: ClockAspect = ClockAspect(),
     /** The clock replaces the picture in the audio player (kept until the clock button is pressed again). */
     val showClock: Boolean = false,
+    val vis: VisSettings = VisSettings(),
 )
 
 /** Alarms and their settings, kept in their own file (not in the app's main settings). */
@@ -175,7 +209,8 @@ object Alarms {
             _state.value = AlarmData((0 until a.length()).map { Alarm.fromJson(a.getJSONObject(it)) },
                 AlarmGlobal.fromJson(p.getString("global", null)?.let { JSONObject(it) }),
                 ClockAspect.fromJson(p.getString("aspect", null)?.let { JSONObject(it) }),
-                p.getBoolean("showClock", false))
+                p.getBoolean("showClock", false),
+                VisSettings.fromJson(p.getString("vis", null)?.let { JSONObject(it) }))
         } catch (_: Exception) {}
     }
 
@@ -183,7 +218,7 @@ object Alarms {
         _state.value = d
         prefs.edit().putString("alarms", JSONArray().apply { d.alarms.forEach { put(it.toJson()) } }.toString())
             .putString("global", d.global.toJson().toString()).putString("aspect", d.aspect.toJson().toString())
-            .putBoolean("showClock", d.showClock).apply()
+            .putBoolean("showClock", d.showClock).putString("vis", d.vis.toJson().toString()).apply()
     }
 
     fun get(id: String): Alarm? = current.alarms.firstOrNull { it.id == id }
@@ -198,6 +233,11 @@ object Alarms {
     fun setGlobal(g: AlarmGlobal) { save(current.copy(global = g)); AlarmScheduler.reschedule(ctx) }
     fun setAspect(a: ClockAspect) = save(current.copy(aspect = a))
     fun toggleClock() = save(current.copy(showClock = !current.showClock))
+    fun setVis(v: VisSettings) = save(current.copy(vis = v))
+
+    /** Time zone of the city chosen by hand, else the phone's. */
+    fun zone(): java.util.TimeZone = current.global.cityTz.takeIf { it.isNotEmpty() }?.let { java.util.TimeZone.getTimeZone(it) }
+        ?: java.util.TimeZone.getDefault()
 
     // Bookkeeping per alarm: when it is planned, when it last rang (missed-alarm check).
     fun planned(id: String): Long = prefs.getLong("planned_$id", 0)

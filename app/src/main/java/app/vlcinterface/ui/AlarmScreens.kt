@@ -56,6 +56,7 @@ import app.vlcinterface.alarm.AlarmGlobal
 import app.vlcinterface.alarm.AlarmScheduler
 import app.vlcinterface.alarm.Alarms
 import app.vlcinterface.alarm.ClockAspect
+import kotlinx.coroutines.launch
 
 // ---------------------------------------------------------------- player: button and clock area
 
@@ -178,6 +179,8 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
             CardBox {
                 SliderRow("Start", a.volStart.toFloat(), 0f..100f, "${a.volStart} %") { a = a.copy(volStart = it.toInt()) }
                 SliderRow("Target", a.volTarget.toFloat(), 0f..100f, "${a.volTarget} %") { a = a.copy(volTarget = it.toInt()) }
+                val maxL = Alarms.current.global.maxLevel
+                if (a.volTarget > maxL || a.volStart > maxL) Text("Capped at $maxL % (maximum level in the alarm clock settings)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp))
                 Label("Fade-in time")
                 Choices(listOf(0, 30, 60, 120, 300, 600).map { minText(it) to it }, a.fadeSec) { a = a.copy(fadeSec = it) }
             }
@@ -220,14 +223,43 @@ fun AlarmSettingsScreen(nav: Navigator) {
     val locAsk = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
         if (r.values.any { it }) set(Alarms.current.global.copy(useLocation = true))
     }
+    var cityAsk by remember { mutableStateOf(false) }
+    val toneAsk = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        @Suppress("DEPRECATION") val uri: Uri? = r.data?.getParcelableExtra(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+        if (r.resultCode == android.app.Activity.RESULT_OK) {
+            val name = uri?.let { try { android.media.RingtoneManager.getRingtone(ctx, it)?.getTitle(ctx) } catch (_: Exception) { null } } ?: ""
+            val isDefault = uri == null || uri == android.provider.Settings.System.DEFAULT_ALARM_ALERT_URI
+            set(Alarms.current.global.copy(toneUri = if (isDefault) "" else uri.toString(), toneName = if (isDefault) "" else name))
+        }
+    }
+    if (cityAsk) CityDialog { cityAsk = false }
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
         BackHeader("Alarm clock", nav)
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SectionTitle("Display")
             CardBox { ValueRow("Clock aspect", "Designs, colours, thickness, size, date, digital", "›") { nav.go(Screen.ClockAspect) } }
+            SectionTitle("Location (clock and weather)")
+            CardBox {
+                ValueRow("City", if (g.cityName.isEmpty()) "Not chosen: the phone's time zone" else "Clock time, alarms and weather follow it, also when the phone's time zone isn't automatic",
+                    if (g.cityName.isEmpty()) "Choose" else g.cityName) { cityAsk = true }
+                Divider()
+                ToggleRow("Weather on the clock", "Sunny, cloudy, rainy or storm, with the city's short name and time zone", g.showWeather) {
+                    set(g.copy(showWeather = it)); if (it) app.vlcinterface.alarm.Weather.refresh(force = true) }
+            }
             SectionTitle("Ringing")
             CardBox {
+                SliderRow("Maximum level", g.maxLevel.toFloat(), 10f..100f, "${g.maxLevel} %") { set(g.copy(maxLevel = it.toInt())) }
+                Text("No alarm goes above it", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
+                Divider()
+                ValueRow("Alarm tone", "When nothing else can play, or music was already playing", g.toneName.ifEmpty { "Phone's alarm" }) {
+                    toneAsk.launch(Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER)
+                        .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_ALARM)
+                        .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                        .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, false)
+                        .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, g.toneUri.takeIf { it.isNotEmpty() }?.let { Uri.parse(it) }))
+                }
+                Divider()
                 ToggleRow("Vibrate", "", g.vibrate) { set(g.copy(vibrate = it)) }; Divider()
                 Label("Light blinking")
                 Choices(listOf("Off" to "off", "Notification light" to "notif", "Flash light" to "flash"), g.led) { set(g.copy(led = it)) }
@@ -260,7 +292,8 @@ fun AlarmSettingsScreen(nav: Navigator) {
             }
             SectionTitle("Situations")
             CardBox {
-                ToggleRow("Music already playing", "Fades out into the alarm", g.fadeIntoAlarm) { set(g.copy(fadeIntoAlarm = it)) }; Divider()
+                Label("Music already playing", "Stops completely: only the alarm tone rings")
+                Divider()
                 ToggleRow("During a call", "Waits for the end of the call", g.callWait) { set(g.copy(callWait = it)) }; Divider()
                 Label("Missed alarm", "Phone off or restarting at the alarm time")
                 Choices(listOf("Ring if under 30 min late" to "ring30", "Notification only" to "notify"), g.missed) { set(g.copy(missed = it)) }
@@ -352,4 +385,46 @@ fun ClockAspectScreen(nav: Navigator) {
             Box(Modifier.height(24.dp))
         }
     }
+}
+
+
+/** City chosen by hand: search by name (Open-Meteo), or back to the phone's time zone. */
+@Composable
+private fun CityDialog(onDone: () -> Unit) {
+    var q by remember { mutableStateOf("") }
+    var res by remember { mutableStateOf<List<app.vlcinterface.alarm.Weather.City>>(emptyList()) }
+    var busy by remember { mutableStateOf(false) }
+    var note by remember { mutableStateOf("") }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    fun search() { if (q.isBlank()) return; busy = true; note = ""; scope.launch {
+        res = app.vlcinterface.alarm.Weather.search(q); busy = false; if (res.isEmpty()) note = "Nothing found (or no internet)" } }
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("City", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(q, { q = it }, singleLine = true, label = { Text("Name") }, modifier = Modifier.weight(1f),
+                        keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { search() }),
+                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search))
+                    STextButton({ search() }, enabled = !busy) { Text(if (busy) "…" else "Search", color = accent()) }
+                }
+                if (note.isNotEmpty()) Text(note, color = C.muted, fontSize = 12.sp)
+                Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
+                    res.forEach { c ->
+                        Column(Modifier.fillMaxWidth().clickable {
+                            Alarms.setGlobal(Alarms.current.global.copy(cityName = c.name, cityShort = c.short, cityLat = c.lat, cityLon = c.lon, cityTz = c.tz))
+                            app.vlcinterface.alarm.Weather.refresh(force = true)
+                            onDone()
+                        }.padding(vertical = 8.dp)) {
+                            Text(c.name + "  ·  " + c.short, color = C.text, fontSize = 15.sp)
+                            Text(listOf(c.detail, c.tz).filter { it.isNotEmpty() }.joinToString(" · "), color = C.muted, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton(onDone) { Text("Close") } },
+        dismissButton = { STextButton({
+            Alarms.setGlobal(Alarms.current.global.copy(cityName = "", cityShort = "", cityLat = 0.0, cityLon = 0.0, cityTz = "")); onDone() }) {
+            Text("Phone's time zone") } })
 }

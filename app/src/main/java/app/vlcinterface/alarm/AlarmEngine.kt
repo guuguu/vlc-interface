@@ -111,13 +111,13 @@ object AlarmEngine {
         log("ring ${a.timeText} ${a.name}" + if (snoozed) " (snooze)" else if (restart) " (wake check: rings again)" else "")
         try {
             app.startForegroundService(Intent(app, AlarmService::class.java).setAction(AlarmService.RING)
-                .putExtra("id", id).putExtra("restart", restart))
+                .putExtra("id", id).putExtra("restart", restart).putExtra("snoozed", snoozed && !restart))
         } catch (e: Exception) { log("service: ${e.message}") }
         if (!snoozed && !restart) { if (a.days == 0) Alarms.put(a.copy(on = false)) else AlarmScheduler.reschedule(app) }
     }
 
     /** Inside the service (foreground already). */
-    fun ring(ctx: Context, id: String, restart: Boolean) {
+    fun ring(ctx: Context, id: String, restart: Boolean, snoozed: Boolean = false) {
         app = ctx.applicationContext
         val a = Alarms.get(id) ?: run { finishAll(); return }
         stopWatch()
@@ -130,10 +130,10 @@ object AlarmEngine {
         showScreen()
         AlarmScheduler.guard(app, true)
         ringJob?.cancel()
-        ringJob = scope.launch { ringBody(a, restart) }
+        ringJob = scope.launch { ringBody(a, restart, snoozed) }
     }
 
-    private suspend fun ringBody(a: Alarm, restart: Boolean) {
+    private suspend fun ringBody(a: Alarm, restart: Boolean, snoozed: Boolean) {
         val g = Alarms.current.global
         val am = app.getSystemService(AudioManager::class.java)
         if (g.callWait) {
@@ -146,16 +146,15 @@ object AlarmEngine {
         startEffects(g)
         val player = App.instance.player
         val low = battery() in 0..15 && g.lowBattery == "tone"
-        val keepPlaying = a.source == "queue" && player.state.value.isPlaying && player.state.value.item?.isMusic == true
-        if (player.state.value.isPlaying && !keepPlaying && g.fadeIntoAlarm && !restart) {
-            val v0 = router.volumePercent()
-            for (i in 1..16) { router.setVolumePercent(v0 * (16 - i) / 16); delay(250) }
-        }
+        // Music or radio already playing: stopped completely, only the phone's alarm tone rings.
+        val wasPlaying = player.state.value.isPlaying && !restart && !snoozed
+        if (wasPlaying) { try { player.pause() } catch (_: Exception) {}; log("music was playing: stopped, alarm tone only") }
         selectOutput(a)
+        var step = if (low || a.source == "tone" || wasPlaying) 2 else 0
+        if (step == 2) tonePending = true
         var vol = if (restart) a.volTarget else a.volStart
         setVol(am, vol)
-        var step = if (low || a.source == "tone") 2 else 0
-        if (step == 2) startTone() else if (!keepPlaying) startSource(a)
+        if (step == 2) startTone() else startSource(a, snoozed)
         val t0 = System.currentTimeMillis()
         var quietSince = 0L
         while (scope.isActive && _ui.value.phase == "ringing") {
@@ -175,7 +174,7 @@ object AlarmEngine {
                         step = if (step == 0 && a.localFallback && a.source != "tone") 1 else 2
                         log(if (step == 1) "nothing plays: phone songs" else "nothing plays: alarm tone")
                         if (step == 1 && !playLocal()) step = 2
-                        if (step == 2) { try { player.pause() } catch (_: Exception) {}; startTone() }
+                        if (step == 2) { try { player.pause() } catch (_: Exception) {}; tonePending = true; setVol(am, vol); startTone() }
                     }
                 } else quietSince = 0L
             }
@@ -190,9 +189,10 @@ object AlarmEngine {
 
     private fun streamPct(am: AudioManager, s: Int): Int { val m = am.getStreamMaxVolume(s); return if (m == 0) 0 else am.getStreamVolume(s) * 100 / m }
 
-    private fun setVol(am: AudioManager, pct: Int) {
+    private fun setVol(am: AudioManager, pct0: Int) {
+        val pct = pct0.coerceAtMost(Alarms.current.global.maxLevel.coerceIn(1, 100))
         try {
-            if (tone != null) { val m = am.getStreamMaxVolume(AudioManager.STREAM_ALARM); am.setStreamVolume(AudioManager.STREAM_ALARM, Math.round(pct * m / 100f).coerceAtLeast(1), 0) }
+            if (tone != null || tonePending) { val m = am.getStreamMaxVolume(AudioManager.STREAM_ALARM); am.setStreamVolume(AudioManager.STREAM_ALARM, Math.round(pct * m / 100f).coerceAtLeast(1), 0) }
             else App.instance.output.setVolumePercent(pct)
         } catch (_: Exception) {}
     }
@@ -207,7 +207,9 @@ object AlarmEngine {
         } catch (_: Exception) {}
     }
 
-    private suspend fun startSource(a: Alarm) {
+    @Volatile private var tonePending = false
+
+    private suspend fun startSource(a: Alarm, snoozed: Boolean) {
         val player = App.instance.player
         val store = App.instance.store
         when (a.source) {
@@ -215,15 +217,36 @@ object AlarmEngine {
                 val pl = store.current.playlists.firstOrNull { it.id == a.playlistId }
                 if (pl != null && pl.items.isNotEmpty()) {
                     player.playQueue(pl.items.map { MusicLibrary.fromPlEntry(it) }, 0, Origin("playlist", playlistId = pl.id, title = pl.name))
+                    if (snoozed) otherPart()
                     return
                 }
             }
-            "radio" -> if (a.stationUrl.isNotEmpty()) { player.playStation(a.stationName.ifEmpty { "Radio" }, a.stationUrl); return }
+            "radio" -> if (a.stationUrl.isNotEmpty()) {
+                player.alarmLive = true   // live: no network buffer
+                player.playStation(a.stationName.ifEmpty { "Radio" }, a.stationUrl); return
+            }
         }
         // The last audio queue, where it was.
         val s = player.state.value
         if (s.item?.isMusic != true) { QueueKeeper.restore(player, "audio", force = true); delay(1200) }
         player.resume()
+        if (snoozed) otherPart()
+    }
+
+    /** After a snooze: a different song, from a different part of it. */
+    private suspend fun otherPart() {
+        val player = App.instance.player
+        var waited = 0
+        while (!player.state.value.isPlaying && waited < 10_000) { delay(250); waited += 250 }
+        val s = player.state.value
+        if (s.queue.size > 1) {
+            val i = (s.queue.indices - s.index).filter { s.queue[it].isMusic }.randomOrNull() ?: return
+            player.jumpTo(i)
+            waited = 0
+            delay(800)
+            while ((!player.state.value.isPlaying || player.state.value.length <= 0) && waited < 10_000) { delay(250); waited += 250 }
+        }
+        if (player.state.value.length > 30_000) player.seekFraction((15..70).random() / 100f)
     }
 
     /** Phone songs (no network), in random order. */
@@ -251,7 +274,8 @@ object AlarmEngine {
 
     private fun startTone() {
         if (tone != null) return
-        val uri = RingtoneManager.getActualDefaultRingtoneUri(app, RingtoneManager.TYPE_ALARM)
+        val uri = Alarms.current.global.toneUri.takeIf { it.isNotEmpty() }?.let { android.net.Uri.parse(it) }
+            ?: RingtoneManager.getActualDefaultRingtoneUri(app, RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM) ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
         try {
             tone = MediaPlayer().apply {
@@ -292,6 +316,8 @@ object AlarmEngine {
 
     private fun stopSound() {
         ringJob?.cancel(); ringJob = null
+        tonePending = false
+        try { App.instance.player.alarmLive = false } catch (_: Exception) {}
         stopEffects()
         try { App.instance.player.pause() } catch (_: Exception) {}
         restoreVolume()
@@ -578,7 +604,7 @@ class AlarmService : Service() {
         try { startForeground(AlarmEngine.NOTIF_ID, AlarmEngine.notification(this), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK) }
         catch (_: Exception) {}
         when (intent?.action) {
-            RING -> AlarmEngine.ring(this, intent.getStringExtra("id") ?: "", intent.getBooleanExtra("restart", false))
+            RING -> AlarmEngine.ring(this, intent.getStringExtra("id") ?: "", intent.getBooleanExtra("restart", false), intent.getBooleanExtra("snoozed", false))
             UPDATE -> {}
             null -> AlarmEngine.guardCheck(this)   // restarted by Android after being killed
         }

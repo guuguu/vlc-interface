@@ -235,7 +235,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Clock button on the left in its own column, an equal empty column on the right: the player buttons stay
             // centred, and they get only the width in between (shrunk if needed), so nothing overlaps on any screen.
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.width(32.dp), contentAlignment = Alignment.CenterStart) { ClockToggleButton(30) }
+            Column(Modifier.width(32.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { ClockToggleButton(30); VisButton(nav, 30) }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             AutoFitRow(spacing = 12.dp) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {

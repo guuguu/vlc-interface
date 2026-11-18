@@ -853,6 +853,8 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     // ---------- audio focus + "headphones unplugged" ----------
 
+    /** An alarm plays the radio: no network buffer. */
+    @Volatile var alarmLive = false
     private var resumeOnGain = false
     @Volatile private var ducked = false
     private val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
@@ -1587,7 +1589,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         // Bigger read-ahead so a busy phone or network never runs the decoder dry (smooth playback):
         // songs keep 3 s from the network / 1.5 s from the phone; videos 2.5 s / 1 s (seeking stays quick).
         when {
-            item.isRadio -> media.addOption(":network-caching=3000")
+            // Radio as an alarm: live, no network buffer.
+            item.isRadio -> media.addOption(if (alarmLive) ":network-caching=0" else ":network-caching=3000")
             item.isMusic -> { media.addOption(":network-caching=3000"); media.addOption(":file-caching=1500") }
             else -> { media.addOption(":network-caching=2500"); media.addOption(":file-caching=1000") }
         }

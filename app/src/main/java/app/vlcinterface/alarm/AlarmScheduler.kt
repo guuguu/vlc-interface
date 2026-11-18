@@ -33,7 +33,7 @@ object AlarmScheduler {
     const val CH_NEXT = "alarm_next_quiet"
 
     fun nextTime(a: Alarm, from: Long = System.currentTimeMillis()): Long {
-        val c = Calendar.getInstance().apply { timeInMillis = from; set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        val c = Calendar.getInstance(Alarms.zone()).apply { timeInMillis = from; set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
             set(Calendar.HOUR_OF_DAY, a.hour); set(Calendar.MINUTE, a.minute) }
         if (c.timeInMillis <= from) c.add(Calendar.DAY_OF_YEAR, 1)
         if (a.days != 0) {
@@ -114,7 +114,7 @@ object AlarmScheduler {
     fun next(): Pair<Alarm, Long>? = Alarms.current.alarms.filter { it.on }.map { it to Alarms.planned(it.id).let { p ->
         if (p > System.currentTimeMillis()) p else nextTime(it) } }.minByOrNull { it.second }
 
-    fun whenText(t: Long): String = SimpleDateFormat("EEE HH:mm", Locale.getDefault()).format(Date(t))
+    fun whenText(t: Long): String = SimpleDateFormat("EEE HH:mm", Locale.getDefault()).apply { timeZone = Alarms.zone() }.format(Date(t))
 
     private fun channel(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)

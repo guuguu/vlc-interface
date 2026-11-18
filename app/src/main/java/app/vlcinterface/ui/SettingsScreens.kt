@@ -97,6 +97,8 @@ fun SettingsScreen(nav: Navigator) {
             SoundSettings(s, ::set)
             SectionTitle("Alarm clock")
             CardBox { ValueRow("Alarm clock", "Ringing, snooze, wake check, clock aspect", "›") { nav.go(Screen.AlarmSettings) } }
+            SectionTitle("Visualisation")
+            VisualisationSettings()
             // Radio songs saved from the player (station menu → Save this song).
             SectionTitle("Saved songs")
             CardBox {

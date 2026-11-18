@@ -46,6 +46,10 @@ import app.vlcinterface.alarm.ClockAspect
 import kotlinx.coroutines.delay
 import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.unit.TextUnit
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -82,11 +86,18 @@ fun ClockFace(a: ClockAspect, modifier: Modifier, now: Long = 0L) {
     if (now == 0L) LaunchedEffect(Unit) { while (true) { t = System.currentTimeMillis(); delay(1000 - t % 1000 + 5) } }
     val tm = rememberTextMeasurer()
     val aspect by rememberUpdatedState(a)
-    Canvas(modifier) { drawClock(aspect, if (now != 0L) now else t, tm) }
+    val g = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global
+    val w by app.vlcinterface.alarm.Weather.now.collectAsState()
+    // Weather for the chosen city: checked every 10 min while the clock is shown (refreshed at most every 30 min).
+    LaunchedEffect(g.cityLat, g.cityLon, g.showWeather) { while (true) { app.vlcinterface.alarm.Weather.refresh(); delay(10 * 60_000L) } }
+    val zone = app.vlcinterface.alarm.Alarms.zone()
+    val wx = if (g.cityName.isEmpty() || !g.showWeather) null
+        else WxInfo(if (w.key == "${g.cityLat},${g.cityLon}") w.stage else -1, g.cityShort, tzLabel(zone, if (now != 0L) now else t))
+    Canvas(modifier) { drawClock(aspect, if (now != 0L) now else t, tm, zone, wx) }
 }
 
-private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer) {
-    val cal = Calendar.getInstance().apply { timeInMillis = ms }
+private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer, zone: TimeZone, wx: WxInfo?) {
+    val cal = Calendar.getInstance(zone).apply { timeInMillis = ms }
     val h = cal.get(Calendar.HOUR_OF_DAY); val m = cal.get(Calendar.MINUTE); val s = cal.get(Calendar.SECOND)
     val dow = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
     val dayNo = cal.get(Calendar.DAY_OF_MONTH)
@@ -125,6 +136,10 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer) {
         drawText(la, topLeft = Offset(c.x - w / 2f, y0))
         lb?.let { drawText(it, topLeft = Offset(c.x - w / 2f + la.size.width, y0 + la.size.height * 0.62f - it.size.height / 2f)) }
         if (a.digitalDate) text(DAY_LONG[dow] + " " + dayNo, Offset(c.x, y0 + la.size.height + px(5f * a.dateSize)), 6.5f * a.dateSize.coerceIn(0.5f, 2f), dateC)
+        if (wx != null) {
+            val wh = wxSize(wx, 1f, tm, u, ::spOf).second
+            drawWeather(wx, Offset(c.x, (y0 - px(wh / 2 + 4f)).coerceAtLeast(c.y - px(48f))), 1f, main, tm, u, ::spOf)
+        }
         return
     }
 
@@ -141,39 +156,19 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer) {
     val minAng = m * 6f + s / 10f
     val secAng = s * 6f
 
-    // Date: in the free part of the face, never crossed by the hour / minute hands, never over the numbers.
+    // Date (and weather): in free parts of the face, never crossed by the hour / minute hands, never over the
+    // numbers, never over each other.
     val design4 = a.design == 4
     val ds = a.dateSize.coerceIn(0.5f, 2f)
     val dateStr = when (a.design) { 1 -> DAY_LONG[dow] + " " + dayNo; 2 -> DAY_LONG[dow].take(3).uppercase(Locale.getDefault()) + " " + dayNo
         else -> DAY_LONG[dow].take(3) + " " + dayNo }
     val limit = sp.numR - sp.numSize * 0.75f          // units: inside the hour numbers
-    fun boxSize(k: Float): Pair<Float, Float> = if (design4) { val fs = 6.5f * ds * k; (fs * 2.4f) to (fs * 2.9f) }
+    fun dateBox(k: Float): Pair<Float, Float> = if (design4) { val fs = 6.5f * ds * k; (fs * 2.4f) to (fs * 2.9f) }
         else { val l = tm.measure(dateStr, TextStyle(fontSize = spOf(px(6.5f * ds * k)))); (l.size.width / u) to (l.size.height / u) }
-    data class Place(val ang: Float, val k: Float, val cx: Float, val cy: Float, val w: Float, val hh: Float, val clear: Boolean)
-    fun place(ang: Float): Place {
-        val dx = sin(ang * PI.toFloat() / 180f); val dy = -cos(ang * PI.toFloat() / 180f)
-        var k = 1f; var cx = 0f; var cy = 0f; var bw = 0f; var bh = 0f
-        for (iter in 0 until 10) {
-            val (w, hh) = boxSize(k); bw = w; bh = hh
-            val d = 7f + abs(dx) * w / 2 + abs(dy) * hh / 2
-            cx = dx * d; cy = dy * d
-            val far = max(max(hypot(cx - w / 2, cy - hh / 2), hypot(cx + w / 2, cy - hh / 2)), max(hypot(cx - w / 2, cy + hh / 2), hypot(cx + w / 2, cy + hh / 2)))
-            if (far <= limit) break
-            k *= (limit / far).coerceIn(0.6f, 0.97f)
-        }
-        val pad = 2f
-        val r = Rect(cx - bw / 2 - pad, cy - bh / 2 - pad, cx + bw / 2 + pad, cy + bh / 2 + pad)
-        fun crosses(ang2: Float, len: Float): Boolean = (1..30).any { i ->
-            val f = len * i / 30f
-            r.contains(Offset(f * sin(ang2 * PI.toFloat() / 180f), -f * cos(ang2 * PI.toFloat() / 180f))) }
-        return Place(ang, k, cx, cy, bw, bh, !crosses(hourAng, 24f) && !crosses(minAng, 36f))
-    }
-    val cands = listOf(180f, 0f, 90f, 270f, 150f, 210f, 30f, 330f, 120f, 240f, 60f, 300f).map { place(it) }
-    val best = cands.filter { it.clear }.maxByOrNull { it.k } ?: cands.maxBy { p ->
-        minOf(angDist(p.ang, hourAng), angDist(p.ang, minAng)) }
-    val bc = Offset(c.x + px(best.cx), c.y + px(best.cy))
+    val placedDate = placeBox(::dateBox, limit, hourAng, minAng, emptyList())
+    val bc = Offset(c.x + px(placedDate.cx), c.y + px(placedDate.cy))
     if (design4) {
-        val fs = 6.5f * ds * best.k
+        val fs = 6.5f * ds * placedDate.k
         val ww = fs * 2.4f; val wh = fs * 1.35f; val gap = fs * 0.2f
         listOf("$dayNo" to (bc.y - wh / 2 * u - gap / 2 * u), DAY_LONG[dow].take(3).uppercase(Locale.getDefault()) to (bc.y + wh / 2 * u + gap / 2 * u)).forEachIndexed { i, (str, cy) ->
             val tl = Offset(bc.x - px(ww) / 2, cy - px(wh) / 2)
@@ -181,8 +176,12 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer) {
             drawRoundRect(main.copy(alpha = main.alpha * 0.7f), tl, androidx.compose.ui.geometry.Size(px(ww), px(wh)), androidx.compose.ui.geometry.CornerRadius(px(1.5f)), style = Stroke(px(0.6f)))
             text(str, Offset(bc.x, cy), if (i == 0) fs else fs * 0.86f, dateC)
         }
-    } else text(dateStr, bc, 6.5f * ds * best.k, dateC)
-
+    } else text(dateStr, bc, 6.5f * ds * placedDate.k, dateC)
+    if (wx != null) {
+        fun wxBox(k: Float): Pair<Float, Float> = wxSize(wx, k, tm, u, ::spOf)
+        val pw = placeBox(::wxBox, limit, hourAng, minAng, listOf(placedDate.rect))
+        drawWeather(wx, Offset(c.x + px(pw.cx), c.y + px(pw.cy)), pw.k, main, tm, u, ::spOf)
+    }
     // Hands.
     val hw = a.handW.coerceIn(0.4f, 3f)
     drawLine(main, c, pt(hourAng, 24f), px(sp.hourW * hw), StrokeCap.Round)
@@ -224,5 +223,108 @@ fun HueSatBars(title: String, hue: Float, sat: Float, swatch: (Float, Float) -> 
         Text("Saturation", color = C.text, fontSize = 13.sp, modifier = Modifier.width(78.dp))
         GradientBar(sat, Brush.horizontalGradient(listOf(swatch(hue, 0f), swatch(hue, 1f))), Modifier.weight(1f)) { onChange(hue, it) }
         Box(Modifier.padding(start = 10.dp).size(26.dp).clip(if (round) CircleShape else RoundedCornerShape(6.dp)).background(swatch(hue, sat)).border(1.dp, C.line, if (round) CircleShape else RoundedCornerShape(6.dp)))
+    }
+}
+
+
+// ---------------------------------------------------------------- placement
+
+private class Placed(val cx: Float, val cy: Float, val k: Float, val rect: Rect)
+
+/**
+ * A box (size in clock units for a text scale k) put in the free part of the face: 12 directions tried; it must not
+ * be crossed by the hour / minute hands nor touch [avoid]; it shrinks until it fits inside [limit].
+ */
+private fun placeBox(box: (Float) -> Pair<Float, Float>, limit: Float, hourAng: Float, minAng: Float, avoid: List<Rect>): Placed {
+    data class P(val ang: Float, val p: Placed, val clear: Boolean)
+    fun place(ang: Float): P {
+        val dx = sin(ang * PI.toFloat() / 180f); val dy = -cos(ang * PI.toFloat() / 180f)
+        var k = 1f; var cx = 0f; var cy = 0f; var bw = 0f; var bh = 0f
+        for (iter in 0 until 10) {
+            val (w, hh) = box(k); bw = w; bh = hh
+            val d = 7f + abs(dx) * w / 2 + abs(dy) * hh / 2
+            cx = dx * d; cy = dy * d
+            val far = max(max(hypot(cx - w / 2, cy - hh / 2), hypot(cx + w / 2, cy - hh / 2)), max(hypot(cx - w / 2, cy + hh / 2), hypot(cx + w / 2, cy + hh / 2)))
+            if (far <= limit) break
+            k *= (limit / far).coerceIn(0.6f, 0.97f)
+        }
+        val pad = 2f
+        val r = Rect(cx - bw / 2 - pad, cy - bh / 2 - pad, cx + bw / 2 + pad, cy + bh / 2 + pad)
+        fun crosses(ang2: Float, len: Float): Boolean = (1..30).any { i ->
+            val f = len * i / 30f
+            r.contains(Offset(f * sin(ang2 * PI.toFloat() / 180f), -f * cos(ang2 * PI.toFloat() / 180f))) }
+        val free = !crosses(hourAng, 24f) && !crosses(minAng, 36f) && avoid.none { it.overlaps(r) }
+        return P(ang, Placed(cx, cy, k, r), free)
+    }
+    val cands = listOf(180f, 0f, 90f, 270f, 150f, 210f, 30f, 330f, 120f, 240f, 60f, 300f).map { place(it) }
+    return (cands.filter { it.clear }.maxByOrNull { it.p.k }
+        ?: cands.filter { c -> avoid.none { it.overlaps(c.p.rect) } }.maxByOrNull { minOf(angDist(it.ang, hourAng), angDist(it.ang, minAng)) }
+        ?: cands.maxBy { minOf(angDist(it.ang, hourAng), angDist(it.ang, minAng)) }).p
+}
+
+// ---------------------------------------------------------------- weather
+
+/** stage: -1 unknown, 0 sunny, 1 cloudy, 2 rainy, 3 storm. */
+class WxInfo(val stage: Int, val city: String, val tz: String)
+
+fun tzLabel(z: TimeZone, ms: Long): String {
+    val off = z.getOffset(ms) / 60_000
+    if (off == 0) return "UTC"
+    val sign = if (off > 0) "+" else "−"
+    val a = kotlin.math.abs(off)
+    return "UTC" + sign + (a / 60) + if (a % 60 != 0) ":%02d".format(a % 60) else ""
+}
+
+/** Width / height in clock units: icon on the left, city over the time zone on the right. */
+private fun wxSize(w: WxInfo, k: Float, tm: TextMeasurer, u: Float, spOf: (Float) -> TextUnit): Pair<Float, Float> {
+    val icon = if (w.stage >= 0) 11f * k else 0f
+    val l1 = tm.measure(w.city, TextStyle(fontSize = spOf(6f * k * u), fontWeight = FontWeight.Bold))
+    val l2 = tm.measure(w.tz, TextStyle(fontSize = spOf(4.5f * k * u)))
+    val tw = max(l1.size.width, l2.size.width) / u
+    val th = (l1.size.height + l2.size.height) / u
+    return (icon + (if (icon > 0) 2f * k else 0f) + tw) to max(icon, th)
+}
+
+private fun DrawScope.drawWeather(w: WxInfo, center: Offset, k: Float, color: Color, tm: TextMeasurer, u: Float, spOf: (Float) -> TextUnit) {
+    val (bw, _) = wxSize(w, k, tm, u, spOf)
+    val left = center.x - bw * u / 2
+    val icon = if (w.stage >= 0) 11f * k * u else 0f
+    if (icon > 0) drawWxIcon(w.stage, Offset(left + icon / 2, center.y), icon, color)
+    val l1 = tm.measure(w.city, TextStyle(color = color, fontSize = spOf(6f * k * u), fontWeight = FontWeight.Bold))
+    val l2 = tm.measure(w.tz, TextStyle(color = color.copy(alpha = color.alpha * 0.75f), fontSize = spOf(4.5f * k * u)))
+    val tx = left + icon + (if (icon > 0) 2f * k * u else 0f)
+    val top = center.y - (l1.size.height + l2.size.height) / 2f
+    drawText(l1, topLeft = Offset(tx, top))
+    drawText(l2, topLeft = Offset(tx, top + l1.size.height))
+}
+
+/** The 4 weather icons: sunny, cloudy, rainy, storm. */
+private fun DrawScope.drawWxIcon(stage: Int, c: Offset, s: Float, color: Color) {
+    val r = s / 2
+    if (stage == 0) {
+        val sun = Color(0xFFFFC83D).copy(alpha = color.alpha)
+        drawCircle(sun, r * 0.45f, c)
+        for (i in 0 until 8) {
+            val a = i * PI.toFloat() / 4
+            drawLine(sun, Offset(c.x + cos(a) * r * 0.62f, c.y + sin(a) * r * 0.62f), Offset(c.x + cos(a) * r * 0.95f, c.y + sin(a) * r * 0.95f), r * 0.12f, StrokeCap.Round)
+        }
+        return
+    }
+    val cloud = Color(0xFFD8DCE3).copy(alpha = color.alpha)
+    val cy = if (stage == 1) c.y + r * 0.1f else c.y - r * 0.2f
+    drawCircle(cloud, r * 0.32f, Offset(c.x - r * 0.38f, cy + r * 0.08f))
+    drawCircle(cloud, r * 0.42f, Offset(c.x + r * 0.02f, cy - r * 0.12f))
+    drawCircle(cloud, r * 0.3f, Offset(c.x + r * 0.45f, cy + r * 0.1f))
+    drawRoundRect(cloud, Offset(c.x - r * 0.7f, cy + r * 0.05f), androidx.compose.ui.geometry.Size(r * 1.45f, r * 0.35f), androidx.compose.ui.geometry.CornerRadius(r * 0.17f))
+    if (stage == 2) {
+        val rain = Color(0xFF5AB0FF).copy(alpha = color.alpha)
+        for (i in -1..1) drawLine(rain, Offset(c.x + i * r * 0.4f, cy + r * 0.55f), Offset(c.x + i * r * 0.4f - r * 0.12f, cy + r * 0.9f), r * 0.11f, StrokeCap.Round)
+    }
+    if (stage == 3) {
+        val bolt = Path().apply {
+            moveTo(c.x + r * 0.08f, cy + r * 0.35f); lineTo(c.x - r * 0.22f, cy + r * 0.72f); lineTo(c.x + r * 0.02f, cy + r * 0.72f)
+            lineTo(c.x - r * 0.12f, cy + r * 1.0f); lineTo(c.x + r * 0.3f, cy + r * 0.58f); lineTo(c.x + r * 0.06f, cy + r * 0.58f); close()
+        }
+        drawPath(bolt, Color(0xFFFFD60A).copy(alpha = color.alpha))
     }
 }

@@ -79,7 +79,7 @@ private fun AlarmScreen(close: () -> Unit) {
     LaunchedEffect(u.phase) { if (u.phase == "idle") { delay(400); close() } }
     var pattern by remember(u.phase) { mutableStateOf(false) }
     val g = Alarms.current.global
-    fun hm(t: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(t))
+    fun hm(t: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).apply { timeZone = Alarms.zone() }.format(Date(t))
     Box(Modifier.fillMaxSize().background(Color.Black).padding(24.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Text(hm(now), color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Light)

@@ -60,6 +60,7 @@ class App : Application() {
         app.vlcinterface.player.QueueKeeper.init(this)          // queue and song kept over a restart
         app.vlcinterface.player.QueueKeeper.restore(player)
         app.vlcinterface.alarm.Alarms.init(this)               // alarm clock: set again, missed ones handled
+        app.vlcinterface.alarm.Weather.init(this)
         app.vlcinterface.alarm.AlarmScheduler.reschedule(this, checkMissed = true)
         if (app.vlcinterface.alarm.Alarms.active.isNotEmpty()) app.vlcinterface.alarm.AlarmEngine.guardCheck(this)
         app.vlcinterface.sources.VpnLink.init(this)          // home NAS over a VPN (ZeroTier …)   // radio: keeps the playing station ready to save songs
