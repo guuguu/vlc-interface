@@ -504,3 +504,16 @@ fun SubnetQuestionHost() {
         confirmButton = { STextButton({ v.searchSubnet(typed) }, enabled = ok) { Text("Search", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) } },
         dismissButton = { STextButton({ v.askSubnet.value = emptyList() }) { Text("Cancel") } })
 }
+
+
+/** Radio started on mobile data: a note at the beginning of the play session (closes after 3 s unless touched). */
+@Composable
+fun RadioMobileNoticeHost() {
+    val g = app.vlcinterface.player.NetGuard
+    val note by g.radioMobileNotice.collectAsState()
+    if (note.isEmpty()) return
+    AutoInfoDialog(onDismissRequest = { g.radioMobileNotice.value = "" }, containerColor = C.panel,
+        title = { Text("On mobile data", color = C.text) },
+        text = { Text(note, color = C.text, fontSize = 14.sp) },
+        confirmButton = { STextButton({ g.radioMobileNotice.value = "" }) { Text("OK", color = accent()) } })
+}

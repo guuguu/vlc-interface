@@ -170,6 +170,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 NewVpnServerHost()
                 NasScanNoteHost()
                 SubnetQuestionHost()
+                RadioMobileNoticeHost()
                 SaveEndQuestionHost()
                 ExitSavingHost()
                 VpnQuestionsHost()

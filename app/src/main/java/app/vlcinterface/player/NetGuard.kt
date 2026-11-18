@@ -213,6 +213,8 @@ object NetGuard {
                     // Playing session over (an hour without playing): the network transfer report, once.
                     if (now - lastUsed >= IDLE_MS && !reported) { reported = true; app.vlcinterface.sources.ParallelFetch.report() }
                     if (now - lastUsed < IDLE_MS) reported = false
+                    if (now - lastUsed >= IDLE_MS) radioNoticed = false          // a new play session: told again
+                    if (!cellular.value) radioNoticed = false                  // back on Wi-Fi: told again next time on mobile
                     if (mobileOk && now - lastUsed >= IDLE_MS) {
                         mobileOk = false; app.vlcinterface.sources.VpnLink.useNas.value = emptySet()
                         app.vlcinterface.data.ServerLog.log("network", "idle", "", "", true, "Player unused for an hour: mobile data has to be allowed again")
@@ -240,6 +242,20 @@ object NetGuard {
         val key = item.uri
         if (key != startKey || startBytes < 0) { if (startBytes >= 0) radioTotal += now - startBytes; startKey = key; startBytes = now }
         return now - startBytes
+    }
+
+    /** Radio started on mobile data: told once at the beginning of the play session (3 s note). */
+    val radioMobileNotice = MutableStateFlow("")
+    @Volatile private var radioNoticed = false
+
+    /** A station starts: on mobile data, the first one of the play session is announced (with the data it uses). */
+    fun radioStarted(item: PlayItem) {
+        if (!cellular.value || radioNoticed) return
+        radioNoticed = true
+        val st = App.instance.store.current.stations.firstOrNull { it.url == item.uri }
+        val kbps = st?.let { bitrateOf(it.meta) } ?: 0
+        val perHour = if (kbps > 0) " — about ${kbps * 3600L / 8 / 1024} MB per hour at $kbps kbps" else ""
+        radioMobileNotice.value = "Radio is playing over mobile data$perHour. The data used is shown under the station."
     }
 
     /** Radio over mobile data since the app started (all stations, the playing one included). */
