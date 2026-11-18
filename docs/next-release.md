@@ -20,6 +20,7 @@
 - Colour combinations set in a new Settings section named "Visualisation".
 - Visualisation brightness setting (same section).
 - Visualisation screen keeps the display on; double tap anywhere on the screen exits.
+- On the visualisation screen, sliding a finger in any direction changes the screen brightness (up / right brighter, down / left dimmer).
 - The visualisation screen keeps the display on; a double tap on the screen exits it.
 - Music or radio already playing when an alarm rings: the music stops completely and only the phone's alarm
   sound plays (the alarm tone chosen), not the alarm's music. Replaces "Music already playing: fades into the alarm".
