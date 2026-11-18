@@ -9,3 +9,7 @@
 - Weather: find a weather report feed and connect to it for the chosen city.
 - The weather icon + city and the time zone are never overlapped by the hour / minute hands, nor by the date
   (placed in a free part of the face, like the date already is).
+
+## Alarm (requested 2026-11-18)
+- Radio as the alarm: never use the network buffer (play live, no buffered start).
+- After a snooze: each new ring plays a different song, from a different part of it (not the start of the same one).
