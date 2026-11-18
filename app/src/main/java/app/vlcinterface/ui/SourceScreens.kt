@@ -121,7 +121,13 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
                 scope.launch {
                     val started = System.currentTimeMillis()
                     val r = Browse.list(s, Urls.forSource(s))
-                    test = r.fold({ "✓ Connected · ${it.size} items" }, { "✕ " + app.vlcinterface.sources.SmbErrors.explain(it, s.user.isEmpty()) }); testing = false
+                    val v = app.vlcinterface.sources.VpnLink
+                    // Away from home and no address for it on the VPN: say so, rather than a bare connection error.
+                    val away = s.proto == "smb" && v.vpnUp.value && !v.atHome(s) && v.routeHost(s.host) == s.host
+                    test = r.fold({ "✓ Connected · ${it.size} items" + if (v.routeHost(s.host) != s.host) " (through the VPN at ${v.routeHost(s.host)})" else "" },
+                        { "✕ " + (if (away) "Away from home: ${s.host} is on your home network and no address of this NAS on the VPN is known. " +
+                            "Settings → VPN → Search for NAS now (its file sharing must answer on port 445 over the VPN). " else "") +
+                            app.vlcinterface.sources.SmbErrors.explain(it, s.user.isEmpty()) }); testing = false
                     app.vlcinterface.data.ServerLog.log(s.host, "test", s.proto.uppercase(), s.user, r.isSuccess, test.drop(2), r.exceptionOrNull()?.let { app.vlcinterface.sources.SmbErrors.ntStatus(it) } ?: "", started)
                 }
             }, Modifier.weight(1f)) { if (testing) CircularProgressIndicator(Modifier.height(18.dp), color = accent()) else Text("Test connection") }
