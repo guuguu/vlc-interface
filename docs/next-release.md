@@ -7,3 +7,5 @@
 - Everything is based on a location chosen by hand (city picked in the settings), not the phone's position:
   the clock's time zone and the weather status follow it, also when the phone's time zone is not on automatic.
 - Weather: find a weather report feed and connect to it for the chosen city.
+- The weather icon + city and the time zone are never overlapped by the hour / minute hands, nor by the date
+  (placed in a free part of the face, like the date already is).
