@@ -54,3 +54,10 @@
   with a fix button for each.
 - "Test alarm in 1 minute" button (works after Exit with the phone locked).
 - Alarm settings: double tap or long-press any setting → an explanatory pop-up for that setting.
+
+## Visualisation (requested 2026-11-19)
+- Settings → Visualisation: a few effect models from the usual variants (e.g. colour blobs, spectrum bars, waves,
+  rings, particles, kaleidoscope) to choose from.
+- On the visualisation screen: sliding along the screen's long direction changes the colour combination; sliding along
+  the short direction changes the brightness (replaces "any direction").
+- Android's bottom navigation bar stays available over the visualisation (not hidden).
