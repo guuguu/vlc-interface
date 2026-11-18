@@ -39,3 +39,11 @@
     time; keep the peak limiter so SBC never gets clipped input.
   - Optional "Bluetooth quality" mode: no other app sounds mixed in, no volume steps below 100 % in the app's
     digital chain (SBC loses detail at low digital levels — use the device volume instead).
+
+## Alarm sources (requested 2026-11-19)
+- Alarms play only music stored on the phone or a radio station (no NAS / network songs, no queue / playlists from the network).
+- Music: when an alarm is set up, ask for the local music root folder unless it's already known from the audio player setup.
+- Radio: ask for a preferred station and a fallback station. Preferred not reachable → fallback station;
+  fallback not reachable either → alarm sound.
+- Alarm sound chosen in settings: the default or any other available one, each previewed for 3 seconds when picked.
+- Every one of these choices is explained to the user while setting the alarm up.
