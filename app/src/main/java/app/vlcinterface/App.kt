@@ -41,11 +41,11 @@ class App : Application() {
         app.vlcinterface.sources.CoverArt.init(this)
         app.vlcinterface.sources.NetIndex.init(this)
         app.vlcinterface.sources.NetIndex.buildMissing()      // pinned LAN folders not indexed yet: in the background
-        // Start volume only after a real restart (Exit, then opened again) or after more than 30 min asleep — not when
-        // the process was just restarted by something else (e.g. a Bluetooth app restarting the Bluetooth stack).
+        // Start volume only after more than 30 min asleep (or the very first start). Any restart within 30 min —
+        // by hand, or by something else such as a Bluetooth app restarting the stack — keeps the volume.
         val vk = getSharedPreferences("volkeep", MODE_PRIVATE)
         val asleep = System.currentTimeMillis() - vk.getLong("alive", 0)
-        if (vk.getBoolean("cleanExit", true) || asleep > KEEP_MS) applyStartVolume()
+        if (vk.getLong("alive", 0) == 0L || asleep > KEEP_MS) applyStartVolume()
         else vk.getInt("pct", -1).takeIf { it >= 0 }?.let { p -> try {
             val am = getSystemService(AudioManager::class.java); val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(p * max / 100f), 0) } catch (_: Exception) {} }
