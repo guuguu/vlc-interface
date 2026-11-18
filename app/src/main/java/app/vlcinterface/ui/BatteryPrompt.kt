@@ -376,7 +376,7 @@ fun NasPickDialog(onClose: () -> Unit) {
                             // Not reachable over the VPN: find its VPN address, or type it.
                             if (!home && vpn && r == false) Row {
                                 STextButton({ v.rescan()
-                                    kotlinx.coroutines.MainScope().launch { kotlinx.coroutines.delay(1500); while (v.searching.value.isNotEmpty()) kotlinx.coroutines.delay(500); recheck++ } }) { Text("Search the VPN again", fontSize = 12.sp) }
+                                    kotlinx.coroutines.MainScope().launch { kotlinx.coroutines.delay(1500); while (v.searching.value.isNotEmpty()) kotlinx.coroutines.delay(500); recheck++ } }) { Text("Search for NAS again", fontSize = 12.sp) }
                                 STextButton({ addFor = s }) { Text("Add VPN address", fontSize = 12.sp) }
                             }
                         }
@@ -461,5 +461,20 @@ fun NewVpnServerHost() {
                 STextButton({ v.skipNew(found, true) }) { Text("Never") }
                 STextButton({ v.skipNew(found, false) }) { Text("Not now") }
             } })
+    }
+}
+
+
+/** Short pop-up (3 s): which network is being searched for NAS. */
+@Composable
+fun NasScanNoteHost() {
+    val v = app.vlcinterface.sources.VpnLink
+    val note by v.scanNote.collectAsState()
+    if (note.isEmpty()) return
+    LaunchedEffect(note) { kotlinx.coroutines.delay(3000); v.scanNote.value = "" }
+    androidx.compose.ui.window.Popup(alignment = Alignment.TopCenter, offset = androidx.compose.ui.unit.IntOffset(0, 120)) {
+        Box(Modifier.padding(horizontal = 24.dp).clip(RoundedCornerShape(12.dp)).background(C.popup).padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(note, color = C.text, fontSize = 13.sp)
+        }
     }
 }

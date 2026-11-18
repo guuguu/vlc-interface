@@ -243,6 +243,8 @@ object VpnLink {
     }
 
     @Volatile private var lastNetKey = ""
+    /** Short note (3 s) of the network being searched for NAS. */
+    val scanNote = MutableStateFlow("")
 
     // ---------- file servers on the VPN not set up yet ----------
     /** A file server found on the VPN that matches no NAS: offered as a new one (one at a time). */
@@ -641,7 +643,10 @@ object VpnLink {
                 for (i in 1 until count - 1) { targets += base + i; if (targets.size > 1100) break }
             }
             targets.removeAll(vpnSelf)
-            searching.value = "Searching the VPN for servers… (${targets.size} addresses)"
+            // Which network is searched: shown for 3 s.
+            val nets2 = nets.map { n -> val p = if (n.prefix >= 22) n.prefix else 24; "${ipStr(n.addr and (if (p == 0) 0 else (-1 shl (32 - p))))}/$p" }.distinct()
+            scanNote.value = "Searching for NAS on ${nets2.joinToString()} (${targets.size} addresses)"
+            searching.value = "Searching for NAS… (${nets2.joinToString()})"
             val sem = Semaphore(64)
             val open = targets.map { ip -> async { sem.withPermit { if (reachable(ipStr(ip), 445, 400)) ipStr(ip) else null } } }.awaitAll().filterNotNull()
             val srcs = App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }
@@ -708,7 +713,7 @@ object VpnLink {
             if (left.size == 1 && unknown.size == 1) {
                 val f = identify(unknown[0]); ask.value = left[0] to f; answer(true)
                 toast("${left[0].name.ifBlank { left[0].host }}: VPN address ${unknown[0]} added")
-            } else if (left.isNotEmpty()) toast("No VPN address found for " + left.joinToString { it.name.ifBlank { it.host } } + " — Settings → VPN → Search the VPN now")
+            } else if (left.isNotEmpty()) toast("No VPN address found for " + left.joinToString { it.name.ifBlank { it.host } } + " — Settings → VPN → Search for NAS now")
             autoFor = emptySet()
             if (open.isEmpty()) ServerLog.log("vpn", "search", "smb", "", false, "No server found on the VPN")
         }
