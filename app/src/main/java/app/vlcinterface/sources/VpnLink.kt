@@ -678,7 +678,7 @@ object VpnLink {
         return (vpnNets.map { cidr(it) } + extraNets() + homeNets.map { cidr(it) }).distinct()
     }
 
-    fun discover(fresh: Boolean = false, only: List<Net>? = null) {
+    private fun discover(fresh: Boolean = false, only: List<Net>? = null) {
         scope.launch {
             if (searching.value.isNotEmpty()) { if (autoFor.isNotEmpty() || fresh) { while (searching.value.isNotEmpty()) delay(500); discover(fresh, only) }; return@launch }
             val nets = only ?: (vpnNets + extraNets().mapNotNull { parseNet(it) })
