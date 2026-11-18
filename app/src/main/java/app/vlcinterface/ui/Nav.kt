@@ -167,6 +167,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 MobileIdleHost()
                 NasUseQuestionHost()
                 NasLinkQuestionHost()
+                NewVpnServerHost()
                 SaveEndQuestionHost()
                 ExitSavingHost()
                 VpnQuestionsHost()

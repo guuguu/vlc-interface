@@ -26,6 +26,7 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.io.File
 import java.net.InetSocketAddress
 import java.net.NetworkInterface
 import java.net.Socket
@@ -120,6 +121,8 @@ object VpnLink {
                 }
             } catch (_: Exception) {}
             val wasUp = vpnUp.value
+            val netKey = (home + vpn).joinToString { "${it.addr}/${it.prefix}" }
+            val netChanged = netKey != lastNetKey; lastNetKey = netKey
             homeNets = home; vpnNets = vpn; vpnSelf = self
             vpnUp.value = vpn.isNotEmpty()
             // Same storage, other road: the index (kept by server, with LAN addresses) is used as it is — only who
@@ -130,9 +133,12 @@ object VpnLink {
             if (vpnUp.value && !wasUp) {
                 ServerLog.log("vpn", "up", "vpn", "", true, "VPN / tunnel up: " + self.joinToString { ipStr(it) })
                 NetIndex.vpnOn()
-                if (on() || autoFor.isNotEmpty()) discover()
+                // The VPN network in use is searched at once: home servers get their address there, new ones are offered.
+                if (on() || autoFor.isNotEmpty()) rescan()
                 if (useNas.value.isNotEmpty()) try { App.instance.player.restoreNas() } catch (_: Exception) {}
             }
+            // Still on the VPN but another network under it (Wi-Fi ↔ mobile, another VPN network): searched again.
+            if (vpnUp.value && wasUp && netChanged && on()) rescan()
             if (!vpnUp.value && wasUp) { ServerLog.log("vpn", "down", "vpn", "", true, "VPN / tunnel down"); NetIndex.vpnOff() }
             checkNeedVpn()
         }
@@ -234,6 +240,38 @@ object VpnLink {
             // Transparent: no pop-up — written in the VPN log; Libraries → LAN shows the address in use.
             ServerLog.log("vpn", "switch", "vpn", "", true, msg)
         }
+    }
+
+    @Volatile private var lastNetKey = ""
+
+    // ---------- file servers on the VPN not set up yet ----------
+    /** A file server found on the VPN that matches no NAS: offered as a new one (one at a time). */
+    val askNew = MutableStateFlow<Found?>(null)
+    private val newQueue = java.util.ArrayDeque<Found>()
+    private fun ignoredFile() = File(App.instance.filesDir, "vpn-ignored-servers.txt")
+    private fun idOf(f: Found) = f.guid.ifEmpty { f.nbName.ifEmpty { f.ip } }
+    private fun ignored(): Set<String> = try { ignoredFile().readLines().toSet() } catch (_: Exception) { emptySet() }
+
+    @Synchronized private fun offerNew(list: List<Found>) {
+        val skip = ignored()
+        list.filter { idOf(it) !in skip && newQueue.none { q -> idOf(q) == idOf(it) } && askNew.value?.let { a -> idOf(a) == idOf(it) } != true }
+            .forEach { newQueue.add(it) }
+        if (askNew.value == null) askNew.value = newQueue.pollFirst()
+    }
+
+    /** "Set up": a new NAS from the server found (its VPN address; name and identity as it gave them). */
+    @Synchronized fun addNew(f: Found) {
+        App.instance.store.update { x -> x.copy(sources = x.sources + Source(zone = app.vlcinterface.data.Zone.LAN, proto = "smb",
+            name = f.nbName.ifEmpty { f.ip }, host = f.ip, vpnHost = f.ip, altHosts = listOf(f.ip),
+            smbGuid = f.guid, nbName = f.nbName, mac = f.mac)) }
+        ServerLog.log("vpn", "new", "smb", "", true, "New NAS set up from the VPN: ${f.nbName.ifEmpty { f.ip }} at ${f.ip}")
+        askNew.value = newQueue.pollFirst()
+    }
+
+    /** "Not now" (asked again at the next search) or "Never" (this server isn't offered again). */
+    @Synchronized fun skipNew(f: Found, never: Boolean) {
+        if (never) try { ignoredFile().appendText(idOf(f) + "\n") } catch (_: Exception) {}
+        askNew.value = newQueue.pollFirst()
     }
 
     /** "Not this session": network songs (LAN servers) are skipped until the phone is on their network again. */
@@ -457,7 +495,11 @@ object VpnLink {
      * is sent and no session is opened. Works wherever file sharing works (over a VPN too), unlike the UDP 137
      * name query. Returns "" when it can't be read.
      */
-    fun smbHostName(ip: String): String {
+    fun smbHostName(ip: String): String = smbIdentity(ip).second
+
+    /** Server GUID and host name in one TCP connection (NEGOTIATE answer, then the NTLM challenge). */
+    fun smbIdentity(ip: String): Pair<String, String> {
+        var guid = ""
         try {
             Socket().use { s ->
                 s.connect(InetSocketAddress(ip, 445), 1500); s.soTimeout = 2500
@@ -484,7 +526,8 @@ object VpnLink {
                 neg.put(ByteArray(16) { (it * 7 + 3).toByte() }); neg.putLong(0)
                 neg.putShort(0x0202); neg.putShort(0x0210); neg.putShort(0x0300); neg.putShort(0x0302)
                 send(neg.array())
-                val nr = recv(); if (nr.size < 64 || nr[0] != 0xFE.toByte()) return ""
+                val nr = recv(); if (nr.size < 64 || nr[0] != 0xFE.toByte()) return "" to ""
+                if (nr.size >= 64 + 24) guid = (64 + 8 until 64 + 24).joinToString("") { "%02x".format(nr[it]) }
                 // 2. SESSION_SETUP with NTLMSSP NEGOTIATE (type 1)
                 val ntlm = java.nio.ByteBuffer.allocate(32).order(java.nio.ByteOrder.LITTLE_ENDIAN)
                 ntlm.put("NTLMSSP".toByteArray()); ntlm.put(0); ntlm.putInt(1)
@@ -497,10 +540,10 @@ object VpnLink {
                 ss.putShort((64 + 24).toShort()); ss.putShort(blob.size.toShort()); ss.putLong(0)
                 ss.put(blob)
                 send(ss.array())
-                val r = recv(); if (r.size < 64 + 8) return ""
-                return ntlmTargetName(r)
+                val r = recv(); if (r.size < 64 + 8) return guid to ""
+                return guid to ntlmTargetName(r)
             }
-        } catch (_: Exception) { return "" }
+        } catch (_: Exception) { return guid to "" }
     }
 
     /** NetBIOS computer name (else DNS host name) from the NTLM challenge found in [r] (raw or in SPNEGO). */
@@ -525,11 +568,13 @@ object VpnLink {
         return nb.ifEmpty { dns.substringBefore('.') }.uppercase()
     }
 
-    /** Host name: from the SMB login (TCP 445) first, else the NetBIOS name query (UDP 137). */
+    /**
+     * Who a server is, over TCP only (port 445, the same as the file sharing — passes any VPN and firewall that
+     * lets the shares through): server GUID and host name from one SMB connection. No UDP (NetBIOS 137) any more.
+     */
     fun identify(ip: String): Found {
-        val (nb, mac) = netbios(ip)
-        val host = smbHostName(ip).ifEmpty { nb }
-        return Found(ip, smbGuid(ip), host, mac)
+        val (guid, host) = smbIdentity(ip)
+        return Found(ip, guid.ifEmpty { smbGuid(ip) }, host, "")
     }
 
     /** At home: the LAN servers' own identity is noted (to recognise them on the VPN later). */
@@ -622,6 +667,10 @@ object VpnLink {
                     ServerLog.log("vpn", "profile", "smb", "", true, "${s.name.ifBlank { s.host }}: found on the VPN at ${pick.ip}")
                     toast("${s.name.ifBlank { s.host }} found on the VPN at ${pick.ip}")
                 }
+                // Servers that match no NAS (and aren't one by an address stored): offered as a new NAS.
+                val stored = App.instance.store.current.sources.flatMap { listOf(it.host, it.vpnHost) + it.altHosts }.toSet()
+                val matched = srcs.mapNotNull { s -> found.firstOrNull { f -> (s.nbName.isNotBlank() && f.nbName.equals(s.nbName, true)) || likeness(f, s) >= 2 } }.map { it.ip }.toSet()
+                offerNew(found.filter { it.ip !in matched && it.ip !in stored })
                 searching.value = ""; autoFor = emptySet()
                 if (open.isEmpty()) { ServerLog.log("vpn", "search", "smb", "", false, "No file server found on the VPN"); toast("No file server (SMB) found on the VPN network") }
                 NetIndex.recheckReachable()

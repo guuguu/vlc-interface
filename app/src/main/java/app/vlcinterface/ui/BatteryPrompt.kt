@@ -442,3 +442,24 @@ fun NasLinkQuestionHost() {
         confirmButton = { STextButton({ v.answerLink(true) }) { Text("Wi-Fi", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) } },
         dismissButton = { STextButton({ v.answerLink(false) }) { Text("Mobile data") } })
 }
+
+
+/** A file server found on the VPN that matches no NAS: set it up as a new one? */
+@Composable
+fun NewVpnServerHost() {
+    val v = app.vlcinterface.sources.VpnLink
+    val f by v.askNew.collectAsState()
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    f?.let { found ->
+        AlertDialog(onDismissRequest = { v.skipNew(found, false) }, containerColor = C.panel,
+            title = { Text("New file server on the VPN", color = C.text) },
+            text = { Text("${found.nbName.ifEmpty { "A server" }} answers at ${found.ip} and isn't one of your NAS. Set it up as a new NAS? " +
+                "You choose its folders in Libraries → LAN.", color = C.text, fontSize = 14.sp) },
+            confirmButton = { STextButton({ v.addNew(found); android.widget.Toast.makeText(ctx, "Added — choose its folders in Libraries → LAN", android.widget.Toast.LENGTH_LONG).show() }) {
+                Text("Set up", color = accent(), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold) } },
+            dismissButton = { Row {
+                STextButton({ v.skipNew(found, true) }) { Text("Never") }
+                STextButton({ v.skipNew(found, false) }) { Text("Not now") }
+            } })
+    }
+}
