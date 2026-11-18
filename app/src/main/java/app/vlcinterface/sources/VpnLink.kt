@@ -251,6 +251,8 @@ object VpnLink {
     }
 
     @Volatile private var lastNetKey = ""
+    /** Wait per address when searching for NAS on the VPN (ZeroTier sets up a path on first contact). */
+    private const val SCAN_MS = 2000
     /** This phone's own addresses on the VPN (e.g. its ZeroTier IP) and the VPN networks, for Settings. */
     fun phoneVpnInfo(): String {
         val mine = vpnSelf.map { ipStr(it) }.sorted()
@@ -701,12 +703,14 @@ object VpnLink {
                 "from this phone's VPN address ${vpnSelf.joinToString { ipStr(it) }} · " +
                 (if (targets.isEmpty()) "" else "${ipStr(targets.min())} … ${ipStr(targets.max())}") + (if (fresh) " · fresh search" else ""))
             searching.value = "Searching for NAS… (${nets2.joinToString()})"
-            val sem = Semaphore(64)
-            val open = targets.map { ip -> async { sem.withPermit { if (reachable(ipStr(ip), 445, 400)) ipStr(ip) else null } } }.awaitAll().filterNotNull()
+            // Over ZeroTier the first packet to a peer can take well over a second (the path is set up first):
+            // 2 s per address, many at once.
+            val sem = Semaphore(128)
+            val open = targets.map { ip -> async { sem.withPermit { if (reachable(ipStr(ip), 445, SCAN_MS)) ipStr(ip) else null } } }.awaitAll().filterNotNull()
             ServerLog.log("vpn", "scan", "TCP 445", "", open.isNotEmpty(),
                 "Scanned ${targets.size} addresses on ${nets2.joinToString()} in ${"%.1f".format(java.util.Locale.US, (System.currentTimeMillis() - scanStart) / 1000.0)} s: " +
                     (if (open.isEmpty()) "no file server (port 445) answered" else "${open.size} answered: ${open.joinToString()}"),
-                "addresses that didn't answer on 445 within 0.4 s: ${targets.size - open.size}", scanStart)
+                "addresses that didn't answer on 445 within ${SCAN_MS / 1000.0} s: ${targets.size - open.size}", scanStart)
             val srcs = App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }
             var asked = 0
             if (fresh) {
