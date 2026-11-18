@@ -18,3 +18,5 @@
 - A button under the clock button (same left column, player buttons stay centred, never overlapping) starts a
   full-screen visualisation: only colours dancing and blending to the music's rhythm.
 - Colour combinations set in a new Settings section named "Visualisation".
+- Music or radio already playing when an alarm rings: the music stops completely and only the phone's alarm
+  sound plays (the alarm tone chosen), not the alarm's music. Replaces "Music already playing: fades into the alarm".
