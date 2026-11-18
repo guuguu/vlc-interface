@@ -112,10 +112,11 @@ object NetGuard {
         val s = p.state.value
         val list = ArrayList<String>()
         val item = s.item
-        // Radio goes on over mobile data: the player just shows it and counts the data (no pause, no question).
-        if (item != null && s.isPlaying && !item.isRadio && needsInternet(item.uri)) {
+        // Wi-Fi → mobile data while playing (radio too): paused and asked, as before. A station started on mobile
+        // data plays without waiting; the player shows it's on mobile data and counts it.
+        if (item != null && s.isPlaying && (item.isRadio || needsInternet(item.uri))) {
             stoppedPlayback = true; p.pause()
-            list += "Playing: " + item.title
+            list += (if (item.isRadio) "Radio: " else "Playing: ") + item.title
         }
         val rg = app.vlcinterface.sources.RgScanner
         if (rg.state.value.running && rg.currentNeedsInternet()) { list += "ReplayGain scan (queue kept)" }
