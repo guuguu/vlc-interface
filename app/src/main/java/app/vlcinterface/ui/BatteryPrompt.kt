@@ -325,8 +325,30 @@ fun NasPickDialog(onClose: () -> Unit) {
     val servers = st.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }
     var chosen by remember { mutableStateOf(on.ifEmpty { v.lastUsed.ifEmpty { servers.map { it.id }.toSet() } }) }
     val reach = remember { mutableStateMapOf<String, Boolean?>() }
-    LaunchedEffect(servers.map { it.id + v.hostNow(it) }, vpn) {
-        servers.forEach { s -> reach[s.id] = null; launch(kotlinx.coroutines.Dispatchers.IO) { reach[s.id] = v.reachableNow(s) } }
+    val diag = remember { mutableStateMapOf<String, String>() }
+    var addFor by remember { mutableStateOf<app.vlcinterface.data.Source?>(null) }
+    var recheck by remember { mutableStateOf(0) }
+    // Opened with the VPN up and a server away from home without a VPN address: the VPN is searched at once.
+    LaunchedEffect(vpn) {
+        if (vpn && servers.any { !v.atHome(it) && v.vpnAddresses(it).isEmpty() }) {
+            v.discover(); kotlinx.coroutines.delay(8000); recheck++
+        }
+    }
+    LaunchedEffect(servers.map { it.id + v.hostNow(it) + it.altHosts.joinToString() }, vpn, recheck) {
+        servers.forEach { s -> reach[s.id] = null; diag.remove(s.id); launch(kotlinx.coroutines.Dispatchers.IO) {
+            if (!v.atHome(s) && vpn) { val (ok, t) = v.vpnDiagnosis(s); diag[s.id] = t; reach[s.id] = ok } else reach[s.id] = v.reachableNow(s)
+        } }
+    }
+    addFor?.let { src ->
+        var ip by remember { mutableStateOf("") }
+        AlertDialog(onDismissRequest = { addFor = null }, containerColor = C.panel,
+            title = { Text("VPN address of ${src.name.ifBlank { src.host }}", color = C.text) },
+            text = { Column {
+                Text("Its address on the VPN (e.g. its ZeroTier IP). Kept with its LAN address; songs stay the same.", color = C.muted, fontSize = 13.sp)
+                androidx.compose.material3.OutlinedTextField(ip, { ip = it.trim() }, singleLine = true, placeholder = { Text("10.147.17.5") })
+            } },
+            confirmButton = { STextButton({ if (ip.matches(Regex("""\d{1,3}(\.\d{1,3}){3}"""))) { v.addAddress(src, ip); addFor = null; recheck++ } }) { Text("Add", color = accent()) } },
+            dismissButton = { STextButton({ addFor = null }) { Text("Cancel") } })
     }
     AlertDialog(onDismissRequest = onClose, containerColor = C.panel,
         title = { Text("NAS and network shares", color = C.text) },
@@ -344,8 +366,14 @@ fun NasPickDialog(onClose: () -> Unit) {
                         androidx.compose.material3.Checkbox(home || s.id in chosen, { c -> chosen = if (c) chosen + s.id else chosen - s.id }, enabled = !home)
                         Column(Modifier.weight(1f)) {
                             Text(s.name.ifBlank { s.host }, color = C.text, fontSize = 14.sp)
-                            Text(v.hostNow(s) + " · " + when { home -> "home network (direct)"; r == null -> "checking…"; r -> "reachable"; else -> "not reachable" },
+                            Text(diag[s.id] ?: (v.hostNow(s) + " · " + when { home -> "home network (direct)"; r == null -> "checking…"; r -> "reachable"; else -> "not reachable" }),
                                 color = if (r == false && !home) C.bad else C.muted, fontSize = 12.sp)
+                            // Not reachable over the VPN: find its VPN address, or type it.
+                            if (!home && vpn && r == false) Row {
+                                STextButton({ v.discover(); android.widget.Toast.makeText(ctx, "Searching the VPN for file servers…", android.widget.Toast.LENGTH_SHORT).show()
+                                    kotlinx.coroutines.MainScope().launch { kotlinx.coroutines.delay(8000); recheck++ } }) { Text("Search the VPN", fontSize = 12.sp) }
+                                STextButton({ addFor = s }) { Text("Add VPN address", fontSize = 12.sp) }
+                            }
                         }
                     }
                 }

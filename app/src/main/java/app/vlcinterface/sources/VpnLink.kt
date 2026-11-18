@@ -151,8 +151,23 @@ object VpnLink {
     fun hostNow(s: Source): String = when (s.addrMode) {
         "lan" -> s.host
         "vpn" -> s.vpnHost.ifBlank { s.host }
-        "auto", "" -> if (on() && s.vpnHost.isNotBlank() && vpnUp.value && !onLan(s.host)) s.vpnHost else s.host
+        "auto", "" -> autoHost(s)
         else -> if (s.addrMode in s.altHosts) s.addrMode else s.host
+    }
+
+    /**
+     * Auto: the LAN address at home; another stored address on the network the phone is on now; away with the
+     * VPN up, any stored address on the VPN's network (found by the search or added by hand — not only the one
+     * kept as "VPN address"), else the noted VPN address; otherwise the LAN address.
+     */
+    private fun autoHost(s: Source): String {
+        if (onLan(s.host)) return s.host
+        s.altHosts.firstOrNull { isIpLiteral(it) && onLan(it) }?.let { return it }
+        if (on() && vpnUp.value) {
+            vpnAddresses(s).firstOrNull()?.let { return it }
+            if (s.vpnHost.isNotBlank()) return s.vpnHost
+        }
+        return s.host
     }
 
     fun useVpn(s: Source): Boolean = hostNow(s) != s.host
@@ -283,6 +298,26 @@ object VpnLink {
 
     /** Reachable now at the address in use (port 445). Blocking: call off the main thread. */
     fun reachableNow(s: Source): Boolean = reachable(hostNow(s), 445, 1500)
+
+    /** The server's addresses on the VPN's network (stored ones). */
+    fun vpnAddresses(s: Source): List<String> = (listOf(s.vpnHost) + s.altHosts)
+        .filter { isIpLiteral(it) && ipInt(it)?.let { ip -> vpnNets.any { n -> n.contains(ip) } } == true }.distinct()
+
+    /**
+     * Away from home: what the VPN side looks like for [s], in plain words — reachable (and at which address),
+     * no VPN address known yet, or the address answers but its file sharing (SMB, 445) doesn't listen there.
+     * Returns (ok, text).
+     */
+    fun vpnDiagnosis(s: Source): Pair<Boolean, String> {
+        if (!vpnUp.value) return false to "VPN off"
+        val addrs = vpnAddresses(s)
+        if (addrs.isEmpty()) return false to "no VPN address known for it yet"
+        addrs.firstOrNull { reachable(it, 445, 1500) }?.let { return true to "$it · reachable over the VPN" }
+        val a = addrs.first()
+        return false to if (reachable(a, 22, 1200) || reachable(a, 80, 1200) || reachable(a, 443, 1200))
+            "$a answers, but its file sharing (SMB, port 445) doesn't listen on the VPN side"
+        else "$a · not reachable over the VPN"
+    }
 
     /** A network song to skip ("Not this session"). */
     fun ignored(uri: String): Boolean {
