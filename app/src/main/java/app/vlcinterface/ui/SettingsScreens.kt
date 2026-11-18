@@ -95,6 +95,8 @@ fun SettingsScreen(nav: Navigator) {
                     else "Battery saver may stop playback between songs in the background", if (free) "Unrestricted ✓" else "Allow") { Battery.ask(bctx) }
             }
             SoundSettings(s, ::set)
+            SectionTitle("Alarm clock")
+            CardBox { ValueRow("Alarm clock", "Ringing, snooze, wake check, clock aspect", "›") { nav.go(Screen.AlarmSettings) } }
             // Radio songs saved from the player (station menu → Save this song).
             SectionTitle("Saved songs")
             CardBox {

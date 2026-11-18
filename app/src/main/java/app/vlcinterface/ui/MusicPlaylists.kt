@@ -171,6 +171,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             val coverItem = item.copy(artist = p.metaArtist.ifEmpty { item.artist }, album = p.metaAlbum.ifEmpty { item.album })
             val coverSize = if (!landscape) 280 else if (leftHpx <= 0) 190 else (with(dens) { leftHpx.toDp().value }.toInt() - 128).coerceIn(110, 240)
             // Radio: the announced song's album picture (temporary radio pictures), else the station's logo.
+            // Clock button pressed: the clock and the alarms in the picture's place, whatever the player does.
+            val clockOn = app.vlcinterface.alarm.Alarms.state.collectAsState().value.showClock
+            if (clockOn) ClockArea(nav, coverSize) else
             if (item.isRadio) Cover(p.artworkUrl.ifEmpty { item.artwork }, coverSize, Modifier.padding(top = 8.dp)) else
             // The picture goes as soon as the song ends (the next song brings its own).
             Cover(if (p.songOver) "" else item.artwork, if (!landscape) 280 else if (leftHpx <= 0) 190 else (with(dens) { leftHpx.toDp().value }.toInt() - 128).coerceIn(110, 240), Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
@@ -188,7 +191,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     coverNote = if (clear) "Allowing the pictures again…" else "Looking for another picture…"
                     player.replacePicture(coverItem, clear) { note -> coverNote = note; coverRefresh++ }
                 })
-            if (coverNote.isNotEmpty()) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)
+            if (coverNote.isNotEmpty() && !clockOn) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)
             if (item.isRadio) RadioHeader(item, p, tk) else
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 // Tap the song name: its folder in Libraries.
@@ -229,6 +232,11 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Skip buttons say where they skip in: the playlist or the folder playback started from.
             val within = if (radio) "station" else when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
             // Never overlapping: shrinks the controls if they don't fit the width (large Button size, narrow phone).
+            // Clock button on the left in its own column, an equal empty column on the right: the player buttons stay
+            // centred, and they get only the width in between (shrunk if needed), so nothing overlaps on any screen.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(32.dp), contentAlignment = Alignment.CenterStart) { ClockToggleButton(30) }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             AutoFitRow(spacing = 12.dp) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
                     CtlBtn("⏮", 52) { player.prev() }
@@ -243,6 +251,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     CtlBtn("⏭", 52) { player.next() }
                     Text(if (radio) "Next\nstation" else "Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
+            }
+            }
+            Box(Modifier.width(32.dp))
             }
             // Loudness, treble and preamp, right under the player buttons (unless switched off in Settings).
             if (st.settings.toneSliders) ToneSliders()

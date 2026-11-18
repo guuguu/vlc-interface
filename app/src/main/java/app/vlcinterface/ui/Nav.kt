@@ -46,6 +46,9 @@ sealed interface Screen {
     data class PlaylistDetail(val id: String, val highlight: String = "") : Screen
     data object Queue : Screen
     data object Music : Screen
+    data class AlarmEdit(val id: String) : Screen
+    data object AlarmSettings : Screen
+    data object ClockAspect : Screen
     data object Logs : Screen
     data class LogPage(val key: String) : Screen
     /** A log made of entries from all logs: "errors", "indexing", "lan" (servers). */
@@ -147,6 +150,9 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.PlaylistDetail -> PlaylistDetailScreen(nav, top)
                     is Screen.Queue -> QueueScreen(nav)
                     is Screen.Music -> MusicScreen(nav, openOutput)
+                    is Screen.AlarmEdit -> AlarmEditScreen(nav, top.id)
+                    is Screen.AlarmSettings -> AlarmSettingsScreen(nav)
+                    is Screen.ClockAspect -> ClockAspectScreen(nav)
                     is Screen.Logs -> LogsScreen(nav)
                     is Screen.LogPage -> LogPageScreen(nav, top.key)
                     is Screen.LogView -> LogViewScreen(nav, top.kind)
