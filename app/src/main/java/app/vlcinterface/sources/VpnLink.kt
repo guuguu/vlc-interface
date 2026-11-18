@@ -243,6 +243,13 @@ object VpnLink {
     }
 
     @Volatile private var lastNetKey = ""
+    /** This phone's own addresses on the VPN (e.g. its ZeroTier IP) and the VPN networks, for Settings. */
+    fun phoneVpnInfo(): String {
+        val mine = vpnSelf.map { ipStr(it) }.sorted()
+        val nets = vpnNets.map { n -> val p = if (n.prefix >= 22) n.prefix else 24; "${ipStr(n.addr and (if (p == 0) 0 else (-1 shl (32 - p))))}/$p" }.distinct()
+        return if (mine.isEmpty()) "" else "This phone on the VPN: ${mine.joinToString()} · searched for NAS: ${nets.joinToString()}"
+    }
+
     /** Short note (3 s) of the network being searched for NAS. */
     val scanNote = MutableStateFlow("")
 

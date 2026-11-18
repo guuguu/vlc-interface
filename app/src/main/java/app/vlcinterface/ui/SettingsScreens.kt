@@ -215,6 +215,7 @@ fun SettingsScreen(nav: Navigator) {
                 val up by vl.vpnUp.collectAsState()
                 val busy by vl.searching.collectAsState()
                 ValueRow("Status", if (up) "A VPN is on" else "No VPN on", if (up) "On" else "Off") {}
+                if (up) vl.phoneVpnInfo().takeIf { it.isNotEmpty() }?.let { Text(it, color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp)) }
                 Divider()
                 ToggleRow("Home NAS through the VPN", "Away from home with the VPN on, your LAN servers are reached through it — at home, directly", s.vpnNas) { set(s.copy(vpnNas = it)) }
                 Divider()
