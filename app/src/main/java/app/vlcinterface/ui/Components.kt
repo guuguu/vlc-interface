@@ -750,6 +750,7 @@ fun AutoInfoDialog(
     onDismissRequest: () -> Unit,
     confirmButton: @Composable () -> Unit,
     modifier: Modifier = Modifier,
+    dismissButton: (@Composable () -> Unit)? = null,
     title: (@Composable () -> Unit)? = null,
     text: (@Composable () -> Unit)? = null,
     containerColor: Color = C.panel,
@@ -757,7 +758,7 @@ fun AutoInfoDialog(
     var pinned by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(pinned) { if (!pinned) { kotlinx.coroutines.delay(3000); if (!pinned) onDismissRequest() } }
     // A touch outside it always closes it (kept open or not).
-    androidx.compose.material3.AlertDialog(onDismissRequest = onDismissRequest, confirmButton = confirmButton,
+    androidx.compose.material3.AlertDialog(onDismissRequest = onDismissRequest, confirmButton = confirmButton, dismissButton = dismissButton,
         modifier = modifier.pointerInput(Unit) {
             awaitEachGesture { awaitFirstDown(requireUnconsumed = false); pinned = true }
         },

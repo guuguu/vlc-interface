@@ -338,7 +338,7 @@ fun RgFailureReport(nav: Navigator) {
         )
         return
     }
-    AlertDialog(onDismissRequest = { RgScanner.reportSeen() }, containerColor = C.panel,
+    AutoInfoDialog(onDismissRequest = { RgScanner.reportSeen() }, containerColor = C.panel,
         title = { Text("ReplayGain scan: ${fails.size} problem${if (fails.size == 1) "" else "s"}", color = C.text) },
         text = {
             val scroll = rememberScrollState()
