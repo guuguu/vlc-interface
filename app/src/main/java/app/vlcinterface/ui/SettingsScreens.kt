@@ -242,7 +242,7 @@ fun SettingsScreen(nav: Navigator) {
                         // Always here (special cases: a new NAS, an address changed on the VPN …).
                         val sctx = androidx.compose.ui.platform.LocalContext.current
                         Pill("Search the VPN now") {
-                            if (up) vl.discover() else android.widget.Toast.makeText(sctx, "Start the VPN first, then search", android.widget.Toast.LENGTH_SHORT).show()
+                            if (up) vl.rescan() else android.widget.Toast.makeText(sctx, "Start the VPN first, then search", android.widget.Toast.LENGTH_SHORT).show()
                         }
                         if (!up) Text("VPN off — start it to search", color = C.muted, fontSize = 12.sp)
                     }

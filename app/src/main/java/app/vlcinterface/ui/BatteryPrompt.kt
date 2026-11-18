@@ -328,10 +328,14 @@ fun NasPickDialog(onClose: () -> Unit) {
     val diag = remember { mutableStateMapOf<String, String>() }
     var addFor by remember { mutableStateOf<app.vlcinterface.data.Source?>(null) }
     var recheck by remember { mutableStateOf(0) }
-    // Opened with the VPN up and a server away from home without a VPN address: the VPN is searched at once.
+    // Opened with the VPN up and a server away from home: the VPN network is searched afresh for it (stored
+    // addresses don't matter), then the rows are checked again.
+    val searchingNow by v.searching.collectAsState()
     LaunchedEffect(vpn) {
-        if (vpn && servers.any { !v.atHome(it) && v.vpnAddresses(it).isEmpty() }) {
-            v.discover(); kotlinx.coroutines.delay(8000); recheck++
+        if (vpn && servers.any { !v.atHome(it) }) {
+            v.rescan(); kotlinx.coroutines.delay(1500)
+            while (v.searching.value.isNotEmpty()) kotlinx.coroutines.delay(500)
+            recheck++
         }
     }
     LaunchedEffect(servers.map { it.id + v.hostNow(it) + it.altHosts.joinToString() }, vpn, recheck) {
@@ -356,6 +360,7 @@ fun NasPickDialog(onClose: () -> Unit) {
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(if (vpn) "VPN on. Choose what to use — data goes over your current connection (mobile data too)."
                     else "VPN off: away from home the NAS can't be used. Start the VPN, then choose.", color = if (vpn) C.text else C.bad, fontSize = 13.sp)
+                if (searchingNow.isNotEmpty()) Text(searchingNow, color = accent(), fontSize = 12.sp)
                 if (servers.isEmpty()) Text("No NAS or share yet — add them on Libraries → LAN.", color = C.muted, fontSize = 13.sp)
                 servers.forEach { s ->
                     val home = v.atHome(s)
@@ -370,8 +375,8 @@ fun NasPickDialog(onClose: () -> Unit) {
                                 color = if (r == false && !home) C.bad else C.muted, fontSize = 12.sp)
                             // Not reachable over the VPN: find its VPN address, or type it.
                             if (!home && vpn && r == false) Row {
-                                STextButton({ v.discover(); android.widget.Toast.makeText(ctx, "Searching the VPN for file servers…", android.widget.Toast.LENGTH_SHORT).show()
-                                    kotlinx.coroutines.MainScope().launch { kotlinx.coroutines.delay(8000); recheck++ } }) { Text("Search the VPN", fontSize = 12.sp) }
+                                STextButton({ v.rescan()
+                                    kotlinx.coroutines.MainScope().launch { kotlinx.coroutines.delay(1500); while (v.searching.value.isNotEmpty()) kotlinx.coroutines.delay(500); recheck++ } }) { Text("Search the VPN again", fontSize = 12.sp) }
                                 STextButton({ addFor = s }) { Text("Add VPN address", fontSize = 12.sp) }
                             }
                         }

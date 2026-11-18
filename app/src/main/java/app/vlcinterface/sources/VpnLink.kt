@@ -164,8 +164,8 @@ object VpnLink {
         if (onLan(s.host)) return s.host
         s.altHosts.firstOrNull { isIpLiteral(it) && onLan(it) }?.let { return it }
         if (on() && vpnUp.value) {
+            if (s.vpnHost.isNotBlank()) return s.vpnHost                    // the one the last search found
             vpnAddresses(s).firstOrNull()?.let { return it }
-            if (s.vpnHost.isNotBlank()) return s.vpnHost
         }
         return s.host
     }
@@ -290,7 +290,8 @@ object VpnLink {
         useNas.value = ids; askUse.value = false
         if (ids.isEmpty()) { nasOnWifi = null; askLink.value = false }
         try { App.instance.player.pruneNas() } catch (_: Exception) {}
-        if (ids.isNotEmpty()) { lastUsed = ids; ignoreSession = false; autoFind(ids)
+        if (ids.isNotEmpty()) { lastUsed = ids; ignoreSession = false
+            if (vpnUp.value && lanServers().any { it.id in ids && !atHome(it) }) { autoFor = autoFor + ids; rescan() } else autoFind(ids)
             if (vpnUp.value) try { App.instance.player.restoreNas() } catch (_: Exception) {} }
         ServerLog.log("vpn", "use-nas", "smb", "", true, if (ids.isEmpty()) "NAS not used (away from home)"
             else "NAS used this session: " + lanServers().filter { it.id in ids }.joinToString { it.name.ifBlank { it.host } })
@@ -494,9 +495,16 @@ object VpnLink {
         if (vpnUp.value) discover()
     }
 
-    fun discover() {
+    /**
+     * Fresh search of the VPN network for the home servers, whatever addresses are stored: every file server
+     * found is identified (server ID, name, network card) and the matching NAS gets the address found now — so a
+     * changed or wrong stored address never hides it. Used by the NAS picker, "Use", and Settings → Search.
+     */
+    fun rescan() = discover(fresh = true)
+
+    fun discover(fresh: Boolean = false) {
         scope.launch {
-            if (searching.value.isNotEmpty()) { if (autoFor.isNotEmpty()) { while (searching.value.isNotEmpty()) delay(500); discover() }; return@launch }
+            if (searching.value.isNotEmpty()) { if (autoFor.isNotEmpty() || fresh) { while (searching.value.isNotEmpty()) delay(500); discover(fresh) }; return@launch }
             val nets = vpnNets
             if (nets.isEmpty()) return@launch
             // The VPN's own /24s (and routed nets up to /22): at most ~1000 addresses.
@@ -514,6 +522,28 @@ object VpnLink {
             val open = targets.map { ip -> async { sem.withPermit { if (reachable(ipStr(ip), 445, 400)) ipStr(ip) else null } } }.awaitAll().filterNotNull()
             val srcs = App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto == "smb" }
             var asked = 0
+            if (fresh) {
+                // Each server found is identified; each home server takes the best match found now.
+                val found = open.map { identify(it) }
+                found.forEach { f -> ServerLog.log("vpn", "found", "smb", "", true, "Server on the VPN: ${f.ip}", "guid ${f.guid} · name ${f.nbName} · mac ${f.mac}") }
+                for (s in srcs) {
+                    val scored = found.map { it to likeness(it, s) }.filter { it.second > 0 }.sortedByDescending { it.second }
+                    val pick = scored.firstOrNull()?.first
+                        ?: found.singleOrNull()?.takeIf { srcs.size == 1 && s.id in (useNas.value + autoFor) }   // the only server there, and you chose this NAS
+                    if (pick == null) continue
+                    if (s.vpnHost == pick.ip) continue                               // already right
+                    App.instance.store.update { x -> x.copy(sources = x.sources.map {
+                        if (it.id == s.id) it.copy(vpnHost = pick.ip, altHosts = (it.altHosts + pick.ip).distinct(),
+                            smbGuid = it.smbGuid.ifEmpty { pick.guid }, nbName = it.nbName.ifEmpty { pick.nbName }, mac = it.mac.ifEmpty { pick.mac }) else it }) }
+                    usingVpn.remove(s.id)
+                    ServerLog.log("vpn", "profile", "smb", "", true, "${s.name.ifBlank { s.host }}: found on the VPN at ${pick.ip}")
+                    toast("${s.name.ifBlank { s.host }} found on the VPN at ${pick.ip}")
+                }
+                searching.value = ""; autoFor = emptySet()
+                if (open.isEmpty()) { ServerLog.log("vpn", "search", "smb", "", false, "No file server found on the VPN"); toast("No file server (SMB) found on the VPN network") }
+                NetIndex.recheckReachable()
+                return@launch
+            }
             for (ip in open) {
                 if (srcs.any { it.vpnHost == ip || it.host == ip || ip in it.altHosts }) continue
                 val f = identify(ip)
