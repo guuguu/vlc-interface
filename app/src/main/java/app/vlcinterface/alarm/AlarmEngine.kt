@@ -37,6 +37,8 @@ import android.os.VibrationEffect
 import android.os.VibratorManager
 import android.provider.MediaStore
 import app.vlcinterface.App
+import app.vlcinterface.R
+import app.vlcinterface.player.NativeAudio
 import app.vlcinterface.data.ServerLog
 import app.vlcinterface.player.OutputKind
 import app.vlcinterface.player.Origin
@@ -201,7 +203,7 @@ object AlarmEngine {
             val r = App.instance.output
             r.refresh()
             val d = r.devices.value.firstOrNull { if (a.output == "speaker") it.kind == OutputKind.SPEAKER else it.key == a.output } ?: return
-            if (d.connected && !d.active && app.vlcinterface.player.NativeAudio.active && d.id > 0) r.select(d)
+            if (d.connected && !d.active && NativeAudio.active && d.id > 0) r.select(d)
         } catch (_: Exception) {}
     }
 
@@ -527,7 +529,7 @@ object AlarmEngine {
         val g = Alarms.current.global
         val urgent = u.phase == "ringing" || u.phase == "confirming"
         val b = Notification.Builder(app, if (!urgent) CH_WATCH else if (g.led == "notif") CH_RING_LED else CH_RING)
-            .setSmallIcon(app.vlcinterface.R.drawable.ic_stat_cone).setOngoing(true).setShowWhen(false)
+            .setSmallIcon(R.drawable.ic_stat_cone).setOngoing(true).setShowWhen(false)
             .setCategory(Notification.CATEGORY_ALARM).setContentIntent(screenIntent()).setVisibility(Notification.VISIBILITY_PUBLIC)
         when (u.phase) {
             "ringing" -> {
@@ -552,7 +554,7 @@ object AlarmEngine {
     private fun snoozeNote(until: Long, name: String) {
         channels()
         app.getSystemService(NotificationManager::class.java).notify(SNOOZE_NOTIF_ID, Notification.Builder(app, CH_WATCH)
-            .setSmallIcon(app.vlcinterface.R.drawable.ic_stat_cone).setContentTitle("Snoozed until " + AlarmScheduler.whenText(until).substringAfter(' '))
+            .setSmallIcon(R.drawable.ic_stat_cone).setContentTitle("Snoozed until " + AlarmScheduler.whenText(until).substringAfter(' '))
             .setContentText(name.ifEmpty { "Tap to dismiss the alarm" }).setOngoing(true).setContentIntent(screenIntent()).build())
     }
 
