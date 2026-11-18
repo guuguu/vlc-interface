@@ -13,3 +13,8 @@
 ## Alarm (requested 2026-11-18)
 - Radio as the alarm: never use the network buffer (play live, no buffered start).
 - After a snooze: each new ring plays a different song, from a different part of it (not the start of the same one).
+
+## Visualisation (requested 2026-11-18)
+- A button under the clock button (same left column, player buttons stay centred, never overlapping) starts a
+  full-screen visualisation: only colours dancing and blending to the music's rhythm.
+- Colour combinations set in a new Settings section named "Visualisation".
