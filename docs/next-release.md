@@ -28,5 +28,5 @@
   with "Reset order".
 
 ## Clock in the player (requested 2026-11-19 18:54)
-- A small settings wheel (⚙) in a corner of the clock's square (top right, outside the round face, never over the
+- A very small settings wheel (⚙, about half the size of the mock-up) in a corner of the clock's square (top right, outside the round face, never over the
   clock), opening Settings → Alarm clock.
