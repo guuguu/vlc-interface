@@ -150,12 +150,18 @@ data class ClockAspect(
     val digitalDate: Boolean = true,
     /** Night (22:00–07:00): clock dimmed by this %. */
     val nightDim: Int = 40,
+    /** Dimming of every clock (player, ringing screen, screen saver), %. */
+    val dim: Int = 25,
+    /** Line / font thickness per design: "1", "2", "4", "5", "8", "d" (digital). */
+    val thick: Map<String, Float> = emptyMap(),
 ) {
+    fun thickFor(analog: Boolean = this.analog, design: Int = this.design): Float = thick[if (analog) "$design" else "d"] ?: 1f
     fun toJson(): JSONObject = JSONObject().put("analog", analog).put("design", design).put("h24", h24).put("seconds", seconds)
         .put("diskHue", diskHue.toDouble()).put("diskSat", diskSat.toDouble()).put("mainHue", mainHue.toDouble()).put("mainSat", mainSat.toDouble())
         .put("secHue", secHue.toDouble()).put("dateHue", dateHue.toDouble()).put("dateSat", dateSat.toDouble()).put("dateSize", dateSize.toDouble())
         .put("ringW", ringW.toDouble()).put("tickW", tickW.toDouble()).put("handW", handW.toDouble()).put("size", size.toDouble())
-        .put("digitalSize", digitalSize.toDouble()).put("digitalBold", digitalBold).put("digitalDate", digitalDate).put("nightDim", nightDim)
+        .put("digitalSize", digitalSize.toDouble()).put("digitalBold", digitalBold).put("digitalDate", digitalDate).put("nightDim", nightDim).put("dim", dim)
+        .put("thick", JSONObject().apply { thick.forEach { (k, v) -> put(k, v.toDouble()) } })
 
     companion object {
         fun fromJson(o: JSONObject?): ClockAspect {
@@ -165,7 +171,8 @@ data class ClockAspect(
                 o.optBoolean("h24", true), o.optBoolean("seconds", true), f("diskHue", 220f), f("diskSat", 0.35f), f("mainHue", 52f),
                 f("mainSat", 0.95f), f("secHue", 4f), f("dateHue", 52f), f("dateSat", 0.95f), f("dateSize", 1f), f("ringW", 1f),
                 f("tickW", 1f), f("handW", 1f), f("size", 1f), f("digitalSize", 1f), o.optBoolean("digitalBold"),
-                o.optBoolean("digitalDate", true), o.optInt("nightDim", 40))
+                o.optBoolean("digitalDate", true), o.optInt("nightDim", 40), o.optInt("dim", 25),
+                o.optJSONObject("thick")?.let { t -> t.keys().asSequence().associateWith { k -> t.optDouble(k, 1.0).toFloat() } } ?: emptyMap())
         }
     }
 }

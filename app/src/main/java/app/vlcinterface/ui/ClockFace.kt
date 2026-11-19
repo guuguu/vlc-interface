@@ -101,7 +101,10 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer, zone
     val h = cal.get(Calendar.HOUR_OF_DAY); val m = cal.get(Calendar.MINUTE); val s = cal.get(Calendar.SECOND)
     val dow = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
     val dayNo = cal.get(Calendar.DAY_OF_MONTH)
-    val dim = if (a.nightDim > 0 && (h >= 22 || h < 7)) 1f - a.nightDim / 100f else 1f
+    val dim = (if (a.nightDim > 0 && (h >= 22 || h < 7)) 1f - a.nightDim / 100f else 1f) * (1f - a.dim.coerceIn(0, 90) / 100f)
+    // Thickness of lines and fonts, set per design.
+    val thk = a.thickFor().coerceIn(0.4f, 3f)
+    val weightK = FontWeight((400 * thk).toInt().coerceIn(100, 900))
     fun Color.d() = copy(alpha = alpha * dim)
     val main = clockMain(a.mainHue, a.mainSat).d()
     val minuteC = lerp(clockMain(a.mainHue, a.mainSat), Color.White, 0.5f).d()
@@ -113,7 +116,7 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer, zone
     fun spOf(pxv: Float) = (pxv / density / fontScale).sp
     fun pt(angDeg: Float, r: Float) = Offset(c.x + px(r) * sin(angDeg * PI.toFloat() / 180f), c.y - px(r) * cos(angDeg * PI.toFloat() / 180f))
     fun text(str: String, center: Offset, sizeU: Float, color: Color, bold: Boolean = false) {
-        val l = tm.measure(str, TextStyle(color = color, fontSize = spOf(px(sizeU)), fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal))
+        val l = tm.measure(str, TextStyle(color = color, fontSize = spOf(px(sizeU)), fontWeight = if (bold) FontWeight((700 * thk).toInt().coerceIn(100, 900)) else weightK))
         drawText(l, topLeft = Offset(center.x - l.size.width / 2f, center.y - l.size.height / 2f))
     }
 
@@ -122,14 +125,14 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer, zone
         val hh = if (a.h24) h else (h % 12).let { if (it == 0) 12 else it }
         val main0 = "%02d:%02d".format(hh, m)
         val big = 22f * a.digitalSize.coerceIn(0.5f, 1.4f)
-        val l = tm.measure(main0, TextStyle(color = main, fontSize = spOf(px(big)), fontWeight = if (a.digitalBold) FontWeight.Bold else FontWeight.Light))
+        val l = tm.measure(main0, TextStyle(color = main, fontSize = spOf(px(big)), fontWeight = FontWeight(((if (a.digitalBold) 700 else 300) * thk).toInt().coerceIn(100, 900))))
         val extra = listOfNotNull(if (a.seconds) ":%02d".format(s) else null, if (!a.h24) (if (h < 12) " AM" else " PM") else null).joinToString("")
         val l2 = if (extra.isEmpty()) null else tm.measure(extra, TextStyle(color = main, fontSize = spOf(px(big * 0.42f))))
         var w = l.size.width + (l2?.size?.width ?: 0)
         // Never wider than the disk.
         val maxW = px(100f)
         val k = if (w > maxW) maxW / w else 1f
-        val la = if (k < 1f) tm.measure(main0, TextStyle(color = main, fontSize = spOf(px(big * k)), fontWeight = if (a.digitalBold) FontWeight.Bold else FontWeight.Light)) else l
+        val la = if (k < 1f) tm.measure(main0, TextStyle(color = main, fontSize = spOf(px(big * k)), fontWeight = FontWeight(((if (a.digitalBold) 700 else 300) * thk).toInt().coerceIn(100, 900)))) else l
         val lb = if (k < 1f && extra.isNotEmpty()) tm.measure(extra, TextStyle(color = main, fontSize = spOf(px(big * 0.42f * k)))) else l2
         w = la.size.width + (lb?.size?.width ?: 0)
         val y0 = c.y - la.size.height / 2f - if (a.digitalDate) px(4f) else 0f
@@ -145,11 +148,11 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer, zone
 
     val sp = spec(a.design)
     drawCircle(clockDisk(a.diskHue, a.diskSat).d(), px(sp.disk), c)
-    if (sp.ring > 0) drawCircle(main, px(sp.ring), c, style = Stroke(px(sp.ringW * a.ringW)))
-    if (sp.inner > 0) drawCircle(main.copy(alpha = main.alpha * 0.4f), px(sp.inner), c, style = Stroke(px(0.6f * a.ringW)))
-    sp.minTick?.let { r -> for (i in 0 until 60) if (i % 5 != 0) drawLine(main.copy(alpha = main.alpha * 0.7f), pt(i * 6f, r[0]), pt(i * 6f, r[1]), px(sp.minTickW * a.tickW)) }
+    if (sp.ring > 0) drawCircle(main, px(sp.ring), c, style = Stroke(px(sp.ringW * a.ringW * thk)))
+    if (sp.inner > 0) drawCircle(main.copy(alpha = main.alpha * 0.4f), px(sp.inner), c, style = Stroke(px(0.6f * a.ringW * thk)))
+    sp.minTick?.let { r -> for (i in 0 until 60) if (i % 5 != 0) drawLine(main.copy(alpha = main.alpha * 0.7f), pt(i * 6f, r[0]), pt(i * 6f, r[1]), px(sp.minTickW * a.tickW * thk)) }
     sp.hourTick?.let { r -> for (i in 0 until 12) drawLine(if (sp.fadedTicks) main.copy(alpha = main.alpha * 0.4f) else main,
-        pt(i * 30f, r[0]), pt(i * 30f, r[1]), px(sp.hourTickW * a.tickW)) }
+        pt(i * 30f, r[0]), pt(i * 30f, r[1]), px(sp.hourTickW * a.tickW * thk)) }
     for (i in 0 until 12) text(if (i == 0) "12" else "$i", pt(i * 30f, sp.numR), sp.numSize, main, sp.numBold)
 
     val hourAng = ((h % 12) + m / 60f) * 30f
@@ -183,7 +186,7 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer, zone
         drawWeather(wx, Offset(c.x + px(pw.cx), c.y + px(pw.cy)), pw.k, main, tm, u, ::spOf)
     }
     // Hands.
-    val hw = a.handW.coerceIn(0.4f, 3f)
+    val hw = (a.handW * thk).coerceIn(0.3f, 6f)
     drawLine(main, c, pt(hourAng, 24f), px(sp.hourW * hw), StrokeCap.Round)
     drawLine(minuteC, c, pt(minAng, 36f), px(sp.minW * hw), StrokeCap.Round)
     if (a.seconds) drawLine(secC, pt(secAng + 180f, 8f), pt(secAng, 40f), px(sp.secW * hw), StrokeCap.Round)

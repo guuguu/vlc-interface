@@ -44,6 +44,8 @@ data class Origin(
 
 /** Gain for songs that carry no ReplayGain at all (when ReplayGain is on). */
 const val NO_RG_DB = 0f
+/** Loudness and treble act 30 % deeper than their slider values (same logic, stronger effect). */
+const val TONE_DEPTH = 1.3f
 /** Songs without ReplayGain reached over the VPN: 6 dB lower (not scanned there). */
 const val VPN_NO_RG_DB = -6f     // no ReplayGain: played as it is (no preamp either); the scan question handles it
 
@@ -411,7 +413,8 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** Band gains (10 bands, all ≤ 0 dB) for loudness [l] and treble [t]. */
     private fun toneGains(l: Float, t: Float): FloatArray {
-            val loud = Iso226.cuts(l)              // ISO 226:2003 equal-loudness compensation, as cuts
+            // ISO 226:2003 equal-loudness compensation, as cuts — 30 % deeper than the plain curve (same shape).
+            val loud = Iso226.cuts(l).let { c -> FloatArray(c.size) { c[it] * TONE_DEPTH } }
             // Treble acts from 8 kHz up: an S-curve on a log-frequency scale from 0 at 8 kHz to full at 16 kHz
             // (bands below 8 kHz take the 8 kHz value). The curve's shape follows the setting, not just its depth:
             // small settings give a gentle, nearly straight slope; larger ones a deeper, steeper S that keeps the
@@ -423,8 +426,8 @@ class PlayerController(private val context: Context, private val store: Store) {
                 (if (xa + ya == 0.0) 0.0 else xa / (xa + ya)).toFloat()
             }
             return FloatArray(10) { b ->
-                val trebleCut = if (t >= 0f) -t * (1f - highShape[b]) else t * highShape[b]
-                (loud[b] + trebleCut).coerceIn(-20f, 0f)
+                val trebleCut = (if (t >= 0f) -t * (1f - highShape[b]) else t * highShape[b]) * TONE_DEPTH
+                (loud[b] + trebleCut).coerceIn(-26f, 0f)
             }
     }
 
@@ -453,7 +456,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         val pct = vol * 100f / max
         val from = (st.deviceLoudFrom[currentOutputName] ?: 50).coerceIn(0, 99).toFloat()
         if (pct <= from) return l
-        val k = (1f - (pct - from) / (100f - from)).coerceIn(0f, 1f)
+        // Smooth fade (cosine): the curve flattens gently as the volume goes up, none left at full volume.
+        val x = ((pct - from) / (100f - from)).coerceIn(0f, 1f)
+        val k = (0.5f + 0.5f * kotlin.math.cos(Math.PI.toFloat() * x)).coerceIn(0f, 1f)
         return Math.round(l * k * 2) / 2f
     }
 

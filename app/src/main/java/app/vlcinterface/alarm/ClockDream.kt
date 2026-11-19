@@ -61,14 +61,16 @@ class ClockDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
             var t by remember { mutableLongStateOf(System.currentTimeMillis()) }
             LaunchedEffect(Unit) { while (true) { delay(1000); t = System.currentTimeMillis() } }
             BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
-                val side = minOf(maxWidth, maxHeight) * 0.62f
+                // As big as fits while still leaving room for a slight slow drift (burn-in protection).
+                val side = minOf(maxWidth, maxHeight) * 0.92f
                 val freeX = (maxWidth - side) / 2
                 val freeY = (maxHeight - side) / 2
                 // A full slow loop takes about 17 min sideways and 23 min up and down.
                 val s = t / 1000.0
-                val dx = freeX * sin(s / 160.0).toFloat()
-                val dy = freeY * cos(s / 220.0).toFloat()
-                app.vlcinterface.ui.ClockFace(aspect, Modifier.offset(freeX + dx, freeY + dy).size(side).alpha(0.55f))
+                // Slight movement only: a few % of the clock's size, never off the screen.
+                val dx = minOf(freeX, side * 0.04f) * sin(s / 160.0).toFloat()
+                val dy = minOf(freeY, side * 0.04f) * cos(s / 220.0).toFloat()
+                app.vlcinterface.ui.ClockFace(aspect, Modifier.offset(freeX + dx, freeY + dy).size(side))
             }
         }
         setContentView(v)

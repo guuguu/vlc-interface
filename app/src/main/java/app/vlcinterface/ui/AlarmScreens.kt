@@ -408,6 +408,16 @@ fun ClockAspectScreen(nav: Navigator) {
                     }
                 }
             }
+            SectionTitle("Dimming and thickness")
+            CardBox {
+                SliderRow("Dimming", a.dim.toFloat(), 0f..85f, "${a.dim} %") { set(a.copy(dim = it.toInt())) }
+                Text("All clocks: player, ringing screen and the screen saver", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
+                val key = if (a.analog) "${a.design}" else "d"
+                val tk = a.thickFor()
+                SliderRow("Thickness", tk, 0.5f..2.5f, "×%.1f".format(tk)) { set(a.copy(thick = a.thick + (key to it))) }
+                Text(if (a.analog) "Lines and numbers of design ${a.design} only" else "Digits of the digital clock only", color = C.muted, fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
+            }
             SectionTitle("Sizes and thickness")
             CardBox {
                 SliderRow("Circle size", a.size, 0.6f..1f, "${(a.size * 100).toInt()} %") { set(a.copy(size = it)) }
