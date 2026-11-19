@@ -14,3 +14,4 @@ left sideways, same in the radio player, clock screen saver while charging with 
   Ink flow (curl-noise colour advection), Reaction–diffusion (Gray–Scott drifting through regimes),
   Complex phase portrait (domain colouring of moving roots / poles), Chladni superposition (several standing-wave
   modes), Mandelbrot dive (slow zoom). Bass / upper band drive their parameters as in the previews.
+- Faster colour changes on all patterns (existing and new), still smooth (no flashing); a "Colour speed" slider.
