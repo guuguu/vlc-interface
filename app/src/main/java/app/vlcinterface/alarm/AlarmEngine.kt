@@ -189,6 +189,8 @@ object AlarmEngine {
                 } else quietSince = 0L
             }
             if (a.stopAfterMin > 0 && el > a.stopAfterMin * 60) { log("stopped by itself after ${a.stopAfterMin} min"); autoStop(); return }
+            // Every 30 s: the notification is posted again (it may have been cleared) so the screen can always be reached.
+            if ((el * 4).toInt() % 120 == 0 && el > 1f) refreshNotif()
             delay(250)
         }
     }
@@ -406,11 +408,25 @@ object AlarmEngine {
 
     private fun stopService() { try { app.stopService(Intent(app, AlarmService::class.java)) } catch (_: Exception) {} }
 
+    /** Notification swiped away: posted again, and the alarm screen shown. */
+    fun reshow(ctx: Context) {
+        app = ctx.applicationContext
+        if (_ui.value.phase == "idle") return
+        refreshNotif()
+        if (_ui.value.phase == "ringing" || _ui.value.phase == "confirming") showScreen()
+    }
+
     /** Guard alarm / app restarted: an alarm that should ring (or be watched) is taken up again. */
     fun guardCheck(ctx: Context) {
         app = ctx.applicationContext
         val id = Alarms.active
         if (id.isEmpty()) { AlarmScheduler.guard(app, false); return }
+        // A ringing alarm interrupted long ago (phone restarted, battery out): over — not taken up again.
+        val rung = Alarms.lastRung(id)
+        val limit = ((Alarms.get(id)?.stopAfterMin ?: 30).takeIf { it > 0 } ?: 60) * 60_000L
+        if (Alarms.activePhase == "ringing" && rung > 0 && System.currentTimeMillis() - rung > limit) {
+            log("interrupted alarm older than its ringing time: not rung again"); finishAll(); return
+        }
         when (Alarms.activePhase) {
             "ringing" -> if (!AlarmService.running || _ui.value.phase != "ringing") startRing(app, id, snoozed = true, restart = true)
             "watching", "confirming" -> if (_ui.value.phase != "watching" && _ui.value.phase != "confirming") {
@@ -569,6 +585,8 @@ object AlarmEngine {
         val b = Notification.Builder(app, if (!urgent) CH_WATCH else if (g.led == "notif") CH_RING_LED else CH_RING)
             .setSmallIcon(R.drawable.ic_stat_cone).setOngoing(true).setShowWhen(false)
             .setCategory(Notification.CATEGORY_ALARM).setContentIntent(screenIntent()).setVisibility(Notification.VISIBILITY_PUBLIC)
+            // Swiped away (Android 14+ allows it): it comes straight back, with the alarm screen.
+            .setDeleteIntent(bc(AlarmScheduler.ACTION_RESHOW, 7331))
         when (u.phase) {
             "ringing" -> {
                 b.setContentTitle(u.name.ifEmpty { "Alarm" }).setContentText("Tap to stop").setFullScreenIntent(screenIntent(), true)

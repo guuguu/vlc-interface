@@ -149,3 +149,24 @@ private fun PatternPad(onDone: () -> Unit) {
         }
     }
 }
+
+
+/** Shown over every page of the app while an alarm rings, is snoozed or checked: tap → the alarm screen. */
+@Composable
+fun AlarmBanner(modifier: Modifier) {
+    val u by AlarmEngine.ui.collectAsState()
+    if (u.phase == "idle") return
+    val ctx = LocalContext.current
+    fun hm(t: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).apply { timeZone = Alarms.zone() }.format(Date(t))
+    val text = when (u.phase) {
+        "ringing" -> "⏰  Alarm ringing — tap to stop or snooze"
+        "snoozed" -> "⏰  Snoozed until " + hm(u.until) + " — tap to dismiss"
+        "confirming" -> "⏰  Are you awake? — tap"
+        else -> "⏰  Wake check until " + hm(u.until) + " — tap"
+    }
+    Box(modifier.padding(top = 36.dp, start = 12.dp, end = 12.dp).fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(GOLD)
+        .clickable { ctx.startActivity(android.content.Intent(ctx, AlarmActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        .padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
+        Text(text, color = Color(0xFF1A0E05), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+    }
+}

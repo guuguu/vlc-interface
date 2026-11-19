@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
@@ -35,7 +36,22 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.BLUETOOTH_CONNECT,
         ) else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.BLUETOOTH_CONNECT))
         handleIntent(intent)
-        setContent { AppRoot(nav) { finish() } }
+        setContent {
+            androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
+                AppRoot(nav) { finish() }
+                // An alarm ringing (or snoozed / being checked): always a way back to its screen, whatever page is open.
+                app.vlcinterface.alarm.AlarmBanner(androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopCenter))
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Opening the app while an alarm rings: its screen comes straight up (to stop or snooze it).
+        val ph = app.vlcinterface.alarm.AlarmEngine.ui.value.phase
+        if (ph == "ringing" || ph == "confirming") try {
+            startActivity(android.content.Intent(this, app.vlcinterface.alarm.AlarmActivity::class.java).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: Exception) {}
     }
 
     /**

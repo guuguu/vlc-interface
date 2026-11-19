@@ -25,6 +25,7 @@ object AlarmScheduler {
     const val ACTION_GUARD = "app.vlcinterface.alarm.GUARD"
     const val ACTION_SNOOZE = "app.vlcinterface.alarm.SNOOZE"
     const val ACTION_AWAKE = "app.vlcinterface.alarm.AWAKE"
+    const val ACTION_RESHOW = "app.vlcinterface.alarm.RESHOW"
     const val EXTRA_ID = "id"
     const val EXTRA_N = "n"
     const val EXTRA_SNOOZED = "snoozed"
@@ -153,6 +154,7 @@ class AlarmReceiver : BroadcastReceiver() {
             AlarmScheduler.ACTION_GUARD -> AlarmEngine.guardCheck(ctx)
             AlarmScheduler.ACTION_SNOOZE -> AlarmEngine.snooze(ctx, intent.getIntExtra(AlarmScheduler.EXTRA_N, 0))
             AlarmScheduler.ACTION_AWAKE -> AlarmEngine.awake(ctx, "notification")
+            AlarmScheduler.ACTION_RESHOW -> AlarmEngine.reshow(ctx)
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
                 AlarmScheduler.reschedule(ctx, checkMissed = true)
