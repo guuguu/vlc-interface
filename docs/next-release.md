@@ -15,3 +15,5 @@ left sideways, same in the radio player, clock screen saver while charging with 
   Complex phase portrait (domain colouring of moving roots / poles), Chladni superposition (several standing-wave
   modes), Mandelbrot dive (slow zoom). Bass / upper band drive their parameters as in the previews.
 - Faster colour changes on all patterns (existing and new), still smooth (no flashing); a "Colour speed" slider.
+- Also Fourier epicycles (rotating circles drawing a curve), enlarged to fill the screen, with thick glowing
+  colour trails that mix and fade slowly; circle radii / speeds follow the bass and the upper band.
