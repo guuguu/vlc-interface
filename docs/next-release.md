@@ -77,3 +77,7 @@
   (no longer limited to the album cover area's size).
 - Landscape: the left half (clock or picture, titles, alarms) fits without scrolling — its items resize dynamically
   to the available height.
+
+## Fixes
+- Alarm settings: the music folder row shows the folder in use — chosen one, else the audio player's one ("(player)"),
+  else "All phone music" — instead of "Choose"; the alarms use the same fallback. (In code.)

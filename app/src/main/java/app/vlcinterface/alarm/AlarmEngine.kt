@@ -231,7 +231,12 @@ object AlarmEngine {
                     true
                 }
             }
-            "local" -> playLocal(Alarms.current.global.localRoot, Alarms.current.global.localVolume).also { if (it && snoozed) otherPart() }
+            "local" -> {
+                // Chosen folder, else the one the audio player uses, else all music on the phone.
+                val g = Alarms.current.global
+                val (root, vol) = if (g.localRoot.isNotEmpty()) g.localRoot to g.localVolume else app.vlcinterface.ui.knownMusicRoot() ?: ("" to "")
+                playLocal(root, vol).also { if (it && snoozed) otherPart() }
+            }
             else -> false
         }
     }

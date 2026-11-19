@@ -188,7 +188,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                 when (a.source) {
                     "local" -> {
                         Explain("Songs from the music folder below and all its subfolders, in random order. If none plays within 15 s, the alarm sound rings.")
-                        HValueRow("Music folder", rootNote.ifEmpty { "Phone music for all alarms" }, gl.localRoot.ifEmpty { "Choose" }) { rootAsk = true }
+                        HValueRow("Music folder", rootNote.ifEmpty { "Phone music for all alarms" }, musicRootText(gl)) { rootAsk = true }
                     }
                     "radio" -> {
                         Explain("The preferred station plays live (no buffer). Not heard within 15 s → the fallback station; not heard either → the alarm sound.")
@@ -285,7 +285,7 @@ fun AlarmSettingsScreen(nav: Navigator) {
                 Divider()
                 HValueRow("Alarm sound", "When nothing else can play, or music was already playing", g.toneName.ifEmpty { "Phone's alarm" }) { soundAsk = true }
                 Divider()
-                HValueRow("Music folder", "Phone music played by the alarms (with its subfolders)", g.localRoot.ifEmpty { "Choose" }) { rootAsk = true }
+                HValueRow("Music folder", "Phone music played by the alarms (with its subfolders)" + if (g.localRoot.isEmpty()) " — not chosen, the current one is used" else "", musicRootText(g)) { rootAsk = true }
                 Divider()
                 HToggleRow("Vibrate", "", g.vibrate) { set(g.copy(vibrate = it)) }; Divider()
                 Label("Light blinking")
@@ -734,3 +734,6 @@ private fun HealthCard() {
         }
     }
 }
+
+/** The music folder the alarms use: chosen one, else the one the audio player uses, else all phone music. */
+fun musicRootText(g: AlarmGlobal): String = g.localRoot.ifEmpty { knownMusicRoot()?.first?.let { "$it (player)" } ?: "All phone music" }
