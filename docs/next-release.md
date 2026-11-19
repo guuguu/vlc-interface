@@ -19,7 +19,9 @@
 
 ## Export / import: choose what goes in (requested 2026-11-19 19:39)
 - On the Export / import page the categories become tickable (all ticked by default) instead of fixed ✓ marks:
-  settings (per Settings group), LAN and Internet sources, saved passwords, radio favourites, playlists, alarms and
+  settings (per Settings group), NAS (home servers, shares, their home and VPN addresses), VPN (VPN app, home
+  servers on the VPN, retry delay, ask to start), Internet sources, saved passwords, radio favourites, playlists, alarms and
   alarm settings, subtitle style and sync offsets, resume positions and scanned folders.
 - Export saves only the ticked categories; import shows the categories found in the file, ticked, and applies only
   those (the rest of the current setup stays as it is).
+  (NAS and VPN as their own categories: requested 2026-11-19 19:41)
