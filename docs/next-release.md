@@ -75,3 +75,5 @@
 ## Clock size (requested 2026-11-19)
 - The clock in the player takes the maximum available screen space without overlapping other items
   (no longer limited to the album cover area's size).
+- Landscape: the left half (clock or picture, titles, alarms) fits without scrolling — its items resize dynamically
+  to the available height.
