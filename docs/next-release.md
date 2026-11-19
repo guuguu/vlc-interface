@@ -4,7 +4,8 @@
 - Page 1: every permission the app needs, what it is for, and under each a link that opens the right Android
   screen (or the system dialog) to grant / set it.
 - Next pages follow the Settings groups and ask for the important settings.
-- Every page: Next / Skip / Help.
+- Every page: Next / Skip / Help, in the page's header, which stays fixed while the page scrolls under it
+  (requested 2026-11-19 19:33).
   - Next: checks that everything asked on the page is set / granted; if not (e.g. a permission refused), says what
     won't work or won't appear without it before going on.
   - Skip: goes on, noting it can all be set later in Settings, and what won't work / which defaults (system or app)
