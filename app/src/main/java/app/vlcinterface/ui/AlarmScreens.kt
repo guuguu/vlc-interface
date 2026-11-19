@@ -46,6 +46,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -378,11 +379,17 @@ fun ClockAspectScreen(nav: Navigator) {
     val a = d.aspect
     fun set(n: ClockAspect) = Alarms.setAspect(n)
     val scroll = rememberScrollState()
+    var dimPreviewAt by remember { androidx.compose.runtime.mutableLongStateOf(0L) }
+    var dimTick by remember { androidx.compose.runtime.mutableIntStateOf(0) }
+    if (dimTick < 0) return   // read: the preview redraws when the 3 s dimming preview ends
     Column(Modifier.fillMaxSize()) {
         BackHeader("Clock aspect", nav)
         // Live preview of the chosen design: follows every change at once. Outside the disk: the player's background.
         Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).clip(RoundedCornerShape(12.dp)).background(PLAYER_BG), contentAlignment = Alignment.Center) {
-            ClockFace(a, Modifier.padding(8.dp).size(190.dp))
+            val showDim = System.currentTimeMillis() - dimPreviewAt < 3000
+            androidx.compose.runtime.LaunchedEffect(dimPreviewAt) { kotlinx.coroutines.delay(3100); dimTick++ }
+            ClockFace(a, Modifier.padding(8.dp).size(190.dp).then(if (showDim) Modifier.alpha(1f - a.dim / 100f) else Modifier))
+            if (showDim) Text("Charging screen preview", color = C.muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp))
         }
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SectionTitle("Design")
@@ -410,8 +417,9 @@ fun ClockAspectScreen(nav: Navigator) {
             }
             SectionTitle("Dimming and thickness")
             CardBox {
-                SliderRow("Dimming", a.dim.toFloat(), 0f..85f, "${a.dim} %") { set(a.copy(dim = it.toInt())) }
-                Text("All clocks: player, ringing screen and the screen saver", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
+                SliderRow("Charging dimming", a.dim.toFloat(), 0f..85f, "${a.dim} %") { set(a.copy(dim = it.toInt())); dimPreviewAt = System.currentTimeMillis() }
+                Text("Only the clock shown while charging (screen saver); the preview above shows it while you move the slider",
+                    color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
                 val key = if (a.analog) "${a.design}" else "d"
                 val tk = a.thickFor()
                 SliderRow("Thickness", tk, 0.5f..2.5f, "×%.1f".format(tk)) { set(a.copy(thick = a.thick + (key to it))) }

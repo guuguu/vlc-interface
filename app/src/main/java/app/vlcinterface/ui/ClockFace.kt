@@ -101,7 +101,7 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer, zone
     val h = cal.get(Calendar.HOUR_OF_DAY); val m = cal.get(Calendar.MINUTE); val s = cal.get(Calendar.SECOND)
     val dow = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
     val dayNo = cal.get(Calendar.DAY_OF_MONTH)
-    val dim = (if (a.nightDim > 0 && (h >= 22 || h < 7)) 1f - a.nightDim / 100f else 1f) * (1f - a.dim.coerceIn(0, 90) / 100f)
+    val dim = if (a.nightDim > 0 && (h >= 22 || h < 7)) 1f - a.nightDim / 100f else 1f
     // Thickness of lines and fonts, set per design.
     val thk = a.thickFor().coerceIn(0.4f, 3f)
     val weightK = FontWeight((400 * thk).toInt().coerceIn(100, 900))

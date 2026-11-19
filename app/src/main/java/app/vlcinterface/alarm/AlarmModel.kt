@@ -150,7 +150,7 @@ data class ClockAspect(
     val digitalDate: Boolean = true,
     /** Night (22:00–07:00): clock dimmed by this %. */
     val nightDim: Int = 40,
-    /** Dimming of every clock (player, ringing screen, screen saver), %. */
+    /** Dimming of the charging screen saver clock only, %. */
     val dim: Int = 25,
     /** Line / font thickness per design: "1", "2", "4", "5", "8", "d" (digital). */
     val thick: Map<String, Float> = emptyMap(),

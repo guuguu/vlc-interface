@@ -70,7 +70,8 @@ class ClockDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
                 // Slight movement only: a few % of the clock's size, never off the screen.
                 val dx = minOf(freeX, side * 0.04f) * sin(s / 160.0).toFloat()
                 val dy = minOf(freeY, side * 0.04f) * cos(s / 220.0).toFloat()
-                app.vlcinterface.ui.ClockFace(aspect, Modifier.offset(freeX + dx, freeY + dy).size(side))
+                // Dimming: only here, on the charging screen saver.
+                app.vlcinterface.ui.ClockFace(aspect, Modifier.offset(freeX + dx, freeY + dy).size(side).alpha(1f - aspect.dim.coerceIn(0, 90) / 100f))
             }
         }
         setContentView(v)
