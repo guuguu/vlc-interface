@@ -74,17 +74,30 @@ fun ClockToggleButton(size: Int = 30) {
     }
 }
 
-/** In the picture's place: the clock, then the alarms (tap one: its page). */
+/** Under the clock: the alarms (tap one: its page). [compact]: sideways, small chips in a row. */
 @Composable
-fun ClockArea(nav: Navigator, sizeDp: Int) {
+fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
     val d by Alarms.state.collectAsState()
-    ClockFace(d.aspect, Modifier.padding(top = 8.dp).size(sizeDp.dp))
+    val ctxH = LocalContext.current
+    val issues = remember(resumeTick()) { alarmIssues(ctxH) }
+    val list = d.alarms.filter { it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID }.sortedBy { it.hour * 60 + it.minute }
+    val warn = issues.isNotEmpty() && list.any { it.on }
+    if (compact) {
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (warn) Text("⚠", color = C.bad, fontSize = 14.sp, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(4.dp))
+            list.forEach { al ->
+                Text(al.timeText, color = if (al.on) C.text else C.muted, fontSize = 13.sp, fontWeight = if (al.on) FontWeight.SemiBold else FontWeight.Normal,
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF)).clickable { nav.go(Screen.AlarmEdit(al.id)) }.padding(horizontal = 8.dp, vertical = 3.dp))
+            }
+            Text("+", color = accent(), fontSize = 14.sp, modifier = Modifier.clickable { nav.go(Screen.AlarmEdit("")) }.padding(horizontal = 6.dp, vertical = 2.dp))
+            Text("⚙", color = C.muted, fontSize = 14.sp, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(horizontal = 6.dp, vertical = 2.dp))
+        }
+        return
+    }
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x14FFFFFF))) {
-        val ctxH = LocalContext.current
-        val issues = remember(resumeTick()) { alarmIssues(ctxH) }
-        if (issues.isNotEmpty() && d.alarms.any { it.on }) Text("⚠  Alarms may not ring: " + issues.joinToString(" · ") { it.title } + "  ›", color = C.bad, fontSize = 13.sp,
+        if (warn) Text("⚠  Alarms may not ring: " + issues.joinToString(" · ") { it.title } + "  ›", color = C.bad, fontSize = 13.sp,
             modifier = Modifier.fillMaxWidth().clickable { nav.go(Screen.AlarmSettings) }.padding(12.dp))
-        d.alarms.filter { it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID }.sortedBy { it.hour * 60 + it.minute }.forEach { al ->
+        list.forEach { al ->
             Row(Modifier.fillMaxWidth().clickable { nav.go(Screen.AlarmEdit(al.id)) }.padding(horizontal = 12.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(al.timeText, color = if (al.on) C.text else C.muted, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)

@@ -73,12 +73,45 @@ static bool g_eqRateChanged;       /* output sample rate changed: tone filters a
 
 /* Peaks per written chunk, keyed by play time, read by the UI when that time comes. */
 #define RING 256
-typedef struct { int64_t pts; float l, r; } peak_t;
+typedef struct { int64_t pts; float l, r, ba, bb; } peak_t;
 static peak_t g_ring[RING];
 
 /* Diagnostics, read by Kotlin (watchdog + Settings → Sound). */
 static atomic_long st_setup, st_setupRes = -99, st_play, st_frames, st_lastWrite, st_startRes = -99, st_ptsDelta, st_rate, st_open = -99;
-static atomic_uint g_w, g_r;
+static atomic_uint g_w, g_r, g_r2;
+
+/* Visualisation: two frequency bands (lower and upper part of the chosen range), measured on the song's samples
+   before the volume, so the pictures don't depend on how loud it is played. */
+static _Atomic float g_bandLo = 30.f, g_bandHi = 150.f;
+static float g_bandUsed[3] = { 0, 0, 0 };     /* lo, hi, rate the filters were made for */
+typedef struct { float b0, b1, b2, a1, a2, z0, z1; } vbq_t;
+static vbq_t g_vb[4];                          /* band A: hp, lp; band B: hp, lp */
+
+static void vbq_design(vbq_t *q, bool high, float f, float fs) {
+    if (f > fs * 0.45f) f = fs * 0.45f;
+    if (f < 10.f) f = 10.f;
+    float w0 = 2.f * (float)M_PI * f / fs, cw = cosf(w0), al = sinf(w0) / (2.f * 0.7071f), a0 = 1.f + al;
+    if (high) { q->b0 = (1.f + cw) / 2.f / a0; q->b1 = -(1.f + cw) / a0; q->b2 = q->b0; }
+    else { q->b0 = (1.f - cw) / 2.f / a0; q->b1 = (1.f - cw) / a0; q->b2 = q->b0; }
+    q->a1 = -2.f * cw / a0; q->a2 = (1.f - al) / a0; q->z0 = q->z1 = 0.f;
+}
+
+static inline float vbq_run(vbq_t *q, float x) {
+    float y = q->b0 * x + q->z0;
+    q->z0 = q->b1 * x - q->a1 * y + q->z1;
+    q->z1 = q->b2 * x - q->a2 * y;
+    return y;
+}
+
+/* Wide range (2 octaves or more): split at the middle (geometric); narrow: both bands = the whole range. */
+static void bands_update(void) {
+    float lo = atomic_load(&g_bandLo), hi = atomic_load(&g_bandHi), fs = (float)(g_src ? g_src : g_rate);
+    if (lo == g_bandUsed[0] && hi == g_bandUsed[1] && fs == g_bandUsed[2]) return;
+    g_bandUsed[0] = lo; g_bandUsed[1] = hi; g_bandUsed[2] = fs;
+    float mid = (hi / lo >= 4.f) ? sqrtf(lo * hi) : hi, lo2 = (hi / lo >= 4.f) ? mid : lo;
+    vbq_design(&g_vb[0], true, lo, fs); vbq_design(&g_vb[1], false, mid, fs);
+    vbq_design(&g_vb[2], true, lo2, fs); vbq_design(&g_vb[3], false, hi, fs);
+}
 
 static int64_t now_us(void) {
     if (p_clock) return p_clock();
@@ -356,10 +389,15 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     const float k16 = 1.f / 32768.f;
     unsigned done = 0;
     float pl = 0.f, pr = 0.f;
+    double ea = 0.0, eb = 0.0;
+    bands_update();
     while (done < count) {
         unsigned n = count - done; if (n > 4096) n = 4096;
         for (unsigned i = 0; i < n; i++) {
             float x = in[(done + i) * 2] * k16, y = in[(done + i) * 2 + 1] * k16;
+            float m = (x + y) * 0.5f;
+            float va = vbq_run(&g_vb[1], vbq_run(&g_vb[0], m)), vb = vbq_run(&g_vb[3], vbq_run(&g_vb[2], m));
+            ea += va * va; eb += vb * vb;
             if (g_eqActive) { x = eq_run(x, 0); y = eq_run(y, 1); }
             float k = (float)(done + i);
             float l = x * (sl + dl * k), r = y * (sr + dr * k);
@@ -380,7 +418,8 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     }
     unsigned wi = atomic_load(&g_w);
     int64_t when = (delta > -3000000 && delta < 3000000) ? pts : now_us() + latency_us();
-    g_ring[wi % RING] = (peak_t){ when, pl > 1.f ? 1.f : pl, pr > 1.f ? 1.f : pr };
+    float ra = count ? sqrtf((float)(ea / count)) : 0.f, rb = count ? sqrtf((float)(eb / count)) : 0.f;
+    g_ring[wi % RING] = (peak_t){ when, pl > 1.f ? 1.f : pl, pr > 1.f ? 1.f : pr, ra, rb };
     atomic_store(&g_w, wi + 1);
     pthread_mutex_unlock(&g_lock);
 }
@@ -410,7 +449,7 @@ static void cb_flush(void *d, int64_t pts) {
         AAudioStream_waitForStateChange(g_stream, AAUDIO_STREAM_STATE_FLUSHING, &next, 200LL * 1000000);
         g_started = false;
     }
-    atomic_store(&g_r, atomic_load(&g_w));
+    atomic_store(&g_r, atomic_load(&g_w)); atomic_store(&g_r2, atomic_load(&g_w));
     pthread_mutex_unlock(&g_lock);
 }
 
@@ -619,4 +658,31 @@ JNIEXPORT void JNICALL
 Java_app_vlcinterface_player_NativeAudio_setAppVolume(JNIEnv *env, jobject thiz, jfloat v) {
     (void)env; (void)thiz;
     atomic_store(&g_appVol, v < 0.f ? 0.f : (v > 2.f ? 2.f : v));
+}
+
+/* Visualisation bands: lower and upper limit of the frequency range followed. */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_setBands(JNIEnv *env, jobject thiz, jfloat lo, jfloat hi) {
+    (void)env; (void)thiz;
+    if (lo < 10.f) lo = 10.f;
+    if (hi < lo * 1.2f) hi = lo * 1.2f;
+    atomic_store(&g_bandLo, lo); atomic_store(&g_bandHi, hi);
+}
+
+/* Band levels (RMS, 0..1) of the audio being heard now: out[0] = lower part, out[1] = upper part. Own read position. */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_readBands(JNIEnv *env, jobject thiz, jfloatArray out) {
+    (void)thiz;
+    float a = 0.f, b = 0.f;
+    int64_t now = now_us();
+    unsigned r = atomic_load(&g_r2), w = atomic_load(&g_w);
+    if (w - r > RING) r = w - RING;
+    while (r != w && g_ring[r % RING].pts <= now) {
+        if (g_ring[r % RING].ba > a) a = g_ring[r % RING].ba;
+        if (g_ring[r % RING].bb > b) b = g_ring[r % RING].bb;
+        r++;
+    }
+    atomic_store(&g_r2, r);
+    jfloat v[2] = { a, b };
+    (*env)->SetFloatArrayRegion(env, out, 0, 2, v);
 }

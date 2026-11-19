@@ -23,6 +23,8 @@ object NativeAudio {
     private external fun setGains(left: Float, right: Float, limiter: Boolean)
     private external fun setGainsEq(left: Float, right: Float, limiter: Boolean, eq: FloatArray)
     private external fun readPeaks(out: FloatArray)
+    private external fun readBands(out: FloatArray)
+    private external fun setBands(lo: Float, hi: Float)
     private external fun stats(out: LongArray)
     private external fun reroute()
     private external fun setDevice(id: Int)
@@ -98,5 +100,8 @@ object NativeAudio {
     fun gainsEq(left: Float, right: Float, limiter: Boolean, eq: FloatArray) { if (active) setGainsEq(left, right, limiter, eq) }
 
     /** Left/right peak (0..1) of what is being heard right now. */
+    /** Visualisation: RMS of the lower / upper part of the frequency range followed (0 when not active). */
+    fun bands(out: FloatArray) { if (active) try { readBands(out) } catch (_: Throwable) { out[0] = 0f; out[1] = 0f } else { out[0] = 0f; out[1] = 0f } }
+    fun bandRange(lo: Float, hi: Float) { if (loaded) try { setBands(lo, hi) } catch (_: Throwable) {} }
     fun peaks(out: FloatArray) { if (active) readPeaks(out) else { out[0] = 0f; out[1] = 0f } }
 }

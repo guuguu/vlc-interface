@@ -172,13 +172,24 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             val coverSize = if (!landscape) 280 else if (leftHpx <= 0) 190 else (with(dens) { leftHpx.toDp().value }.toInt() - 128).coerceIn(110, 240)
             // Radio: the announced song's album picture (temporary radio pictures), else the station's logo.
             // Clock button pressed: the clock and the alarms in the picture's place, whatever the player does.
-            val clockOn = app.vlcinterface.alarm.Alarms.state.collectAsState().value.showClock
-            if (clockOn) ClockArea(nav, coverSize) else
-            if (item.isRadio) Cover(p.artworkUrl.ifEmpty { item.artwork }, coverSize, Modifier.padding(top = 8.dp)) else
-            // The picture goes as soon as the song ends (the next song brings its own).
-            Cover(if (p.songOver) "" else item.artwork, if (!landscape) 280 else if (leftHpx <= 0) 190 else (with(dens) { leftHpx.toDp().value }.toInt() - 128).coerceIn(110, 240), Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
-                item = if (p.songOver) null else coverItem, download = !p.songOver, refresh = coverRefresh,
-                onNote = { coverNote = it }, onFound = { player.useDownloadedArtwork(item, "mem:" + item.uri) })
+            val alarmData = app.vlcinterface.alarm.Alarms.state.collectAsState().value
+            val clockOn = alarmData.showClock
+            val pic: @Composable (Int) -> Unit = { sz ->
+                if (clockOn) ClockFace(alarmData.aspect, Modifier.padding(top = 8.dp).size(sz.dp)) else
+                if (item.isRadio) Cover(p.artworkUrl.ifEmpty { item.artwork }, sz, Modifier.padding(top = 8.dp)) else
+                // The picture goes as soon as the song ends (the next song brings its own).
+                Cover(if (p.songOver) "" else item.artwork, sz, Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
+                    item = if (p.songOver) null else coverItem, download = !p.songOver, refresh = coverRefresh,
+                    onNote = { coverNote = it }, onFound = { player.useDownloadedArtwork(item, "mem:" + item.uri) })
+            }
+            // Sideways: the picture / clock takes the height left by the rest of the left half (no scrolling).
+            // Upright: the clock takes the whole width; the album picture keeps its size.
+            if (landscape) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                pic((minOf(maxWidth, maxHeight).value.toInt() - 8).coerceAtLeast(48))
+            } else if (clockOn) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                pic(maxWidth.value.toInt())
+            } else pic(coverSize)
+            if (clockOn) AlarmMiniList(nav, compact = landscape)
             if (coverPick) CoverPicker(coverItem,
                 onNone = { coverPick = false; coverNote = "Looking for the picture online…"; coverRetry++ },
                 onDone = { note, changed ->
@@ -389,8 +400,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         }
         if (landscape) Row(Modifier.weight(1f).fillMaxWidth()) {
             val scrollA = rememberScrollState()
-            Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { leftHpx = it.height }.verticalScroll(scrollA).padding(horizontal = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) { partA() }
+            // Left half: everything fits without scrolling — the picture / clock shrinks to the room left.
+            Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { leftHpx = it.height }.padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) { partA() }
             Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.verticalScroll(scroll).padding(horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partB() }
         } else Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,

@@ -172,22 +172,32 @@ data class ClockAspect(
 
 /** Full-screen visualisation (Settings → Visualisation). */
 data class VisSettings(
-    /** "sunset", "ocean", "forest", "neon", "fire", "aurora", "custom". */
-    val palette: String = "sunset",
+    /** "pattern" (the pattern's own colours), "sunset", "ocean", "forest", "neon", "fire", "aurora", "custom". */
+    val palette: String = "pattern",
     val hue1: Float = 20f,
     val hue2: Float = 200f,
     val hue3: Float = 300f,
     /** Colour brightness 0.2…1. */
     val brightness: Float = 0.85f,
-    /** Effect: "blobs", "bars", "waves", "rings", "particles", "kaleido". */
-    val effect: String = "blobs",
+    /** Pattern: "clouds", "lava", "nebula", "tides", "plasma", "silk", "sunset", "ocean", "embers". */
+    val effect: String = "clouds",
+    /** Movement strength (bass sensitivity) 0.2…2. */
+    val move: Float = 1f,
+    /** Colour mixing strength 0…1. */
+    val mix: Float = 0.6f,
+    /** Frequency range followed (Hz). */
+    val fLo: Float = 30f,
+    val fHi: Float = 150f,
 ) {
     fun toJson(): JSONObject = JSONObject().put("palette", palette).put("hue1", hue1.toDouble()).put("hue2", hue2.toDouble())
-        .put("hue3", hue3.toDouble()).put("brightness", brightness.toDouble()).put("effect", effect)
+        .put("hue3", hue3.toDouble()).put("brightness", brightness.toDouble()).put("effect", effect).put("move", move.toDouble())
+        .put("mix", mix.toDouble()).put("fLo", fLo.toDouble()).put("fHi", fHi.toDouble())
     companion object {
-        fun fromJson(o: JSONObject?) = if (o == null) VisSettings() else VisSettings(o.optString("palette", "sunset"),
+        val EFFECTS = listOf("clouds", "lava", "nebula", "tides", "plasma", "silk", "sunset", "ocean", "embers")
+        fun fromJson(o: JSONObject?) = if (o == null) VisSettings() else VisSettings(o.optString("palette", "pattern"),
             o.optDouble("hue1", 20.0).toFloat(), o.optDouble("hue2", 200.0).toFloat(), o.optDouble("hue3", 300.0).toFloat(),
-            o.optDouble("brightness", 0.85).toFloat(), o.optString("effect", "blobs"))
+            o.optDouble("brightness", 0.85).toFloat(), o.optString("effect", "clouds").let { if (it in EFFECTS) it else "clouds" },
+            o.optDouble("move", 1.0).toFloat(), o.optDouble("mix", 0.6).toFloat(), o.optDouble("fLo", 30.0).toFloat(), o.optDouble("fHi", 150.0).toFloat())
     }
 }
 
