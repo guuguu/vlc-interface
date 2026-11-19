@@ -16,3 +16,5 @@
   Subtitles, Alarm clock, Visualisation, Setup export / import, Logs).
 - Long-press on ANY item of any settings page or subpage: a pop-up explaining that setting.
 - All sliders in the settings thin, like the sliders of the player (thin track, small knob).
+- Every page that has a Save button gets it in its header (right side, accent colour), like the alarm and source
+  pages already do (e.g. ReplayGain scan page). Small pop-up dialogs keep their Save at the bottom (no header).
