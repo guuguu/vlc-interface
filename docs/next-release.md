@@ -26,3 +26,7 @@
     accent…), also listed on the main Settings page.
 - Look settings page: the order of the main Settings links can be changed (move each link up / down, or drag),
   with "Reset order".
+
+## Clock in the player (requested 2026-11-19 18:54)
+- A small settings wheel (⚙) in a corner of the clock's square (top right, outside the round face, never over the
+  clock), opening Settings → Alarm clock.
