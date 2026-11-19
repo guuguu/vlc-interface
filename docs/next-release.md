@@ -7,3 +7,5 @@
   - "VPN active": VPN up, NAS use switched off
   - "NAS unreach": NAS use on, but the NAS can't be reached
   - no VPN and NAS use off: stays "VPN-NAS off" (assumption, unless told otherwise)
+- In front of the label: a Wi-Fi or mobile-data symbol for the connection in use, updated live as the phone switches
+  (no symbol when there's no connection).
