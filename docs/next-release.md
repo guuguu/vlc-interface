@@ -11,3 +11,9 @@
 - When the clock is shown, it stays fixed at the top of the player; the rest of the page scrolls underneath it.
 - The clock and the visualisation work exactly the same in the radio player as in the audio player
   (same buttons, same clock area, same alarms list).
+
+## Clock as the charging screen saver (asked 2026-11-19)
+- The app provides an Android screen saver (DreamService) that shows the clock model chosen in the app, dimmed,
+  drifting very slowly around the screen (also protects the screen from burn-in), with the weather / date as set.
+- Turned on by the user in Android: Settings → Display → Screen saver → "vlc interface clock", start "While charging".
+  A shortcut to that Android page from Settings → Alarm clock.
