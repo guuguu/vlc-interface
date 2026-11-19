@@ -70,3 +70,4 @@
 - More patterns (ambient ones added to the existing effects).
 - Settings → Visualisation: each pattern button shows a preview picture of that pattern in a small pop-up placed
   above the pattern buttons (when the button is touched / chosen).
+- The preview pop-up closes by itself after 3 s; choosing another pattern shows that one's preview (3 s again).
