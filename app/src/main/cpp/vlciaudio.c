@@ -56,6 +56,8 @@ static unsigned g_rate = 48000;   /* rate the device plays at */
 /* Rate libVLC sends (agreed in setup). When the output reopens by itself (headphones, Bluetooth, device switch)
    Android may give another rate: the sound is then converted here, so it never plays faster/slower or off pitch. */
 static unsigned g_src = 0;
+/* Bluetooth quality mode: the stream is opened at the Bluetooth link's rate (0 = the song's rate). */
+static _Atomic int g_prefRate = 0;
 static double g_rsPh = 0.0;          /* resampler: next output position, in input frames */
 static float g_rsHist[3 * 2];        /* resampler: last 3 input frames (L,R) */
 static unsigned g_rsFrom = 0, g_rsTo = 0;
@@ -165,7 +167,8 @@ static bool open_stream(void) {
     AAudioStreamBuilder_setFormat(b, AAUDIO_FORMAT_PCM_FLOAT);
     AAudioStreamBuilder_setChannelCount(b, 2);
     /* Always ask for the song's rate; Android may still give another one (then converted in cb_play). */
-    AAudioStreamBuilder_setSampleRate(b, (int32_t)(g_src ? g_src : g_rate));
+    int pref = atomic_load(&g_prefRate);
+    AAudioStreamBuilder_setSampleRate(b, (int32_t)(pref > 0 ? (unsigned)pref : (g_src ? g_src : g_rate)));
     AAudioStreamBuilder_setUsage(b, AAUDIO_USAGE_MEDIA);
     AAudioStreamBuilder_setContentType(b, AAUDIO_CONTENT_TYPE_MUSIC);
     /* Other apps may listen to the app's sound (Shazam's "listen to apps" without the microphone). */
@@ -685,4 +688,10 @@ Java_app_vlcinterface_player_NativeAudio_readBands(JNIEnv *env, jobject thiz, jf
     atomic_store(&g_r2, r);
     jfloat v[2] = { a, b };
     (*env)->SetFloatArrayRegion(env, out, 0, 2, v);
+}
+
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_setPreferredRate(JNIEnv *env, jobject thiz, jint hz) {
+    (void)env; (void)thiz;
+    atomic_store(&g_prefRate, (hz >= 8000 && hz <= 192000) ? hz : 0);
 }

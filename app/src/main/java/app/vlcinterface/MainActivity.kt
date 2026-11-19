@@ -61,7 +61,9 @@ class MainActivity : ComponentActivity() {
      */
     override fun dispatchKeyEvent(event: android.view.KeyEvent): Boolean {
         val k = event.keyCode
-        if ((k == android.view.KeyEvent.KEYCODE_VOLUME_UP || k == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) && !App.instance.output.overriding) {
+        // Bluetooth quality mode: always the device's (Android's) volume, the app's own volume stays at 100 %.
+        val btq = app.vlcinterface.player.BtQuality.on()
+        if ((k == android.view.KeyEvent.KEYCODE_VOLUME_UP || k == android.view.KeyEvent.KEYCODE_VOLUME_DOWN) && (!App.instance.output.overriding || btq)) {
             // Media volume, every time: right after resuming, Android could think nothing plays and change another volume.
             if (event.action == android.view.KeyEvent.ACTION_DOWN) {
                 val am = getSystemService(android.media.AudioManager::class.java)

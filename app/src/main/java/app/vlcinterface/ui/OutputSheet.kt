@@ -1,5 +1,6 @@
 package app.vlcinterface.ui
 
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -96,6 +97,16 @@ fun OutputSheet(onDismiss: () -> Unit) {
                         Pill("Codec settings") {
                             try { ctxB.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
                         }
+                    }
+                }
+                // Bluetooth quality mode.
+                val stQ by app.vlcinterface.App.instance.store.state.collectAsState()
+                val scopeQ = androidx.compose.runtime.rememberCoroutineScope()
+                CardBox {
+                    ToggleRow("Bluetooth quality mode", "App volume kept at 100 % (the device's volume is used) and the sound sent at the link's rate" +
+                        (app.vlcinterface.player.BtCodec.linkRateHz.takeIf { it > 0 }?.let { " (${it / 1000.0} kHz)" } ?: ""), stQ.settings.btQuality) { on ->
+                        app.vlcinterface.App.instance.store.update { it.copy(settings = it.settings.copy(btQuality = on)) }
+                        scopeQ.launch { app.vlcinterface.player.BtQuality.apply(ctxB) }
                     }
                 }
             }

@@ -21,6 +21,10 @@ object BtCodec {
     /** e.g. "SBC · 44.1 kHz · 16-bit", or null when Android doesn't tell. */
     suspend fun info(ctx: Context): String? = try { infoInner(ctx) } catch (_: Throwable) { null }
 
+    /** Sample rate of the Bluetooth link in Hz, from the last [info] (0 = unknown). */
+    @Volatile var linkRateHz = 0
+    private fun rateHz(r: Int) = when (r) { 0x1 -> 44100; 0x2 -> 48000; 0x4 -> 88200; 0x8 -> 96000; 0x10 -> 176400; 0x20 -> 192000; else -> 0 }
+
     private suspend fun infoInner(ctx: Context): String? = withTimeoutOrNull(3000) {
         val adapter = ctx.getSystemService(BluetoothManager::class.java)?.adapter ?: return@withTimeoutOrNull null
         val a2dp: BluetoothA2dp = suspendCancellableCoroutine { cont ->
@@ -38,10 +42,34 @@ object BtCodec {
             val cfg = status.javaClass.getMethod("getCodecConfig").invoke(status) ?: return@withTimeoutOrNull null
             fun int(m: String) = try { cfg.javaClass.getMethod(m).invoke(cfg) as Int } catch (_: Exception) { -1 }
             val type = int("getCodecType")
+            linkRateHz = rateHz(int("getSampleRate"))
             val q = try { cfg.javaClass.getMethod("getCodecSpecific1").invoke(cfg) as Long } catch (_: Exception) { 0L }
             listOf(if (type == 4) ldacName(q).ifEmpty { "LDAC" } else codecName(type), rateName(int("getSampleRate")), bitsName(int("getBitsPerSample")))
                 .filter { it.isNotEmpty() }.joinToString(" · ")
         } catch (_: Throwable) { null }
         finally { try { adapter.closeProfileProxy(BluetoothProfile.A2DP, a2dp) } catch (_: Exception) {} }
+    }
+}
+
+/**
+ * Bluetooth quality mode (Settings, sound output sheet): on a Bluetooth output played through Android's own routing,
+ * the app's digital volume stays at 100 % (volume keys and swipes change the device's volume) and the sound is sent
+ * at the Bluetooth link's sample rate, so the phone doesn't convert it once more on the way.
+ */
+object BtQuality {
+    fun on(): Boolean = try {
+        val app = app.vlcinterface.App.instance
+        app.store.current.settings.btQuality && !app.output.overriding &&
+            app.output.devices.value.any { it.active && it.kind == OutputKind.BLUETOOTH }
+    } catch (_: Throwable) { false }
+
+    /** Applied when the output changes and when the setting is switched. */
+    suspend fun apply(ctx: Context) {
+        val player = app.vlcinterface.App.instance.player
+        if (on()) {
+            player.setAppVolume(1f)
+            if (BtCodec.linkRateHz == 0) BtCodec.info(ctx)
+            NativeAudio.preferRate(BtCodec.linkRateHz)
+        } else NativeAudio.preferRate(0)
     }
 }

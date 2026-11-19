@@ -1,5 +1,6 @@
 package app.vlcinterface
 
+import kotlinx.coroutines.launch
 import android.app.Application
 import android.media.AudioManager
 import app.vlcinterface.data.ServerLog
@@ -94,6 +95,12 @@ class App : Application() {
                 (after == null || after.kind == OutputKind.SPEAKER)
             // Not when you picked the speaker yourself in Sound output: then it just keeps playing there.
             if (lostPersonal && !picked && store.current.settings.pauseOnDisconnect) player.pause()
+            // Bluetooth quality mode: link rate and 100 % app volume follow the output.
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                kotlinx.coroutines.delay(800)
+                app.vlcinterface.player.BtCodec.linkRateHz = 0
+                app.vlcinterface.player.BtQuality.apply(this@App)
+            }
         }
     }
 

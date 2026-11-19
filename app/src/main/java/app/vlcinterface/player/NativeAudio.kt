@@ -30,6 +30,7 @@ object NativeAudio {
     private external fun setDevice(id: Int)
     private external fun setAppVolume(v: Float)
     private external fun setDeep(on: Boolean)
+    private external fun setPreferredRate(hz: Int)
 
     /** Music: biggest output buffer (steady Bluetooth); video: normal buffer (picture and sound in step). */
     fun deepBuffer(on: Boolean) { if (active) try { setDeep(on) } catch (_: Throwable) {} }
@@ -102,6 +103,13 @@ object NativeAudio {
     /** Left/right peak (0..1) of what is being heard right now. */
     /** Visualisation: RMS of the lower / upper part of the frequency range followed (0 when not active). */
     fun bands(out: FloatArray) { if (active) try { readBands(out) } catch (_: Throwable) { out[0] = 0f; out[1] = 0f } else { out[0] = 0f; out[1] = 0f } }
+    /** Output stream at this rate (Bluetooth link rate), 0 = the song's rate. Reopens the stream when it changes. */
+    @Volatile private var prefRate = 0
+    fun preferRate(hz: Int) {
+        if (!loaded || hz == prefRate) return
+        prefRate = hz
+        try { setPreferredRate(hz); if (active) reroute() } catch (_: Throwable) {}
+    }
     fun bandRange(lo: Float, hi: Float) { if (loaded) try { setBands(lo, hi) } catch (_: Throwable) {} }
     fun peaks(out: FloatArray) { if (active) readPeaks(out) else { out[0] = 0f; out[1] = 0f } }
 }

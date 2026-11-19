@@ -307,7 +307,7 @@ private class VolumeDrag(ctx: Context) {
         // Speaker picked in the app while Android routes media to Bluetooth: Android's volume would change the
         // Bluetooth device, so the swipe changes the app's volume on the device that is playing.
         warned = false
-        own = app.vlcinterface.App.instance.output.overriding
+        own = app.vlcinterface.App.instance.output.overriding && !app.vlcinterface.player.BtQuality.on()
         if (own) ownBase = app.vlcinterface.App.instance.player.appVolume
         base = am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
     }

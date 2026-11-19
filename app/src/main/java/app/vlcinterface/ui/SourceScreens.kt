@@ -66,7 +66,13 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
     val scroll = rememberScrollState()
 
     Column(Modifier.fillMaxSize()) {
-        BackHeader(if (existing != null) "Edit source" else "New source", nav)
+        BackHeader(if (existing != null) "Edit source" else "New source", nav, actions = {
+            SaveTopButton(enabled = s.host.isNotBlank()) {
+                val final = s.copy(name = s.name.ifBlank { Urls.hostOnly(s.host).ifEmpty { s.host } })
+                store.update { st -> st.copy(sources = st.sources.filterNot { it.id == final.id } + final) }
+                nav.back()
+            }
+        })
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             SectionTitle("Preset")
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -131,11 +137,6 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
                     app.vlcinterface.data.ServerLog.log(s.host, "test", s.proto.uppercase(), s.user, r.isSuccess, test.drop(2), r.exceptionOrNull()?.let { app.vlcinterface.sources.SmbErrors.ntStatus(it) } ?: "", started)
                 }
             }, Modifier.weight(1f)) { if (testing) CircularProgressIndicator(Modifier.height(18.dp), color = accent()) else Text("Test connection") }
-            SButton({
-                val final = s.copy(name = s.name.ifBlank { Urls.hostOnly(s.host).ifEmpty { s.host } })
-                store.update { st -> st.copy(sources = st.sources.filterNot { it.id == final.id } + final) }
-                nav.back()
-            }, Modifier.weight(1f), enabled = s.host.isNotBlank(), colors = ButtonDefaults.buttonColors(containerColor = accent())) { Text("Save preset") }
         }
     }
 }

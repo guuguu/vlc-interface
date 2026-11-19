@@ -117,6 +117,9 @@ data class SubStyle(
 }
 
 data class Settings(
+    /** Bluetooth quality mode: on a Bluetooth output the app's own volume stays at 100 % (the device volume is used)
+     *  and the sound is sent at the Bluetooth link's rate. */
+    val btQuality: Boolean = false,
     val volumeSwipe: Boolean = true,
     val brightnessSwipe: Boolean = true,
     val doubleTapSeekSec: Int = 10,

@@ -16,6 +16,8 @@ data class Alarm(
     val minute: Int = 0,
     /** Days: bit 0 = Monday … bit 6 = Sunday. 0 = once. */
     val days: Int = 0,
+    /** Date "yyyy-MM-dd" ("" = none): a single alarm rings on that date; a repeating one starts repeating from it. */
+    val date: String = "",
     /** "local" (music stored on the phone, under the root folder), "radio" (preferred → fallback station), "tone". */
     val source: String = "local",
     val playlistId: String = "",
@@ -37,7 +39,7 @@ data class Alarm(
     val localFallback: Boolean = true,
 ) {
     fun toJson(): JSONObject = JSONObject().put("id", id).put("on", on).put("name", name).put("hour", hour).put("minute", minute)
-        .put("days", days).put("source", source).put("playlistId", playlistId).put("stationUrl", stationUrl).put("stationName", stationName).put("fallbackUrl", fallbackUrl).put("fallbackName", fallbackName)
+        .put("days", days).put("date", date).put("source", source).put("playlistId", playlistId).put("stationUrl", stationUrl).put("stationName", stationName).put("fallbackUrl", fallbackUrl).put("fallbackName", fallbackName)
         .put("volStart", volStart).put("volTarget", volTarget).put("fadeSec", fadeSec).put("maxSnoozes", maxSnoozes)
         .put("stopAfterMin", stopAfterMin).put("output", output).put("localFallback", localFallback)
 
@@ -45,12 +47,20 @@ data class Alarm(
 
     companion object {
         fun fromJson(o: JSONObject) = Alarm(o.optString("id", UUID.randomUUID().toString()), o.optBoolean("on", true), o.optString("name"),
-            o.optInt("hour", 7), o.optInt("minute"), o.optInt("days"), o.optString("source", "local").let { if (it == "radio" || it == "tone") it else "local" }, o.optString("playlistId"),
+            o.optInt("hour", 7), o.optInt("minute"), o.optInt("days"), o.optString("date"), o.optString("source", "local").let { if (it == "radio" || it == "tone") it else "local" }, o.optString("playlistId"),
             o.optString("stationUrl"), o.optString("stationName"), o.optString("fallbackUrl"), o.optString("fallbackName"), o.optInt("volStart", 10), o.optInt("volTarget", 60),
             o.optInt("fadeSec", 60), o.optInt("maxSnoozes", 3), o.optInt("stopAfterMin", 30), o.optString("output"),
             o.optBoolean("localFallback", true))
 
         private val DAY = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+        /** Days, with the date when there is one ("Thu 4 Dec" / "Mon–Fri from 4 Dec"). */
+        fun whenText(a: Alarm): String {
+            if (a.date.isEmpty()) return daysText(a.days)
+            val d = try { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(a.date) } catch (_: Exception) { null } ?: return daysText(a.days)
+            val shown = java.text.SimpleDateFormat("EEE d MMM", java.util.Locale.getDefault()).format(d)
+            return if (a.days == 0) shown else daysText(a.days) + " from " + shown
+        }
+
         fun daysText(d: Int): String = when (d) {
             0 -> "Once"
             0x7F -> "Every day"

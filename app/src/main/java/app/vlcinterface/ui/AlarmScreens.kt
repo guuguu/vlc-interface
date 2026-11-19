@@ -104,7 +104,7 @@ fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
                 Text(al.timeText, color = if (al.on) C.text else C.muted, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     if (al.name.isNotEmpty()) Text(al.name, color = C.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(Alarm.daysText(al.days), color = C.muted, fontSize = 12.sp)
+                    Text(Alarm.whenText(al), color = C.muted, fontSize = 12.sp)
                 }
                 Switch(al.on, { Alarms.put(al.copy(on = it)) }, colors = SwitchDefaults.colors(checkedTrackColor = accent()))
             }
@@ -155,6 +155,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     val start = remember(id) { Alarms.get(id) ?: Alarm() }
     var a by remember(id) { mutableStateOf(start) }
     var timeAsk by remember { mutableStateOf(false) }
+    var dateAsk by remember { mutableStateOf(false) }
     var rootAsk by remember { mutableStateOf(false) }
     var soundAsk by remember { mutableStateOf(false) }
     var rootNote by remember { mutableStateOf("") }
@@ -164,7 +165,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     val scroll = rememberScrollState()
     HelpHost {
     Column(Modifier.fillMaxSize()) {
-        BackHeader(if (Alarms.get(id) == null) "New alarm" else "Alarm", nav)
+        BackHeader(if (Alarms.get(id) == null) "New alarm" else "Alarm", nav, actions = { SaveTopButton { Alarms.put(a); nav.back() } })
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             CardBox {
                 HToggleRow("Alarm on", "", a.on) { a = a.copy(on = it) }; Divider()
@@ -186,7 +187,12 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                             contentAlignment = Alignment.Center) { Text(l, color = if (on) Color(0xFF1A0E05) else C.text, fontWeight = FontWeight.SemiBold) }
                     }
                 }
-                Text(Alarm.daysText(a.days), color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
+                Text(Alarm.whenText(a), color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
+                Divider()
+                HValueRow("Date", if (a.date.isEmpty()) "Not set: the next matching day" else if (a.days == 0) "Rings once, on this date" else "Starts repeating from this date",
+                    if (a.date.isEmpty()) "Set" else Alarm.whenText(a.copy(days = 0))) { dateAsk = true }
+                if (a.date.isNotEmpty()) Text("Clear the date", color = accent(), fontSize = 13.sp,
+                    modifier = Modifier.padding(start = 16.dp, bottom = 10.dp).clickable { a = a.copy(date = "") })
             }
             SectionTitle("What plays")
             CardBox {
@@ -242,11 +248,22 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                     a.output) { a = a.copy(output = it) }
             }
             Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (Alarms.get(id) != null) Pill("Delete", modifier = Modifier.weight(1f)) { Alarms.delete(a.id); nav.back() }
-                Pill("Save", filled = true, modifier = Modifier.weight(1f)) { Alarms.put(a); nav.back() }
+                if (Alarms.get(id) != null) Pill("Delete alarm", modifier = Modifier.weight(1f)) { Alarms.delete(a.id); nav.back() }
             }
         }
     }
+    }
+    if (dateAsk) {
+        val utc = java.util.TimeZone.getTimeZone("UTC")
+        val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply { timeZone = utc }
+        val initial = a.date.takeIf { it.isNotEmpty() }?.let { try { fmt.parse(it)?.time } catch (_: Exception) { null } }
+            ?: (System.currentTimeMillis() + Alarms.zone().getOffset(System.currentTimeMillis()))
+        val dp = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = initial)
+        androidx.compose.material3.DatePickerDialog(onDismissRequest = { dateAsk = false },
+            confirmButton = { STextButton({ dp.selectedDateMillis?.let { a = a.copy(date = fmt.format(java.util.Date(it))) }; dateAsk = false }) { Text("OK", color = accent()) } },
+            dismissButton = { STextButton({ dateAsk = false }) { Text("Cancel") } }) {
+            androidx.compose.material3.DatePicker(dp)
+        }
     }
     if (timeAsk) {
         val tp = rememberTimePickerState(a.hour, a.minute, Alarms.current.aspect.h24)
@@ -500,6 +517,7 @@ private val HELP: Map<String, String> = mapOf(
     "Alarm on" to "Switches this alarm on or off without deleting it. A one-time alarm switches itself off after ringing.",
     "Time" to "When the alarm rings, in the time zone of the city chosen in the alarm clock settings (or the phone's).",
     "Days" to "The days it repeats. No day selected: it rings once, at the next time shown.",
+    "Date" to "A date for the alarm. With no day selected it rings once, on that date. With days selected it starts repeating from that date (nothing before it).",
     "What plays" to "Phone music: songs stored on the phone under the music folder. Radio: a live station, with a fallback station. Alarm sound: only the sound chosen below. Network songs from the NAS are never used, so a NAS or Wi-Fi problem can't silence an alarm.",
     "Music folder" to "The phone folder the alarms take songs from (all its subfolders too), in random order. Asked once; it is taken from the audio player when the player already plays phone music.",
     "Preferred station" to "The radio station the alarm starts with, played live without a network buffer.",

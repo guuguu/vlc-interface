@@ -722,7 +722,11 @@ class PlayerController(private val context: Context, private val store: Store) {
     var appVolume = 1f
         private set
 
-    fun setAppVolume(v: Float) { appVolume = v.coerceIn(0f, 2f); NativeAudio.appVolume(if (sleepClosing) 0f else appVolume * fadeK) }
+    fun setAppVolume(v: Float) {
+        // Bluetooth quality mode: the app's own (digital) volume stays at 100 %; the device volume does the rest.
+        appVolume = if (BtQuality.on()) 1f else v.coerceIn(0f, 2f)
+        NativeAudio.appVolume(if (sleepClosing) 0f else appVolume * fadeK)
+    }
 
     // ---------- sleep fade ----------
 

@@ -33,7 +33,21 @@ object AlarmScheduler {
     const val MISSED_ID = 7302
     const val CH_NEXT = "alarm_next_quiet"
 
-    fun nextTime(a: Alarm, from: Long = System.currentTimeMillis()): Long {
+    /** Next ring time, or 0 when there is none (a dated single alarm whose date has passed). */
+    fun nextTime(a: Alarm, from0: Long = System.currentTimeMillis()): Long {
+        var from = from0
+        // A date: nothing before that day.
+        if (a.date.isNotEmpty()) try {
+            val d = Calendar.getInstance(Alarms.zone()).apply {
+                val p = a.date.split('-').map { it.toInt() }
+                set(p[0], p[1] - 1, p[2], 0, 0, 0); set(Calendar.MILLISECOND, 0)
+            }
+            if (a.days == 0) {
+                d.set(Calendar.HOUR_OF_DAY, a.hour); d.set(Calendar.MINUTE, a.minute)
+                return if (d.timeInMillis > from0) d.timeInMillis else 0L
+            }
+            if (d.timeInMillis - 1 > from) from = d.timeInMillis - 1
+        } catch (_: Exception) {}
         val c = Calendar.getInstance(Alarms.zone()).apply { timeInMillis = from; set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
             set(Calendar.HOUR_OF_DAY, a.hour); set(Calendar.MINUTE, a.minute) }
         if (c.timeInMillis <= from) c.add(Calendar.DAY_OF_YEAR, 1)
@@ -82,7 +96,8 @@ object AlarmScheduler {
             }
             // A snooze set earlier keeps its own time.
             if (Alarms.planned(a.id) > now && snoozedUntil(ctx, a.id) > 0) continue
-            if (a.on) { val t = nextTime(a, now); Alarms.setPlanned(a.id, t); setAt(ctx, t, ringIntent(ctx, a.id, false)) }
+            val t = if (a.on) nextTime(a, now) else 0L
+            if (t > 0) { Alarms.setPlanned(a.id, t); setAt(ctx, t, ringIntent(ctx, a.id, false)) }
             else { am.cancel(ringIntent(ctx, a.id, false)); Alarms.setPlanned(a.id, 0) }
         }
         updateNextNote(ctx)
@@ -113,7 +128,7 @@ object AlarmScheduler {
     }
 
     fun next(): Pair<Alarm, Long>? = Alarms.current.alarms.filter { it.on }.map { it to Alarms.planned(it.id).let { p ->
-        if (p > System.currentTimeMillis()) p else nextTime(it) } }.minByOrNull { it.second }
+        if (p > System.currentTimeMillis()) p else nextTime(it) } }.filter { it.second > 0 }.minByOrNull { it.second }
 
     fun whenText(t: Long): String = SimpleDateFormat("EEE HH:mm", Locale.getDefault()).apply { timeZone = Alarms.zone() }.format(Date(t))
 

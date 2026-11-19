@@ -115,6 +115,16 @@ fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Comp
     }
 }
 
+/** Save, in a page's top bar: always filled with the accent colour. */
+@Composable
+fun SaveTopButton(enabled: Boolean = true, label: String = "Save", onClick: () -> Unit) {
+    val a = accent()
+    Box(Modifier.padding(end = 8.dp).clip(RoundedCornerShape(18.dp)).background(if (enabled) a else a.copy(alpha = 0.35f))
+        .clickable(enabled = enabled, onClick = onClick).padding(horizontal = 18.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+        Text(label, color = Color(0xFF1A0E05), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
 @Composable
 fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
