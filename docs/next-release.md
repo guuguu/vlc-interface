@@ -17,3 +17,5 @@
   drifting very slowly around the screen (also protects the screen from burn-in), with the weather / date as set.
 - Turned on by the user in Android: Settings → Display → Screen saver → "vlc interface clock", start "While charging".
   A shortcut to that Android page from Settings → Alarm clock.
+- Landscape with the clock shown: the left half holds only the clock, as big as possible; the titles, badges,
+  alarm chips and buttons that were on the left move to the top of the right half.
