@@ -17,3 +17,5 @@ left sideways, same in the radio player, clock screen saver while charging with 
 - Faster colour changes on all patterns (existing and new), still smooth (no flashing); a "Colour speed" slider.
 - Also Fourier epicycles (rotating circles drawing a curve), enlarged to fill the screen, with thick glowing
   colour trails that mix and fade slowly; circle radii / speeds follow the bass and the upper band.
+- Fourier epicycles: the background keeps changing colour with soft, diffused wave forms, using only the colours
+  of the chosen colour combination.
