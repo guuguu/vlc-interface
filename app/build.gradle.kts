@@ -74,7 +74,7 @@ android {
             excludes += listOf(
                 "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*",
                 "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA",
-                "META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/INDEX.LIST"
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/INDEX.LIST", "META-INF/versions/*/module-info.class", "module-info.class"
             )
         }
         jniLibs { useLegacyPackaging = false }
@@ -97,6 +97,9 @@ dependencies {
 
     implementation("org.videolan.android:libvlc-all:3.7.6")
     implementation("eu.agno3.jcifs:jcifs-ng:2.1.10")
+    // SFTP: the app's own client (modern SSH algorithms; BouncyCastle for Ed25519 / Curve25519 on Android).
+    implementation("com.github.mwiede:jsch:0.2.21")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // Writing ReplayGain tags (ID3v2, Vorbis comments, MP4) into music files.
     implementation("net.jthink:jaudiotagger:3.0.1")

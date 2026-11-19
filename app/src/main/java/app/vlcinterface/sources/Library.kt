@@ -102,7 +102,8 @@ object MusicLibrary {
             if (cached != null && !force && (cached.size < 0 || cached.size == e.size)) return e.applyTags(cached)
             return try {
                 val url = if (src.smbVersion == "SMB1" && e.uri.startsWith("smb://"))
-                    SmbBridge.urlFor(e.uri, "SMB1", src.user, src.password, src.domain) else VpnLink.route(e.uri)
+                    SmbBridge.urlFor(e.uri, "SMB1", src.user, src.password, src.domain)
+                    else if (e.uri.startsWith("sftp://")) Sftp.urlFor(e.uri, src.user, src.password) else VpnLink.route(e.uri)
                 val m = Media(player.libVlc, Uri.parse(url))
                 m.parse(IMedia.Parse.ParseNetwork)
                 fun meta(id: Int) = m.getMeta(id)?.trim().orEmpty()

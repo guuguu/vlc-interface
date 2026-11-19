@@ -181,6 +181,7 @@ object Browse {
         val first = when (s.proto) {
             "webdav" -> WebDav.list(uri, s.user, s.password)
             "http" -> HttpIndex.list(uri, s.user, s.password)
+            "sftp" -> Sftp.list(uri, s.user, s.password)      // the app's own SFTP client (modern SSH)
             else -> VlcBrowse.browse(uri, s.user, s.password)
         }
         val r = if (first.isSuccess || s.proto != "smb") first else {
@@ -193,7 +194,9 @@ object Browse {
         r.onSuccess { l ->
             ServerLog.log(s.host, action, proto, s.user, true, "Listed $what: ${l.size} entries", startedAt = started)
         }.onFailure { e ->
-            ServerLog.log(s.host, action, proto, s.user, false, SmbErrors.explain(e, s.user.isEmpty(), share), SmbErrors.ntStatus(e), started)
+            if (s.proto == "sftp") ServerLog.log(s.host, action, "SFTP (app client)", s.user, false, e.message ?: "Could not list $what",
+                (e.cause ?: e).toString(), started)
+            else ServerLog.log(s.host, action, proto, s.user, false, SmbErrors.explain(e, s.user.isEmpty(), share), SmbErrors.ntStatus(e), started)
         }
         return r
     }

@@ -1574,6 +1574,11 @@ class PlayerController(private val context: Context, private val store: Store) {
             // A network song cached ahead (the next one while the last played): played from the phone.
             app.vlcinterface.sources.Prefetch.localFor(item.uri) != null ->
                 Media(libVlc, app.vlcinterface.sources.Prefetch.localFor(item.uri)!!.absolutePath)
+            // SFTP: streamed by the app's own SFTP client (libVLC's SSH library is too old for many servers).
+            item.uri.startsWith("sftp://") -> {
+                val src = store.current.sources.firstOrNull { it.id == item.sourceId }
+                Media(libVlc, Uri.parse(app.vlcinterface.sources.Sftp.urlFor(item.uri, item.user.ifEmpty { src?.user ?: "" }, item.password.ifEmpty { src?.password ?: "" })))
+            }
             // LAN servers: their VPN address while away from home with the VPN on.
             else -> Media(libVlc, Uri.parse(app.vlcinterface.sources.VpnLink.route(item.uri)))
         }
