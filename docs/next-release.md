@@ -16,3 +16,10 @@
   and "Guide me through the setup step by step".
 - Last item of the main Settings page: "Launch the setup wizard".
 - Planning presented 2026-11-19; user will complete it.
+
+## Export / import: choose what goes in (requested 2026-11-19 19:39)
+- On the Export / import page the categories become tickable (all ticked by default) instead of fixed ✓ marks:
+  settings (per Settings group), LAN and Internet sources, saved passwords, radio favourites, playlists, alarms and
+  alarm settings, subtitle style and sync offsets, resume positions and scanned folders.
+- Export saves only the ticked categories; import shows the categories found in the file, ticked, and applies only
+  those (the rest of the current setup stays as it is).
