@@ -61,3 +61,9 @@
 - On the visualisation screen: sliding along the screen's long direction changes the colour combination; sliding along
   the short direction changes the brightness (replaces "any direction").
 - Android's bottom navigation bar stays available over the visualisation (not hidden).
+
+## Visualisation as ambient light (requested 2026-11-19)
+- Patterns that fill the whole screen (no black areas), usable as ambient light in a dark room.
+- Rhythm guided by the bass only (low-frequency level from the app's own audio output, not the overall peaks).
+- Gentle: no violent changes, to avoid epileptic reactions — smooth fades, brightness changes limited in speed,
+  never more than 3 flashes per second, no strong red flashes.
