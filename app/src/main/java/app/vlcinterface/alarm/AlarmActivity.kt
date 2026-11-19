@@ -82,7 +82,12 @@ private fun AlarmScreen(close: () -> Unit) {
     fun hm(t: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).apply { timeZone = Alarms.zone() }.format(Date(t))
     Box(Modifier.fillMaxSize().background(Color.Black).padding(24.dp), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Text(hm(now), color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Light)
+            // The clock as set in Settings → Alarm clock → Clock aspect (also for the test alarm), as big as fits.
+            val aspect = Alarms.state.collectAsState().value.aspect
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                val side = minOf(maxWidth * 0.85f, androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * (if (pattern) 0.3f else 0.42f))
+                app.vlcinterface.ui.ClockFace(aspect, Modifier.size(side))
+            }
             if (u.name.isNotEmpty()) Text(u.name, color = Color(0xFFB0B0B0), fontSize = 18.sp, textAlign = TextAlign.Center)
             when {
                 pattern -> PatternPad { pattern = false; AlarmEngine.stop(ctx) }

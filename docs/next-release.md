@@ -81,3 +81,4 @@
 ## Fixes
 - Alarm settings: the music folder row shows the folder in use — chosen one, else the audio player's one ("(player)"),
   else "All phone music" — instead of "Choose"; the alarms use the same fallback. (In code.)
+- Ringing screen (lock screen, test alarm too): shows the clock as set in Clock aspect, as big as fits. (In code.)
