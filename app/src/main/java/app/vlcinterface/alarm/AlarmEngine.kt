@@ -114,7 +114,7 @@ object AlarmEngine {
             app.startForegroundService(Intent(app, AlarmService::class.java).setAction(AlarmService.RING)
                 .putExtra("id", id).putExtra("restart", restart).putExtra("snoozed", snoozed && !restart))
         } catch (e: Exception) { log("service: ${e.message}") }
-        if (!snoozed && !restart) { if (a.days == 0) Alarms.put(a.copy(on = false)) else AlarmScheduler.reschedule(app) }
+        if (!snoozed && !restart) { if (a.mode != "weekly") AlarmScheduler.afterRing(a) else AlarmScheduler.reschedule(app) }
     }
 
     /** Inside the service (foreground already). */

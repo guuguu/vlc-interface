@@ -156,6 +156,21 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     var a by remember(id) { mutableStateOf(start) }
     var timeAsk by remember { mutableStateOf(false) }
     var dateAsk by remember { mutableStateOf(false) }
+    var datesAsk by remember { mutableStateOf(false) }
+    var helpMsg by remember { mutableStateOf<Pair<String, String>?>(null) }
+    // Helper: what the alarm will now do, and how to get another repetition (Settings → Alarm clock → Helpers).
+    fun showHelp(x: Alarm) {
+        if (!Alarms.current.global.helpers) return
+        val title = when (x.mode) {
+            "weekly" -> if (x.days == 0) "No day chosen yet" else "Rings every " + Alarm.daysText(x.days).replace(" ", ", ") +
+                (if (x.date.isNotEmpty()) " from " + Alarm.whenText(x.copy(mode = "once")) else "")
+            "dates" -> Alarm.whenText(x).let { if (it == "No dates left") "No dates chosen yet" else "Rings only on: $it" }
+            else -> "Rings one time only" + (if (x.date.isNotEmpty()) ", on " + Alarm.whenText(x) else ", the next time the clock shows " + x.timeText)
+        }
+        helpMsg = title to "One time only: use only the Date button, don't select any day disk.\n" +
+            "Repeated alarm: choose the start date on the calendar and the day buttons here.\n" +
+            "Several dates: choose specific dates on the monthly calendar."
+    }
     var rootAsk by remember { mutableStateOf(false) }
     var soundAsk by remember { mutableStateOf(false) }
     var rootNote by remember { mutableStateOf("") }
@@ -177,22 +192,48 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                 OutlinedTextField(a.name, { a = a.copy(name = it.take(40)) }, label = { Text("Name") }, singleLine = true,
                     modifier = Modifier.fillMaxWidth().padding(16.dp))
             }
-            SectionTitle("Days")
+            SectionTitle("Repeat")
             CardBox {
-                Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { i, l ->
-                        val on = a.days and (1 shl i) != 0
-                        Box(Modifier.size(38.dp).clip(CircleShape).background(if (on) accent() else Color.Transparent)
-                            .border(1.dp, if (on) accent() else C.line, CircleShape).clickable { a = a.copy(days = a.days xor (1 shl i)) },
-                            contentAlignment = Alignment.Center) { Text(l, color = if (on) Color(0xFF1A0E05) else C.text, fontWeight = FontWeight.SemiBold) }
+                Label("Repeat")
+                Choices(listOf("Once" to "once", "Weekly days" to "weekly", "Specific dates" to "dates"), a.mode) { m ->
+                    a = a.copy(mode = m); if (m == "dates" && a.dates.isEmpty()) datesAsk = true else showHelp(a)
+                }
+                when (a.mode) {
+                    "weekly" -> {
+                        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                            listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { i, l ->
+                                val on = a.days and (1 shl i) != 0
+                                Box(Modifier.size(38.dp).clip(CircleShape).background(if (on) accent() else Color.Transparent)
+                                    .border(1.dp, if (on) accent() else C.line, CircleShape).clickable { a = a.copy(days = a.days xor (1 shl i)); showHelp(a) },
+                                    contentAlignment = Alignment.Center) { Text(l, color = if (on) Color(0xFF1A0E05) else C.text, fontWeight = FontWeight.SemiBold) }
+                            }
+                        }
+                        HValueRow("Start date", if (a.date.isEmpty()) "Not set: from now" else "Repeats from this date (nothing before it)",
+                            if (a.date.isEmpty()) "Set" else Alarm.whenText(a.copy(mode = "once"))) { dateAsk = true }
+                        if (a.date.isNotEmpty()) Text("Clear the start date", color = accent(), fontSize = 13.sp,
+                            modifier = Modifier.padding(start = 16.dp, bottom = 10.dp).clickable { a = a.copy(date = "") })
+                    }
+                    "dates" -> {
+                        val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply { timeZone = Alarms.zone() }.format(java.util.Date())
+                        FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            a.dates.filter { it >= today }.sorted().forEach { d ->
+                                Row(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0x1FFFFFFF)).padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Text(Alarm.whenText(Alarm(mode = "once", date = d)), color = C.text, fontSize = 13.sp)
+                                    Text("✕", color = C.muted, fontSize = 13.sp, modifier = Modifier.clickable { a = a.copy(dates = a.dates - d); showHelp(a) }.padding(horizontal = 6.dp))
+                                }
+                            }
+                            Pill("+ Add dates") { datesAsk = true }
+                        }
+                    }
+                    else -> {
+                        HValueRow("Date", if (a.date.isEmpty()) "Not set: the next time the clock shows it" else "Rings one time only, on this date",
+                            if (a.date.isEmpty()) "Set" else Alarm.whenText(a)) { dateAsk = true }
+                        if (a.date.isNotEmpty()) Text("Clear the date", color = accent(), fontSize = 13.sp,
+                            modifier = Modifier.padding(start = 16.dp, bottom = 10.dp).clickable { a = a.copy(date = "") })
                     }
                 }
                 Text(Alarm.whenText(a), color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
-                Divider()
-                HValueRow("Date", if (a.date.isEmpty()) "Not set: the next matching day" else if (a.days == 0) "Rings once, on this date" else "Starts repeating from this date",
-                    if (a.date.isEmpty()) "Set" else Alarm.whenText(a.copy(days = 0))) { dateAsk = true }
-                if (a.date.isNotEmpty()) Text("Clear the date", color = accent(), fontSize = 13.sp,
-                    modifier = Modifier.padding(start = 16.dp, bottom = 10.dp).clickable { a = a.copy(date = "") })
             }
             SectionTitle("What plays")
             CardBox {
@@ -253,6 +294,11 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
         }
     }
     }
+    helpMsg?.let { (t, txt) ->
+        AutoInfoDialog(onDismissRequest = { helpMsg = null }, confirmButton = { STextButton({ helpMsg = null }) { Text("OK", color = accent()) } },
+            title = { Text(t, color = C.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }, text = { Text(txt, color = C.muted, fontSize = 13.sp) })
+    }
+    if (datesAsk) MonthDatesDialog(a.dates) { picked -> datesAsk = false; if (picked != null) { a = a.copy(mode = "dates", dates = picked); showHelp(a) } }
     if (dateAsk) {
         val utc = java.util.TimeZone.getTimeZone("UTC")
         val fmt = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply { timeZone = utc }
@@ -260,7 +306,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
             ?: (System.currentTimeMillis() + Alarms.zone().getOffset(System.currentTimeMillis()))
         val dp = androidx.compose.material3.rememberDatePickerState(initialSelectedDateMillis = initial)
         androidx.compose.material3.DatePickerDialog(onDismissRequest = { dateAsk = false },
-            confirmButton = { STextButton({ dp.selectedDateMillis?.let { a = a.copy(date = fmt.format(java.util.Date(it))) }; dateAsk = false }) { Text("OK", color = accent()) } },
+            confirmButton = { STextButton({ dp.selectedDateMillis?.let { a = a.copy(date = fmt.format(java.util.Date(it))) }; dateAsk = false; showHelp(a) }) { Text("OK", color = accent()) } },
             dismissButton = { STextButton({ dateAsk = false }) { Text("Cancel") } }) {
             androidx.compose.material3.DatePicker(dp)
         }
@@ -289,6 +335,9 @@ fun AlarmSettingsScreen(nav: Navigator) {
     if (cityAsk) CityDialog { cityAsk = false }
     var soundAsk by remember { mutableStateOf(false) }
     var rootAsk by remember { mutableStateOf(false) }
+    var calAsk by remember { mutableStateOf(false) }
+    val calPerm = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r -> if (r.values.all { it }) calAsk = true }
+    if (calAsk) CalendarPickDialog { calAsk = false }
     if (soundAsk) AlarmSoundDialog { soundAsk = false }
     if (rootAsk) RootFolderDialog { rootAsk = false }
     val scroll = rememberScrollState()
@@ -362,6 +411,18 @@ fun AlarmSettingsScreen(nav: Navigator) {
                 Divider()
                 Label("Low battery (15 % or less)")
                 Choices(listOf("Normal" to "normal", "Alarm tone only (no network)" to "tone"), g.lowBattery) { set(g.copy(lowBattery = it)) }
+            }
+            SectionTitle("Alarm page and calendar")
+            CardBox {
+                HToggleRow("Helpers", "A short pop-up saying what the alarm will do when you choose days or dates", g.helpers) { set(g.copy(helpers = it)) }
+                Divider()
+                HToggleRow("Show alarms in my calendar", if (g.calSync && g.calName.isNotEmpty()) "In: ${g.calName}" else
+                    "Alarms as events in the phone's calendar (your account already on the phone syncs them)", g.calSync) { on ->
+                    if (!on) set(g.copy(calSync = false))
+                    else if (app.vlcinterface.alarm.AlarmCalendar.allowed(ctx)) calAsk = true
+                    else calPerm.launch(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR))
+                }
+                if (g.calSync) { Divider(); HValueRow("Calendar", "Where the alarms appear", g.calName.ifEmpty { "Choose" }) { calAsk = true } }
             }
             SectionTitle("System")
             CardBox {
@@ -517,6 +578,10 @@ private val HELP: Map<String, String> = mapOf(
     "Alarm on" to "Switches this alarm on or off without deleting it. A one-time alarm switches itself off after ringing.",
     "Time" to "When the alarm rings, in the time zone of the city chosen in the alarm clock settings (or the phone's).",
     "Days" to "The days it repeats. No day selected: it rings once, at the next time shown.",
+    "Repeat" to "Once: rings one time (on the date you choose, or the next time the clock shows it). Weekly days: every week on the chosen days, from a start date. Specific dates: only on the dates you tap on the monthly calendar.",
+    "Helpers" to "After you choose days or dates on an alarm page, a small pop-up says what the alarm will do and how to get another repetition. It closes by itself.",
+    "Show alarms in my calendar" to "Each alarm also appears as an event in the phone's calendar, so you see it in your account's calendar on any device. The app uses the calendar already on the phone: no account details are asked or stored. The events have no reminders (the app rings) and follow every change.",
+    "Calendar" to "The calendar the alarms are written to. Your main account's calendar comes first.",
     "Date" to "A date for the alarm. With no day selected it rings once, on that date. With days selected it starts repeating from that date (nothing before it).",
     "What plays" to "Phone music: songs stored on the phone under the music folder. Radio: a live station, with a fallback station. Alarm sound: only the sound chosen below. Network songs from the NAS are never used, so a NAS or Wi-Fi problem can't silence an alarm.",
     "Music folder" to "The phone folder the alarms take songs from (all its subfolders too), in random order. Asked once; it is taken from the audio player when the player already plays phone music.",
@@ -822,4 +887,85 @@ private fun ScreenSaverRow() {
         else -> "Android doesn't tell whether it's on: check in its Screen saver page" to "Open"
     }
     HValueRow("Clock screen saver while charging", hint, value) { if (st.available) app.vlcinterface.alarm.ClockDream.open(ctx) }
+}
+
+
+/** Monthly calendar where several days can be tapped; ‹ › move between months. [onDone] null = cancelled. */
+@Composable
+private fun MonthDatesDialog(initial: List<String>, onDone: (List<String>?) -> Unit) {
+    val zone = Alarms.zone()
+    val fmt = remember { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply { timeZone = zone } }
+    val today = remember { fmt.format(java.util.Date()) }
+    var picked by remember { mutableStateOf(initial.filter { it >= today }.toSet()) }
+    var month by remember { mutableStateOf(java.util.Calendar.getInstance(zone).apply { set(java.util.Calendar.DAY_OF_MONTH, 1) }.timeInMillis) }
+    val cal = java.util.Calendar.getInstance(zone).apply { timeInMillis = month }
+    val title = java.text.SimpleDateFormat("LLLL yyyy", java.util.Locale.getDefault()).apply { timeZone = zone }.format(java.util.Date(month))
+    val first = (cal.get(java.util.Calendar.DAY_OF_WEEK) + 5) % 7          // Monday = 0
+    val daysIn = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH)
+    fun shift(n: Int) { month = java.util.Calendar.getInstance(zone).apply { timeInMillis = month; add(java.util.Calendar.MONTH, n) }.timeInMillis }
+    AlertDialog(onDismissRequest = { onDone(null) }, containerColor = C.panel,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("‹", color = C.text, fontSize = 26.sp, modifier = Modifier.clickable { shift(-1) }.padding(horizontal = 12.dp))
+                Text(title.replaceFirstChar { it.uppercase() }, color = C.text, fontSize = 17.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Text("›", color = C.text, fontSize = 26.sp, modifier = Modifier.clickable { shift(1) }.padding(horizontal = 12.dp))
+            }
+        },
+        text = {
+            Column {
+                Row(Modifier.fillMaxWidth()) { listOf("M", "T", "W", "T", "F", "S", "S").forEach { Text(it, color = C.muted, fontSize = 12.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
+                val cells = first + daysIn
+                for (r in 0 until (cells + 6) / 7) Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                    for (c in 0 until 7) {
+                        val day = r * 7 + c - first + 1
+                        Box(Modifier.weight(1f).height(38.dp), contentAlignment = Alignment.Center) {
+                            if (day in 1..daysIn) {
+                                val key = "%04d-%02d-%02d".format(cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, day)
+                                val past = key < today
+                                val on = key in picked
+                                Box(Modifier.size(34.dp).clip(CircleShape).background(if (on) accent() else Color.Transparent)
+                                    .border(1.dp, if (key == today) C.muted else Color.Transparent, CircleShape)
+                                    .clickable(enabled = !past) { picked = if (on) picked - key else picked + key }, contentAlignment = Alignment.Center) {
+                                    Text("$day", color = if (on) Color(0xFF1A0E05) else if (past) C.muted.copy(alpha = 0.4f) else C.text, fontSize = 14.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+                Text("${picked.size} dates chosen", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+            }
+        },
+        confirmButton = { STextButton({ onDone(picked.sorted()) }) { Text("OK", color = accent()) } },
+        dismissButton = { STextButton({ onDone(null) }) { Text("Cancel") } })
+}
+
+
+/** Which of the phone's calendars gets the alarms (the main account's first, already selected). */
+@Composable
+private fun CalendarPickDialog(onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    val cals = remember { app.vlcinterface.alarm.AlarmCalendar.calendars(ctx) }
+    val g = Alarms.current.global
+    var sel by remember { mutableStateOf(cals.firstOrNull { it.id == g.calId } ?: cals.firstOrNull()) }
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("Show alarms in", color = C.text) },
+        text = {
+            Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
+                if (cals.isEmpty()) Text("No calendar on this phone can take events. Add your account in Android's settings first.", color = C.muted, fontSize = 13.sp)
+                cals.forEach { c ->
+                    Row(Modifier.fillMaxWidth().clickable { sel = c }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        SRadioButton(sel?.id == c.id, null)
+                        Column(Modifier.padding(start = 8.dp)) {
+                            Text(c.name + if (c.primary) "  (main)" else "", color = C.text, fontSize = 14.sp)
+                            if (c.account.isNotEmpty() && c.account != c.name) Text(c.account, color = C.muted, fontSize = 12.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton({
+            sel?.let { c -> Alarms.setGlobal(Alarms.current.global.copy(calSync = true, calId = c.id, calName = c.name)) }
+            onDone()
+        }, enabled = sel != null) { Text("OK", color = accent()) } },
+        dismissButton = { STextButton(onDone) { Text("Cancel") } })
 }

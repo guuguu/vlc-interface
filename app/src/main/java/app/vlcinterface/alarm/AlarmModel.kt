@@ -18,6 +18,10 @@ data class Alarm(
     val days: Int = 0,
     /** Date "yyyy-MM-dd" ("" = none): a single alarm rings on that date; a repeating one starts repeating from it. */
     val date: String = "",
+    /** Repeat: "once", "weekly" (days, from [date]) or "dates" (only on [dates]). */
+    val mode: String = "once",
+    /** Specific dates "yyyy-MM-dd" (mode "dates"). */
+    val dates: List<String> = emptyList(),
     /** "local" (music stored on the phone, under the root folder), "radio" (preferred → fallback station), "tone". */
     val source: String = "local",
     val playlistId: String = "",
@@ -39,7 +43,7 @@ data class Alarm(
     val localFallback: Boolean = true,
 ) {
     fun toJson(): JSONObject = JSONObject().put("id", id).put("on", on).put("name", name).put("hour", hour).put("minute", minute)
-        .put("days", days).put("date", date).put("source", source).put("playlistId", playlistId).put("stationUrl", stationUrl).put("stationName", stationName).put("fallbackUrl", fallbackUrl).put("fallbackName", fallbackName)
+        .put("days", days).put("date", date).put("mode", mode).put("dates", JSONArray(dates)).put("source", source).put("playlistId", playlistId).put("stationUrl", stationUrl).put("stationName", stationName).put("fallbackUrl", fallbackUrl).put("fallbackName", fallbackName)
         .put("volStart", volStart).put("volTarget", volTarget).put("fadeSec", fadeSec).put("maxSnoozes", maxSnoozes)
         .put("stopAfterMin", stopAfterMin).put("output", output).put("localFallback", localFallback)
 
@@ -47,14 +51,26 @@ data class Alarm(
 
     companion object {
         fun fromJson(o: JSONObject) = Alarm(o.optString("id", UUID.randomUUID().toString()), o.optBoolean("on", true), o.optString("name"),
-            o.optInt("hour", 7), o.optInt("minute"), o.optInt("days"), o.optString("date"), o.optString("source", "local").let { if (it == "radio" || it == "tone") it else "local" }, o.optString("playlistId"),
+            o.optInt("hour", 7), o.optInt("minute"), o.optInt("days"), o.optString("date"),
+            o.optString("mode", if (o.optInt("days") != 0) "weekly" else "once").let { if (it in listOf("once", "weekly", "dates")) it else "once" },
+            o.optJSONArray("dates")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(), o.optString("source", "local").let { if (it == "radio" || it == "tone") it else "local" }, o.optString("playlistId"),
             o.optString("stationUrl"), o.optString("stationName"), o.optString("fallbackUrl"), o.optString("fallbackName"), o.optInt("volStart", 10), o.optInt("volTarget", 60),
             o.optInt("fadeSec", 60), o.optInt("maxSnoozes", 3), o.optInt("stopAfterMin", 30), o.optString("output"),
             o.optBoolean("localFallback", true))
 
         private val DAY = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
         /** Days, with the date when there is one ("Thu 4 Dec" / "Mon–Fri from 4 Dec"). */
+        private fun shortDate(s: String): String = try {
+            java.text.SimpleDateFormat("EEE d MMM", java.util.Locale.getDefault()).format(java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(s)!!)
+        } catch (_: Exception) { s }
+
         fun whenText(a: Alarm): String {
+            if (a.mode == "dates") {
+                val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply { timeZone = Alarms.zone() }.format(java.util.Date())
+                val left = a.dates.filter { it >= today }.sorted()
+                return when (left.size) { 0 -> "No dates left"; 1 -> shortDate(left[0]); else -> shortDate(left[0]) + " + ${left.size - 1} more dates" }
+            }
+            if (a.mode == "once") return if (a.date.isEmpty()) "Once" else shortDate(a.date)
             if (a.date.isEmpty()) return daysText(a.days)
             val d = try { java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(a.date) } catch (_: Exception) { null } ?: return daysText(a.days)
             val shown = java.text.SimpleDateFormat("EEE d MMM", java.util.Locale.getDefault()).format(d)
@@ -103,6 +119,12 @@ data class AlarmGlobal(
     val lowBattery: String = "normal",
     /** Next alarm shown in a notification. */
     val nextInNotif: Boolean = true,
+    /** Helper pop-ups on the alarm page (what the alarm will do). */
+    val helpers: Boolean = true,
+    /** Alarms shown in the phone's calendar (Android's calendar, the account already on the phone). */
+    val calSync: Boolean = false,
+    val calId: Long = -1,
+    val calName: String = "",
     /** City chosen by hand: the clock's time zone, the alarms' times and the weather follow it ("" = the phone's). */
     val cityName: String = "",
     val cityShort: String = "",
@@ -119,6 +141,7 @@ data class AlarmGlobal(
         .put("wakeCheckMin", wakeCheckMin).put("useLocation", useLocation).put("lockActions", lockActions)
         .put("volumeKeys", volumeKeys).put("maxLevel", maxLevel).put("toneUri", toneUri).put("toneName", toneName).put("callWait", callWait)
         .put("missed", missed).put("lowBattery", lowBattery).put("nextInNotif", nextInNotif)
+        .put("helpers", helpers).put("calSync", calSync).put("calId", calId).put("calName", calName)
         .put("cityName", cityName).put("cityShort", cityShort).put("cityLat", cityLat).put("cityLon", cityLon).put("cityTz", cityTz)
         .put("showWeather", showWeather).put("localRoot", localRoot).put("localVolume", localVolume)
 
@@ -130,6 +153,7 @@ data class AlarmGlobal(
             o.optBoolean("pattern", true), o.optInt("wakeCheckMin", 10), o.optBoolean("useLocation"), o.optBoolean("lockActions", true),
             o.optString("volumeKeys", "snooze"), o.optInt("maxLevel", 100), o.optString("toneUri"), o.optString("toneName"), o.optBoolean("callWait", true),
             o.optString("missed", "ring30"), o.optString("lowBattery", "normal"), o.optBoolean("nextInNotif", true),
+            o.optBoolean("helpers", true), o.optBoolean("calSync", false), o.optLong("calId", -1), o.optString("calName"),
             o.optString("cityName"), o.optString("cityShort"), o.optDouble("cityLat", 0.0), o.optDouble("cityLon", 0.0), o.optString("cityTz"),
             o.optBoolean("showWeather", true), o.optString("localRoot"), o.optString("localVolume"))
     }

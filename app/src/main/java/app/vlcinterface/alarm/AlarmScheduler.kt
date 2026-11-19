@@ -35,6 +35,10 @@ object AlarmScheduler {
 
     /** Next ring time, or 0 when there is none (a dated single alarm whose date has passed). */
     fun nextTime(a: Alarm, from0: Long = System.currentTimeMillis()): Long {
+        // Specific dates: the first one still to come.
+        if (a.mode == "dates") return a.dates.mapNotNull { atDate(it, a) }.filter { it > from0 }.minOrNull() ?: 0L
+        // Once: on its date, or the next time the clock shows that time.
+        if (a.mode == "once") return if (a.date.isNotEmpty()) (atDate(a.date, a)?.takeIf { it > from0 } ?: 0L) else nextTime(a.copy(mode = "weekly", days = 0), from0)
         var from = from0
         // A date: nothing before that day.
         if (a.date.isNotEmpty()) try {
@@ -59,6 +63,24 @@ object AlarmScheduler {
             }
         }
         return c.timeInMillis
+    }
+
+    /** The alarm's time on a date "yyyy-MM-dd", in the clock's time zone. */
+    fun atDate(d: String, a: Alarm): Long? = try {
+        val p = d.split('-').map { it.toInt() }
+        Calendar.getInstance(Alarms.zone()).apply { set(p[0], p[1] - 1, p[2], a.hour, a.minute, 0); set(Calendar.MILLISECOND, 0) }.timeInMillis
+    } catch (_: Exception) { null }
+
+    /** After an alarm rang (or was missed): one-time alarms switch off, passed dates drop out. */
+    fun afterRing(a: Alarm, now: Long = System.currentTimeMillis()) {
+        when (a.mode) {
+            "weekly" -> return
+            "dates" -> {
+                val left = a.dates.filter { (atDate(it, a) ?: 0L) > now + 60_000 }
+                Alarms.put(a.copy(dates = left, on = left.isNotEmpty() && a.on))
+            }
+            else -> Alarms.put(a.copy(on = false))
+        }
     }
 
     private fun ringIntent(ctx: Context, id: String, snoozed: Boolean): PendingIntent =
@@ -91,7 +113,7 @@ object AlarmScheduler {
                     Alarms.setRung(a.id, now)
                     if (d.global.missed == "ring30" && now - p < 30 * 60_000L) AlarmEngine.startRing(ctx, a.id, false)
                     else missedNote(ctx, a, p)
-                    if (a.days == 0) { Alarms.put(a.copy(on = false)); return }
+                    if (a.mode != "weekly") { afterRing(a, now); return }
                 }
             }
             // A snooze set earlier keeps its own time.
@@ -101,6 +123,7 @@ object AlarmScheduler {
             else { am.cancel(ringIntent(ctx, a.id, false)); Alarms.setPlanned(a.id, 0) }
         }
         updateNextNote(ctx)
+        AlarmCalendar.sync(ctx)
     }
 
     fun snoozedUntil(ctx: Context, id: String): Long =
