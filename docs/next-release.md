@@ -67,3 +67,6 @@
 - Rhythm guided by the bass only (low-frequency level from the app's own audio output, not the overall peaks).
 - Gentle: no violent changes, to avoid epileptic reactions — smooth fades, brightness changes limited in speed,
   never more than 3 flashes per second, no strong red flashes.
+- More patterns (ambient ones added to the existing effects).
+- Settings → Visualisation: each pattern button shows a preview picture of that pattern in a small pop-up placed
+  above the pattern buttons (when the button is touched / chosen).
