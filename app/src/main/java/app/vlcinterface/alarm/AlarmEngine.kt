@@ -189,8 +189,9 @@ object AlarmEngine {
                 } else quietSince = 0L
             }
             if (a.stopAfterMin > 0 && el > a.stopAfterMin * 60) { log("stopped by itself after ${a.stopAfterMin} min"); autoStop(); return }
-            // Every 30 s: the notification is posted again (it may have been cleared) so the screen can always be reached.
-            if ((el * 4).toInt() % 120 == 0 && el > 1f) refreshNotif()
+            // Every 30 s: posted again only if it is gone (cleared), so the screen can always be reached — never
+            // re-posted while it is shown (that would make the notification list jump).
+            if ((el * 4).toInt() % 120 == 0 && el > 1f && !notifShown()) refreshNotif(force = true)
             delay(250)
         }
     }
@@ -412,7 +413,7 @@ object AlarmEngine {
     fun reshow(ctx: Context) {
         app = ctx.applicationContext
         if (_ui.value.phase == "idle") return
-        refreshNotif()
+        refreshNotif(force = true)
         if (_ui.value.phase == "ringing" || _ui.value.phase == "confirming") showScreen()
     }
 
@@ -583,7 +584,8 @@ object AlarmEngine {
         val g = Alarms.current.global
         val urgent = u.phase == "ringing" || u.phase == "confirming"
         val b = Notification.Builder(app, if (!urgent) CH_WATCH else if (g.led == "notif") CH_RING_LED else CH_RING)
-            .setSmallIcon(R.drawable.ic_stat_cone).setOngoing(true).setShowWhen(false)
+            .setSmallIcon(R.drawable.ic_stat_cone).setOngoing(true).setShowWhen(false).setOnlyAlertOnce(true)
+            .setSortKey("0alarm").setGroup("alarm")
             .setCategory(Notification.CATEGORY_ALARM).setContentIntent(screenIntent()).setVisibility(Notification.VISIBILITY_PUBLIC)
             // Swiped away (Android 14+ allows it): it comes straight back, with the alarm screen.
             .setDeleteIntent(bc(AlarmScheduler.ACTION_RESHOW, 7331))
@@ -603,7 +605,18 @@ object AlarmEngine {
         return b.build()
     }
 
-    private fun refreshNotif() {
+    private var lastNotifKey = ""
+
+    private fun notifShown(): Boolean = try {
+        app.getSystemService(NotificationManager::class.java).activeNotifications.any { it.id == NOTIF_ID }
+    } catch (_: Exception) { true }
+
+    /** Posted only when what it shows changes (or [force]: it was cleared) — no needless updates that reorder the list. */
+    private fun refreshNotif(force: Boolean = false) {
+        val u = _ui.value
+        val key = "${u.phase}|${u.name}|${u.snoozesLeft}|${u.until}"
+        if (!force && key == lastNotifKey && notifShown()) return
+        lastNotifKey = key
         try { app.getSystemService(NotificationManager::class.java).notify(NOTIF_ID, notification(app)) } catch (_: Exception) {}
     }
 
