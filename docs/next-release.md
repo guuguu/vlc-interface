@@ -93,3 +93,6 @@
 - Frequency bar spans 20 Hz – 10 000 Hz (logarithmic scale), default 30–150 Hz.
 - Patterns kept after the animated preview (9): Colour clouds, Lava glow, Nebula, Tides, Plasma, Silk bands,
   Sunset sky, Deep ocean, Embers. Dropped: Aurora drift, Breathing glow, Bokeh field, Forest light.
+- Much more movement across the screen for the spots and the colour tones.
+- Big spots follow the lower part of the chosen frequency range, smaller spots the upper part — when the range is
+  wide enough (about 2 octaves or more); a narrow range drives all spots together.
