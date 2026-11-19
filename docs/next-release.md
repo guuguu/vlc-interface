@@ -90,3 +90,4 @@
   strength, and the frequency range that is followed (e.g. 30–250 Hz, low and high limit).
 - Frequency range: one bar with two handles (lower and upper limit); a Reset puts it back to the default low
   frequencies (bass / percussion, about 30–150 Hz).
+- Frequency bar spans 20 Hz – 10 000 Hz (logarithmic scale), default 30–150 Hz.
