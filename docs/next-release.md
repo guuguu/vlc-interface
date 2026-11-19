@@ -19,3 +19,8 @@
 - Every page that has a Save button gets it in its header (right side, accent colour), like the alarm and source
   pages already do (e.g. ReplayGain scan page). Small pop-up dialogs keep their Save at the bottom (no header).
 - Submenu links end with a bigger, accent-coloured triangle (▶) instead of the small "›", so it reads as "opens a page".
+- A settings symbol (⚙) in the header of every page. It opens the main Settings page, except:
+  - audio player → the Audio section
+  - video player → the Video section
+  - radio player → a new Radio section (radio settings gathered there: buffer, saving songs, mobile data notice,
+    accent…), also listed on the main Settings page.
