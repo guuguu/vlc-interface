@@ -9,3 +9,10 @@
   - no VPN and NAS use off: stays "VPN-NAS off" (assumption, unless told otherwise)
 - In front of the label: a Wi-Fi or mobile-data symbol for the connection in use, updated live as the phone switches
   (no symbol when there's no connection).
+
+## Settings layout (requested 2026-11-19 18:43)
+- Main Settings page becomes a list of links to submenus with clear names; every setting and log page moves into
+  one of them (proposed: Sound, Playback & gestures, Look, Library & scanning, Network & NAS, VPN, Saved songs,
+  Subtitles, Alarm clock, Visualisation, Setup export / import, Logs).
+- Long-press on ANY item of any settings page or subpage: a pop-up explaining that setting.
+- All sliders in the settings thin, like the sliders of the player (thin track, small knob).
