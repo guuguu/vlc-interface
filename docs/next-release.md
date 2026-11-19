@@ -71,3 +71,7 @@
 - Settings → Visualisation: each pattern button shows a preview picture of that pattern in a small pop-up placed
   above the pattern buttons (when the button is touched / chosen).
 - The preview pop-up closes by itself after 3 s; choosing another pattern shows that one's preview (3 s again).
+
+## Clock size (requested 2026-11-19)
+- The clock in the player takes the maximum available screen space without overlapping other items
+  (no longer limited to the album cover area's size).
