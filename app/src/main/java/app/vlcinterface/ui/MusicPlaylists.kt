@@ -161,6 +161,14 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         if (playNextPick) JumpDialog(playNext = true, nav = nav) { playNextPick = false }
         // Upright: one scrolling page. Sideways: the same page split in two under the track / ReplayGain line —
         // picture and titles on the left, controls and the rest on the right, each scrolling on its own.
+        // Clock shown: pinned at the top (upright, the page scrolls under it) or alone on the left half (sideways).
+        val clockShown = app.vlcinterface.alarm.Alarms.state.collectAsState().value.showClock
+        val pinnedClock: @Composable (Modifier) -> Unit = { mod ->
+            val asp = app.vlcinterface.alarm.Alarms.state.collectAsState().value.aspect
+            androidx.compose.foundation.layout.BoxWithConstraints(mod, contentAlignment = Alignment.Center) {
+                ClockFace(asp, Modifier.size(minOf(maxWidth, maxHeight)))
+            }
+        }
         val partA: @Composable ColumnScope.() -> Unit = {
             var coverNote by remember(item.uri) { mutableStateOf("") }
             // Long-press the picture: look for it online again (also when it wasn't found before).
@@ -184,12 +192,11 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             // Sideways: the picture / clock takes the height left by the rest of the left half (no scrolling).
             // Upright: the clock takes the whole width; the album picture keeps its size.
-            if (landscape) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            if (clockOn) Unit   // the clock is pinned outside the scrolling page
+            else if (landscape) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 pic((minOf(maxWidth, maxHeight).value.toInt() - 8).coerceAtLeast(48))
-            } else if (clockOn) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                pic(maxWidth.value.toInt())
             } else pic(coverSize)
-            if (clockOn) AlarmMiniList(nav, compact = landscape)
+            if (clockOn) AlarmMiniList(nav, compact = false)
             if (coverPick) CoverPicker(coverItem,
                 onNone = { coverPick = false; coverNote = "Looking for the picture online…"; coverRetry++ },
                 onDone = { note, changed ->
@@ -399,15 +406,25 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             Box(Modifier.height(if (landscape) 0.dp else 16.dp))
         }
         if (landscape) Row(Modifier.weight(1f).fillMaxWidth()) {
-            val scrollA = rememberScrollState()
-            // Left half: everything fits without scrolling — the picture / clock shrinks to the room left.
-            Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { leftHpx = it.height }.padding(horizontal = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) { partA() }
-            Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.verticalScroll(scroll).padding(horizontal = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partB() }
-        } else Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(if (item.isRadio) 10.dp else 14.dp)) {
-            partA(); partB()
+            if (clockShown) {
+                // Clock alone on the left, as big as possible; titles, alarms and buttons on the right.
+                pinnedClock(Modifier.weight(1f).fillMaxHeight().padding(8.dp))
+                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.verticalScroll(scroll).padding(horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partA(); partB() }
+            } else {
+                // Left half: everything fits without scrolling — the picture shrinks to the room left.
+                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { leftHpx = it.height }.padding(horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) { partA() }
+                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.verticalScroll(scroll).padding(horizontal = 16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partB() }
+            }
+        } else {
+            // Upright: the clock stays at the top; the rest of the page scrolls underneath it.
+            if (clockShown) pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(horizontal = 16.dp, vertical = 4.dp))
+            Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(if (item.isRadio) 10.dp else 14.dp)) {
+                partA(); partB()
+            }
         }
     }
     // Stereo level meters: right edge, full height of the player.

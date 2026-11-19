@@ -199,17 +199,21 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
         val t = m.t
         val a = v.brightness.coerceIn(0.2f, 1f)
         drawBackground(v.effect, bg, t, m.lo, a, plasma, px)
-        drawSpots(spots, m, a, v.mix.coerceIn(0f, 1f), v.effect)
+        drawSpots(spots, m, a, v.mix.coerceIn(0f, 1f), v.effect, v.sharp)
     }
 }
 
-private fun DrawScope.spot(c: Color, alpha: Float, center: Offset, r: Float) {
+/** [sharp]: 0 = very diffused (soft glow) … 1 = very sharp (crisp edge). */
+private fun DrawScope.spot(c: Color, alpha: Float, center: Offset, r: Float, sharp: Float) {
     val rr = r.coerceAtLeast(1f)
-    drawCircle(Brush.radialGradient(listOf(c.copy(alpha = alpha), c.copy(alpha = alpha * 0.4f), Color.Transparent), center, rr), rr, center, blendMode = BlendMode.Plus)
+    val s = sharp.coerceIn(0f, 1f)
+    val edge = 0.35f + 0.62f * s
+    drawCircle(Brush.radialGradient(0f to c.copy(alpha = alpha), edge to c.copy(alpha = alpha * (0.4f + 0.55f * s)), 1f to Color.Transparent,
+        center = center, radius = rr), rr, center, blendMode = BlendMode.Plus)
 }
 
 /** Big spots follow the low part, small spots the high part; both travel across the whole screen. */
-private fun DrawScope.drawSpots(cols: List<Color>, m: VisMotion, a: Float, mix: Float, effect: String) {
+private fun DrawScope.drawSpots(cols: List<Color>, m: VisMotion, a: Float, mix: Float, effect: String, sharp: Float) {
     val w = size.width
     val h = size.height
     val mn = size.minDimension
@@ -218,13 +222,13 @@ private fun DrawScope.drawSpots(cols: List<Color>, m: VisMotion, a: Float, mix: 
         val p = m.pb * (0.45f + i * 0.13f) + i * 1.9f
         val q = m.pb * (0.37f + i * 0.11f) + i * 2.7f
         val r = mn * (0.5f + 0.35f * m.lo) * (0.8f + 0.5f * mix) * (0.85f + 0.2f * sin(p * 1.3f))
-        spot(cols[i % cols.size], bigA, Offset(w * (0.5f + 0.48f * sin(p)), h * (0.5f + 0.46f * cos(q))), r)
+        spot(cols[i % cols.size], bigA, Offset(w * (0.5f + 0.48f * sin(p)), h * (0.5f + 0.46f * cos(q))), r, sharp)
     }
     for (i in 0 until 7) {
         val p = m.ps * (0.7f + i * 0.17f) + i * 1.3f
         val q = m.ps * (0.55f + i * 0.13f) + i * 2.1f
         val r = mn * (0.11f + 0.11f * m.hi) * (0.8f + 0.5f * mix)
-        spot(cols[(i + 1) % cols.size], (0.35f + 0.35f * m.hi) * (0.6f + 0.5f * mix) * a, Offset(w * (0.5f + 0.47f * sin(p)), h * (0.5f + 0.47f * cos(q))), r)
+        spot(cols[(i + 1) % cols.size], (0.35f + 0.35f * m.hi) * (0.6f + 0.5f * mix) * a, Offset(w * (0.5f + 0.47f * sin(p)), h * (0.5f + 0.47f * cos(q))), r, sharp)
     }
 }
 
@@ -404,6 +408,7 @@ fun VisualisationSettings() {
         Divider()
         VisSlider("Movement", v.move, 0.2f..2f, "×%.1f".format(v.move)) { set(v.copy(move = it)) }
         VisSlider("Colour mixing", v.mix, 0f..1f, "${(v.mix * 100).toInt()} %") { set(v.copy(mix = it)) }
+        VisSlider("Definition", v.sharp, 0f..1f, if (v.sharp < 0.15f) "soft" else if (v.sharp > 0.85f) "sharp" else "${(v.sharp * 100).toInt()} %") { set(v.copy(sharp = it)) }
         VisSlider("Brightness", v.brightness, 0.2f..1f, "${(v.brightness * 100).toInt()} %") { set(v.copy(brightness = it)) }
         Divider()
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {

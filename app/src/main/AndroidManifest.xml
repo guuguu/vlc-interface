@@ -95,6 +95,16 @@
             android:name=".alarm.AlarmService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+        <service
+            android:name=".alarm.ClockDream"
+            android:exported="true"
+            android:label="vlc interface clock"
+            android:permission="android.permission.BIND_DREAM_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.dreams.DreamService" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
         <receiver
             android:name=".alarm.AlarmReceiver"
             android:exported="true">

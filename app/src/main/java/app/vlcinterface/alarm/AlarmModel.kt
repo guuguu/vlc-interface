@@ -188,16 +188,19 @@ data class VisSettings(
     /** Frequency range followed (Hz). */
     val fLo: Float = 30f,
     val fHi: Float = 150f,
+    /** Spot definition: 0 = very diffused … 1 = very sharp. */
+    val sharp: Float = 0.25f,
 ) {
     fun toJson(): JSONObject = JSONObject().put("palette", palette).put("hue1", hue1.toDouble()).put("hue2", hue2.toDouble())
         .put("hue3", hue3.toDouble()).put("brightness", brightness.toDouble()).put("effect", effect).put("move", move.toDouble())
-        .put("mix", mix.toDouble()).put("fLo", fLo.toDouble()).put("fHi", fHi.toDouble())
+        .put("mix", mix.toDouble()).put("fLo", fLo.toDouble()).put("fHi", fHi.toDouble()).put("sharp", sharp.toDouble())
     companion object {
         val EFFECTS = listOf("clouds", "lava", "nebula", "tides", "plasma", "silk", "sunset", "ocean", "embers")
         fun fromJson(o: JSONObject?) = if (o == null) VisSettings() else VisSettings(o.optString("palette", "pattern"),
             o.optDouble("hue1", 20.0).toFloat(), o.optDouble("hue2", 200.0).toFloat(), o.optDouble("hue3", 300.0).toFloat(),
             o.optDouble("brightness", 0.85).toFloat(), o.optString("effect", "clouds").let { if (it in EFFECTS) it else "clouds" },
-            o.optDouble("move", 1.0).toFloat(), o.optDouble("mix", 0.6).toFloat(), o.optDouble("fLo", 30.0).toFloat(), o.optDouble("fHi", 150.0).toFloat())
+            o.optDouble("move", 1.0).toFloat(), o.optDouble("mix", 0.6).toFloat(), o.optDouble("fLo", 30.0).toFloat(), o.optDouble("fHi", 150.0).toFloat(),
+            o.optDouble("sharp", 0.25).toFloat())
     }
 }
 
