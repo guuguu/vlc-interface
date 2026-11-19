@@ -25,3 +25,6 @@
 - Export saves only the ticked categories; import shows the categories found in the file, ticked, and applies only
   those (the rest of the current setup stays as it is).
   (NAS and VPN as their own categories: requested 2026-11-19 19:41)
+- First tick box "Everything" (requested 2026-11-19 19:42): ticked → the whole setup is saved and every other
+  category is shown greyed (included, not changeable); passwords included too, the passphrase is asked at export.
+  Unticked → the categories below become active one by one (a "Settings" box among them for the settings alone).
