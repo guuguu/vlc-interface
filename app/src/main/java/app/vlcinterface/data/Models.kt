@@ -226,7 +226,9 @@ data class Settings(
     val customAccents: List<Long> = emptyList(),
     /** Bluetooth quality mode: on a Bluetooth output the app's own volume stays at 100 % (the device volume is used)
      *  and the sound is sent at the Bluetooth link's rate. */
-    val btQuality: Boolean = false
+    val btQuality: Boolean = false,
+    /** Order of the links on the main Settings page (group ids); empty = the original order. */
+    val settingsOrder: List<String> = emptyList()
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -242,7 +244,7 @@ data class Settings(
         .put("startVolume", startVolume).put("preampDb", preampDb.toDouble()).put("rgMode", rgMode)
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
-        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccents", org.json.JSONArray(customAccents)).put("menuOpacity", menuOpacity).put("menuGap", menuGap).put("vpnNas", vpnNas).put("vpnAskStart", vpnAskStart).put("vpnApp", vpnApp).put("vpnRetrySec", vpnRetrySec).put("upNextCount", upNextCount).put("radioAccent", radioAccent).put("autoLoud", autoLoud).put("toneSliders", toneSliders).put("controlShadow", controlShadow).put("toneLoud", toneLoud.toDouble()).put("toneTreble", toneTreble.toDouble()).put("radioPreLast", radioPreLast.toDouble()).put("songPreLast", songPreLast.toDouble()).put("saveFolder", saveFolder).put("saveFormat", saveFormat).put("radioCapture", radioCapture).put("scrollbarPx", scrollbarPx).put("spaceUnderGb", spaceUnderGb).put("radioBufferMin", radioBufferMin).put("spotifyId", spotifyId).put("spotifySecret", spotifySecret).put("spacePercent", spacePercent).put("btQuality", btQuality)
+        .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccents", org.json.JSONArray(customAccents)).put("menuOpacity", menuOpacity).put("menuGap", menuGap).put("vpnNas", vpnNas).put("vpnAskStart", vpnAskStart).put("vpnApp", vpnApp).put("vpnRetrySec", vpnRetrySec).put("upNextCount", upNextCount).put("radioAccent", radioAccent).put("autoLoud", autoLoud).put("toneSliders", toneSliders).put("controlShadow", controlShadow).put("toneLoud", toneLoud.toDouble()).put("toneTreble", toneTreble.toDouble()).put("radioPreLast", radioPreLast.toDouble()).put("songPreLast", songPreLast.toDouble()).put("saveFolder", saveFolder).put("saveFormat", saveFormat).put("radioCapture", radioCapture).put("scrollbarPx", scrollbarPx).put("spaceUnderGb", spaceUnderGb).put("radioBufferMin", radioBufferMin).put("spotifyId", spotifyId).put("spotifySecret", spotifySecret).put("spacePercent", spacePercent).put("btQuality", btQuality).put("settingsOrder", org.json.JSONArray(settingsOrder))
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -311,6 +313,7 @@ data class Settings(
                 spotifySecret = o.optString("spotifySecret", ""),
                 spacePercent = o.optInt("spacePercent", 30).coerceIn(5, 90),
                 btQuality = o.optBoolean("btQuality", false),
+                settingsOrder = o.optJSONArray("settingsOrder")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
                 customAccents = ((o.optJSONArray("customAccents")?.let { a -> (0 until a.length()).map { a.getLong(it) } }
                     ?: listOfNotNull(o.optLong("customAccent", 0L).takeIf { it != 0L }))
                     // A colour in use from the old preset row (blue / green / purple) stays as a custom one.

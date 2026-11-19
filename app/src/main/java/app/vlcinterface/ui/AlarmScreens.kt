@@ -139,8 +139,7 @@ private fun Label(text: String, hint: String = "") {
 private fun SliderRow(label: String, value: Float, range: ClosedFloatingPointRange<Float>, shown: String, steps: Int = 0, onChange: (Float) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).helpOn(label))
-        Slider(value, onChange, Modifier.weight(1f), valueRange = range, steps = steps,
-            colors = SliderDefaults.colors(thumbColor = accent(), activeTrackColor = accent()))
+        ThinSlider(value, onChange, Modifier.weight(1f), valueRange = range, steps = steps)
         Text(shown, color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
     }
 }

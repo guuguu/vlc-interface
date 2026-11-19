@@ -429,6 +429,8 @@ private fun BoxScope.ControlsOverlayBody(
             player.setRate(rates[(i + 1) % rates.size]); onTouch()
         }
         SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
+        // Video player → Video settings.
+        SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
         ShazamButton(Color.White)
         BackgroundWorkButton()
         ScreenOnSign(Color.White)

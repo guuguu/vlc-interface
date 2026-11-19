@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 object NetGuard {
     /** The phone's internet goes over mobile data right now. */
     val cellular = MutableStateFlow(false)
+    /** The phone's real connection now: "wifi" (or Ethernet), "mobile", or "" (none). */
+    val link = MutableStateFlow("")
     /** Show the "Wi-Fi lost" question. */
     val ask = MutableStateFlow(false)
     /**
@@ -55,6 +57,7 @@ object NetGuard {
             if (w && on && (!wasWifi || !wasOn)) try { app.vlcinterface.sources.RadioCapture.netBack() } catch (_: Exception) {}
             online = on
             wifi = w; cellular.value = c
+            link.value = if (w) "wifi" else if (real.any { it.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) }) "mobile" else ""
             if (wasWifi && !w) android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ wifiLost() }, 800)
             if (!wasWifi && w) android.os.Handler(android.os.Looper.getMainLooper()).post { wifiBack() }
         }

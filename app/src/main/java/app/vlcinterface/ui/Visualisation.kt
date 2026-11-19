@@ -455,11 +455,11 @@ fun VisualisationSettings() {
             }
             Pill("Reset") { set(v.copy(fLo = 30f, fHi = 150f)) }
         }
-        RangeSlider(toPos(v.fLo)..toPos(v.fHi), { r ->
+        ThinRangeSlider(toPos(v.fLo)..toPos(v.fHi), { r ->
             val lo = toHz(r.start)
             val hi = toHz(r.endInclusive).coerceAtLeast(lo * 1.2f).coerceAtMost(F_MAX)
             set(v.copy(fLo = lo, fHi = hi))
-        }, Modifier.padding(horizontal = 16.dp), colors = SliderDefaults.colors(thumbColor = accent(), activeTrackColor = accent()))
+        }, Modifier.padding(horizontal = 16.dp))
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
             Text("20 Hz", color = C.muted, fontSize = 11.sp, modifier = Modifier.weight(1f))
             Text("450 Hz", color = C.muted, fontSize = 11.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -475,8 +475,8 @@ fun VisualisationSettings() {
 @Composable
 private fun VisSlider(label: String, value: Float, range: ClosedFloatingPointRange<Float>, shown: String, onChange: (Float) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp))
-        Slider(value, onChange, Modifier.weight(1f), valueRange = range, colors = SliderDefaults.colors(thumbColor = accent(), activeTrackColor = accent()))
+        Text(label, color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain(label))
+        ThinSlider(value, onChange, Modifier.weight(1f), valueRange = range)
         Text(shown, color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
     }
 }

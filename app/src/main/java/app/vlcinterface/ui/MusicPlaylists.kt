@@ -149,10 +149,11 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     Box(Modifier.fillMaxSize().background(PLAYER_BG)) {   // players: 90 % black
     Column(Modifier.fillMaxSize().padding(end = if (meters) (21 * vuK).dp else 0.dp)) {
         // No page title: the song name is already shown in the middle of the player.
-        BackHeader("", nav, afterHome = {
+        BackHeader("", nav, gear = false, afterHome = {
             // Shortcut to the sound settings (preamp, balance per device, ReplayGain, sound engine).
             // The full Settings page (all sections, Sound included).
-            SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.text) }
+            // Audio player → Audio settings; radio player → Radio settings.
+            SymButton({ nav.go(Screen.SettingsGroup(if (item.isRadio) "radio" else "audio")) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.text) }
             // Jump to a song: search the queue and the Library; plays it (added after the current song if new).
             SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
         }) { ShazamButton(); BackgroundWorkButton(); ScreenOnSign(C.text); OutputPill(openOutput); ExitButton() }
@@ -166,7 +167,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         val pinnedClock: @Composable (Modifier) -> Unit = { mod ->
             val asp = app.vlcinterface.alarm.Alarms.state.collectAsState().value.aspect
             androidx.compose.foundation.layout.BoxWithConstraints(mod, contentAlignment = Alignment.Center) {
-                ClockFace(asp, Modifier.size(minOf(maxWidth, maxHeight)))
+                ClockWithGear(nav) { ClockFace(asp, Modifier.size(minOf(maxWidth, maxHeight))) }
             }
         }
         val partA: @Composable ColumnScope.() -> Unit = {
@@ -183,7 +184,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             val alarmData = app.vlcinterface.alarm.Alarms.state.collectAsState().value
             val clockOn = alarmData.showClock
             val pic: @Composable (Int) -> Unit = { sz ->
-                if (clockOn) ClockFace(alarmData.aspect, Modifier.padding(top = 8.dp).size(sz.dp)) else
+                if (clockOn) Box(Modifier.padding(top = 8.dp)) { ClockWithGear(nav) { ClockFace(alarmData.aspect, Modifier.size(sz.dp)) } } else
                 if (item.isRadio) Cover(p.artworkUrl.ifEmpty { item.artwork }, sz, Modifier.padding(top = 8.dp)) else
                 // The picture goes as soon as the song ends (the next song brings its own).
                 Cover(if (p.songOver) "" else item.artwork, sz, Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
@@ -1883,5 +1884,16 @@ fun KnobThumb(color: Color) {
     Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
         Box(Modifier.size(16.dp).then(if (shadow) Modifier.liteShadow(CircleShape, 2f) else Modifier).clip(CircleShape).background(color)
             .then(if (shadow) Modifier.border(1.dp, Color(0xFF8A8A8F), CircleShape) else Modifier))
+    }
+}
+
+
+/** The clock's square with a very small settings symbol in its top-right corner (outside the round face) → Alarm clock settings. */
+@Composable
+fun ClockWithGear(nav: Navigator, clock: @Composable () -> Unit) {
+    Box {
+        clock()
+        Text("⚙", color = C.muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.TopEnd).clip(CircleShape)
+            .clickable { nav.go(Screen.AlarmSettings) }.padding(3.dp))
     }
 }

@@ -52,6 +52,43 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Settings groups: id → name (the main page's links; their order is chosen in Look). */
+val SETTINGS_GROUPS: List<Pair<String, String>> = listOf("audio" to "Audio", "playback" to "Playback & gestures", "video" to "Video",
+    "radio" to "Radio", "look" to "Look", "library" to "Library & files", "network" to "Network & NAS", "vpn" to "VPN",
+    "alarm" to "Alarm clock", "vis" to "Visualisation", "backup" to "Export / import", "logs" to "Logs")
+
+private val GROUP_HINTS = mapOf("audio" to "Start volume, preamp, ReplayGain, sound engine", "playback" to "Gestures, resume, background playback",
+    "video" to "Subtitles, rotation", "radio" to "Saving songs, radio buffer, free space", "look" to "Colours, sizes, menus, order of these links",
+    "library" to "Scanning, album pictures, deleting files", "network" to "SMB1, Spotify links", "vpn" to "Home NAS through ZeroTier / Tailscale",
+    "alarm" to "Alarms, ringing, wake check, clock aspect", "vis" to "Patterns, colours, frequencies", "backup" to "Your whole setup in one file",
+    "logs" to "Errors, servers, indexing, crashes, caches")
+
+/** The main Settings page's links, in the chosen order (new groups added at the end). */
+fun orderedGroups(order: List<String>): List<Pair<String, String>> {
+    val byId = SETTINGS_GROUPS.toMap()
+    return (order.filter { it in byId } + SETTINGS_GROUPS.map { it.first }.filter { it !in order }).map { it to byId.getValue(it) }
+}
+
+/** A link to a settings page: name, what's in it, and a coloured triangle. */
+@Composable
+fun SettingsLink(name: String, hint: String, onClick: () -> Unit) {
+    val ex = LocalExplain.current
+    Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).combinedClickable(onClick = onClick, onLongClick = { ex(name, hint) })
+        .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(name, color = C.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 12.sp)
+        }
+        Text("▶", color = accent(), fontSize = 20.sp)
+    }
+}
+
+fun openSettingsGroup(nav: Navigator, id: String) = when (id) {
+    "alarm" -> nav.go(Screen.AlarmSettings)
+    "backup" -> nav.go(Screen.Backup)
+    else -> nav.go(Screen.SettingsGroup(id))
+}
+
 @Composable
 fun SettingsScreen(nav: Navigator) {
     val store = App.instance.store
@@ -59,22 +96,45 @@ fun SettingsScreen(nav: Navigator) {
     val s = st.settings
     fun set(n: Settings) = store.update { it.copy(settings = n) }
     val scroll = rememberScrollState()
-    var deleteFile by remember { mutableStateOf(false) }
-    if (deleteFile) DeleteFileDialog { deleteFile = false }
+    val ctxV = LocalContext.current
+    val explainNow = LocalExplain.current
     Column(Modifier.fillMaxSize()) {
-        val ctxV = LocalContext.current
         // Exact version of this build, e.g. "vlc interface 0.3.0-build29 (29)".
         val version = remember {
             try { ctxV.packageManager.getPackageInfo(ctxV.packageName, 0).let { "vlc interface ${it.versionName} (${it.longVersionCode})" } }
             catch (_: Exception) { "vlc interface ${app.vlcinterface.App.VERSION}" }
         }
-        BackHeader("Settings", nav, version) {
-            Box(Modifier.padding(end = 8.dp).clip(RoundedCornerShape(20.dp)).border(1.dp, C.line, RoundedCornerShape(20.dp))
-                .clickable { nav.go(Screen.Backup) }.padding(horizontal = 14.dp, vertical = 9.dp)) {
-                Text("Export / import", color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-            }
-        }
+        BackHeader("Settings", nav, version)
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            CardBox {
+                orderedGroups(s.settingsOrder).forEachIndexed { i, (id, name) ->
+                    if (i > 0) Divider()
+                    SettingsLink(name, GROUP_HINTS[id] ?: "") { openSettingsGroup(nav, id) }
+                }
+            }
+            Text("Long-press any setting for an explanation", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+            Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
+        }
+    }
+}
+
+/** One settings page (opened from the main Settings page, or by a player's settings symbol). */
+@Composable
+fun SettingsGroupScreen(nav: Navigator, id: String) {
+    val store = App.instance.store
+    val st by store.state.collectAsState()
+    val s = st.settings
+    fun set(n: Settings) = store.update { it.copy(settings = n) }
+    val scroll = rememberScrollState()
+    val ctxV = LocalContext.current
+    val explainNow = LocalExplain.current
+    var deleteFile by remember { mutableStateOf(false) }
+    if (deleteFile) DeleteFileDialog { deleteFile = false }
+    Column(Modifier.fillMaxSize()) {
+        BackHeader(SETTINGS_GROUPS.toMap()[id] ?: "Settings", nav)
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            when (id) {
+                "playback" -> {
             SectionTitle("Gestures")
             CardBox {
                 ToggleRow("Volume swipe", "Right half, vertical", s.volumeSwipe) { set(s.copy(volumeSwipe = it)) }; Divider()
@@ -94,11 +154,33 @@ fun SettingsScreen(nav: Navigator) {
                 ValueRow("Background playback", if (free) "Battery: Unrestricted — playlists go on while you use other apps"
                     else "Battery saver may stop playback between songs in the background", if (free) "Unrestricted ✓" else "Allow") { Battery.ask(bctx) }
             }
+                }
+                "audio" -> {
             SoundSettings(s, ::set)
-            SectionTitle("Alarm clock")
-            CardBox { ValueRow("Alarm clock", "Ringing, snooze, wake check, clock aspect", "›") { nav.go(Screen.AlarmSettings) } }
-            SectionTitle("Visualisation")
-            VisualisationSettings()
+                }
+                "video" -> {
+            SectionTitle("Subtitles")
+            CardBox {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Preferred languages", color = C.muted, fontSize = 12.sp, modifier = Modifier.explain("Preferred languages"))
+                    Field("Preferred languages (e.g. en, es)", s.subLangs.joinToString(", ")) { v ->
+                        set(s.copy(subLangs = v.split(',', ' ').map { it.trim().lowercase() }.filter { it.isNotEmpty() }))
+                    }
+                }
+                ToggleRow("Auto-download missing subtitles", "When a movie has none in your languages", s.autoDownloadSubs) { set(s.copy(autoDownloadSubs = it)) }
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("OpenSubtitles.com account (free). Create an API key under your profile → API consumers.", color = C.muted, fontSize = 12.sp)
+                    Field("API key", s.osApiKey, password = true) { set(s.copy(osApiKey = it.trim())) }
+                    Field("Username", s.osUser) { set(s.copy(osUser = it.trim())) }
+                    Field("Password", s.osPassword, password = true) { set(s.copy(osPassword = it)) }
+                }
+            }
+            SectionTitle("Rotation")
+            CardBox {
+                ToggleRow("Auto-rotate", "On: the app turns with the phone · Off: stays upright (videos still turn with the rotate button)", s.autoRotate) { set(s.copy(autoRotate = it)) }
+            }
+                }
+                "radio" -> {
             // Radio songs saved from the player (station menu → Save this song).
             SectionTitle("Saved songs")
             CardBox {
@@ -133,12 +215,12 @@ fun SettingsScreen(nav: Navigator) {
                 }
                 Divider()
                 // Radio buffer: the last N minutes kept for saving, and how long a lost connection may take to come back.
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Column(Modifier.explain("Radio buffer").padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Text("Radio buffer: ${s.radioBufferMin} min", color = C.text, fontSize = 15.sp)
                     Text("The last ${s.radioBufferMin} min are kept for saving (longer while a song is being saved); a lost connection back within ${s.radioBufferMin} min keeps the recording",
                         color = C.muted, fontSize = 12.sp)
                     var v by remember { mutableStateOf(s.radioBufferMin.toFloat()) }
-                    androidx.compose.material3.Slider(v, { v = it }, valueRange = 1f..20f, steps = 18,
+                    ThinSlider(v, { v = it }, valueRange = 1f..20f, steps = 18,
                         onValueChangeFinished = { set(s.copy(radioBufferMin = Math.round(v).coerceIn(1, 20))) })
                 }
                 Divider()
@@ -163,193 +245,14 @@ fun SettingsScreen(nav: Navigator) {
                 Divider()
                 ValueRow("MP3 encoder", "LAME ${app.vlcinterface.sources.Mp3Encoder.version} — LGPL, bundled unchanged as libmp3lame.so (lame.sourceforge.io)", "") {}
             }
-            SectionTitle("Network")
-            CardBox {
-                ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }
-                Divider()
-                // Song links: Spotify's own search with a free developer app (no Spotify login). Without it the
-                // links are found through MusicBrainz and a web search.
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Spotify links", color = C.text, fontSize = 15.sp)
-                    val on = s.spotifyId.isNotBlank() && s.spotifySecret.isNotBlank()
-                    Text(if (on) "On: song links include Spotify" else "Off: no Spotify anywhere until both keys are set", color = if (on) accent() else C.muted, fontSize = 12.sp)
-                    var help by remember { mutableStateOf(false) }
-                    var helped by remember { mutableStateOf(false) }
-                    Text("How to get them?", color = accent(), fontSize = 13.sp, modifier = Modifier.clickable { help = true })
-                    var id by remember { mutableStateOf(s.spotifyId) }
-                    var sec by remember { mutableStateOf(s.spotifySecret) }
-                    // The first tap on a box: the help.
-                    val firstTap = Modifier.onFocusChanged { if (it.isFocused && !helped && !on) { helped = true; help = true } }
-                    androidx.compose.material3.OutlinedTextField(id, { id = it.trim(); set(s.copy(spotifyId = id)) }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth().then(firstTap), label = { Text("Client ID") })
-                    androidx.compose.material3.OutlinedTextField(sec, { sec = it.trim(); set(s.copy(spotifySecret = sec)) }, singleLine = true,
-                        modifier = Modifier.fillMaxWidth().then(firstTap), label = { Text("Client Secret") },
-                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
-                    if (help) AlertDialog(onDismissRequest = { help = false }, containerColor = C.panel,
-                        title = { Text("Spotify keys", color = C.text) },
-                        text = {
-                            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text("Free, a few minutes, any Spotify account (free accounts too). Best done on a computer.", color = C.text, fontSize = 14.sp)
-                                listOf(
-                                    "Open developer.spotify.com and log in with your Spotify account.",
-                                    "Accept the developer terms if asked.",
-                                    "Dashboard → Create app.",
-                                    "App name and description: anything (e.g. \"vlc interface\").",
-                                    "Redirect URI: https://localhost (it's not used), then Add.",
-                                    "Which API: tick Web API. Accept the terms → Save.",
-                                    "Open the app → Settings: copy the Client ID.",
-                                    "Click View client secret: copy the Client Secret.",
-                                    "Paste both here. Spotify links work at once.",
-                                ).forEachIndexed { i, t -> Text("${i + 1}. $t", color = C.text, fontSize = 13.sp) }
-                                Text("The keys stay on this phone and are only used to search Spotify's catalogue for song links — no access to your account.",
-                                    color = C.muted, fontSize = 12.sp)
-                            }
-                        },
-                        confirmButton = { STextButton({ help = false }) { Text("OK", color = accent()) } },
-                        dismissButton = { STextButton({
-                            help = false
-                            try { ctxV.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://developer.spotify.com/dashboard"))) } catch (_: Exception) {}
-                        }) { Text("Open the site") } })
                 }
-            }
-            // VPN: home NAS through ZeroTier / Tailscale … (their own app keeps the login: nothing to enter here).
-            SectionTitle("VPN")
-            CardBox {
-                val vl = app.vlcinterface.sources.VpnLink
-                val up by vl.vpnUp.collectAsState()
-                val busy by vl.searching.collectAsState()
-                ValueRow("Status", if (up) "A VPN is on" else "No VPN on", if (up) "On" else "Off") {}
-                if (up) vl.phoneVpnInfo().takeIf { it.isNotEmpty() }?.let { Text(it, color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp)) }
-                Divider()
-                ToggleRow("Home NAS through the VPN", "Away from home with the VPN on, your LAN servers are reached through it — at home, directly", s.vpnNas) { set(s.copy(vpnNas = it)) }
-                Divider()
-                ToggleRow("Ask to start the VPN", "Away from home with the VPN off, when the phone isn't on the subnet of any address stored for a home server", s.vpnAskStart) { set(s.copy(vpnAskStart = it)) }
-                if (s.vpnAskStart) {
-                    Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("“Retry in” delay (time to start the VPN)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                            Text("${s.vpnRetrySec} s", color = accent(), fontWeight = FontWeight.SemiBold)
-                            STextButton({ set(s.copy(vpnRetrySec = 40)) }) { Text("Reset") }
-                        }
-                        androidx.compose.material3.Slider(s.vpnRetrySec.toFloat(), { v -> set(s.copy(vpnRetrySec = (Math.round(v / 5f) * 5).coerceIn(10, 120))) }, valueRange = 10f..120f)
-                    }
-                }
-                Divider()
-                ValueRow("VPN app", "Opened by “Start the VPN” (its saved login is used)",
-                    when (s.vpnApp) { "zerotier" -> "ZeroTier"; "tailscale" -> "Tailscale"; "settings" -> "Android settings"; else -> "Auto" }) {
-                    val o = listOf("auto", "zerotier", "tailscale", "settings"); set(s.copy(vpnApp = o[(o.indexOf(s.vpnApp) + 1).mod(o.size)]))
-                }
-                Divider()
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Home servers on the VPN", color = C.text, fontSize = 15.sp)
-                    if (busy.isNotEmpty()) Text(busy, color = accent(), fontSize = 12.sp)
-                    else {
-                        // Always here (special cases: a new NAS, an address changed on the VPN …).
-                        val sctx = androidx.compose.ui.platform.LocalContext.current
-                        Pill("Search for NAS now") {
-                            if (up) vl.rescan() else android.widget.Toast.makeText(sctx, "Start the VPN first, then search", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                        if (!up) Text("VPN off — start it to search", color = C.muted, fontSize = 12.sp)
-                    }
-                    val kept = st.sources.filter { it.vpnHost.isNotBlank() }
-                    if (kept.isEmpty()) Text("None yet — found by themselves when the VPN starts", color = C.muted, fontSize = 12.sp)
-                    var editing by remember { mutableStateOf<app.vlcinterface.data.Source?>(null) }
-                    kept.forEach { src ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("${src.name.ifBlank { src.host }}: LAN ${src.host} · VPN ${src.vpnHost}", color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                            STextButton({ editing = src }) { Text("Modify") }
-                            STextButton({ vl.forget(src) }) { Text("Forget") }
-                        }
-                    }
-                    editing?.let { src ->
-                        var ip by remember(src.id) { mutableStateOf(src.vpnHost) }
-                        AlertDialog(onDismissRequest = { editing = null }, containerColor = C.panel,
-                            title = { Text("${src.name.ifBlank { src.host }}: VPN address", color = C.text) },
-                            text = { androidx.compose.material3.OutlinedTextField(ip, { ip = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), label = { Text("VPN address") }) },
-                            confirmButton = { STextButton({ vl.setVpnHost(src, ip); editing = null }, enabled = ip.isNotBlank()) { Text("Save", color = accent()) } },
-                            dismissButton = { STextButton({ editing = null }) { Text("Cancel") } })
-                    }
-                }
-                Divider()
-                ValueRow("VPN log", "VPN on / off, servers found, LAN ↔ VPN switches", "Open") { nav.go(Screen.LogPage("vpn")) }
-            }
-            // Logs, by kind. Each page has Errors only / Empty log / Share / Save to NAS.
-            SectionTitle("Logs")
-            CardBox {
-                ValueRow("All errors", "Every failure from every log, newest first", "Open") { nav.go(Screen.LogView("errors")) }; Divider()
-                ValueRow("Deleted files", "Every file deleted from Settings, with its full path", "Open") { nav.go(Screen.LogPage(ServerLog.DELETED)) }; Divider()
-                ValueRow("Network", "One page per LAN / Internet server", "Open") { nav.go(Screen.Logs) }; Divider()
-                ValueRow("Indexing", "LAN folders indexed for search (songs found, or why not)", "Open") { nav.go(Screen.LogView("indexing")) }; Divider()
-                ValueRow("ReplayGain", "Every scan, and each file that had a problem", "Open") { nav.go(Screen.LogPage(ServerLog.REPLAYGAIN)) }; Divider()
-                ValueRow("Crashes", "App crashes, and why the app ended last time (from Android)", "Open") { nav.go(Screen.LogPage(app.vlcinterface.data.CrashLog.KEY)) }; Divider()
-                ValueRow("Sound engine", "The app's sound output: switches and problems", "Open") { nav.go(Screen.LogPage("sound-engine")) }; Divider()
-                ValueRow("Radio pictures", "Each song a station announced: picture found, or what was searched", "Open") { nav.go(Screen.LogPage("radio-pictures")) }; Divider()
-                ValueRow("Player", "Songs skipped (not found / not reachable)", "Open") { nav.go(Screen.LogPage("player")) }
-                Divider()
-                // By hand: everything in the app's cache folder (radio buffer, songs being saved, radio pictures,
-                // temporary files). Settings, playlists, logs and ReplayGain values are not touched.
-                var askClear by remember { mutableStateOf(false) }
-                var cacheSize by remember { mutableStateOf(-1L) }
-                val cctx = LocalContext.current
-                LaunchedEffect(askClear) { cacheSize = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { cctx.cacheDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() } } }
-                ValueRow("Clear all caches", "Radio buffer, songs being saved, radio pictures, temporary files" +
-                    if (cacheSize >= 0) " · ${"%.1f".format(java.util.Locale.US, cacheSize / 1048576.0)} MB" else "", "Clear") { askClear = true }
-                if (askClear) {
-                    val busy = app.vlcinterface.sources.RadioCapture.hasWork()
-                    AlertDialog(onDismissRequest = { askClear = false }, containerColor = C.panel,
-                        title = { Text("Clear all caches?", color = C.text) },
-                        text = { Text((if (busy) "Songs being saved from the radio are stopped and lost. " else "") +
-                            "The radio buffer, radio pictures and temporary files are deleted. Settings, playlists, logs and saved songs stay.",
-                            color = if (busy) C.bad else C.muted, fontSize = 13.sp) },
-                        confirmButton = { STextButton({
-                            askClear = false
-                            val freed = app.vlcinterface.sources.RadioCapture.clearAllCaches(cctx)
-                            android.widget.Toast.makeText(cctx, "Caches cleared: ${"%.1f".format(java.util.Locale.US, freed / 1048576.0)} MB freed", android.widget.Toast.LENGTH_SHORT).show()
-                        }) { Text("Clear", color = C.bad, fontWeight = FontWeight.Bold) } },
-                        dismissButton = { STextButton({ askClear = false }) { Text("Cancel") } })
-                }
-            }
-            SectionTitle("Subtitles")
-            CardBox {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Field("Preferred languages (e.g. en, es)", s.subLangs.joinToString(", ")) { v ->
-                        set(s.copy(subLangs = v.split(',', ' ').map { it.trim().lowercase() }.filter { it.isNotEmpty() }))
-                    }
-                }
-                ToggleRow("Auto-download missing subtitles", "When a movie has none in your languages", s.autoDownloadSubs) { set(s.copy(autoDownloadSubs = it)) }
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("OpenSubtitles.com account (free). Create an API key under your profile → API consumers.", color = C.muted, fontSize = 12.sp)
-                    Field("API key", s.osApiKey, password = true) { set(s.copy(osApiKey = it.trim())) }
-                    Field("Username", s.osUser) { set(s.copy(osUser = it.trim())) }
-                    Field("Password", s.osPassword, password = true) { set(s.copy(osPassword = it)) }
-                }
-            }
-            SectionTitle("Library scanning")
-            CardBox {
-                ToggleRow("Automatic scanning", "Off: only scans when you tap Rescan", s.autoScan) { set(s.copy(autoScan = it)) }; Divider()
-                ToggleRow("Watch folders for changes", "Off: no background file watching", s.watchFolders) { set(s.copy(watchFolders = it)) }; Divider()
-                ToggleRow("Album pictures from the internet", "For albums with no picture (MusicBrainz / Cover Art Archive); artist or band photo when the album has none (Wikimedia). Resized for the phone and saved in the album folder (cover.jpg / artist.jpg) when that folder holds one album; songs in folders mixing albums use the pictures folder below", s.coverDownload) { set(s.copy(coverDownload = it)) }
-                Divider()
-                ValueRow("Pictures folder", "For songs not in a one-album folder: each picture saved as <unique id>.jpg, tied to the song it was downloaded for (and its album / artist) in " +
-                    app.vlcinterface.sources.CoverArt.store.path, "") {}
-                Divider()
-                val ctx = LocalContext.current
-                var granted by remember { mutableStateOf(app.vlcinterface.sources.CoverArt.phoneAccessGranted(ctx)) }
-                val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
-                    if (uri != null) try {
-                        ctx.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                        granted = true
-                    } catch (_: Exception) {}
-                }
-                ValueRow("Phone music folders", if (granted) "Album pictures can be saved in phone album folders" else "Allow once (e.g. pick Music) so pictures can be saved next to the songs",
-                    if (granted) "Allowed ✓" else "Allow") { pick.launch(null) }
-            }
+                "look" -> {
             SectionTitle("Look")
             CardBox {
                 ToggleRow("Auto-rotate", "On: the app turns with the phone · Off: stays upright (videos still turn with the rotate button)", s.autoRotate) { set(s.copy(autoRotate = it)) }
                 Divider()
                 // All long lists: the bar on the right; drag it (or touch the right edge) to jump anywhere fast.
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Column(Modifier.explain("Scroll bar width").padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Text("Scroll bar width", color = C.text, fontSize = 15.sp)
                     Text("All lists: drag the bar on the right edge to scroll fast", color = C.muted, fontSize = 12.sp)
                     Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -357,22 +260,8 @@ fun SettingsScreen(nav: Navigator) {
                     }
                 }
             }
-            // Deleting a file for good: only here (not in the lists' menus), with a search like the Songs list / player.
             CardBox {
-                Row(Modifier.fillMaxWidth().clickable { deleteFile = true }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Delete a file or folder…", color = C.bad, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                        Text("Search for a song or a folder and delete it from the phone or the NAS for good (folders: full content shown first)", color = C.bad.copy(alpha = 0.8f), fontSize = 13.sp)
-                    }
-                }
-            }
-            // Files taken out of lists with "Remove from this list" (never deleted): put them back.
-            if (s.hiddenUris.isNotEmpty()) CardBox {
-                ValueRow("Removed from lists", "${s.hiddenUris.size} file${if (s.hiddenUris.size == 1) "" else "s"} taken out of the lists and never re-added — files and folders (not deleted)",
-                    "Show again") { HiddenFiles.showAll() }
-            }
-            CardBox {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Column(Modifier.explain("Button size").padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Button size", color = C.text, fontSize = 15.sp)
@@ -381,12 +270,12 @@ fun SettingsScreen(nav: Navigator) {
                         Text("${s.buttonScale}%", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(buttonScale = 75)) }) { Text("Reset") }
                     }
-                    androidx.compose.material3.Slider(s.buttonScale.toFloat(), { v -> set(s.copy(buttonScale = (Math.round(v / 5f) * 5).coerceIn(50, 125))) }, valueRange = 50f..125f)
+                    ThinSlider(s.buttonScale.toFloat(), { v -> set(s.copy(buttonScale = (Math.round(v / 5f) * 5).coerceIn(50, 125))) }, valueRange = 50f..125f)
                     Text("75 % = 25 % smaller than standard (default) · 100 % = standard Android size", color = C.muted, fontSize = 12.sp)
                 }
             }
             CardBox {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Column(Modifier.explain("Songs list horizontal autoscroll").padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Songs list horizontal autoscroll", color = C.text, fontSize = 15.sp)
@@ -395,12 +284,12 @@ fun SettingsScreen(nav: Navigator) {
                         Text(if (s.songsScrollSpeed == 0) "Off" else "${s.songsScrollSpeed}%", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(songsScrollSpeed = 100)) }) { Text("Reset") }
                     }
-                    androidx.compose.material3.Slider(s.songsScrollSpeed.toFloat(), { v -> set(s.copy(songsScrollSpeed = (Math.round(v / 10f) * 10).coerceIn(0, 300))) }, valueRange = 0f..300f)
+                    ThinSlider(s.songsScrollSpeed.toFloat(), { v -> set(s.copy(songsScrollSpeed = (Math.round(v / 10f) * 10).coerceIn(0, 300))) }, valueRange = 0f..300f)
                     Text("0 = rows stay still · 100 % = normal (slow) · 300 % = three times faster", color = C.muted, fontSize = 12.sp)
                 }
             }
             CardBox {
-                Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.explain("Up next songs on the player").padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Up next songs on the player", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                     Pill("−") { set(s.copy(upNextCount = (s.upNextCount - 1).coerceAtLeast(0))) }
                     Text("${s.upNextCount}", color = accent(), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
@@ -411,14 +300,15 @@ fun SettingsScreen(nav: Navigator) {
             CardBox {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Pop-up opacity", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("Pop-up opacity", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Pop-up opacity"))
                         Text("${s.popupOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(popupOpacity = 90)) }) { Text("Reset") }
                     }
                     OpacityPreview(s.popupOpacity / 100f, "Pop-up window", 15)
-                    androidx.compose.material3.Slider(s.popupOpacity.toFloat(), { v -> set(s.copy(popupOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
+                    ThinSlider(s.popupOpacity.toFloat(), { v -> set(s.copy(popupOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
                     // Players: faint shadow on buttons and slider knobs (knobs ringed in grey).
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clickable { set(s.copy(controlShadow = !s.controlShadow)) }) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { set(s.copy(controlShadow = !s.controlShadow)) },
+                        onLongClick = { explainNow("Shadow on player buttons", "") })) {
                         Column(Modifier.weight(1f)) {
                             Text("Shadow on player buttons", color = C.text, fontSize = 15.sp)
                             Text("Audio and radio players: faint grey shadow on buttons and slider knobs, knobs ringed in grey", color = C.muted, fontSize = 12.sp)
@@ -426,15 +316,15 @@ fun SettingsScreen(nav: Navigator) {
                         androidx.compose.material3.Switch(s.controlShadow, { set(s.copy(controlShadow = it)) })
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Menu opacity (menus and search results, own setting)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("Menu opacity (menus and search results, own setting)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Menu opacity"))
                         Text("${s.menuOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(menuOpacity = 90)) }) { Text("Reset") }
                     }
                     OpacityPreview(s.menuOpacity / 100f, "Menu entry", UiPrefs.spOf(s.menuFont))
-                    androidx.compose.material3.Slider(s.menuOpacity.toFloat(), { v -> set(s.copy(menuOpacity = (Math.round(v / 5f) * 5).coerceIn(30, 100))) }, valueRange = 30f..100f)
+                    ThinSlider(s.menuOpacity.toFloat(), { v -> set(s.copy(menuOpacity = (Math.round(v / 5f) * 5).coerceIn(30, 100))) }, valueRange = 30f..100f)
                     // Menu row spacing: how close menu (and search result) rows are; preview of three rows.
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Menu row spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("Menu row spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Menu row spacing"))
                         Text("${s.menuGap} dp", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(menuGap = 6)) }) { Text("Reset") }
                     }
@@ -444,8 +334,8 @@ fun SettingsScreen(nav: Navigator) {
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = s.menuGap.dp))
                         }
                     }
-                    androidx.compose.material3.Slider(s.menuGap.toFloat(), { v -> set(s.copy(menuGap = Math.round(v).coerceIn(0, 16))) }, valueRange = 0f..16f, steps = 15)
-                    Text("Menu text", color = C.text, fontSize = 15.sp)
+                    ThinSlider(s.menuGap.toFloat(), { v -> set(s.copy(menuGap = Math.round(v).coerceIn(0, 16))) }, valueRange = 0f..16f, steps = 15)
+                    Text("Menu text", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Menu text"))
                     Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf("small" to "Small", "medium" to "Medium", "large" to "Large", "xlarge" to "Extra large").forEach { (k, l) ->
                             Pill(l, selected = s.menuFont == k, filled = s.menuFont == k) { set(s.copy(menuFont = k)) }
@@ -458,7 +348,7 @@ fun SettingsScreen(nav: Navigator) {
             val cur = if (forRadio) (s.radioAccent.takeIf { it != 0L } ?: s.accent) else s.accent
             fun pick(c: Long) = set(if (forRadio) s.copy(radioAccent = c) else s.copy(accent = c))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Colour for", color = C.text, fontSize = 15.sp)
+                Text("Colour for", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Colour for"))
                 Pill("Files", selected = !forRadio, filled = !forRadio) { forRadio = false }
                 Pill("Radio", selected = forRadio, filled = forRadio) { forRadio = true }
             }
@@ -523,7 +413,215 @@ fun SettingsScreen(nav: Navigator) {
                     confirmButton = { STextButton({ replacing = null }) { Text("Cancel") } },
                 )
             }
-            Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
+            SectionTitle("Order of the Settings links")
+            CardBox {
+                val order = orderedGroups(s.settingsOrder).map { it.first }
+                order.forEachIndexed { i, gid ->
+                    if (i > 0) Divider()
+                    Row(Modifier.fillMaxWidth().explain("Order of the Settings links").padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(SETTINGS_GROUPS.toMap()[gid] ?: gid, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        STextButton({ if (i > 0) set(s.copy(settingsOrder = order.toMutableList().also { java.util.Collections.swap(it, i, i - 1) })) }, enabled = i > 0) { Text("▲", fontSize = 16.sp) }
+                        STextButton({ if (i < order.lastIndex) set(s.copy(settingsOrder = order.toMutableList().also { java.util.Collections.swap(it, i, i + 1) })) }, enabled = i < order.lastIndex) { Text("▼", fontSize = 16.sp) }
+                    }
+                }
+                Divider()
+                ValueRow("Reset order", "Back to the original order", "Reset") { set(s.copy(settingsOrder = emptyList())) }
+            }
+                }
+                "library" -> {
+            SectionTitle("Library scanning")
+            CardBox {
+                ToggleRow("Automatic scanning", "Off: only scans when you tap Rescan", s.autoScan) { set(s.copy(autoScan = it)) }; Divider()
+                ToggleRow("Watch folders for changes", "Off: no background file watching", s.watchFolders) { set(s.copy(watchFolders = it)) }; Divider()
+                ToggleRow("Album pictures from the internet", "For albums with no picture (MusicBrainz / Cover Art Archive); artist or band photo when the album has none (Wikimedia). Resized for the phone and saved in the album folder (cover.jpg / artist.jpg) when that folder holds one album; songs in folders mixing albums use the pictures folder below", s.coverDownload) { set(s.copy(coverDownload = it)) }
+                Divider()
+                ValueRow("Pictures folder", "For songs not in a one-album folder: each picture saved as <unique id>.jpg, tied to the song it was downloaded for (and its album / artist) in " +
+                    app.vlcinterface.sources.CoverArt.store.path, "") {}
+                Divider()
+                val ctx = LocalContext.current
+                var granted by remember { mutableStateOf(app.vlcinterface.sources.CoverArt.phoneAccessGranted(ctx)) }
+                val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()) { uri ->
+                    if (uri != null) try {
+                        ctx.contentResolver.takePersistableUriPermission(uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                        granted = true
+                    } catch (_: Exception) {}
+                }
+                ValueRow("Phone music folders", if (granted) "Album pictures can be saved in phone album folders" else "Allow once (e.g. pick Music) so pictures can be saved next to the songs",
+                    if (granted) "Allowed ✓" else "Allow") { pick.launch(null) }
+            }
+            // Deleting a file for good: only here (not in the lists' menus), with a search like the Songs list / player.
+            CardBox {
+                Row(Modifier.fillMaxWidth().clickable { deleteFile = true }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Delete a file or folder…", color = C.bad, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Search for a song or a folder and delete it from the phone or the NAS for good (folders: full content shown first)", color = C.bad.copy(alpha = 0.8f), fontSize = 13.sp)
+                    }
+                }
+            }
+            // Files taken out of lists with "Remove from this list" (never deleted): put them back.
+            if (s.hiddenUris.isNotEmpty()) CardBox {
+                ValueRow("Removed from lists", "${s.hiddenUris.size} file${if (s.hiddenUris.size == 1) "" else "s"} taken out of the lists and never re-added — files and folders (not deleted)",
+                    "Show again") { HiddenFiles.showAll() }
+            }
+                }
+                "network" -> {
+            SectionTitle("Network")
+            CardBox {
+                ToggleRow("Allow SMB1", "Old, unencrypted — fine on your home LAN, avoid over the internet", s.allowSmb1) { set(s.copy(allowSmb1 = it)) }
+                Divider()
+                // Song links: Spotify's own search with a free developer app (no Spotify login). Without it the
+                // links are found through MusicBrainz and a web search.
+                Column(Modifier.explain("Spotify links").padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Spotify links", color = C.text, fontSize = 15.sp)
+                    val on = s.spotifyId.isNotBlank() && s.spotifySecret.isNotBlank()
+                    Text(if (on) "On: song links include Spotify" else "Off: no Spotify anywhere until both keys are set", color = if (on) accent() else C.muted, fontSize = 12.sp)
+                    var help by remember { mutableStateOf(false) }
+                    var helped by remember { mutableStateOf(false) }
+                    Text("How to get them?", color = accent(), fontSize = 13.sp, modifier = Modifier.clickable { help = true })
+                    var id by remember { mutableStateOf(s.spotifyId) }
+                    var sec by remember { mutableStateOf(s.spotifySecret) }
+                    // The first tap on a box: the help.
+                    val firstTap = Modifier.onFocusChanged { if (it.isFocused && !helped && !on) { helped = true; help = true } }
+                    androidx.compose.material3.OutlinedTextField(id, { id = it.trim(); set(s.copy(spotifyId = id)) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().then(firstTap), label = { Text("Client ID") })
+                    androidx.compose.material3.OutlinedTextField(sec, { sec = it.trim(); set(s.copy(spotifySecret = sec)) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth().then(firstTap), label = { Text("Client Secret") },
+                        visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                    if (help) AlertDialog(onDismissRequest = { help = false }, containerColor = C.panel,
+                        title = { Text("Spotify keys", color = C.text) },
+                        text = {
+                            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Free, a few minutes, any Spotify account (free accounts too). Best done on a computer.", color = C.text, fontSize = 14.sp)
+                                listOf(
+                                    "Open developer.spotify.com and log in with your Spotify account.",
+                                    "Accept the developer terms if asked.",
+                                    "Dashboard → Create app.",
+                                    "App name and description: anything (e.g. \"vlc interface\").",
+                                    "Redirect URI: https://localhost (it's not used), then Add.",
+                                    "Which API: tick Web API. Accept the terms → Save.",
+                                    "Open the app → Settings: copy the Client ID.",
+                                    "Click View client secret: copy the Client Secret.",
+                                    "Paste both here. Spotify links work at once.",
+                                ).forEachIndexed { i, t -> Text("${i + 1}. $t", color = C.text, fontSize = 13.sp) }
+                                Text("The keys stay on this phone and are only used to search Spotify's catalogue for song links — no access to your account.",
+                                    color = C.muted, fontSize = 12.sp)
+                            }
+                        },
+                        confirmButton = { STextButton({ help = false }) { Text("OK", color = accent()) } },
+                        dismissButton = { STextButton({
+                            help = false
+                            try { ctxV.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://developer.spotify.com/dashboard"))) } catch (_: Exception) {}
+                        }) { Text("Open the site") } })
+                }
+            }
+                }
+                "vpn" -> {
+            // VPN: home NAS through ZeroTier / Tailscale … (their own app keeps the login: nothing to enter here).
+            SectionTitle("VPN")
+            CardBox {
+                val vl = app.vlcinterface.sources.VpnLink
+                val up by vl.vpnUp.collectAsState()
+                val busy by vl.searching.collectAsState()
+                ValueRow("Status", if (up) "A VPN is on" else "No VPN on", if (up) "On" else "Off") {}
+                if (up) vl.phoneVpnInfo().takeIf { it.isNotEmpty() }?.let { Text(it, color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp)) }
+                Divider()
+                ToggleRow("Home NAS through the VPN", "Away from home with the VPN on, your LAN servers are reached through it — at home, directly", s.vpnNas) { set(s.copy(vpnNas = it)) }
+                Divider()
+                ToggleRow("Ask to start the VPN", "Away from home with the VPN off, when the phone isn't on the subnet of any address stored for a home server", s.vpnAskStart) { set(s.copy(vpnAskStart = it)) }
+                if (s.vpnAskStart) {
+                    Column(Modifier.explain("Ask to start the VPN").padding(horizontal = 16.dp, vertical = 6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("“Retry in” delay (time to start the VPN)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                            Text("${s.vpnRetrySec} s", color = accent(), fontWeight = FontWeight.SemiBold)
+                            STextButton({ set(s.copy(vpnRetrySec = 40)) }) { Text("Reset") }
+                        }
+                        ThinSlider(s.vpnRetrySec.toFloat(), { v -> set(s.copy(vpnRetrySec = (Math.round(v / 5f) * 5).coerceIn(10, 120))) }, valueRange = 10f..120f)
+                    }
+                }
+                Divider()
+                ValueRow("VPN app", "Opened by “Start the VPN” (its saved login is used)",
+                    when (s.vpnApp) { "zerotier" -> "ZeroTier"; "tailscale" -> "Tailscale"; "settings" -> "Android settings"; else -> "Auto" }) {
+                    val o = listOf("auto", "zerotier", "tailscale", "settings"); set(s.copy(vpnApp = o[(o.indexOf(s.vpnApp) + 1).mod(o.size)]))
+                }
+                Divider()
+                Column(Modifier.explain("Home servers on the VPN").padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Home servers on the VPN", color = C.text, fontSize = 15.sp)
+                    if (busy.isNotEmpty()) Text(busy, color = accent(), fontSize = 12.sp)
+                    else {
+                        // Always here (special cases: a new NAS, an address changed on the VPN …).
+                        val sctx = androidx.compose.ui.platform.LocalContext.current
+                        Pill("Search for NAS now") {
+                            if (up) vl.rescan() else android.widget.Toast.makeText(sctx, "Start the VPN first, then search", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                        if (!up) Text("VPN off — start it to search", color = C.muted, fontSize = 12.sp)
+                    }
+                    val kept = st.sources.filter { it.vpnHost.isNotBlank() }
+                    if (kept.isEmpty()) Text("None yet — found by themselves when the VPN starts", color = C.muted, fontSize = 12.sp)
+                    var editing by remember { mutableStateOf<app.vlcinterface.data.Source?>(null) }
+                    kept.forEach { src ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${src.name.ifBlank { src.host }}: LAN ${src.host} · VPN ${src.vpnHost}", color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            STextButton({ editing = src }) { Text("Modify") }
+                            STextButton({ vl.forget(src) }) { Text("Forget") }
+                        }
+                    }
+                    editing?.let { src ->
+                        var ip by remember(src.id) { mutableStateOf(src.vpnHost) }
+                        AlertDialog(onDismissRequest = { editing = null }, containerColor = C.panel,
+                            title = { Text("${src.name.ifBlank { src.host }}: VPN address", color = C.text) },
+                            text = { androidx.compose.material3.OutlinedTextField(ip, { ip = it }, singleLine = true, modifier = Modifier.fillMaxWidth(), label = { Text("VPN address") }) },
+                            confirmButton = { STextButton({ vl.setVpnHost(src, ip); editing = null }, enabled = ip.isNotBlank()) { Text("Save", color = accent()) } },
+                            dismissButton = { STextButton({ editing = null }) { Text("Cancel") } })
+                    }
+                }
+                Divider()
+                ValueRow("VPN log", "VPN on / off, servers found, LAN ↔ VPN switches", "Open") { nav.go(Screen.LogPage("vpn")) }
+            }
+                }
+                "vis" -> {
+            SectionTitle("Visualisation")
+            VisualisationSettings()
+                }
+                "logs" -> {
+            // Logs, by kind. Each page has Errors only / Empty log / Share / Save to NAS.
+            SectionTitle("Logs")
+            CardBox {
+                ValueRow("All errors", "Every failure from every log, newest first", "Open") { nav.go(Screen.LogView("errors")) }; Divider()
+                ValueRow("Deleted files", "Every file deleted from Settings, with its full path", "Open") { nav.go(Screen.LogPage(ServerLog.DELETED)) }; Divider()
+                ValueRow("Network", "One page per LAN / Internet server", "Open") { nav.go(Screen.Logs) }; Divider()
+                ValueRow("Indexing", "LAN folders indexed for search (songs found, or why not)", "Open") { nav.go(Screen.LogView("indexing")) }; Divider()
+                ValueRow("ReplayGain", "Every scan, and each file that had a problem", "Open") { nav.go(Screen.LogPage(ServerLog.REPLAYGAIN)) }; Divider()
+                ValueRow("Crashes", "App crashes, and why the app ended last time (from Android)", "Open") { nav.go(Screen.LogPage(app.vlcinterface.data.CrashLog.KEY)) }; Divider()
+                ValueRow("Sound engine", "The app's sound output: switches and problems", "Open") { nav.go(Screen.LogPage("sound-engine")) }; Divider()
+                ValueRow("Radio pictures", "Each song a station announced: picture found, or what was searched", "Open") { nav.go(Screen.LogPage("radio-pictures")) }; Divider()
+                ValueRow("Player", "Songs skipped (not found / not reachable)", "Open") { nav.go(Screen.LogPage("player")) }
+                Divider()
+                // By hand: everything in the app's cache folder (radio buffer, songs being saved, radio pictures,
+                // temporary files). Settings, playlists, logs and ReplayGain values are not touched.
+                var askClear by remember { mutableStateOf(false) }
+                var cacheSize by remember { mutableStateOf(-1L) }
+                val cctx = LocalContext.current
+                LaunchedEffect(askClear) { cacheSize = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { cctx.cacheDir.walkBottomUp().filter { it.isFile }.sumOf { it.length() } } }
+                ValueRow("Clear all caches", "Radio buffer, songs being saved, radio pictures, temporary files" +
+                    if (cacheSize >= 0) " · ${"%.1f".format(java.util.Locale.US, cacheSize / 1048576.0)} MB" else "", "Clear") { askClear = true }
+                if (askClear) {
+                    val busy = app.vlcinterface.sources.RadioCapture.hasWork()
+                    AlertDialog(onDismissRequest = { askClear = false }, containerColor = C.panel,
+                        title = { Text("Clear all caches?", color = C.text) },
+                        text = { Text((if (busy) "Songs being saved from the radio are stopped and lost. " else "") +
+                            "The radio buffer, radio pictures and temporary files are deleted. Settings, playlists, logs and saved songs stay.",
+                            color = if (busy) C.bad else C.muted, fontSize = 13.sp) },
+                        confirmButton = { STextButton({
+                            askClear = false
+                            val freed = app.vlcinterface.sources.RadioCapture.clearAllCaches(cctx)
+                            android.widget.Toast.makeText(cctx, "Caches cleared: ${"%.1f".format(java.util.Locale.US, freed / 1048576.0)} MB freed", android.widget.Toast.LENGTH_SHORT).show()
+                        }) { Text("Clear", color = C.bad, fontWeight = FontWeight.Bold) } },
+                        dismissButton = { STextButton({ askClear = false }) { Text("Cancel") } })
+                }
+            }
+                }
+            }
+            Box(Modifier.height(24.dp))
         }
     }
 }
@@ -670,7 +768,7 @@ fun DeviceSoundControls(name: String) {
         Text(name, color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Preamp", color = C.muted, fontSize = 12.sp, modifier = Modifier.width(64.dp))
-            androidx.compose.material3.Slider(pre, { v ->
+            ThinSlider(pre, { v ->
                 store.update { it.copy(devicePreamp = it.devicePreamp + (name to Math.round(v * 2) / 2f)) }; App.instance.player.applySoundChain()
             }, valueRange = -12f..12f, modifier = Modifier.weight(1f))
             Text("%+.1f dB".format(pre), color = accent(), fontSize = 12.sp, modifier = Modifier.width(64.dp))
@@ -679,7 +777,7 @@ fun DeviceSoundControls(name: String) {
             val from = st.deviceLoudFrom[name] ?: 50
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Loudness\nflat from", color = C.muted, fontSize = 12.sp, lineHeight = 13.sp, modifier = Modifier.width(64.dp))
-                androidx.compose.material3.Slider(from.toFloat(), { v ->
+                ThinSlider(from.toFloat(), { v ->
                     store.update { it.copy(deviceLoudFrom = it.deviceLoudFrom + (name to (Math.round(v / 5f) * 5).coerceIn(0, 95))) }
                     App.instance.player.applySoundChain()
                 }, valueRange = 0f..95f, modifier = Modifier.weight(1f))
@@ -689,7 +787,7 @@ fun DeviceSoundControls(name: String) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Balance", color = C.muted, fontSize = 12.sp, modifier = Modifier.width(64.dp))
             Text("L", color = C.muted, fontSize = 12.sp)
-            androidx.compose.material3.Slider(bal.toFloat(), { v ->
+            ThinSlider(bal.toFloat(), { v ->
                 val snapped = if (kotlin.math.abs(v) < 6f) 0 else v.toInt()
                 store.update { it.copy(deviceBalance = it.deviceBalance + (name to snapped)) }; App.instance.player.applySoundChain()
             }, valueRange = -100f..100f, modifier = Modifier.weight(1f).padding(horizontal = 4.dp))
@@ -715,7 +813,7 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
                 }
                 Text("${s.startVolume}%", color = accent(), fontWeight = FontWeight.SemiBold)
             }
-            androidx.compose.material3.Slider(s.startVolume.toFloat(), { set(s.copy(startVolume = it.toInt())) }, valueRange = 0f..100f)
+            ThinSlider(s.startVolume.toFloat(), { set(s.copy(startVolume = it.toInt())) }, valueRange = 0f..100f)
             Divider()
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -725,7 +823,7 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
                 Text("%+.1f dB".format(s.preampDb), color = accent(), fontWeight = FontWeight.SemiBold)
                 STextButton({ set(s.copy(preampDb = 0f)); App.instance.player.applySoundChain() }) { Text("Reset") }
             }
-            androidx.compose.material3.Slider(s.preampDb, { v -> set(s.copy(preampDb = Math.round(v * 2) / 2f)); App.instance.player.applySoundChain() }, valueRange = -12f..12f)
+            ThinSlider(s.preampDb, { v -> set(s.copy(preampDb = Math.round(v * 2) / 2f)); App.instance.player.applySoundChain() }, valueRange = -12f..12f)
             Divider()
             // All three player sliders on / off: off takes them off the players and stops their processing.
             ToggleRow("Loudness, Treble and Preamp sliders", "On the audio and radio players", s.toneSliders) { on ->
@@ -747,7 +845,7 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
                 Text("ReplayGain pre-amp", color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 Text("%+.1f dB".format(s.rgPreampDb), color = accent(), fontSize = 13.sp)
             }
-            androidx.compose.material3.Slider(s.rgPreampDb, { v -> set(s.copy(rgPreampDb = Math.round(v * 2) / 2f)) }, valueRange = -6f..6f)
+            ThinSlider(s.rgPreampDb, { v -> set(s.copy(rgPreampDb = Math.round(v * 2) / 2f)) }, valueRange = -6f..6f)
         }
         ToggleRow("Prevent clipping", "Uses the peak values in the tags", s.rgClipProtect) { set(s.copy(rgClipProtect = it)) }
     }
@@ -783,11 +881,11 @@ fun ColorPickDialog(start: Long, onDismiss: () -> Unit, onRemove: (() -> Unit)? 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Box(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp)).background(Color(argb)))
                 Text("Hue", color = C.muted, fontSize = 13.sp)
-                androidx.compose.material3.Slider(h, { h = it }, valueRange = 0f..360f)
+                ThinSlider(h, { h = it }, valueRange = 0f..360f)
                 Text("Saturation", color = C.muted, fontSize = 13.sp)
-                androidx.compose.material3.Slider(sat, { sat = it }, valueRange = 0f..1f)
+                ThinSlider(sat, { sat = it }, valueRange = 0f..1f)
                 Text("Brightness", color = C.muted, fontSize = 13.sp)
-                androidx.compose.material3.Slider(v, { v = it }, valueRange = 0.2f..1f)
+                ThinSlider(v, { v = it }, valueRange = 0.2f..1f)
             }
         },
         confirmButton = { STextButton({ onPick(argb) }) { Text("Save", color = Color(argb)) } },

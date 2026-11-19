@@ -93,6 +93,7 @@ fun LibraryHeader(title: String, openOutput: () -> Unit, nav: Navigator? = null,
         Text(title, color = C.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
         OutputPill(openOutput)
         actions()
+        if (nav != null) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
     }
 }
 
@@ -102,7 +103,8 @@ fun HomeButton(nav: Navigator, tint: Color = C.text) {
 }
 
 @Composable
-fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Composable () -> Unit = {}, actions: @Composable () -> Unit = {}) = Scaled {
+fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Composable () -> Unit = {}, gear: Boolean = title != "Settings",
+               actions: @Composable () -> Unit = {}) = Scaled {
     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         SymButton(onClick = { nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
         HomeButton(nav)
@@ -112,6 +114,8 @@ fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Comp
             if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         actions()
+        // Settings symbol on every page: opens the main Settings page.
+        if (gear) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
     }
 }
 

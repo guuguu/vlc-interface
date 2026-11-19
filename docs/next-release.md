@@ -1,32 +1,3 @@
 # Next release: requests kept
 
-## VPN-NAS button (requested 2026-11-19 18:37)
-- Same button, same use (tap = switch NAS use on / off, as now); only its label shows the status:
-  - "NAS active": NAS in use, reached on the home network
-  - "VPN - NAS active": NAS in use, reached through the VPN
-  - "VPN active": VPN up, NAS use switched off
-  - "NAS unreach": NAS use on, but the NAS can't be reached
-  - no VPN and NAS use off: stays "VPN-NAS off" (assumption, unless told otherwise)
-- In front of the label: a Wi-Fi or mobile-data symbol for the connection in use, updated live as the phone switches
-  (no symbol when there's no connection).
-
-## Settings layout (requested 2026-11-19 18:43)
-- Main Settings page becomes a list of links to submenus with clear names; every setting and log page moves into
-  one of them (proposed: Sound, Playback & gestures, Video (picture, rotation, subtitles), Look, Library & scanning,
-  Network & NAS, VPN, Saved songs, Alarm clock, Visualisation, Setup export / import, Logs).
-- Long-press on ANY item of any settings page or subpage: a pop-up explaining that setting.
-- All sliders in the settings thin, like the sliders of the player (thin track, small knob).
-- Every page that has a Save button gets it in its header (right side, accent colour), like the alarm and source
-  pages already do (e.g. ReplayGain scan page). Small pop-up dialogs keep their Save at the bottom (no header).
-- Submenu links end with a bigger, accent-coloured triangle (▶) instead of the small "›", so it reads as "opens a page".
-- A settings symbol (⚙) in the header of every page. It opens the main Settings page, except:
-  - audio player → the Audio section
-  - video player → the Video section
-  - radio player → a new Radio section (radio settings gathered there: buffer, saving songs, mobile data notice,
-    accent…), also listed on the main Settings page.
-- Look settings page: the order of the main Settings links can be changed (move each link up / down, or drag),
-  with "Reset order".
-
-## Clock in the player (requested 2026-11-19 18:54)
-- A very small settings wheel (⚙, about half the size of the mock-up) in a corner of the clock's square (top right, outside the round face, never over the
-  clock), opening Settings → Alarm clock.
+Nothing open — the VPN-NAS status button, the grouped Settings pages and the clock's settings wheel went into 1.35.0.

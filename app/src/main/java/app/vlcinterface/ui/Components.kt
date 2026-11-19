@@ -1,5 +1,8 @@
 package app.vlcinterface.ui
 
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.graphics.drawOutline
 
 import androidx.compose.ui.graphics.drawscope.translate
@@ -316,8 +319,10 @@ private fun PillBody(text: String, selected: Boolean, modifier: Modifier, filled
 
 @Composable
 fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boolean) -> Unit) = Scaled {
+    val ex = LocalExplain.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).combinedClickable(onClick = { onChange(!checked) }, onLongClick = { ex(label, hint) })
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -330,8 +335,10 @@ fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boo
 
 @Composable
 fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) = Scaled {
+    val ex = LocalExplain.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().heightIn(min = 56.dp).combinedClickable(onClick = onClick, onLongClick = { ex(label, hint) })
+            .padding(horizontal = 16.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -340,6 +347,58 @@ fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Uni
         }
         Text(value, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
+}
+
+// ---------------------------------------------------------------- explanations (long-press any setting)
+
+/** Long-press on a setting: (title, its own short description) → an explanation pop-up (see [ExplainHost]). */
+val LocalExplain = androidx.compose.runtime.staticCompositionLocalOf<(String, String) -> Unit> { { _, _ -> } }
+
+/** Long-press on this item: its explanation. For rows that aren't ToggleRow / ValueRow (sliders, choices…). */
+@Composable
+fun Modifier.explain(title: String, hint: String = ""): Modifier {
+    val ex = LocalExplain.current
+    return this.combinedClickable(interactionSource = null, indication = null, onClick = {}, onLongClick = { ex(title, hint) })
+}
+
+/** Around the whole app: shows the explanation of a long-pressed setting. */
+@Composable
+fun ExplainHost(content: @Composable () -> Unit) {
+    var shown by remember { mutableStateOf<Pair<String, String>?>(null) }
+    androidx.compose.runtime.CompositionLocalProvider(LocalExplain provides { t, h -> shown = t to h }) { content() }
+    shown?.let { (t, h) ->
+        val text = SettingHelp.text(t, h)
+        AlertDialog(onDismissRequest = { shown = null }, containerColor = C.panel,
+            title = { Text(t, color = C.text) }, text = { Text(text, color = C.muted, fontSize = 14.sp) },
+            confirmButton = { STextButton({ shown = null }) { Text("OK", color = accent()) } })
+    }
+}
+
+// ---------------------------------------------------------------- thin sliders (like the players')
+
+/** Slider of the settings pages: thin track and the players' small knob. */
+@Composable
+fun ThinSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier, valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
+               steps: Int = 0, onValueChangeFinished: (() -> Unit)? = null, enabled: Boolean = true) {
+    val a = accent()
+    val colors = SliderDefaults.colors(thumbColor = a, activeTrackColor = a, inactiveTrackColor = C.line, activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent)
+    androidx.compose.material3.Slider(value, onValueChange, modifier, enabled = enabled, onValueChangeFinished = onValueChangeFinished, colors = colors, steps = steps,
+        thumb = { KnobThumb(a) },
+        track = { st -> SliderDefaults.Track(sliderState = st, modifier = Modifier.height(3.dp), colors = colors, enabled = enabled,
+            drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) },
+        valueRange = valueRange)
+}
+
+/** Two-handle version (frequency range…). */
+@Composable
+fun ThinRangeSlider(value: ClosedFloatingPointRange<Float>, onValueChange: (ClosedFloatingPointRange<Float>) -> Unit, modifier: Modifier = Modifier,
+                    valueRange: ClosedFloatingPointRange<Float> = 0f..1f) {
+    val a = accent()
+    val colors = SliderDefaults.colors(thumbColor = a, activeTrackColor = a, inactiveTrackColor = C.line)
+    androidx.compose.material3.RangeSlider(value, onValueChange, modifier, valueRange = valueRange, colors = colors,
+        startThumb = { KnobThumb(a) }, endThumb = { KnobThumb(a) },
+        track = { st -> SliderDefaults.Track(rangeSliderState = st, modifier = Modifier.height(3.dp), colors = colors,
+            drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) })
 }
 
 @Composable

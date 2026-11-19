@@ -116,8 +116,7 @@ fun OutputSheet(onDismiss: () -> Unit) {
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Volume", color = C.muted, fontSize = 13.sp)
-                Slider(vol.toFloat(), { vol = it.toInt(); router.setVolumePercent(vol) }, valueRange = 0f..100f, modifier = Modifier.weight(1f).padding(horizontal = 12.dp),
-                    colors = SliderDefaults.colors(activeTrackColor = accent(), thumbColor = Color.White))
+                ThinSlider(vol.toFloat(), { vol = it.toInt(); router.setVolumePercent(vol) }, valueRange = 0f..100f, modifier = Modifier.weight(1f).padding(horizontal = 12.dp))
                 Text("$vol%", color = C.text, fontSize = 13.sp)
             }
             CardBox {

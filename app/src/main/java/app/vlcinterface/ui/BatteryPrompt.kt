@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -288,10 +290,39 @@ fun UseNasButton() {
     // The NAS away from home goes only through the VPN: "VPN-NAS on" / "off". Tap: on/off (several servers: pick
     // which); long-press: the list. Without the VPN: a 3 s note to start it.
     val active = on.isNotEmpty() && vpn
-    val label = if (active) "VPN-NAS on" + (if (on.size > 1) " (${on.size})" else "") else "VPN-NAS off"
+    val link by app.vlcinterface.player.NetGuard.link.collectAsState()
+    val stS by App.instance.store.state.collectAsState()
+    // Status shown on the button (the tap works as before): at home → NAS active; away with the VPN → VPN - NAS active;
+    // VPN without NAS use → VPN active; NAS in use but not answering → NAS unreach; nothing → VPN-NAS off.
+    val servers = remember(stS.sources, vpn, link) { v.lanServers() }
+    val home = remember(servers, vpn, link) { servers.any { v.atHome(it) } }
+    val nasInUse = home || on.isNotEmpty()
+    var reach by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(nasInUse, on, vpn, link, home) {
+        reach = null
+        while (nasInUse) {
+            val list = if (home) servers.filter { v.atHome(it) } else servers.filter { it.id in on }
+            reach = when {
+                !home && !vpn -> false                 // away from home without the VPN: the NAS can't be reached
+                list.isEmpty() -> true
+                else -> kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    list.any { try { v.reachableNow(it) } catch (_: Exception) { false } } }
+            }
+            kotlinx.coroutines.delay(30_000)
+        }
+    }
+    val label = when {
+        nasInUse && reach == false -> "NAS unreach"
+        home -> "NAS active"
+        on.isNotEmpty() && vpn -> "VPN - NAS active"
+        on.isNotEmpty() -> "NAS unreach"
+        vpn -> "VPN active"
+        else -> "VPN-NAS off"
+    }
+    val lit = label == "NAS active" || label == "VPN - NAS active"
     Box(Modifier.padding(top = 4.dp).clip(RoundedCornerShape(16.dp))
-        .background(if (active) accent() else C.tile)
-        .border(1.dp, if (active) accent() else if (vpn) accent().copy(alpha = 0.6f) else C.muted.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+        .background(if (lit) accent() else C.tile)
+        .border(1.dp, if (lit) accent() else if (vpn) accent().copy(alpha = 0.6f) else C.muted.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
         .combinedClickable(onClick = {
             when {
                 !vpn -> needVpn = true
@@ -300,8 +331,11 @@ fun UseNasButton() {
                 else -> pick = true
             }
         }, onLongClick = { if (vpn) pick = true else needVpn = true }).padding(horizontal = 14.dp, vertical = 6.dp)) {
-        Text(label, color = if (active) Color.Black else if (vpn) accent() else C.muted, fontSize = 13.sp,
-            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+        val col = if (lit) Color.Black else if (label == "NAS unreach") Color(0xFFE57373) else if (vpn) accent() else C.muted
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (link.isNotEmpty()) { NetSymbol(link, col); Box(Modifier.width(6.dp)) }
+            Text(label, color = col, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+        }
     }
     if (needVpn) {
         LaunchedEffect(Unit) { kotlinx.coroutines.delay(3_000); needVpn = false }
@@ -516,4 +550,29 @@ fun RadioMobileNoticeHost() {
         title = { Text("On mobile data", color = C.text) },
         text = { Text(note, color = C.text, fontSize = 14.sp) },
         confirmButton = { STextButton({ g.radioMobileNotice.value = "" }) { Text("OK", color = accent()) } })
+}
+
+
+/** Small connection symbol: Wi-Fi arcs or mobile-data bars. */
+@Composable
+fun NetSymbol(kind: String, color: Color) {
+    androidx.compose.foundation.Canvas(Modifier.size(14.dp)) {
+        val w = size.width; val h = size.height
+        if (kind == "wifi") {
+            val c = androidx.compose.ui.geometry.Offset(w / 2, h * 0.92f)
+            for (i in 1..3) {
+                val r = h * 0.28f * i
+                drawArc(color, 225f, 90f, false, topLeft = androidx.compose.ui.geometry.Offset(c.x - r, c.y - r),
+                    size = androidx.compose.ui.geometry.Size(r * 2, r * 2), style = androidx.compose.ui.graphics.drawscope.Stroke(width = h * 0.12f,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round))
+            }
+            drawCircle(color, h * 0.09f, c)
+        } else {
+            val bw = w / 5.5f
+            for (i in 0..3) {
+                val bh = h * (0.3f + 0.233f * i)
+                drawRect(color, topLeft = androidx.compose.ui.geometry.Offset(i * bw * 1.45f, h - bh), size = androidx.compose.ui.geometry.Size(bw, bh))
+            }
+        }
+    }
 }
