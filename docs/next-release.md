@@ -14,6 +14,8 @@
     Forward in its header (Back / Forward move inside the guide).
 - First rows of every wizard page, as active links: "Close the wizard, use the default setup, I'll set it up later"
   and "Guide me through the setup step by step".
+- Every item a wizard page asks for shows its current value next to it (on / off, the value, folder or path, server,
+  station, permission granted or not…), so you see what is already set (requested 2026-11-19 19:47).
 - Last item of the main Settings page: "Launch the setup wizard".
 - Planning presented 2026-11-19; user will complete it.
 
