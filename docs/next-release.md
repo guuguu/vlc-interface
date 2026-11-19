@@ -88,3 +88,5 @@
 - Movement follows only the low frequencies (bass, percussion); colour mixing effects accentuated.
 - Sliders in Settings → Visualisation to set these by hand: movement strength (bass sensitivity), colour mixing
   strength, and the frequency range that is followed (e.g. 30–250 Hz, low and high limit).
+- Frequency range: one bar with two handles (lower and upper limit); a Reset puts it back to the default low
+  frequencies (bass / percussion, about 30–150 Hz).
