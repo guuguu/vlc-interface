@@ -83,3 +83,8 @@
   else "All phone music" — instead of "Choose"; the alarms use the same fallback. (In code.)
 - Ringing screen (lock screen, test alarm too): shows the clock as set in Clock aspect, as big as fits. (In code.)
 - Alarm sound: "Browse…" picks your own sound file (kept readable over restarts), previewed 3 s. (In code.)
+- From the old effects keep only "Colour clouds" (bars, waves, rings, particles, kaleidoscope removed); the 12 new
+  ambient patterns are added.
+- Movement follows only the low frequencies (bass, percussion); colour mixing effects accentuated.
+- Sliders in Settings → Visualisation to set these by hand: movement strength (bass sensitivity), colour mixing
+  strength, and the frequency range that is followed (e.g. 30–250 Hz, low and high limit).
