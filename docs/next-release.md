@@ -24,3 +24,5 @@
   - video player → the Video section
   - radio player → a new Radio section (radio settings gathered there: buffer, saving songs, mobile data notice,
     accent…), also listed on the main Settings page.
+- Look settings page: the order of the main Settings links can be changed (move each link up / down, or drag),
+  with "Reset order".
