@@ -38,6 +38,7 @@ import android.os.VibratorManager
 import android.provider.MediaStore
 import app.vlcinterface.App
 import app.vlcinterface.R
+import app.vlcinterface.ui.knownMusicRoot
 import app.vlcinterface.player.NativeAudio
 import app.vlcinterface.data.ServerLog
 import app.vlcinterface.player.OutputKind
@@ -234,7 +235,7 @@ object AlarmEngine {
             "local" -> {
                 // Chosen folder, else the one the audio player uses, else all music on the phone.
                 val g = Alarms.current.global
-                val (root, vol) = if (g.localRoot.isNotEmpty()) g.localRoot to g.localVolume else app.vlcinterface.ui.knownMusicRoot() ?: ("" to "")
+                val (root, vol) = if (g.localRoot.isNotEmpty()) g.localRoot to g.localVolume else knownMusicRoot() ?: ("" to "")
                 playLocal(root, vol).also { if (it && snoozed) otherPart() }
             }
             else -> false
