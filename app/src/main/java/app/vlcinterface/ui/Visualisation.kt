@@ -72,7 +72,19 @@ private val PALETTES: List<Pair<String, String>> = listOf("pattern" to "Pattern 
     "forest" to "Forest", "neon" to "Neon", "fire" to "Fire", "aurora" to "Aurora", "custom" to "Custom")
 
 private val EFFECT_NAMES = listOf("clouds" to "Colour clouds", "lava" to "Lava glow", "nebula" to "Nebula", "tides" to "Tides",
-    "plasma" to "Plasma", "silk" to "Silk bands", "sunset" to "Sunset sky", "ocean" to "Deep ocean", "embers" to "Embers")
+    "plasma" to "Plasma", "silk" to "Silk bands", "sunset" to "Sunset sky", "ocean" to "Deep ocean", "embers" to "Embers",
+    "ink" to "Ink flow", "reaction" to "Reaction–diffusion", "phase" to "Phase portrait", "chladni" to "Chladni waves",
+    "mandel" to "Mandelbrot dive", "epicycles" to "Fourier epicycles")
+
+/** Mathematical patterns: drawn as a colour field (cosine palettes, or the chosen colour combination). */
+private val FIELD_FX = setOf("ink", "reaction", "phase", "chladni", "mandel", "epicycles")
+private fun cosOffsets(effect: String): FloatArray = when (effect) {
+    "reaction" -> floatArrayOf(0.8f, 0.9f, 0.3f)
+    "chladni" -> floatArrayOf(0f, 0.1f, 0.2f)
+    "epicycles" -> floatArrayOf(0.5f, 0.2f, 0.25f)
+    else -> floatArrayOf(0f, 0.33f, 0.67f)
+}
+private fun cosColour(f: Float, o: FloatArray) = Color(0.5f + 0.5f * cos(6.2832f * (f + o[0])), 0.5f + 0.5f * cos(6.2832f * (f + o[1])), 0.5f + 0.5f * cos(6.2832f * (f + o[2])))
 
 private fun c(vararg v: Long) = v.map { Color(it) }
 
@@ -86,7 +98,16 @@ private fun patternColours(effect: String): Pair<List<Color>, List<Color>> = whe
     "sunset" -> c(0xFFFF6B35, 0xFFF72585, 0xFFFFD166, 0xFF3A0CA3) to c(0xFF3A0CA3, 0xFFF72585, 0xFFFFD166)
     "ocean" -> c(0xFF48CAE4, 0xFFCAF0F8, 0xFF0077B6, 0xFF90E0EF) to c(0xFF0096C7, 0xFF0077B6, 0xFF03045E)
     "embers" -> c(0xFFF48C06, 0xFFFFBA08, 0xFFD00000, 0xFFFFE6B4) to c(0xFF1A0208, 0xFF2A0410, 0xFF6A040F)
+    in FIELD_FX -> cosOffsets(effect).let { o -> listOf(0f, 0.25f, 0.5f, 0.75f).map { cosColour(it, o) } to listOf(0f, 0.33f, 0.66f).map { cosColour(it, o) } }
     else -> c(0xFFFF6B35, 0xFFF72585, 0xFF7209B7, 0xFFFFD166) to c(0xFF050505, 0xFF050505, 0xFF050505)
+}
+
+/** Colour [f] along a combination, wrapping round (smooth blend between its colours). */
+private fun cyc(cols: List<Color>, f: Float): Color {
+    val n = cols.size
+    val x = ((f % 1f) + 1f) % 1f * n
+    val i = x.toInt().coerceIn(0, n - 1)
+    return lerpC(cols[i], cols[(i + 1) % n], x - i)
 }
 
 private fun paletteColours(v: VisSettings): List<Color>? = when (v.palette) {
@@ -138,6 +159,8 @@ private class VisMotion {
     var ps = 0f
     var refLo = 0.02f
     var refHi = 0.02f
+    /** Colour time: runs with the colour speed (a little faster on the beat). */
+    var tc = 0f
 }
 
 /**
@@ -180,6 +203,7 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
                 m.lo = follow(m.lo, a); m.hi = follow(m.hi, b)
                 m.pb += dt * (0.25f + 1.5f * m.lo * k)
                 m.ps += dt * (0.45f + 2.4f * m.hi * k)
+                m.tc += dt * vs.colourSpeed.coerceIn(0.2f, 3f) * (0.6f + 0.8f * m.hi)
                 m.t = clock
             }
         }
@@ -195,10 +219,18 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
     val bg = visBackground(v)
     val plasma = remember { android.graphics.Bitmap.createBitmap(18, 32, android.graphics.Bitmap.Config.ARGB_8888) }
     val px = remember { IntArray(18 * 32) }
+    val field = remember(v.effect) { arrayOfNulls<VisField>(1) }
     Canvas(modifier) {
         val t = m.t
         val a = v.brightness.coerceIn(0.2f, 1f)
-        drawBackground(v.effect, bg, t, m.lo, a, plasma, px)
+        if (v.effect in FIELD_FX) {
+            val land = size.width > size.height
+            val fw = if (land) 128 else 72; val fh = if (land) 72 else 128
+            val f = field[0]?.takeIf { it.w == fw && it.h == fh } ?: VisField(fw, fh).also { field[0] = it }
+            drawField(v.effect, f, m, a, paletteColours(v), cosOffsets(v.effect), v)
+            return@Canvas
+        }
+        drawBackground(v.effect, bg, t, m.lo, a, plasma, px, m.tc)
         drawSpots(spots, m, a, v.mix.coerceIn(0f, 1f), v.effect, v.sharp)
     }
 }
@@ -222,20 +254,22 @@ private fun DrawScope.drawSpots(cols: List<Color>, m: VisMotion, a: Float, mix: 
         val p = m.pb * (0.45f + i * 0.13f) + i * 1.9f
         val q = m.pb * (0.37f + i * 0.11f) + i * 2.7f
         val r = mn * (0.5f + 0.35f * m.lo) * (0.8f + 0.5f * mix) * (0.85f + 0.2f * sin(p * 1.3f))
-        spot(cols[i % cols.size], bigA, Offset(w * (0.5f + 0.48f * sin(p)), h * (0.5f + 0.46f * cos(q))), r, sharp)
+        spot(cyc(cols, i * 0.25f + m.tc * 0.15f), bigA, Offset(w * (0.5f + 0.48f * sin(p)), h * (0.5f + 0.46f * cos(q))), r, sharp)
     }
     for (i in 0 until 7) {
         val p = m.ps * (0.7f + i * 0.17f) + i * 1.3f
         val q = m.ps * (0.55f + i * 0.13f) + i * 2.1f
         val r = mn * (0.11f + 0.11f * m.hi) * (0.8f + 0.5f * mix)
-        spot(cols[(i + 1) % cols.size], (0.35f + 0.35f * m.hi) * (0.6f + 0.5f * mix) * a, Offset(w * (0.5f + 0.47f * sin(p)), h * (0.5f + 0.47f * cos(q))), r, sharp)
+        spot(cyc(cols, (i + 1) * 0.25f + m.tc * 0.2f), (0.35f + 0.35f * m.hi) * (0.6f + 0.5f * mix) * a, Offset(w * (0.5f + 0.47f * sin(p)), h * (0.5f + 0.47f * cos(q))), r, sharp)
     }
 }
 
 /** Each pattern's background: always fills the whole screen (ambient light). */
-private fun DrawScope.drawBackground(effect: String, bg: List<Color>, t: Float, lo: Float, a: Float, plasma: android.graphics.Bitmap, px: IntArray) {
+private fun DrawScope.drawBackground(effect: String, bg0: List<Color>, t: Float, lo: Float, a: Float, plasma: android.graphics.Bitmap, px: IntArray, tc: Float) {
     val w = size.width
     val h = size.height
+    // The background's colours slide slowly along their own set (colour speed).
+    val bg = bg0.indices.map { i -> cyc(bg0, i / bg0.size.toFloat() + tc * 0.05f) }
     fun dim(c: Color) = Color(c.red * a, c.green * a, c.blue * a)
     when (effect) {
         "tides" -> {
@@ -253,7 +287,7 @@ private fun DrawScope.drawBackground(effect: String, bg: List<Color>, t: Float, 
             for (j in 0 until 32) for (i in 0 until 18) {
                 val v = sin(i * 0.35f + t * 1.4f) + sin(j * 0.25f + t) + sin((i + j) * 0.2f + t * 0.7f) +
                     sin(hypot(i - 9f - 6f * sin(t * 0.5f), j - 16f - 10f * cos(t * 0.4f)) * 0.35f - t * (1.5f + 2f * lo))
-                val hue = (((v * 45f + t * 30f) % 360f) + 360f) % 360f
+                val hue = (((v * 45f + tc * 90f) % 360f) + 360f) % 360f
                 px[j * 18 + i] = android.graphics.Color.HSVToColor(floatArrayOf(hue, 0.85f, (0.45f + 0.2f * lo) * a))
             }
             plasma.setPixels(px, 0, 18, 0, 0, 18, 32)
@@ -304,9 +338,10 @@ fun VisualisationScreen(nav: Navigator) {
     DisposableEffect(Unit) {
         val w = act?.window
         w?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        try { w?.insetsController?.hide(WindowInsets.Type.statusBars()) } catch (_: Exception) {}   // bottom navigation bar stays usable
+        // Bars hidden like a full-screen app; Android's usual swipe from the edge brings them back for a moment.
+        try { w?.insetsController?.let { it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; it.hide(WindowInsets.Type.systemBars()) } } catch (_: Exception) {}
         onDispose {
-            try { w?.insetsController?.show(WindowInsets.Type.statusBars()) } catch (_: Exception) {}
+            try { w?.insetsController?.show(WindowInsets.Type.systemBars()) } catch (_: Exception) {}
             w?.attributes = w?.attributes?.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
         }
     }
@@ -408,6 +443,7 @@ fun VisualisationSettings() {
         Divider()
         VisSlider("Movement", v.move, 0.2f..2f, "×%.1f".format(v.move)) { set(v.copy(move = it)) }
         VisSlider("Colour mixing", v.mix, 0f..1f, "${(v.mix * 100).toInt()} %") { set(v.copy(mix = it)) }
+        VisSlider("Colour speed", v.colourSpeed, 0.2f..3f, "×%.1f".format(v.colourSpeed)) { set(v.copy(colourSpeed = it)) }
         VisSlider("Definition", v.sharp, 0f..1f, if (v.sharp < 0.15f) "soft" else if (v.sharp > 0.85f) "sharp" else "${(v.sharp * 100).toInt()} %") { set(v.copy(sharp = it)) }
         VisSlider("Brightness", v.brightness, 0.2f..1f, "${(v.brightness * 100).toInt()} %") { set(v.copy(brightness = it)) }
         Divider()
@@ -442,5 +478,178 @@ private fun VisSlider(label: String, value: Float, range: ClosedFloatingPointRan
         Text(label, color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp))
         Slider(value, onChange, Modifier.weight(1f), valueRange = range, colors = SliderDefaults.colors(thumbColor = accent(), activeTrackColor = accent()))
         Text(shown, color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
+    }
+}
+
+
+// ---------------------------------------------------------------- mathematical patterns (colour fields)
+
+/** State of a field pattern: a small grid drawn stretched and smoothed over the screen. */
+private class VisField(val w: Int, val h: Int) {
+    val px = IntArray(w * h)
+    val bmp: android.graphics.Bitmap = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+    var r = FloatArray(w * h); var g = FloatArray(w * h); var b = FloatArray(w * h)
+    var u = FloatArray(w * h) { 1f }; var v = FloatArray(w * h)
+    var inkReady = false; var rdReady = false
+    var lastT = -1f
+    fun seedRd() {
+        val rnd = java.util.Random()
+        repeat(14) {
+            val cx = 4 + rnd.nextInt(w - 8); val cy = 4 + rnd.nextInt(h - 8)
+            for (j in -3..3) for (i in -3..3) { val k = (cy + j) * w + cx + i; v[k] = 0.5f; u[k] = 0.5f }
+        }
+        rdReady = true
+    }
+}
+
+private fun argb(c: Color, a: Float, l: Float = 1f): Int {
+    val k = a * l
+    return (0xFF shl 24) or ((c.red * k * 255).toInt().coerceIn(0, 255) shl 16) or ((c.green * k * 255).toInt().coerceIn(0, 255) shl 8) or (c.blue * k * 255).toInt().coerceIn(0, 255)
+}
+
+private fun DrawScope.drawField(effect: String, f: VisField, m: VisMotion, a: Float, cols: List<Color>?, o: FloatArray, v: VisSettings) {
+    val w = f.w; val h = f.h
+    val t = m.t; val tc = m.tc; val lo = m.lo; val hi = m.hi
+    val dt = if (f.lastT < 0f) 0.016f else (t - f.lastT).coerceIn(0f, 0.1f)
+    f.lastT = t
+    fun col(x: Float): Color = if (cols != null) cyc(cols, x) else cosColour(x, o)
+    val px = f.px
+    when (effect) {
+        "ink" -> {
+            if (!f.inkReady) { for (k in 0 until w * h) { val c = col(k / (w * h).toFloat()); f.r[k] = c.red; f.g[k] = c.green; f.b[k] = c.blue }; f.inkReady = true }
+            val sp = (10f + 28f * lo) * dt * v.move.coerceIn(0.2f, 2f)
+            val r2 = FloatArray(w * h); val g2 = FloatArray(w * h); val b2 = FloatArray(w * h)
+            fun sm(arr: FloatArray, x0: Float, y0: Float): Float {
+                val x = x0.coerceIn(0f, w - 1.001f); val y = y0.coerceIn(0f, h - 1.001f)
+                val i = x.toInt(); val j = y.toInt(); val fx = x - i; val fy = y - j; val k = j * w + i
+                return arr[k] * (1 - fx) * (1 - fy) + arr[k + 1] * fx * (1 - fy) + arr[k + w] * (1 - fx) * fy + arr[k + w + 1] * fx * fy
+            }
+            for (j in 0 until h) for (i in 0 until w) {
+                // Stream function ψ = sin(x+0.3t)·cos(y−0.21t) + 0.6·sin(1.7y+0.12t)·cos(1.3x); velocity = (∂ψ/∂y, −∂ψ/∂x).
+                val x = i / w.toFloat() * 4f; val y = j / h.toFloat() * 7f
+                val uu = -sin(x + t * 0.3f) * sin(y - t * 0.21f) + 1.02f * cos(1.7f * y + t * 0.12f) * cos(1.3f * x)
+                val vv = -(cos(x + t * 0.3f) * cos(y - t * 0.21f) - 0.78f * sin(1.7f * y + t * 0.12f) * sin(1.3f * x))
+                val sx = i - uu * sp; val sy = j - vv * sp * 1.2f; val k = j * w + i
+                r2[k] = sm(f.r, sx, sy); g2[k] = sm(f.g, sx, sy); b2[k] = sm(f.b, sx, sy)
+            }
+            f.r = r2; f.g = g2; f.b = b2
+            for (e in 0 until 3) {
+                val ex = w * (0.5f + 0.4f * sin(t * 0.17f * (1 + e * 0.3f) + e * 2)); val ey = h * (0.5f + 0.42f * cos(t * 0.13f * (1 + e * 0.2f) + e))
+                val c = col(tc * 0.12f + e / 3f); val rad = 4f + 5f * hi
+                for (j in -9..9) for (i in -9..9) {
+                    val d = hypot(i.toFloat(), j.toFloat()); if (d > rad) continue
+                    val X = (ex + i).toInt(); val Y = (ey + j).toInt(); if (X < 0 || Y < 0 || X >= w || Y >= h) continue
+                    val k = Y * w + X; val q = 0.25f * (1 - d / rad)
+                    f.r[k] += (c.red - f.r[k]) * q; f.g[k] += (c.green - f.g[k]) * q; f.b[k] += (c.blue - f.b[k]) * q
+                }
+            }
+            for (k in 0 until w * h) px[k] = (0xFF shl 24) or ((f.r[k] * a * 255).toInt().coerceIn(0, 255) shl 16) or
+                ((f.g[k] * a * 255).toInt().coerceIn(0, 255) shl 8) or (f.b[k] * a * 255).toInt().coerceIn(0, 255)
+        }
+        "reaction" -> {
+            if (!f.rdReady) f.seedRd()
+            val F = 0.026f + 0.03f * (0.5f + 0.5f * sin(t * 0.011f)); val K = 0.054f + 0.009f * sin(t * 0.0137f) + 0.002f * lo
+            repeat(6) {
+                val u2 = FloatArray(w * h); val v2 = FloatArray(w * h); val u = f.u; val vv = f.v
+                for (j in 0 until h) {
+                    val jm = ((j - 1 + h) % h) * w; val jp = ((j + 1) % h) * w; val jj = j * w
+                    for (i in 0 until w) {
+                        val im = (i - 1 + w) % w; val ip = (i + 1) % w; val id = jj + i
+                        val lu = u[jj + im] + u[jj + ip] + u[jm + i] + u[jp + i] - 4 * u[id]
+                        val lv = vv[jj + im] + vv[jj + ip] + vv[jm + i] + vv[jp + i] - 4 * vv[id]
+                        val uvv = u[id] * vv[id] * vv[id]
+                        u2[id] = u[id] + 0.2f * lu - uvv + F * (1 - u[id]); v2[id] = vv[id] + 0.1f * lv + uvv - (F + K) * vv[id]
+                    }
+                }
+                f.u = u2; f.v = v2
+            }
+            if (f.v.sum() < 5f) f.seedRd()
+            for (k in 0 until w * h) px[k] = argb(col(f.v[k] * 2.2f + f.u[k] * 0.35f + tc * 0.1f), a)
+        }
+        "phase" -> {
+            val roots = arrayOf(floatArrayOf(0.6f * cos(t * 0.2f), 0.9f * sin(t * 0.17f)), floatArrayOf(-0.5f + 0.3f * sin(t * 0.11f), 0.4f * cos(t * 0.23f)),
+                floatArrayOf(0.2f * cos(t * 0.31f), -0.8f + 0.2f * sin(t * 0.13f)))
+            val poles = arrayOf(floatArrayOf(-0.4f * cos(t * 0.15f), 0.6f * sin(t * 0.19f)), floatArrayOf(0.5f * sin(t * 0.09f), -0.3f + 0.4f * cos(t * 0.14f)))
+            val sx = if (w > h) 3.9f else 2.2f; val sy = if (w > h) 2.2f else 3.9f
+            for (j in 0 until h) for (i in 0 until w) {
+                val x = (i / w.toFloat() - 0.5f) * sx; val y = (j / h.toFloat() - 0.5f) * sy
+                var fr = 1f; var fi = 0f
+                for (q in roots) { val ar = x - q[0]; val ai = y - q[1]; val nr = fr * ar - fi * ai; fi = fr * ai + fi * ar; fr = nr }
+                var gr = 1f; var gi = 0f
+                for (q in poles) { val ar = x - q[0]; val ai = y - q[1]; val nr = gr * ar - gi * ai; gi = gr * ai + gi * ar; gr = nr }
+                val d = gr * gr + gi * gi + 1e-9f; val qr = (fr * gr + fi * gi) / d; val qi = (fi * gr - fr * gi) / d
+                val arg = kotlin.math.atan2(qi, qr) / 6.2832f
+                val mag = (ln(hypot(qr, qi) + 1e-9f) / ln(2f)); val band = mag - kotlin.math.floor(mag)
+                px[j * w + i] = argb(col(arg + tc * 0.1f), a, 0.55f + 0.45f * band.pow(0.6f + 0.8f * lo))
+            }
+        }
+        "chladni" -> {
+            val modes = arrayOf(intArrayOf(1, 2), intArrayOf(2, 5), intArrayOf(3, 4), intArrayOf(1, 6), intArrayOf(4, 7))
+            val wt = FloatArray(5) { k -> sin(t * (0.07f + k * 0.031f) + k * 1.7f) * (if (k == 0) 1f + 0.4f * lo else 1f) }
+            val pi = 3.14159f
+            for (j in 0 until h) for (i in 0 until w) {
+                val uu = i / w.toFloat(); val vv = j / h.toFloat()
+                var z = 0f
+                for (k in 0 until 5) { val n = modes[k][0]; val mm = modes[k][1]; z += wt[k] * (cos(n * pi * uu) * cos(mm * pi * vv) - cos(mm * pi * uu) * cos(n * pi * vv)) }
+                px[j * w + i] = argb(col(z * 0.35f + tc * 0.1f), a, 0.45f + 0.55f * exp(-abs(z) * 1.5f))
+            }
+        }
+        "mandel" -> {
+            val ph = (t * 0.02f) % 2f
+            val zz = exp(-(if (ph < 1f) ph else 2f - ph) * 6.5f) * 1.6
+            val it = 50 + ((1 - zz / 1.6) * 60).toInt()
+            val cr0 = -0.743643887; val ci0 = 0.131825904
+            val ax = if (w > h) 2.0 else 1.15; val ay = if (w > h) 1.15 else 2.0
+            for (j in 0 until h) for (i in 0 until w) {
+                val x0 = cr0 + (i / w.toDouble() - 0.5) * zz * ax; val y0 = ci0 + (j / h.toDouble() - 0.5) * zz * ay
+                var x = 0.0; var y = 0.0; var n = 0
+                while (n < it && x * x + y * y < 64) { val tx = x * x - y * y + x0; y = 2 * x * y + y0; x = tx; n++ }
+                val smv = if (n < it) n + 1 - kotlin.math.log2(ln(kotlin.math.sqrt(x * x + y * y))) else it.toDouble()
+                px[j * w + i] = argb(col((smv * 0.03).toFloat() + tc * 0.1f), a, if (n < it) 1f else 0.3f)
+            }
+        }
+        "epicycles" -> {
+            // Background: soft diffused waves, only in the chosen colours.
+            for (j in 0 until h) for (i in 0 until w) {
+                val x = i / w.toFloat(); val y = j / h.toFloat()
+                val wv = sin(x * 3f + t * 0.4f) + sin(y * 2.2f - t * 0.3f) + sin((x + y) * 2.5f + t * 0.2f) + 0.6f * sin(hypot(x - 0.5f, y - 0.5f) * 6f - t * (0.5f + lo))
+                px[j * w + i] = argb(col(wv * 0.12f + tc * 0.08f), a, 0.5f)
+            }
+        }
+    }
+    f.bmp.setPixels(px, 0, w, 0, 0, w, h)
+    drawImage(f.bmp.asImageBitmap(), dstSize = IntSize(size.width.toInt(), size.height.toInt()), filterQuality = FilterQuality.Low)
+    if (effect == "epicycles") drawEpicycles(m, a, ::col)
+}
+
+/** Fourier epicycles: circles on circles; the tip leaves thick glowing trails that fade. */
+private fun DrawScope.drawEpicycles(m: VisMotion, a: Float, col: (Float) -> Color) {
+    val terms = arrayOf(floatArrayOf(1f, 0.30f), floatArrayOf(-2f, 0.13f), floatArrayOf(3f, 0.09f), floatArrayOf(-5f, 0.055f), floatArrayOf(7f, 0.035f))
+    val mn = size.minDimension
+    val cx = size.width / 2; val cy = size.height / 2
+    val ky = size.height / size.width.coerceAtLeast(1f)
+    fun tip(s: Float): Offset {
+        var x = cx; var y = cy
+        for (q in terms) { val r = q[1] * mn * (1f + 0.25f * m.lo); x += r * cos(q[0] * s); y += r * sin(q[0] * s) * ky.coerceIn(0.6f, 1.8f) }
+        return Offset(x, y)
+    }
+    val now = m.pb * 0.9f
+    val n = 160
+    var prev = tip(now - 5f)
+    for (k in 1..n) {
+        val s = now - 5f + 5f * k / n
+        val p = tip(s)
+        val age = k / n.toFloat()
+        val c = col(m.tc * 0.1f + age * 0.5f)
+        drawLine(c.copy(alpha = 0.18f * age * a), prev, p, mn * (0.06f + 0.03f * m.hi), androidx.compose.ui.graphics.StrokeCap.Round, blendMode = BlendMode.Plus)
+        drawLine(c.copy(alpha = 0.7f * age * a), prev, p, mn * (0.018f + 0.012f * m.hi), androidx.compose.ui.graphics.StrokeCap.Round, blendMode = BlendMode.Plus)
+        prev = p
+    }
+    // The circles themselves, faint.
+    var x = cx; var y = cy
+    for (q in terms) {
+        val r = q[1] * mn * (1f + 0.25f * m.lo)
+        drawCircle(Color.White.copy(alpha = 0.10f * a), r, Offset(x, y), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5f))
+        x += r * cos(q[0] * now); y += r * sin(q[0] * now) * ky.coerceIn(0.6f, 1.8f)
     }
 }
