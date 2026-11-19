@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -48,6 +49,7 @@ import app.vlcinterface.App
 import app.vlcinterface.data.ServerLog
 import app.vlcinterface.data.Settings
 import app.vlcinterface.data.Store
+import app.vlcinterface.data.ExportCat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -112,6 +114,9 @@ fun SettingsScreen(nav: Navigator) {
                     SettingsLink(name, GROUP_HINTS[id] ?: "") { openSettingsGroup(nav, id) }
                 }
             }
+            CardBox {
+                SettingsLink("Launch the setup wizard", "Permissions and the important settings, page by page") { nav.go(Screen.Wizard()) }
+            }
             Text("Long-press any setting for an explanation", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
             Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
         }
@@ -121,18 +126,27 @@ fun SettingsScreen(nav: Navigator) {
 /** One settings page (opened from the main Settings page, or by a player's settings symbol). */
 @Composable
 fun SettingsGroupScreen(nav: Navigator, id: String) {
+    val scroll = rememberScrollState()
+    Column(Modifier.fillMaxSize()) {
+        BackHeader(SETTINGS_GROUPS.toMap()[id] ?: "Settings", nav)
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            SettingsGroupBody(nav, id)
+            Box(Modifier.height(24.dp))
+        }
+    }
+}
+
+/** The settings of one group (also shown on the setup wizard's pages). */
+@Composable
+fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
     val store = App.instance.store
     val st by store.state.collectAsState()
     val s = st.settings
     fun set(n: Settings) = store.update { it.copy(settings = n) }
-    val scroll = rememberScrollState()
     val ctxV = LocalContext.current
     val explainNow = LocalExplain.current
     var deleteFile by remember { mutableStateOf(false) }
     if (deleteFile) DeleteFileDialog { deleteFile = false }
-    Column(Modifier.fillMaxSize()) {
-        BackHeader(SETTINGS_GROUPS.toMap()[id] ?: "Settings", nav)
-        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             when (id) {
                 "playback" -> {
             SectionTitle("Gestures")
@@ -621,8 +635,20 @@ fun SettingsGroupScreen(nav: Navigator, id: String) {
             }
                 }
             }
-            Box(Modifier.height(24.dp))
-        }
+}
+
+/** One tick box of the setup file's categories (greyed while "Everything" is ticked). */
+@Composable
+private fun CatRow(label: String, count: String, checked: Boolean, enabled: Boolean, bold: Boolean = false, onChange: (Boolean) -> Unit) {
+    val a = accent()
+    val ex = LocalExplain.current
+    val col = if (enabled) C.text else C.muted.copy(alpha = 0.55f)
+    Row(Modifier.fillMaxWidth().combinedClickable(enabled = enabled, onClick = { onChange(!checked) }, onLongClick = { ex(label, "") })
+        .padding(start = if (bold) 12.dp else 26.dp, end = 12.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(if (checked) "☑" else "☐", color = if (!enabled) col else if (checked) a else C.muted, fontSize = 18.sp)
+        Text(label, color = col, fontSize = 14.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+            modifier = Modifier.weight(1f).padding(start = 10.dp))
+        if (count.isNotEmpty()) Text(count, color = C.muted, fontSize = 12.sp)
     }
 }
 
@@ -631,26 +657,41 @@ fun BackupScreen(nav: Navigator) {
     val ctx = LocalContext.current
     val store = App.instance.store
     val st by store.state.collectAsState()
-    var withPasswords by remember { mutableStateOf(false) }
+    val alarmsN = app.vlcinterface.alarm.Alarms.state.collectAsState().value.alarms.size
+    var cats by remember { mutableStateOf(setOf(ExportCat.ALL)) }
     var passphrase by remember { mutableStateOf("") }
     var replace by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<Store.ImportPreview?>(null) }
+    var importCats by remember { mutableStateOf(emptySet<String>()) }
     var importPass by remember { mutableStateOf("") }
+    val all = ExportCat.ALL in cats
+    val pwChosen = all || ExportCat.PASSWORDS in cats
 
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         status = try {
-            ctx.contentResolver.openOutputStream(uri)?.use { it.write(store.exportJson(withPasswords, passphrase).toByteArray()) }
-            "Exported."
+            ctx.contentResolver.openOutputStream(uri)?.use { it.write(store.exportJson(cats, passphrase).toByteArray()) }
+            "Exported." + if (pwChosen && passphrase.isEmpty()) " Passwords left out (no passphrase)." else ""
         } catch (e: Exception) { "Export failed: ${e.message}" }
     }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         val text = try { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } ?: "" } catch (e: Exception) { "" }
         val p = store.previewImport(text)
-        if (p.ok) preview = p else status = p.error
+        if (p.ok) { preview = p; importCats = p.cats; importPass = "" } else status = p.error
     }
+    val counts = mapOf(
+        ExportCat.SETTINGS to "all",
+        ExportCat.NAS to "${st.sources.count { it.zone == app.vlcinterface.data.Zone.LAN }} servers",
+        ExportCat.INTERNET to "${st.sources.count { it.zone == app.vlcinterface.data.Zone.INTERNET }} sources",
+        ExportCat.PASSWORDS to "with a passphrase",
+        ExportCat.RADIO to "${st.stations.size} stations",
+        ExportCat.PLAYLISTS to "${st.playlists.size} playlists",
+        ExportCat.ALARMS to "$alarmsN alarms",
+        ExportCat.SUBS to "${st.subOffsets.size + st.audioOffsets.size} offsets",
+        ExportCat.RESUME to "${st.recent.size} files",
+    )
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
         BackHeader("Export & import", nav)
@@ -658,33 +699,30 @@ fun BackupScreen(nav: Navigator) {
             SButton({
                 val name = "vlc-interface-setup_" + SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".json"
                 exporter.launch(name)
-            }, Modifier.fillMaxWidth().height(64.dp), enabled = !withPasswords || passphrase.length >= 4,
-                colors = ButtonDefaults.buttonColors(containerColor = accent())) { Text("Export entire setup", fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+            }, Modifier.fillMaxWidth().height(64.dp), enabled = all || cats.isNotEmpty(),
+                colors = ButtonDefaults.buttonColors(containerColor = accent())) { Text(if (all) "Export entire setup" else "Export chosen", fontSize = 17.sp, fontWeight = FontWeight.Bold) }
             Text("One file you can save to Downloads, your NAS or a cloud drive.", color = C.muted, fontSize = 13.sp)
             SectionTitle("What's in the file")
             CardBox {
-                listOf(
-                    "Settings, gestures, theme" to "all",
-                    "LAN and Internet sources" to "${st.sources.size} sources",
-                    "Radio favourites" to "${st.stations.size} stations",
-                    "Subtitle style & sync offsets" to "${st.subOffsets.size + st.audioOffsets.size} offsets",
-                    "Resume positions & scanned folders" to "${st.recent.size} files",
-                ).forEach { (l, n) ->
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Badge("✓", true); Text(l, color = C.text, fontSize = 14.sp, modifier = Modifier.weight(1f).padding(start = 10.dp)); Text(n, color = C.muted, fontSize = 12.sp)
-                    }
-                    Divider()
+                CatRow("Everything", "", all, true, bold = true) { on -> cats = if (on) setOf(ExportCat.ALL) else ExportCat.ALL_IDS.toSet() }
+                Divider()
+                ExportCat.LIST.forEach { (id, label) ->
+                    CatRow(label, counts[id] ?: "", all || id in cats, !all) { on -> cats = if (on) cats + id else cats - id }
                 }
-                ToggleRow("Include saved passwords", "Encrypted with a passphrase you choose", withPasswords) { withPasswords = it }
-                if (withPasswords) Column(Modifier.padding(12.dp)) { Field("Passphrase (min. 4 characters)", passphrase, password = true) { passphrase = it } }
+                if (pwChosen) Column(Modifier.padding(12.dp)) {
+                    Field("Passphrase for the passwords (min. 4 characters)", passphrase, password = true) { passphrase = it }
+                    Text(if (passphrase.isEmpty()) "Without a passphrase the passwords are left out." else if (passphrase.length < 4) "At least 4 characters."
+                        else "Passwords saved encrypted with this passphrase.", color = C.muted, fontSize = 12.sp)
+                }
             }
             SOutlinedButton({ importer.launch(arrayOf("application/json", "*/*")) }, Modifier.fillMaxWidth().height(56.dp)) { Text("Import setup…", fontSize = 16.sp) }
             SectionTitle("On import")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill("Merge · add new, keep mine", selected = !replace) { replace = false }
-                Pill("Replace all", selected = replace) { replace = true }
+                Pill("Replace chosen parts", selected = replace) { replace = true }
             }
-            Text("You'll see a summary before anything changes. Your current setup is backed up automatically first.", color = C.muted, fontSize = 12.sp)
+            Text("You'll choose which parts of the file to apply; the rest of your setup stays as it is. Your current setup is backed up automatically first.",
+                color = C.muted, fontSize = 12.sp)
             if (status.isNotEmpty()) Text(status, color = C.text, fontSize = 14.sp)
             Box(Modifier.height(16.dp))
         }
@@ -695,17 +733,21 @@ fun BackupScreen(nav: Navigator) {
         onDismissRequest = { preview = null },
         title = { Text("Import setup?") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${pv.sources} sources, ${pv.stations} radio stations. Mode: ${if (replace) "replace everything" else "merge (keep mine, add new)"}.")
-                if (pv.needsPassphrase) Field("Passphrase for passwords", importPass, password = true) { importPass = it }
+            val sc = rememberScrollState()
+            Column(Modifier.verticalScroll(sc), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Mode: ${if (replace) "replace the chosen parts" else "merge (keep mine, add new)"}. In the file:", fontSize = 13.sp)
+                ExportCat.LIST.filter { it.first in pv.cats }.forEach { (id, label) ->
+                    CatRow(label, "", id in importCats, true) { on -> importCats = if (on) importCats + id else importCats - id }
+                }
+                if (pv.needsPassphrase && ExportCat.PASSWORDS in importCats) Field("Passphrase for passwords", importPass, password = true) { importPass = it }
             }
         },
         confirmButton = {
             STextButton({
-                val err = store.applyImport(pv, replace, importPass)
+                val err = store.applyImport(pv, replace, importPass, importCats)
                 status = err ?: "Imported. Previous setup backed up."
-                preview = null
-            }) { Text("Import") }
+                if (err == null) preview = null
+            }, enabled = importCats.isNotEmpty()) { Text("Import") }
         },
         dismissButton = { STextButton({ preview = null }) { Text("Cancel") } },
     )

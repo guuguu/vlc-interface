@@ -299,6 +299,25 @@ object Alarms {
     fun toggleClock() = save(current.copy(showClock = !current.showClock))
     fun setVis(v: VisSettings) = save(current.copy(vis = v))
 
+    /** Alarms, alarm settings, clock aspect and visualisation for the setup file. */
+    fun exportJson(): JSONObject {
+        val d = current
+        return JSONObject().put("alarms", JSONArray().apply { d.alarms.forEach { put(it.toJson()) } }).put("global", d.global.toJson())
+            .put("aspect", d.aspect.toJson()).put("showClock", d.showClock).put("vis", d.vis.toJson())
+    }
+
+    /** From a setup file: alarms replaced or added (merge); settings applied. This phone's calendar choice stays. */
+    fun importJson(o: JSONObject, replace: Boolean) {
+        val d = current
+        val a = o.optJSONArray("alarms") ?: JSONArray()
+        val inc = (0 until a.length()).map { Alarm.fromJson(a.getJSONObject(it)) }
+        val list = if (replace) inc else d.alarms + inc.filter { n -> d.alarms.none { it.id == n.id } }
+        val g = o.optJSONObject("global")?.let { AlarmGlobal.fromJson(it).copy(calSync = d.global.calSync, calId = d.global.calId, calName = d.global.calName) } ?: d.global
+        save(d.copy(alarms = list, global = g, aspect = o.optJSONObject("aspect")?.let { ClockAspect.fromJson(it) } ?: d.aspect,
+            showClock = o.optBoolean("showClock", d.showClock), vis = o.optJSONObject("vis")?.let { VisSettings.fromJson(it) } ?: d.vis))
+        AlarmScheduler.reschedule(ctx)
+    }
+
     /** Time zone of the city chosen by hand, else the phone's. */
     fun zone(): java.util.TimeZone = current.global.cityTz.takeIf { it.isNotEmpty() }?.let { java.util.TimeZone.getTimeZone(it) }
         ?: java.util.TimeZone.getDefault()

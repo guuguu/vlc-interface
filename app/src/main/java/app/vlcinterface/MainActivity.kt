@@ -36,6 +36,8 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.BLUETOOTH_CONNECT,
         ) else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.BLUETOOTH_CONNECT))
         handleIntent(intent)
+        // First start (or never finished): the setup wizard opens over the Library.
+        if (savedInstanceState == null && !app.vlcinterface.App.instance.store.current.settings.wizardDone) nav.go(app.vlcinterface.ui.Screen.Wizard())
         setContent {
             androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
                 app.vlcinterface.ui.ExplainHost { AppRoot(nav) { finish() } }

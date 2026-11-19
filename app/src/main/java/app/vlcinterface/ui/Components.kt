@@ -328,6 +328,7 @@ fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boo
         Column(Modifier.weight(1f)) {
             Text(label, color = C.text, fontSize = 15.sp)
             if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
+            if (LocalShowNow.current) NowLine(if (checked) "on" else "off")
         }
         Switch(checked, onChange, colors = SwitchDefaults.colors(checkedTrackColor = accent()))
     }
@@ -344,9 +345,21 @@ fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Uni
         Column(Modifier.weight(1f)) {
             Text(label, color = C.text, fontSize = 15.sp)
             if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
+            if (LocalShowNow.current && value.isNotBlank()) NowLine(value)
         }
         Text(value, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
+}
+
+// ---------------------------------------------------------------- current value (setup wizard)
+
+/** True on the setup wizard's pages: every setting shows its current value on a row underneath. */
+val LocalShowNow = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/** "Now: …" row under a setting (red when something isn't granted / set). */
+@Composable
+fun NowLine(text: String, bad: Boolean = false) {
+    Text("Now: $text", color = if (bad) C.bad else Color(0xFF8FC3E8), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
 }
 
 // ---------------------------------------------------------------- explanations (long-press any setting)

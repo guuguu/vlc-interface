@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -323,6 +324,21 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
 
 @Composable
 fun AlarmSettingsScreen(nav: Navigator) {
+    val scroll = rememberScrollState()
+    HelpHost {
+    Column(Modifier.fillMaxSize()) {
+        BackHeader("Alarm clock", nav)
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            AlarmSettingsBody(nav)
+            Box(Modifier.height(24.dp))
+        }
+    }
+    }
+}
+
+/** The alarm clock settings (also shown on the setup wizard's alarm page). */
+@Composable
+fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
     val d by Alarms.state.collectAsState()
     val g = d.global
     fun set(n: AlarmGlobal) = Alarms.setGlobal(n)
@@ -339,11 +355,6 @@ fun AlarmSettingsScreen(nav: Navigator) {
     if (calAsk) CalendarPickDialog { calAsk = false }
     if (soundAsk) AlarmSoundDialog { soundAsk = false }
     if (rootAsk) RootFolderDialog { rootAsk = false }
-    val scroll = rememberScrollState()
-    HelpHost {
-    Column(Modifier.fillMaxSize()) {
-        BackHeader("Alarm clock", nav)
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             SectionTitle("Alarm health")
             HealthCard()
             Text("Tip: double tap or long-press any setting for an explanation", color = C.muted, fontSize = 12.sp)
@@ -442,10 +453,6 @@ fun AlarmSettingsScreen(nav: Navigator) {
                 val free = Battery.unrestricted(ctx)
                 HValueRow("Battery", if (free) "Unrestricted" else "Battery saving may delay the app after the alarm", if (free) "✓" else "Allow") { Battery.ask(ctx) }
             }
-            Box(Modifier.height(24.dp))
-        }
-    }
-    }
 }
 
 // ---------------------------------------------------------------- clock aspect
@@ -622,7 +629,7 @@ private val HELP: Map<String, String> = mapOf(
 
 /** Screen with explanation pop-ups: double tap or long-press a setting. */
 @Composable
-private fun HelpHost(content: @Composable () -> Unit) {
+fun HelpHost(content: @Composable () -> Unit) {
     var key by remember { mutableStateOf("") }
     androidx.compose.runtime.CompositionLocalProvider(LocalHelp provides { k -> if (HELP.containsKey(k)) key = k }) { content() }
     if (key.isNotEmpty()) AlertDialog(onDismissRequest = { key = "" }, containerColor = C.panel,
@@ -649,6 +656,7 @@ private fun HToggleRow(label: String, hint: String = "", checked: Boolean, onCha
         Column(Modifier.weight(1f)) {
             Text(label, color = C.text, fontSize = 15.sp)
             if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
+            if (LocalShowNow.current) NowLine(if (checked) "on" else "off")
         }
         Switch(checked, onChange, colors = SwitchDefaults.colors(checkedTrackColor = accent()))
     }
@@ -664,6 +672,7 @@ private fun HValueRow(label: String, hint: String = "", value: String, onClick: 
         Column(Modifier.weight(1f)) {
             Text(label, color = C.text, fontSize = 15.sp)
             if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
+            if (LocalShowNow.current && value.isNotBlank()) NowLine(value)
         }
         Text(value, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 8.dp).widthIn(max = 160.dp))

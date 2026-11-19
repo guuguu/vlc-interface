@@ -58,16 +58,40 @@ class Store(private val context: Context) {
 
     // ---------- export / import ----------
 
-    fun exportJson(includePasswords: Boolean, passphrase: String): String {
-        val transform: (String) -> String = { p ->
-            if (includePasswords && passphrase.isNotEmpty()) Crypto.sealWithPassphrase(p, passphrase) else ""
+    /** Whole setup (old call): everything, passwords included when a passphrase is given. */
+    fun exportJson(includePasswords: Boolean, passphrase: String): String =
+        exportJson(ExportCat.ALL_IDS.toSet().let { if (includePasswords) it else it - ExportCat.PASSWORDS }, passphrase)
+
+    /** Only the chosen categories ([ExportCat]); passwords only with the PASSWORDS category and a passphrase. */
+    fun exportJson(cats: Set<String>, passphrase: String): String {
+        val c = if (ExportCat.ALL in cats) ExportCat.ALL_IDS.toSet() else cats
+        val withPw = ExportCat.PASSWORDS in c && passphrase.isNotEmpty()
+        val transform: (String) -> String = { p -> if (withPw && p.isNotEmpty()) Crypto.sealWithPassphrase(p, passphrase) else "" }
+        val full = toJson(current, transform)
+        val st = JSONObject()
+        if (ExportCat.SETTINGS in c || ExportCat.VPN in c) {
+            val all = full.getJSONObject("settings"); val o = JSONObject()
+            all.keys().forEach { k ->
+                val vpn = k in ExportCat.VPN_KEYS
+                if ((vpn && ExportCat.VPN in c) || (!vpn && ExportCat.SETTINGS in c)) o.put(k, all.get(k))
+            }
+            st.put("settings", o)
         }
+        if (ExportCat.SETTINGS in c) listOf("lastOutput", "devicePreamp", "deviceBalance", "deviceLoudFrom").forEach { st.put(it, full.get(it)) }
+        val zones = buildSet { if (ExportCat.NAS in c) add(Zone.LAN); if (ExportCat.INTERNET in c) add(Zone.INTERNET) }
+        if (zones.isNotEmpty()) st.put("sources", JSONArray(current.sources.filter { it.zone in zones }.map { it.toJson(transform) }))
+        if (ExportCat.RADIO in c) st.put("stations", full.get("stations"))
+        if (ExportCat.PLAYLISTS in c) st.put("playlists", full.get("playlists"))
+        if (ExportCat.SUBS in c) listOf("subStyle", "subOffsets", "audioOffsets").forEach { st.put(it, full.get(it)) }
+        if (ExportCat.RESUME in c) listOf("recent", "scanned").forEach { st.put(it, full.get(it)) }
+        if (ExportCat.ALARMS in c) try { st.put("alarms", app.vlcinterface.alarm.Alarms.exportJson()) } catch (_: Exception) {}
         return JSONObject()
             .put("format", "vlc-interface-setup")
             .put("formatVersion", FORMAT_VERSION)
             .put("exportedAt", System.currentTimeMillis())
-            .put("passwordsIncluded", includePasswords && passphrase.isNotEmpty())
-            .put("state", toJson(current, transform))
+            .put("passwordsIncluded", withPw)
+            .put("categories", JSONArray((c - ExportCat.ALL - (if (withPw) emptySet() else setOf(ExportCat.PASSWORDS))).toList()))
+            .put("state", st)
             .toString(2)
     }
 
@@ -78,6 +102,8 @@ class Store(private val context: Context) {
         val stations: Int = 0,
         val needsPassphrase: Boolean = false,
         val raw: JSONObject? = null,
+        /** Categories found in the file. */
+        val cats: Set<String> = emptySet(),
     )
 
     fun previewImport(text: String): ImportPreview = try {
@@ -85,42 +111,80 @@ class Store(private val context: Context) {
         if (root.optString("format") != "vlc-interface-setup") ImportPreview(false, "Not a vlc interface setup file")
         else {
             val st = root.getJSONObject("state")
+            val pw = root.optBoolean("passwordsIncluded")
+            val cats = root.optJSONArray("categories")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
+                ?: (ExportCat.ALL_IDS.toSet() - ExportCat.ALARMS - (if (pw) emptySet() else setOf(ExportCat.PASSWORDS)))   // older files
             ImportPreview(
                 true,
                 sources = st.optJSONArray("sources")?.length() ?: 0,
                 stations = st.optJSONArray("stations")?.length() ?: 0,
-                needsPassphrase = root.optBoolean("passwordsIncluded"),
+                needsPassphrase = pw,
                 raw = root,
+                cats = cats,
             )
         }
     } catch (e: Exception) {
         ImportPreview(false, "Could not read the file: ${e.message}")
     }
 
-    /** Returns an error message, or null on success. Backs up the current setup first. */
-    fun applyImport(preview: ImportPreview, replace: Boolean, passphrase: String): String? {
+    /** Old call: every category in the file. */
+    fun applyImport(preview: ImportPreview, replace: Boolean, passphrase: String): String? = applyImport(preview, replace, passphrase, preview.cats)
+
+    /**
+     * Applies only the chosen categories [cats] (the rest of the setup stays as it is). Replace: those parts are
+     * replaced; merge: new items are added, mine kept. Ticked settings are applied in both modes.
+     * Returns an error message, or null on success. Backs up the current setup first.
+     */
+    fun applyImport(preview: ImportPreview, replace: Boolean, passphrase: String, cats: Set<String>): String? {
         val root = preview.raw ?: return "Nothing to import"
+        val c = cats.intersect(preview.cats)
+        val usePw = ExportCat.PASSWORDS in c && preview.needsPassphrase
         var wrongPass = false
         val transform: (String) -> String = { p ->
-            if (p.isEmpty()) "" else Crypto.openWithPassphrase(p, passphrase) ?: run { wrongPass = true; "" }
+            if (p.isEmpty() || !usePw) "" else Crypto.openWithPassphrase(p, passphrase) ?: run { wrongPass = true; "" }
         }
-        val incoming = fromJson(root.getJSONObject("state"), transform)
+        val stJ = root.getJSONObject("state")
+        val incoming = fromJson(stJ, transform)
         if (wrongPass) return "Wrong passphrase"
         backup()
         update { mine ->
-            if (replace) incoming else mine.copy(
-                sources = mine.sources + incoming.sources.filter { s -> mine.sources.none { it.id == s.id || (it.proto == s.proto && it.host == s.host && it.path == s.path) } },
-                stations = mine.stations + incoming.stations.filter { s -> mine.stations.none { it.url == s.url } },
-                subOffsets = incoming.subOffsets + mine.subOffsets,
-                audioOffsets = incoming.audioOffsets + mine.audioOffsets,
-                recent = (mine.recent + incoming.recent.filter { r -> mine.recent.none { it.uri == r.uri } }).take(50),
-                scanned = incoming.scanned + mine.scanned,
-                playlists = mine.playlists + incoming.playlists.filter { p -> mine.playlists.none { it.id == p.id || it.name == p.name } },
-                devicePreamp = incoming.devicePreamp + mine.devicePreamp,
-                deviceBalance = incoming.deviceBalance + mine.deviceBalance,
-                deviceLoudFrom = incoming.deviceLoudFrom + mine.deviceLoudFrom,
+            var m = mine
+            val inS = stJ.optJSONObject("settings")
+            if (inS != null && (ExportCat.SETTINGS in c || ExportCat.VPN in c)) {
+                val myS = mine.settings.toJson { it }
+                inS.keys().forEach { k ->
+                    val vpn = k in ExportCat.VPN_KEYS
+                    if ((vpn && ExportCat.VPN in c) || (!vpn && ExportCat.SETTINGS in c)) myS.put(k, inS.get(k))
+                }
+                m = m.copy(settings = Settings.fromJson(myS) { it })
+            }
+            if (ExportCat.SETTINGS in c && stJ.has("devicePreamp")) m = m.copy(
+                devicePreamp = if (replace) incoming.devicePreamp else incoming.devicePreamp + mine.devicePreamp,
+                deviceBalance = if (replace) incoming.deviceBalance else incoming.deviceBalance + mine.deviceBalance,
+                deviceLoudFrom = if (replace) incoming.deviceLoudFrom else incoming.deviceLoudFrom + mine.deviceLoudFrom,
             )
+            val zones = buildSet { if (ExportCat.NAS in c) add(Zone.LAN); if (ExportCat.INTERNET in c) add(Zone.INTERNET) }
+            if (zones.isNotEmpty() && stJ.has("sources")) {
+                fun same(a: Source, b: Source) = a.id == b.id || (a.proto == b.proto && a.host == b.host && a.path == b.path)
+                // No password in the file (or not imported): the one already saved for that server stays.
+                val inc = incoming.sources.filter { it.zone in zones }.map { s ->
+                    if (s.password.isNotEmpty()) s else mine.sources.firstOrNull { same(it, s) }?.let { s.copy(password = it.password) } ?: s }
+                m = m.copy(sources = if (replace) mine.sources.filter { it.zone !in zones } + inc
+                    else mine.sources + inc.filter { s -> mine.sources.none { same(it, s) } })
+            }
+            if (ExportCat.RADIO in c && stJ.has("stations")) m = m.copy(stations = if (replace) incoming.stations
+                else mine.stations + incoming.stations.filter { s -> mine.stations.none { it.url == s.url } })
+            if (ExportCat.PLAYLISTS in c && stJ.has("playlists")) m = m.copy(playlists = if (replace) incoming.playlists
+                else mine.playlists + incoming.playlists.filter { p -> mine.playlists.none { it.id == p.id || it.name == p.name } })
+            if (ExportCat.SUBS in c && stJ.has("subStyle")) m = m.copy(subStyle = incoming.subStyle,
+                subOffsets = if (replace) incoming.subOffsets else incoming.subOffsets + mine.subOffsets,
+                audioOffsets = if (replace) incoming.audioOffsets else incoming.audioOffsets + mine.audioOffsets)
+            if (ExportCat.RESUME in c && stJ.has("recent")) m = m.copy(
+                recent = if (replace) incoming.recent else (mine.recent + incoming.recent.filter { r -> mine.recent.none { it.uri == r.uri } }).take(50),
+                scanned = if (replace) incoming.scanned else incoming.scanned + mine.scanned)
+            m
         }
+        if (ExportCat.ALARMS in c) stJ.optJSONObject("alarms")?.let { try { app.vlcinterface.alarm.Alarms.importJson(it, replace) } catch (_: Exception) {} }
         return null
     }
 
@@ -174,4 +238,27 @@ class Store(private val context: Context) {
             )
         }
     }
+}
+
+
+/** Categories of the setup file (Export / import). */
+object ExportCat {
+    const val ALL = "all"
+    const val SETTINGS = "settings"
+    const val NAS = "nas"
+    const val VPN = "vpn"
+    const val INTERNET = "internet"
+    const val PASSWORDS = "passwords"
+    const val RADIO = "radio"
+    const val PLAYLISTS = "playlists"
+    const val ALARMS = "alarms"
+    const val SUBS = "subs"
+    const val RESUME = "resume"
+    /** id → name, in the order shown. */
+    val LIST = listOf(SETTINGS to "Settings", NAS to "NAS (servers, shares, addresses)", VPN to "VPN (app, home servers, retry)",
+        INTERNET to "Internet sources", PASSWORDS to "Saved passwords", RADIO to "Radio favourites", PLAYLISTS to "Playlists",
+        ALARMS to "Alarms, clock and visualisation", SUBS to "Subtitle style and sync offsets", RESUME to "Resume positions and scanned folders")
+    val ALL_IDS = LIST.map { it.first }
+    /** Settings that belong to the VPN category. */
+    val VPN_KEYS = setOf("vpnNas", "vpnAskStart", "vpnApp", "vpnRetrySec")
 }
