@@ -9,5 +9,6 @@
   Thursday from Thu 26 Nov") and how to get another repetition (once: deselect the days; several dates: Specific
   dates). Closes by itself after 3 s (stays if touched).
 - Alarm clock settings: "Helpers" on/off switch for these pop-ups.
-- Helper wording: "One time only: deselect the weekly circles." / "Several dates: choose specific dates on the monthly
+- Helper wording: "One time only: use only the Date button, don't select any day disk." / "Repeated alarm: choose the
+  start date on the calendar and the day buttons here." / "Several dates: choose specific dates on the monthly
   calendar." Specific dates are picked on a monthly calendar (tap several days, move between months).
