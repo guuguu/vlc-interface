@@ -634,13 +634,30 @@ private fun AlarmSoundDialog(onDone: () -> Unit) {
     }
     androidx.compose.runtime.DisposableEffect(Unit) { onDispose { stopPreview() } }
     val g = Alarms.state.collectAsState().value.global
+    // Your own sound file (kept readable after a restart).
+    val browse = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { u ->
+        if (u != null) {
+            try { ctx.contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
+            val name = try { ctx.contentResolver.query(u, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) c.getString(0) else null } } catch (_: Exception) { null } ?: "My sound"
+            Alarms.setGlobal(Alarms.current.global.copy(toneUri = u.toString(), toneName = name.substringBeforeLast('.')))
+            play(u.toString())
+        }
+    }
+    val own = g.toneUri.isNotEmpty() && g.toneUri.startsWith("content://") && !g.toneUri.startsWith("content://media/")
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
         title = { Text("Alarm sound", color = C.text) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Rings when nothing else can play, when music was already playing, and with low battery (if chosen). " +
-                    "Tap a sound: it is chosen and plays for 3 s.", color = C.muted, fontSize = 13.sp)
+                    "Tap a sound: it is chosen and plays for 3 s. Browse… picks your own sound file.", color = C.muted, fontSize = 13.sp)
                 Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
+                    Row(Modifier.fillMaxWidth().clickable { browse.launch(arrayOf("audio/*")) }.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        SRadioButton(own, null)
+                        Text(if (own) "My file: " + g.toneName else "Browse… (your own file)", color = if (own) accent() else C.text, fontSize = 14.sp,
+                            modifier = Modifier.padding(start = 8.dp).weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("📂", fontSize = 16.sp)
+                    }
                     (listOf("Phone's alarm (default)" to "") + sounds).forEach { (title, uri) ->
                         val on = g.toneUri == uri
                         Row(Modifier.fillMaxWidth().clickable {
