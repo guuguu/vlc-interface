@@ -74,7 +74,7 @@ android {
             excludes += listOf(
                 "META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*",
                 "META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA",
-                "META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/INDEX.LIST", "META-INF/versions/*/module-info.class", "module-info.class"
+                "META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/INDEX.LIST", "META-INF/versions/*/module-info.class", "module-info.class", "META-INF/versions/*/OSGI-INF/MANIFEST.MF"
             )
         }
         jniLibs { useLegacyPackaging = false }
