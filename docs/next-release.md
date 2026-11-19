@@ -12,8 +12,8 @@
 
 ## Settings layout (requested 2026-11-19 18:43)
 - Main Settings page becomes a list of links to submenus with clear names; every setting and log page moves into
-  one of them (proposed: Sound, Playback & gestures, Look, Library & scanning, Network & NAS, VPN, Saved songs,
-  Subtitles, Alarm clock, Visualisation, Setup export / import, Logs).
+  one of them (proposed: Sound, Playback & gestures, Video (picture, rotation, subtitles), Look, Library & scanning,
+  Network & NAS, VPN, Saved songs, Alarm clock, Visualisation, Setup export / import, Logs).
 - Long-press on ANY item of any settings page or subpage: a pop-up explaining that setting.
 - All sliders in the settings thin, like the sliders of the player (thin track, small knob).
 - Every page that has a Save button gets it in its header (right side, accent colour), like the alarm and source
