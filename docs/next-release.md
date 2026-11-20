@@ -258,3 +258,12 @@
 - Only the chosen visualisations are offered (23:06): Spectrum (centred) and the four analysers (LED bars, light
   bars, wave area, radial); projectM's four follow when its library is built. A previously chosen old pattern
   (clouds, plasma, …) becomes the centred spectrum.
+
+# After 1.56.0
+
+## projectM (requested 2026-11-20 23:06)
+- libprojectM v4.1.8 compiled for Android arm64 (OpenGL ES 3, shared, LGPL 2.1) by the "Build libprojectM" workflow
+  and committed into app/src/main/cpp/projectm (library + headers + licence). Done 23:11.
+- Still to do: native bridge (projectM fed with the app's own sound — a sample buffer added to the sound engine),
+  a drawing surface in the cover place and full screen, four bundled presets, the same visibility / lifecycle rules
+  (stops when not visible, freed when a cover / clock replaces it), and the four as choices on the Visualisation page.
