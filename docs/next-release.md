@@ -18,4 +18,4 @@
   🌎 Americas · 🌍 Europe / Africa · 🌏 Asia / Australia.
   - Where: the station directory's own coordinates when it has them; otherwise the server's address (its IP) looked up
     once with a free geolocation service (ipwho.is), kept so each server is asked only once.
-  - Plain 🌐 only while it's being looked up or when nothing can be found.
+  - 🌍 (Europe) by default: while it's being looked up and when nothing can be found — no plain 🌐 (requested 2026-11-20 18:14).
