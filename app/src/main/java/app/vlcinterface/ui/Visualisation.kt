@@ -75,7 +75,7 @@ private val EFFECT_NAMES = listOf("clouds" to "Colour clouds", "lava" to "Lava g
     "plasma" to "Plasma", "silk" to "Silk bands", "sunset" to "Sunset sky", "ocean" to "Deep ocean", "embers" to "Embers",
     "ink" to "Ink flow", "reaction" to "Reaction–diffusion", "phase" to "Phase portrait", "chladni" to "Chladni waves",
     "mandel" to "Mandelbrot dive", "epicycles" to "Fourier epicycles",
-    "bars" to "Spectrum bars", "mirror" to "Spectrum mirror", "radial" to "Spectrum circle")
+    "mirror" to "Spectrum (centred)")
 
 /** Mathematical patterns: drawn as a colour field (cosine palettes, or the chosen colour combination). */
 private val FIELD_FX = setOf("ink", "reaction", "phase", "chladni", "mandel", "epicycles")
@@ -279,7 +279,7 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
                 if (vs.effect in SPEC_FX) {
                     if (live && NativeAudio.active) NativeAudio.spectrum(m.specRaw)
                     else for (i in m.specRaw.indices) m.specRaw[i] = if (!live || playing)
-                        (0.05f + 0.6f * m.lo * exp(-i / 4f) + 0.3f * m.hi * exp(-(19 - i) / 6f) + 0.08f * (0.5f + 0.5f * sin(clock * 3f + i))) else 0f
+                        (0.05f + 0.6f * m.lo * exp(-i / 6f) + 0.3f * m.hi * exp(-(m.specRaw.size - 1 - i) / 9f) + 0.08f * (0.5f + 0.5f * sin(clock * 3f + i))) else 0f
                     for (i in m.spec.indices) {
                         val raw = m.specRaw[i]
                         m.specRef[i] = max(m.specRef[i] * (1f - dt * 0.2f), max(raw, 1e-4f))
@@ -321,13 +321,13 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
     val px = remember { IntArray(18 * 32) }
     val field = remember(v.effect) { arrayOfNulls<VisField>(1) }
     // The analyser is measured only while a live spectrum picture is shown (saves battery otherwise).
-    if (live) androidx.compose.runtime.DisposableEffect(v.effect in SPEC_FX) {
-        NativeAudio.spectrumOn(v.effect in SPEC_FX); onDispose { if (v.effect in SPEC_FX) NativeAudio.spectrumOn(false) }
+    if (live && v.effect in SPEC_FX) androidx.compose.runtime.DisposableEffect(Unit) {
+        NativeAudio.spectrumOn(true); onDispose { NativeAudio.spectrumOn(false) }
     }
     Canvas(modifier) {
         val t = m.t
         val a = v.brightness.coerceIn(0.2f, 1f)
-        if (v.effect in SPEC_FX) { drawSpectrum(v.effect, m, a, visColours(v), bg); return@Canvas }
+        if (v.effect in SPEC_FX) { drawSpectrum(m, a, visColours(v), bg, v.specBar.dp.toPx()); return@Canvas }
         if (v.effect in FIELD_FX) {
             val land = size.width > size.height
             val fw = if (land) 128 else 72; val fh = if (land) 72 else 128
@@ -341,52 +341,37 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
 }
 
 /**
- * Spectrum pictures: "bars" (from the bottom, peak caps), "mirror" (from the middle line up and down), "radial"
- * (around a circle that swells on the beat and turns with the music). Colours run across the bands.
+ * Centred spectrum: bars growing up and down from the middle line, with peak marks. The bar thickness is set by the
+ * user ([barPx]); the number of bars is what fits across the width at that thickness (thicker → fewer bars), each
+ * bar taking its share of the 32 measured bands. Colours run across the bars from the chosen colour combination.
  */
-private fun DrawScope.drawSpectrum(effect: String, m: VisMotion, a: Float, cols: List<Color>, bg: List<Color>) {
+private fun DrawScope.drawSpectrum(m: VisMotion, a: Float, cols: List<Color>, bg: List<Color>, barPx: Float) {
     drawRect(lerpC(Color.Black, bg.firstOrNull() ?: Color.Black, 0.25f + 0.25f * m.kickLo))
-    val n = m.spec.size
+    val gap = (barPx * 0.35f).coerceAtLeast(2f)
+    val bars = ((size.width + gap) / (barPx + gap)).toInt().coerceIn(3, m.spec.size)
+    val bw = (size.width - gap * (bars - 1)) / bars        // fills the width exactly
+    val left = 0f
     fun colAt(i: Int): Color {
-        val f = i / (n - 1f) * (cols.size - 1)
+        if (cols.size < 2) return (cols.firstOrNull() ?: Color.White).copy(alpha = a)
+        val f = i / (bars - 1f).coerceAtLeast(1f) * (cols.size - 1)
         val j = f.toInt().coerceIn(0, cols.size - 2)
         return lerpC(cols[j], cols[j + 1], f - j).copy(alpha = a)
     }
-    when (effect) {
-        "radial" -> {
-            val c = Offset(size.width / 2, size.height / 2)
-            val base = minOf(size.width, size.height) * (0.18f + 0.05f * m.kickLo)
-            val len = minOf(size.width, size.height) * 0.30f
-            val turn = m.ps * 0.3f
-            val bw = (2f * Math.PI.toFloat() * base / (n * 2)) * 0.7f
-            drawCircle(colAt(0).copy(alpha = 0.25f * a + 0.35f * m.kickLo), base * 0.92f, c)
-            for (i in 0 until n * 2) {
-                val b = if (i < n) i else 2 * n - 1 - i             // mirrored all round
-                val ang = turn + i * (2f * Math.PI.toFloat() / (n * 2))
-                val r1 = base; val r2 = base + len * m.spec[b].coerceAtLeast(0.02f)
-                drawLine(colAt(b), Offset(c.x + cos(ang) * r1, c.y + sin(ang) * r1), Offset(c.x + cos(ang) * r2, c.y + sin(ang) * r2), bw, androidx.compose.ui.graphics.StrokeCap.Round)
-            }
-        }
-        else -> {
-            val gap = size.width * 0.012f
-            val bw = (size.width - gap * (n + 1)) / n
-            val mirror = effect == "mirror"
-            val mid = size.height / 2
-            for (i in 0 until n) {
-                val x = gap + i * (bw + gap)
-                val h = (if (mirror) mid * 0.92f else size.height * 0.9f) * m.spec[i].coerceAtLeast(0.01f)
-                val ph = (if (mirror) mid * 0.92f else size.height * 0.9f) * m.specPeak[i]
-                val col = colAt(i)
-                if (mirror) {
-                    drawRect(col, Offset(x, mid - h), androidx.compose.ui.geometry.Size(bw, h * 2))
-                    drawRect(col.copy(alpha = col.alpha * 0.9f), Offset(x, mid - ph - 3f), androidx.compose.ui.geometry.Size(bw, 3f))
-                    drawRect(col.copy(alpha = col.alpha * 0.9f), Offset(x, mid + ph), androidx.compose.ui.geometry.Size(bw, 3f))
-                } else {
-                    drawRect(col, Offset(x, size.height - h), androidx.compose.ui.geometry.Size(bw, h))
-                    drawRect(Color.White.copy(alpha = 0.8f * a), Offset(x, size.height - ph - 4f), androidx.compose.ui.geometry.Size(bw, 3f))
-                }
-            }
-        }
+    // Each bar: the loudest of its bands (log-spaced bands shared out evenly across the bars).
+    fun level(arr: FloatArray, i: Int): Float {
+        val n = arr.size
+        val from = i * n / bars; val to = ((i + 1) * n / bars).coerceAtLeast(from + 1)
+        var v = 0f; for (k in from until to.coerceAtMost(n)) v = max(v, arr[k]); return v
+    }
+    val mid = size.height / 2; val full = mid * 0.92f
+    for (i in 0 until bars) {
+        val x = left + i * (bw + gap)
+        val h = full * level(m.spec, i).coerceAtLeast(0.01f)
+        val ph = full * level(m.specPeak, i)
+        val col = colAt(i)
+        drawRect(col, Offset(x, mid - h), androidx.compose.ui.geometry.Size(bw, h * 2))
+        drawRect(col.copy(alpha = col.alpha * 0.9f), Offset(x, mid - ph - 3f), androidx.compose.ui.geometry.Size(bw, 3f))
+        drawRect(col.copy(alpha = col.alpha * 0.9f), Offset(x, mid + ph), androidx.compose.ui.geometry.Size(bw, 3f))
     }
 }
 
@@ -623,6 +608,21 @@ fun VisualisationSettings() {
         VisSlider("Colour speed", v.colourSpeed, 0.2f..3f, "×%.1f".format(v.colourSpeed)) { set(v.copy(colourSpeed = it)) }
         VisSlider("Definition", v.sharp, 0f..1f, if (v.sharp < 0.15f) "soft" else if (v.sharp > 0.85f) "sharp" else "${(v.sharp * 100).toInt()} %") { set(v.copy(sharp = it)) }
         VisSlider("Brightness", v.brightness, 0.2f..1f, "${(v.brightness * 100).toInt()} %") { set(v.copy(brightness = it)) }
+        // Centred spectrum: bar thickness (thicker → fewer bars). Helper with a live preview on a still hold.
+        if (v.effect in SPEC_FX) {
+            var barHelp by remember { mutableStateOf(false) }
+            if (barHelp) HelperDialog("Bar thickness", "How thick each bar of the centred spectrum is. The bars always fill the whole width, " +
+                "so thicker bars means fewer of them (each covering a wider slice of the sound): thin bars show more detail, thick bars a bolder beat. " +
+                "From 3 to 40 dp; default 10 dp.", extra = {
+                VisCanvas(v, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)), live = true)
+            }) { barHelp = false }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Bar thickness", color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain("Bar thickness"))
+                ThinSlider(v.specBar, { set(v.copy(specBar = Math.round(it).toFloat())) }, Modifier.weight(1f), valueRange = 3f..40f,
+                    onHoldStill = { if (Alarms.current.global.helpers) barHelp = true })
+                Text("${v.specBar.toInt()} dp", color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
+            }
+        }
         Divider()
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {

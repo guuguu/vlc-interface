@@ -113,9 +113,14 @@ object NativeAudio {
         try { setPreferredRate(hz); if (active) reroute() } catch (_: Throwable) {}
     }
     fun bandRange(lo: Float, hi: Float) { if (loaded) try { setBands(lo, hi) } catch (_: Throwable) {} }
-    /** Spectrum analyser: 20 bands (≈ 40 Hz … 16 kHz), measured only while [spectrumOn] is set. */
-    const val SPEC_N = 20
-    fun spectrumOn(on: Boolean) { if (loaded) try { setSpectrum(on) } catch (_: Throwable) {} }
+    /** Spectrum analyser: 32 bands (≈ 40 Hz … 16 kHz), measured only while [spectrumOn] is set. */
+    const val SPEC_N = 32
+    /** Counted: on while at least one live spectrum picture is shown. */
+    private var specUsers = 0
+    @Synchronized fun spectrumOn(on: Boolean) {
+        specUsers = (specUsers + if (on) 1 else -1).coerceAtLeast(0)
+        if (loaded) try { setSpectrum(specUsers > 0) } catch (_: Throwable) {}
+    }
     fun spectrum(out: FloatArray) { if (active) try { readSpectrum(out) } catch (_: Throwable) { out.fill(0f) } else out.fill(0f) }
     fun peaks(out: FloatArray) { if (active) readPeaks(out) else { out[0] = 0f; out[1] = 0f } }
 }

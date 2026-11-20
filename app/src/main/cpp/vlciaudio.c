@@ -91,7 +91,7 @@ static vbq_t g_vb[4];                          /* band A: hp, lp; band B: hp, lp
 
 /* Spectrum analyser: SPEC_N log-spaced bands (≈ 40 Hz … 16 kHz), band-pass filters on the song's samples,
    measured only while a spectrum picture is shown. RMS per written chunk, kept in step with the peaks ring. */
-#define SPEC_N 20
+#define SPEC_N 32
 typedef struct { float b0, b2, a1, a2, z0, z1; } sbp_t;      /* band-pass (b1 = 0) */
 static sbp_t g_sb[SPEC_N];
 static float g_specUsed = 0.f;

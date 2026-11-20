@@ -209,8 +209,10 @@
 - Beat engine: onsets of the bass are found against their own recent statistics; the tempo (70–180 BPM) comes from
   the spacing of recent onsets; beats keep coming on time between clear onsets (phase-locked), so every pattern
   pulses on the beat and keeps time through quieter bars.
-- Spectrum analyser (new patterns): "Spectrum bars" (with falling peak caps), "Spectrum mirror" (from the middle
-  line), "Spectrum circle" (round, swells on the beat, turns with the music). 20 bands from ~40 Hz to 16 kHz,
-  measured in the app's sound engine only while such a pattern is shown; colours from the chosen colours.
+- Spectrum analyser: one pattern, "Spectrum (centred)" — bars growing up and down from the middle line with peak
+  marks (22:44: only the centred one). 32 bands from ~40 Hz to 16 kHz, measured in the app's sound engine only while
+  it's shown. Uses the colour combinations like every pattern (pattern colours or the chosen ones).
+- Bar thickness (Settings → Visualisation, shown for the spectrum): 3–40 dp, default 10; the bars always fill the
+  width, so thicker bars = fewer bars. Helper with a live preview on a still hold.
 - projectM (MilkDrop presets): planned as the next step — libprojectM (LGPL 2.1, OpenGL ES 3) built into the app and
   fed with the app's own sound, with a preset pack; its own pattern group on the Visualisation page.

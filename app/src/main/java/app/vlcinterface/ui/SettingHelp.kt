@@ -125,6 +125,8 @@ object SettingHelp {
         "Pop-up opacity" to "How see-through pop-up windows are. More see-through shows what's behind; fully opaque is easier to read.",
         "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
+        "Bar thickness" to "How thick each bar of the centred spectrum is. The bars always fill the whole width, so thicker bars means fewer " +
+            "of them, each covering a wider slice of the sound: thin bars show more detail, thick bars a bolder beat. From 3 to 40 dp; default 10 dp.",
         "OpenSubtitles account" to "Subtitles are searched and downloaded from OpenSubtitles.com. It needs three things from a free account there:\n\n" +
             "1. Account: on opensubtitles.com choose Register, confirm the e-mail it sends, then log in.\n" +
             "2. API key: open your profile → API consumers → New consumer; any name (for example 'vlc interface'); " +
