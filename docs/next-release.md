@@ -37,3 +37,10 @@
   top bar (never shrunk into tiny text or near-invisible symbols); symbols the same size and visible colours.
 - Sideways one clean row for the bottom controls, upright wrapping if needed — same rule as the top bar.
 - Same "Player rows spacing" for the gaps between its rows, and the same button colours / switch styles as elsewhere.
+
+## Video list under a wide video (requested 2026-11-20 17:52)
+- When the video is wider than tall and the phone is upright (free space under the picture), that space holds a box
+  with the video collection (the queue / folder it plays from), scrollable on its own, behaving like the song
+  player's "Up next": the coming videos in order, tap to jump to one, long-press for its menu (move up / down,
+  remove from the queue, file actions), duration on the right.
+- Sideways, or with a tall video filling the screen, no box (the picture keeps the whole screen).
