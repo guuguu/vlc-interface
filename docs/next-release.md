@@ -29,3 +29,11 @@
   text at least 13 sp, chips at least 34 dp high.
 - Sideways (landscape): everything on one clean row at the same readable sizes (scrolls sideways only if a narrow
   screen needs it) (requested 2026-11-20 17:50).
+
+## Video player in line with the song player (requested 2026-11-20 17:51)
+- Position bar: thin track with the small knob (like the song player's), times close under / beside it at a readable
+  size; the drag bubble kept.
+- −10 / play-pause / +10 and the bottom row (Fit, rotate, previous / next, PiP): same readable minimum sizes as the
+  top bar (never shrunk into tiny text or near-invisible symbols); symbols the same size and visible colours.
+- Sideways one clean row for the bottom controls, upright wrapping if needed — same rule as the top bar.
+- Same "Player rows spacing" for the gaps between its rows, and the same button colours / switch styles as elsewhere.
