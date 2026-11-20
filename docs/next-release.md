@@ -43,3 +43,5 @@
 - Results listed with tick boxes (same light-green ticks); only the ticked ones are added to the Library.
 - Folders already in the Library are shown as already added and never overwritten or duplicated.
 - The item can be moved like the other links (order chosen on the Look page).
+- With a helper pop-up (long-press, and the help pop-up when Helpers are on) explaining what it searches, that only
+  ticked folders are added and that existing ones stay as they are (requested 2026-11-20 11:30).
