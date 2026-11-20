@@ -29,3 +29,5 @@
   off = a muted grey-blue). Greyed only when a switch can't be used, as before; still no on / off words.
 - With a helper pop-up while Helpers are on, previewing a sample switch in both positions with the chosen colours
   (requested 2026-11-20 12:20).
+- No ready-made colour circles for the switch colours: each of the two settings shows only its current colour and a
+  colour creation button that opens the colour editor (hue / saturation / brightness) (requested 2026-11-20 12:22).
