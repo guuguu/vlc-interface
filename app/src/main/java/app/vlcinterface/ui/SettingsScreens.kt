@@ -323,6 +323,17 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     OpacityPreview(s.popupOpacity / 100f, "Pop-up window", 15)
                     ThinSlider(s.popupOpacity.toFloat(), { v -> set(s.copy(popupOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
                     // Floating play / pause on the players (shown when their buttons are scrolled away).
+                    var floatHelp by remember { mutableStateOf(false) }
+                    if (floatHelp) HelperDialog("Floating play / pause button", SettingHelp.text("Floating play / pause button", "")) { floatHelp = false }
+                    Text("Floating play / pause button", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp).explain("Floating play / pause button"))
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("always" to "Always", "scroll" to "When the buttons scroll away", "off" to "Off").forEach { (m, l) ->
+                            Pill(l, selected = s.floatBtnMode == m) {
+                                set(s.copy(floatBtnMode = m))
+                                if (app.vlcinterface.alarm.Alarms.current.global.helpers) floatHelp = true
+                            }
+                        }
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                         Text("Floating button size", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Floating button size"))
                         Text("${s.floatBtnSize} dp", color = accent(), fontWeight = FontWeight.SemiBold)
@@ -354,6 +365,13 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     ThinSlider(s.clockHideSec.toFloat(), { v -> set(s.copy(clockHideSec = Math.round(v).coerceIn(3, 60))) }, valueRange = 3f..60f,
                         onValueChangeFinished = { if (helpersOn) lookHelp = "Clock hidden for" })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Cover hidden for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Cover hidden for"))
+                        Text("${s.coverHideSec} s", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(coverHideSec = 10)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.coverHideSec.toFloat(), { v -> set(s.copy(coverHideSec = Math.round(v).coerceIn(3, 60))) }, valueRange = 3f..60f,
+                        onValueChangeFinished = { if (helpersOn) lookHelp = "Cover hidden for" })
                     // Short, self-closing pop-ups: how long they stay.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Short pop-ups stay for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Short pop-ups stay for"))

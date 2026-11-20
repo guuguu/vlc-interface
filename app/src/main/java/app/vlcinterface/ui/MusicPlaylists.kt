@@ -163,12 +163,17 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     androidx.compose.runtime.CompositionLocalProvider(LocalInPlayer provides true) {
     // Upright with the clock: scrolling hides the clock; any action (scroll, touch) keeps it hidden for Look → "Clock hidden for"
     // more seconds; it never comes back while a menu, pop-up or settings window is open.
-    val hideSec = App.instance.store.state.collectAsState().value.settings.clockHideSec
+    // The same for the album cover (Look → "Cover hidden for"), each with its own time.
+    val setsP = App.instance.store.state.collectAsState().value.settings
+    val hideSec = setsP.clockHideSec
+    val coverSec = setsP.coverHideSec
     var lastAct by remember { mutableLongStateOf(0L) }
     var clockHidden by remember { mutableStateOf(false) }
+    var coverHidden by remember { mutableStateOf(false) }
+    var coverHpx by remember { mutableIntStateOf(0) }
     val winFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(scroll) {
-        androidx.compose.runtime.snapshotFlow { scroll.value }.collect { v -> if (v > 0 || clockHidden) lastAct = System.currentTimeMillis() }
+        androidx.compose.runtime.snapshotFlow { scroll.value }.collect { v -> if (v > 0 || clockHidden || coverHidden) lastAct = System.currentTimeMillis() }
     }
     LaunchedEffect(lastAct, winFocused, hideSec) {
         if (lastAct == 0L || landscape) return@LaunchedEffect
@@ -177,12 +182,23 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         kotlinx.coroutines.delay((lastAct + hideSec * 1000L - System.currentTimeMillis()).coerceAtLeast(0L))
         clockHidden = false
     }
-    LaunchedEffect(winFocused) { if (winFocused && clockHidden) lastAct = System.currentTimeMillis() }
+    LaunchedEffect(lastAct, winFocused, coverSec) {
+        if (lastAct == 0L || landscape) return@LaunchedEffect
+        if (!coverHidden) {
+            coverHidden = true
+            // The page keeps its place: what was under the cover stays where it was.
+            if (coverHpx > 0) scroll.scrollTo((scroll.value - coverHpx).coerceAtLeast(0))
+        }
+        if (!winFocused) return@LaunchedEffect
+        kotlinx.coroutines.delay((lastAct + coverSec * 1000L - System.currentTimeMillis()).coerceAtLeast(0L))
+        coverHidden = false
+    }
+    LaunchedEffect(winFocused) { if (winFocused && (clockHidden || coverHidden)) lastAct = System.currentTimeMillis() }
     Box(Modifier.fillMaxSize().background(PLAYER_BG).pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) {
                 val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-                if (clockHidden && e.type == androidx.compose.ui.input.pointer.PointerEventType.Press) lastAct = System.currentTimeMillis()
+                if ((clockHidden || coverHidden) && e.type == androidx.compose.ui.input.pointer.PointerEventType.Press) lastAct = System.currentTimeMillis()
             }
         }
     }) {   // players: 90 % black
@@ -235,7 +251,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (clockOn) Unit   // the clock is pinned outside the scrolling page
             else if (landscape) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 pic((minOf(maxWidth, maxHeight).value.toInt() - 8).coerceAtLeast(48))
-            } else pic(coverSize)
+            } else if (!coverHidden) Box(Modifier.onSizeChanged { coverHpx = it.height }) { pic(coverSize) }
             if (clockOn) AlarmMiniList(nav, compact = false)
             if (coverPick) CoverPicker(coverItem,
                 onNone = { coverPick = false; coverNote = "Looking for the picture online…"; coverRetry++ },
@@ -484,7 +500,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     if (meters) StereoVu(Modifier.align(Alignment.CenterEnd).padding(end = (4 * vuK).dp).fillMaxHeight().width((15 * vuK).dp))
     // Floating play / pause: only while the player's buttons are scrolled out of view (under the title block / off the top).
     val ctlHidden = scroll.value > 0 && ctlBottom < viewTop + (if (landscape) 0 else titleHpx) + 2f
-    if (ctlHidden) FloatingPlayButton(p.isPlaying) { player.togglePause() }
+    // Look → "Floating play / pause button": always (default), only when the buttons scroll away, or off.
+    val fMode = setsP.floatBtnMode
+    if (fMode == "always" || (fMode == "scroll" && ctlHidden)) FloatingPlayButton(p.isPlaying) { player.togglePause() }
     }
     }
 }

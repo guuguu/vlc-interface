@@ -125,6 +125,10 @@ object SettingHelp {
         "Pop-up opacity" to "How see-through pop-up windows are. More see-through shows what's behind; fully opaque is easier to read.",
         "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
+        "Floating play / pause button" to "A round play / pause button floating over the audio and radio players, that you can drag anywhere (its place is kept).\n\n" +
+            "'Always': it's always there, handy when the album picture or clock takes the screen. 'When the buttons scroll away': it appears only while the player's own buttons are out of view. 'Off': never shown.\n\nDefault: Always.",
+        "Cover hidden for" to "With the phone upright and the album picture shown on the player, scrolling the player hides the picture completely, so the list and buttons get its room.\n\n" +
+            "It comes back this many seconds after your last action; every scroll, touch or button press starts the count again, and it never comes back while a menu, pop-up or settings window is open. Sideways the picture stays on the left. The clock has its own time.\n\nDefault: 10 s.",
         "Floating button colour" to "The colour of the round play / pause button that floats over the players, separate from the accent colour so it stands out over album pictures and lists.\n\n" +
             "'+ Create' opens the colour editor; the ▶ / ❚❚ symbol turns dark or white by itself to stay readable. Default: the accent colour.",
         "Floating button transparency" to "How see-through the floating play / pause button is: 0 % is solid, higher lets the list show through it.\n\n" +
