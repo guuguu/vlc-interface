@@ -26,3 +26,10 @@
 - A switch is greyed only when it can't be used (not available in the current state).
 - No "on / off" words anywhere for switches, the wizard's "Now:" row included (switch rows show no "Now:" row;
   other settings keep theirs) (requested 2026-11-20 10:55).
+
+## Radio player scrolling (requested 2026-11-20 11:25)
+- Scrolling up on the radio player moves the cover (album picture / clock) up and out of view.
+- The station block then stays frozen under the header: "RADIO STATION", station name, address, Live, format line,
+  the VPN-NAS button and "Live · listening …".
+- Scrolling on moves all the rest underneath it (controls, Up next, the other items); scrolling back down
+  brings the cover back.
