@@ -31,3 +31,7 @@
 - Helper pop-up while Helpers are on (only on a still hold), previewing two sample setting rows at the chosen spacing.
 - Also: every setting row keeps the same left margin (e.g. Audio → "Loudness, Treble and Preamp sliders" is indented
   more than the rows around it today).
+- Graphical items on the settings pages (sliders, switches, pills / choice buttons, colour circles, ▲▼ and Reset
+  buttons) get less free space around them: the slider's tall touch row, the switch's surrounding gap and the pills'
+  outer margins shrink (touch areas stay usable); the "Vertical spacing" slider scales this space too
+  (requested 2026-11-20 17:24).
