@@ -1685,12 +1685,12 @@ fun StationSearch() {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, C.line, RoundedCornerShape(12.dp)).padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("Find stations", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-        // ▲ ▼ step through the results (highlighted, scrolled into view).
         val reqs = remember(results) { List(results?.size ?: 0) { androidx.compose.foundation.relocation.BringIntoViewRequester() } }
-        var at by remember(results) { mutableStateOf(-1) }
-        val sscope = rememberCoroutineScope()
-        fun step(k: Int) { if (reqs.isEmpty()) return; at = (k + reqs.size) % reqs.size; sscope.launch { reqs[at].bringIntoView() } }
-        SmallSearchBar(q, { q = it }, "Station name", reqs.size, at.coerceAtLeast(0), { step(at - 1) }, { step(at + 1) }, onSearch = { run() })
+        val at = -1
+        val focusM = androidx.compose.ui.platform.LocalFocusManager.current
+        // ✕ closes the search: name and results cleared, the box shrinks back, the keyboard goes away.
+        SmallSearchBar(q, { q = it }, "Station name", results?.size ?: 0, onSearch = { run() },
+            onClose = { q = ""; results = emptyList(); error = ""; focusM.clearFocus() })
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Filter("style", "Style", style, (listOf("any" to "") + listOf("Rock", "Pop", "Jazz", "Classical", "Blues", "Metal", "Electronic", "Chill", "Ambient",
                 "Hip hop", "Country", "Folk", "Reggae", "Soul", "Oldies", "80s", "90s", "News", "Talk").map { it to it.lowercase() })

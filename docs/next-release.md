@@ -5,3 +5,8 @@
 - It plays what that player last played (kept across app restarts too), else the most recent song / video, else
   (radio) the first favourite station. If there's truly nothing (never played any), a short note says so and the
   current player stays.
+
+## Radio player's "Find stations" (reported 2026-11-20 18:08)
+- The ✕ only emptied the name (results stayed, so it seemed to do nothing). Now ✕ closes the search: name and
+  results cleared, the find box shrinks back to its small size, the keyboard goes away.
+- The result counter and the ▲ ▼ arrows are removed from this box.

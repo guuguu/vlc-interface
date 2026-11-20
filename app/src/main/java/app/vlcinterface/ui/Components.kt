@@ -234,7 +234,8 @@ fun JumpToBox(state: LazyListState, labels: List<String>, offset: Int = 0) {
  */
 @Composable
 fun SmallSearchBar(value: String, onChange: (String) -> Unit, placeholder: String, count: Int = 0, at: Int = 0,
-                   prev: () -> Unit = {}, next: () -> Unit = {}, onSearch: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+                   prev: () -> Unit = {}, next: () -> Unit = {}, onSearch: (() -> Unit)? = null, modifier: Modifier = Modifier,
+                   onClose: (() -> Unit)? = null) {
     Row(modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f).height(34.dp).clip(RoundedCornerShape(17.dp)).background(C.card2).padding(horizontal = 14.dp),
             contentAlignment = Alignment.CenterStart) {
@@ -246,7 +247,9 @@ fun SmallSearchBar(value: String, onChange: (String) -> Unit, placeholder: Strin
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch?.invoke() }))
         }
         if (onSearch != null) Text("🔍", fontSize = 16.sp, modifier = Modifier.clickable { onSearch() }.padding(horizontal = 8.dp))
-        if (value.isNotEmpty() || count > 0) SearchSteps(count, at, prev, next) { onChange("") }
+        // With onClose: no counter / arrows, only ✕ which closes the search (clears it and shrinks the box back).
+        if (onClose != null) { if (value.isNotEmpty() || count > 0) Text("✕", color = C.text, fontSize = SYM, modifier = Modifier.clickable { onClose() }.padding(horizontal = 10.dp)) }
+        else if (value.isNotEmpty() || count > 0) SearchSteps(count, at, prev, next) { onChange("") }
     }
 }
 
