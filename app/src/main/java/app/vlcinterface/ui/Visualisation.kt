@@ -873,6 +873,32 @@ fun VisualisationSettings() {
     var previewAt by remember { mutableLongStateOf(0L) }
     LaunchedEffect(previewAt) { if (previewAt > 0) { kotlinx.coroutines.delay(3000); preview = null } }
     val dens = LocalDensity.current
+    // Live preview, always on this page: floats over the page (beside the pattern buttons at first), shows every
+    // change at once, and can be dragged anywhere (its place is kept); a tap switches it small / large.
+    run {
+        val conf = androidx.compose.ui.platform.LocalConfiguration.current
+        var big by remember { mutableStateOf(KeptChoice.get("vis.prevBig", "0") == "1") }
+        val pw = if (big) 170.dp else 110.dp; val ph = if (big) 280.dp else 180.dp
+        val defX = with(dens) { (conf.screenWidthDp.dp - pw - 12.dp).roundToPx() }
+        val defY = with(dens) { 150.dp.roundToPx() }
+        var off by remember { mutableStateOf(IntOffset(KeptChoice.get("vis.prevX", "$defX").toIntOrNull() ?: defX, KeptChoice.get("vis.prevY", "$defY").toIntOrNull() ?: defY)) }
+        Popup(alignment = Alignment.TopStart, offset = off, properties = androidx.compose.ui.window.PopupProperties(focusable = false)) {
+            Box(Modifier.size(pw, ph).clip(RoundedCornerShape(12.dp)).border(1.5.dp, accent(), RoundedCornerShape(12.dp))
+                .pointerInput(big) {
+                    detectDragGestures(onDragEnd = { KeptChoice.put("vis.prevX", "${off.x}"); KeptChoice.put("vis.prevY", "${off.y}") }) { ch, d ->
+                        ch.consume()
+                        val maxX = with(dens) { conf.screenWidthDp.dp.roundToPx() } - with(dens) { pw.roundToPx() }
+                        val maxY = with(dens) { conf.screenHeightDp.dp.roundToPx() } - with(dens) { ph.roundToPx() }
+                        off = IntOffset((off.x + d.x.toInt()).coerceIn(0, maxX.coerceAtLeast(0)), (off.y + d.y.toInt()).coerceIn(0, maxY.coerceAtLeast(0)))
+                    }
+                }
+                .pointerInput(Unit) { detectTapGestures(onTap = { big = !big; KeptChoice.put("vis.prevBig", if (big) "1" else "0") }) }) {
+                VisCanvas(v, Modifier.fillMaxSize(), live = true)
+                Text("⇕ drag · tap to resize", color = Color.White.copy(alpha = 0.7f), fontSize = 9.sp,
+                    modifier = Modifier.align(Alignment.BottomCenter).background(Color(0x66000000)).padding(horizontal = 4.dp, vertical = 1.dp))
+            }
+        }
+    }
     // Songs / Radio / Both / Off: the visualisation always in the album picture's place.
     run {
         val store = app.vlcinterface.App.instance.store
@@ -909,7 +935,7 @@ fun VisualisationSettings() {
                 }
             }
             FlowRow(Modifier.padding(horizontal = 16.dp, vertical = (8 * sg()).dp), horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
-                EFFECT_NAMES.forEach { (k, l) -> Pill(l, selected = v.effect == k) { set(v.copy(effect = k)); preview = k; previewAt = System.currentTimeMillis() } }
+                EFFECT_NAMES.forEach { (k, l) -> Pill(l, selected = v.effect == k) { set(v.copy(effect = k)) } }
             }
         }
         Divider()

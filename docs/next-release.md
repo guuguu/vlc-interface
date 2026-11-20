@@ -314,3 +314,9 @@
   frequencies, bar thickness, sensitivity and the amplitudes are remembered for each pattern; choosing a pattern
   brings back its own settings (the first time it starts from the ones in use). Full-screen brightness stays one
   setting for all.
+
+## Live preview on the Visualisation settings page (requested 2026-11-20 23:41)
+- A live preview is always shown on Settings → Visualisation: a small floating window (at first beside the pattern
+  buttons, on the right) showing the chosen pattern with every setting change at once, moving with the music. Drag
+  it anywhere (its place is kept); tap it to switch small / large. Replaces the 3-second preview after picking a
+  pattern.
