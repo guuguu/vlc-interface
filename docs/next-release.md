@@ -31,3 +31,6 @@
   (requested 2026-11-20 12:20).
 - No ready-made colour circles for the switch colours: each of the two settings shows only its current colour and a
   colour creation button that opens the colour editor (hue / saturation / brightness) (requested 2026-11-20 12:22).
+
+## Radio player without the VPN-NAS button (requested 2026-11-20 12:25)
+- The VPN-NAS button is no longer shown on the radio player (radio doesn't use the NAS); it stays on the audio player.
