@@ -43,3 +43,12 @@
 - Since 1.48 (Now / At noon) the weather was fetched and kept, but the clock looked it up under the old name, so the
   icon never appeared (city and time zone still showed). The clock now finds it again; changing Now / At noon
   refreshes it at once.
+
+## Small videos fill the screen; every format grows to the edges (requested 2026-11-20 20:55 / 20:56)
+- A video smaller than the screen (low resolution) is no longer shown at its own small size in the middle: it's
+  enlarged as much as possible, until it reaches the edges of the video area (full width upright, full height or
+  width sideways).
+- Whatever format is chosen with the format button, the picture grows until an edge of the screen is reached:
+  Fit and 1:1 keep the video's own shape, 16:9 and 4:3 use that shape, Fill covers the whole area (stretched),
+  Crop covers the whole area and cuts off what sticks out.
+- Changing the format no longer restarts the video for a moment; it changes at once.

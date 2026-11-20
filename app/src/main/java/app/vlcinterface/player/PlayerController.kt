@@ -1747,14 +1747,22 @@ class PlayerController(private val context: Context, private val store: Store) {
     var scale: MediaPlayer.ScaleType = MediaPlayer.ScaleType.SURFACE_BEST_FIT
         private set
 
-    fun setScale(s: MediaPlayer.ScaleType) { scale = s; mp.setVideoScale(s); refreshSurface(); main.postDelayed({ reloadVideo() }, 150) }
+    /**
+     * The player sizes the video view itself to the chosen format, as large as the area allows (small videos are
+     * enlarged until an edge is reached); libVLC then only stretches the picture over its whole view.
+     * Crop is the exception: the view keeps the whole area and libVLC zooms in.
+     */
+    private val vlcScale: MediaPlayer.ScaleType
+        get() = if (scale == MediaPlayer.ScaleType.SURFACE_FIT_SCREEN) MediaPlayer.ScaleType.SURFACE_FIT_SCREEN else MediaPlayer.ScaleType.SURFACE_FILL
+
+    fun setScale(s: MediaPlayer.ScaleType) { scale = s; mp.setVideoScale(vlcScale); refreshSurface() }
 
     /** Re-fits the picture to the current size of the video area (rotation, split screen, PiP, new video size). */
     fun refreshSurface() {
         if (attachedLayout == null) return
         main.post {
             try { mp.updateVideoSurfaces() } catch (_: Throwable) {}
-            try { mp.setVideoScale(scale) } catch (_: Throwable) {}
+            try { mp.setVideoScale(vlcScale) } catch (_: Throwable) {}
         }
     }
 

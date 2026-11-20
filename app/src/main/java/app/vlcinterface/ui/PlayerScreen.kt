@@ -201,12 +201,27 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     }
 
     val video: @Composable (Modifier) -> Unit = { m ->
-        Box(m.background(Color.Black)) {
+        androidx.compose.foundation.layout.BoxWithConstraints(m.background(Color.Black)) {
+            // The picture is made as large as the chosen format allows: it grows (small videos too) until it reaches
+            // the edges of the area — Fit / 1:1: the video's own shape; 16:9, 4:3: that shape; Fill: the whole area
+            // (stretched); Crop: the whole area, zoomed in by libVLC.
+            val fmt = scales[scaleIdx].first
+            val srcAr = if (p.videoW > 0 && p.videoH > 0) p.videoW.toFloat() / p.videoH else 0f
+            val ar = when (fmt) {
+                MediaPlayer.ScaleType.SURFACE_16_9 -> 16f / 9f
+                MediaPlayer.ScaleType.SURFACE_4_3 -> 4f / 3f
+                MediaPlayer.ScaleType.SURFACE_FILL, MediaPlayer.ScaleType.SURFACE_FIT_SCREEN -> 0f
+                else -> srcAr
+            }
+            val areaW = maxWidth; val areaH = maxHeight
+            val viewMod = if (ar <= 0f || areaW.value <= 0f || areaH.value <= 0f) Modifier.fillMaxSize()
+                else if (areaW / areaH > ar) Modifier.size(areaH * ar, areaH)
+                else Modifier.size(areaW, areaW / ar)
             AndroidView(factory = { _ ->
                     (videoView.parent as? android.view.ViewGroup)?.removeView(videoView)
                     videoView.also { player.attach(it) }
                 },
-                modifier = Modifier.fillMaxSize().onSizeChanged { player.refreshSurface() },
+                modifier = viewMod.align(Alignment.Center).onSizeChanged { player.refreshSurface() },
                 onRelease = { /* the same view is reused by the next layout; detached when the screen closes */ })
             if (!inPip) GestureLayer(
                 onTap = { controls = !controls; touchTick++ },
