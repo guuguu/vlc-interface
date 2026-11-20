@@ -13,3 +13,5 @@
 - It stays hidden until 10 s after the last action; any further action (scroll, tap, button) keeps it hidden for
   another 10 s. Then it comes back by itself.
 - Look setting "Clock hidden for" (seconds after the last action; default 10).
+- Upright only: sideways the clock stays on the left as now. With a text helper pop-up while Helpers are on
+  (requested 2026-11-20 13:28).
