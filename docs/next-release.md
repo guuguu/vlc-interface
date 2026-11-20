@@ -108,3 +108,11 @@
   disks, sound source, stations, volumes, fade-in, snoozes, ringing time, output) except the calendar choices: the
   start date and the specific dates start empty (a "specific dates" alarm gives a one-time template). The very
   first alarm uses the defaults (confirmed 2026-11-20 21:29).
+
+## Video picture quality: decoding artifacts (checked 2026-11-20 21:31)
+- Full deblocking: the engine skipped the de-blocking filter, which showed square blocks and smeared edges on
+  every video decoded in software (codecs or files the phone's hardware decoder refuses, and after a hardware
+  decoder error). Now always on.
+- Full 32-bit colour for pictures shown through the app's own display path (software decoding, Hue & sat): no
+  16-bit colour banding on skies, gradients and dark scenes.
+- Small videos are enlarged to the screen edges and the format sizing no longer reloads the video (see above).

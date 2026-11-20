@@ -292,7 +292,14 @@ class PlayerController(private val context: Context, private val store: Store) {
             "--audio-time-stretch",
             "--network-caching=1500",
             "--http-reconnect",
-            "--avcodec-skiploopfilter=1",
+            // Video picture quality:
+            // - full deblocking: skipping the loop filter (the old "1") left square blocks / smearing on every video
+            //   decoded in software (codecs or files the phone's hardware decoder refuses, and the fallback after a
+            //   hardware error); today's phones decode 1080p with it at full speed.
+            "--avcodec-skiploopfilter=0",
+            // - pictures shown in full 32-bit colour (no 16-bit colour banding on skies / dark scenes) when frames
+            //   go through the app's display path (software decoding, colour filters).
+            "--android-display-chroma=RV32",
             // A fixed Android audio session, so preamp + balance effects can be attached to it.
             "--audiotrack-session-id=$sessionId",
             // Fallback output (when our own output cannot attach): AudioTrack, so the session id above is used.
