@@ -14,3 +14,8 @@
 - Any other folder found (SD card, USB storage, unusual folders) is offered in a list and added only after approval
   (tick / confirm).
 - The Downloads folder is added too (offered for approval like the others if it's not a usual media folder).
+- Shown on the setup wizard's Library page (requested 2026-11-20 10:53).
+
+## Wizard symbols easy to see (requested 2026-11-20 10:53)
+- On every wizard page the tick symbols (☑ ✓) and the small forward arrows (▶, "Grant ▶", "Open ▶", "Add ▶") are drawn
+  bigger and in a bright light green, so they stand out from the text.
