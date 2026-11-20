@@ -16,3 +16,7 @@
 - The switch of each listed alarm (alarm list and the list under the clock) is drawn wider, horizontally elongated,
   so it's easy to hit; switching it raises a short live pop-up (about 2 s, closes by itself) confirming what was
   done, e.g. "07:30 Mon–Fri will ring" / "07:30 Mon–Fri won't ring" (requested 2026-11-20 12:17).
+
+## How long short pop-ups stay (requested 2026-11-20 12:17)
+- A Look setting "Short pop-ups stay for" sets how long every short, self-closing pop-up stays on screen (alarm
+  switch confirmations, the 3 s helper pop-ups, saved / added notes…), e.g. 1–10 s; default as today.
