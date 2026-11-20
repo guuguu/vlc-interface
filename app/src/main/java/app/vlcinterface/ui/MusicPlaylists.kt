@@ -1708,8 +1708,8 @@ fun StationSearch() {
         when {
             results == null -> Box(Modifier.fillMaxWidth().padding(10.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
             error.isNotEmpty() -> Text(error, color = C.bad, fontSize = 13.sp)
-            else -> results!!.forEachIndexed { ri, r ->
-                // Thin grey line between stations; spacing like the settings pages.
+            // Results in their own column: no extra gaps between rows, only the thin grey line.
+            else -> Column(Modifier.fillMaxWidth()) { results!!.forEachIndexed { ri, r ->
                 if (ri > 0) Divider()
               Box(Modifier.then(if (ri < reqs.size) Modifier.bringIntoViewRequester(reqs[ri]) else Modifier)
                   .background(if (ri == at) accent().copy(alpha = 0.18f) else Color.Transparent, RoundedCornerShape(8.dp))) {
@@ -1719,16 +1719,16 @@ fun StationSearch() {
                 var rDetails by remember(r.url) { mutableStateOf(false) }
                 if (rDetails) StationDetailsDialog(app.vlcinterface.data.Station(name = r.name, url = r.url, meta = r.meta, favicon = r.favicon)) { rDetails = false }
                 Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.playStation(r.name, r.url) }, onLongClick = { rMenu = true })
-                    .heightIn(min = (48 * sg()).dp).padding(vertical = (5 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
+                    .padding(vertical = (3 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(r.name, color = C.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(r.name, color = C.text, fontSize = 14.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (r.meta.isNotEmpty()) Text(r.meta, color = if (r.isFlac) C.bad.copy(alpha = 0.8f) else C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    Text(if (fav) "★" else "☆", color = accent(), fontSize = 22.sp, modifier = Modifier.clickable {
+                    Text(if (fav) "★" else "☆", color = accent(), fontSize = 20.sp, lineHeight = 20.sp, modifier = Modifier.clickable {
                         toggleFavourite(r.name, r.url, r.meta, r.favicon)
                     }.padding(horizontal = 8.dp))
                     Box {
-                        Text("⋮", color = C.text, fontSize = 20.sp, modifier = Modifier.clickable { rMenu = true }.padding(horizontal = 10.dp, vertical = 4.dp))
+                        Text("⋮", color = C.text, fontSize = 20.sp, lineHeight = 20.sp, modifier = Modifier.clickable { rMenu = true }.padding(horizontal = 10.dp))
                         SDropdownMenu(rMenu, { rMenu = false }) {
                             SMenuItem({ Text("▶  Play") }, { rMenu = false; player.playStation(r.name, r.url) })
                             SMenuItem({ Text(if (fav) "Remove from favourites" else "Add to favourites") }, { rMenu = false; toggleFavourite(r.name, r.url, r.meta, r.favicon) })
@@ -1740,7 +1740,7 @@ fun StationSearch() {
                     }
                 }
               }
-            }
+            } }
         }
     }
 }
