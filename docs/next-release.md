@@ -36,3 +36,10 @@
   brings the cover back.
 - Sideways (landscape), on both players: the left side (cover or clock, and what's shown with it) is always shown
   whole, sized to fit the screen height, never needing to scroll (requested 2026-11-20 11:28).
+
+## Find media folders, from Settings (requested 2026-11-20 11:30)
+- A new item on the main Settings page, "Find media folders": scans the phone's storage (internal, SD card, USB,
+  Downloads) for folders holding audio and video, whenever you want.
+- Results listed with tick boxes (same light-green ticks); only the ticked ones are added to the Library.
+- Folders already in the Library are shown as already added and never overwritten or duplicated.
+- The item can be moved like the other links (order chosen on the Look page).
