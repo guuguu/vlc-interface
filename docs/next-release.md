@@ -52,3 +52,5 @@
 - No pop-up just repeats the line under the setting: settings that today fall back to that line get their own
   longer text.
 - New settings: asked each time whether a helper pop-up is wanted.
+- Helper pop-ups scroll when the text is long; the OK (close) button stays always visible, in the pop-up's top bar
+  next to the title, never scrolling away (requested 2026-11-20 11:33).
