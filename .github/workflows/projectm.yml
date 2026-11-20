@@ -1,0 +1,82 @@
+name: Build libprojectM (Android arm64)
+
+# Builds the projectM visualisation library (MilkDrop presets, LGPL 2.1) for Android with the NDK and commits the
+# shared library and its headers into app/src/main/cpp/projectm/, where the app's native build picks them up.
+# Runs by hand, or when this file changes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "projectM tag to build (empty = latest release)"
+        required: false
+        default: ""
+  push:
+    branches: [ main ]
+    paths: [ '.github/workflows/projectm.yml' ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick the projectM version
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.inputs.tag }}"
+          if [ -z "$TAG" ]; then TAG="$(gh api repos/projectM-visualizer/projectm/releases/latest --jq .tag_name)"; fi
+          echo "Building projectM $TAG"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Get the sources (with submodules)
+        run: git clone --depth 1 --branch "${{ steps.tag.outputs.tag }}" --recurse-submodules --shallow-submodules https://github.com/projectM-visualizer/projectm.git pm
+
+      - name: Configure (NDK, arm64-v8a, Android 12, OpenGL ES 3, shared)
+        run: |
+          NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          echo "NDK: $NDK"
+          cmake -S pm -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-31 -DANDROID_STL=c++_static \
+            -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$PWD/install" \
+            -DENABLE_GLES=ON -DBUILD_SHARED_LIBS=ON -DENABLE_PLAYLIST=OFF \
+            -DBUILD_TESTING=OFF -DENABLE_TESTING=OFF -DENABLE_SDL_UI=OFF -DENABLE_SDL=OFF -DBUILD_DOCS=OFF
+
+      - name: Build and install
+        run: |
+          cmake --build build --config Release -j 4
+          cmake --install build
+          find install -type f | head -100
+
+      - name: Put the library and headers into the app
+        run: |
+          DEST=app/src/main/cpp/projectm
+          rm -rf "$DEST"; mkdir -p "$DEST/lib/arm64-v8a" "$DEST/include"
+          SO="$(find install -name 'libprojectM*.so' -type f | head -1)"
+          echo "Library: $SO"
+          cp "$SO" "$DEST/lib/arm64-v8a/libprojectM-4.so"
+          cp -r install/include/. "$DEST/include/"
+          cp pm/LICENSE.txt "$DEST/LICENSE-LGPL-2.1.txt" 2>/dev/null || cp pm/COPYING "$DEST/LICENSE-LGPL-2.1.txt" 2>/dev/null || true
+          echo "${{ steps.tag.outputs.tag }}" > "$DEST/VERSION"
+          ls -laR "$DEST" | head -60
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libprojectM-android-arm64-${{ steps.tag.outputs.tag }}
+          path: app/src/main/cpp/projectm
+          retention-days: 7
+
+      - name: Commit into the repository (no app build triggered)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/cpp/projectm
+          git commit -m "libprojectM ${{ steps.tag.outputs.tag }} for Android arm64 [skip ci]" || echo "nothing to commit"
+          git pull --rebase origin main
+          git push origin HEAD:main
