@@ -519,10 +519,26 @@ fun HelperDialog(title: String, text: String, extra: (@Composable () -> Unit)? =
 /** Slider of the settings pages: thin track and the players' small knob. */
 @Composable
 fun ThinSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier = Modifier, valueRange: ClosedFloatingPointRange<Float> = 0f..1f,
-               steps: Int = 0, onValueChangeFinished: (() -> Unit)? = null, enabled: Boolean = true) {
+               steps: Int = 0, onValueChangeFinished: (() -> Unit)? = null, enabled: Boolean = true, onHoldStill: (() -> Unit)? = null) {
     val a = accent()
     val colors = SliderDefaults.colors(thumbColor = a, activeTrackColor = a, inactiveTrackColor = C.line, activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent)
-    androidx.compose.material3.Slider(value, onValueChange, modifier, enabled = enabled, onValueChangeFinished = onValueChangeFinished, colors = colors, steps = steps,
+    // Helper pop-up only when the finger stays down without moving (never while the slider is being moved).
+    val hold by androidx.compose.runtime.rememberUpdatedState(onHoldStill)
+    val holdMod = if (onHoldStill == null) Modifier else Modifier.pointerInput(Unit) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+            val still = withTimeoutOrNull(650L) {
+                while (true) {
+                    val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                    val c = ev.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull false
+                    if (!c.pressed || (c.position - down.position).getDistance() > viewConfiguration.touchSlop) return@withTimeoutOrNull false
+                }
+                @Suppress("UNREACHABLE_CODE") false
+            }
+            if (still == null) hold?.invoke()   // held 650 ms, no movement
+        }
+    }
+    androidx.compose.material3.Slider(value, onValueChange, modifier.then(holdMod), enabled = enabled, onValueChangeFinished = onValueChangeFinished, colors = colors, steps = steps,
         thumb = { KnobThumb(a) },
         track = { st -> SliderDefaults.Track(sliderState = st, modifier = Modifier.height(3.dp), colors = colors, enabled = enabled,
             drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) },

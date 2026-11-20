@@ -1,3 +1,7 @@
 # Next release: requests kept
 
-Nothing open — slimmer player rows and their spacing, uniform settings text and its size slider, text that fits on the players and clock, new weather icons and the noon forecast went into 1.48.0.
+## Slider helpers only on a still hold (requested 2026-11-20 17:15)
+- Moving a slider never brings up its helper pop-up any more (Player rows spacing, alarm rows, short pop-ups,
+  clock / cover hidden for, text size…).
+- The helper (while Helpers are on) appears only when the finger stays pressed on the slider without moving
+  (about 0.65 s).

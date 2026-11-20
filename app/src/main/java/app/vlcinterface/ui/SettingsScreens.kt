@@ -129,7 +129,7 @@ fun SettingsScreen(nav: Navigator) {
                         Text("${s.settingsTextPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
                     }
                     ThinSlider(s.settingsTextPct.toFloat(), { v -> set(s.copy(settingsTextPct = (Math.round(v / 5f) * 5).coerceIn(70, 160))) }, valueRange = 70f..160f,
-                        onValueChangeFinished = { if (helpersOnM) sizeHelp = true })
+                        onHoldStill = { if (helpersOnM) sizeHelp = true })
                 }
             }
             if (sizeHelp) HelperDialog("Text size", SettingHelp.text("Text size", ""), extra = {
@@ -375,7 +375,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(alarmRowPct = 50)) }) { Text("Reset") }
                     }
                     ThinSlider(s.alarmRowPct.toFloat(), { v -> set(s.copy(alarmRowPct = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f,
-                        onValueChangeFinished = { if (helpersOn) lookHelp = "Alarm rows under the clock" })
+                        onHoldStill = { if (helpersOn) lookHelp = "Alarm rows under the clock" })
                     // Order of the player rows, songs and radio apart.
                     var rowsRadio by remember { mutableStateOf(false) }
                     Text("Order of the player rows", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp).explain("Order of the player rows"))
@@ -404,7 +404,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(playerGap = 4)) }) { Text("Reset") }
                     }
                     ThinSlider(s.playerGap.toFloat(), { v -> set(s.copy(playerGap = Math.round(v).coerceIn(0, 16))) }, valueRange = 0f..16f, steps = 15,
-                        onValueChangeFinished = { if (helpersOn) lookHelp = "Player rows spacing" })
+                        onHoldStill = { if (helpersOn) lookHelp = "Player rows spacing" })
                     // Upright player: the clock / album picture hide while scrolling (on), or not (off: clock pinned).
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                         Text("Hide the clock while scrolling", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Hide the clock while scrolling"))
@@ -421,14 +421,14 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(clockHideSec = 10)) }) { Text("Reset") }
                     }
                     ThinSlider(s.clockHideSec.toFloat(), { v -> set(s.copy(clockHideSec = Math.round(v).coerceIn(3, 60))) }, valueRange = 3f..60f,
-                        onValueChangeFinished = { if (helpersOn) lookHelp = "Clock hidden for" })
+                        onHoldStill = { if (helpersOn) lookHelp = "Clock hidden for" })
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Cover hidden for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Cover hidden for"))
                         Text("${s.coverHideSec} s", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(coverHideSec = 10)) }) { Text("Reset") }
                     }
                     ThinSlider(s.coverHideSec.toFloat(), { v -> set(s.copy(coverHideSec = Math.round(v).coerceIn(3, 60))) }, valueRange = 3f..60f,
-                        onValueChangeFinished = { if (helpersOn) lookHelp = "Cover hidden for" })
+                        onHoldStill = { if (helpersOn) lookHelp = "Cover hidden for" })
                     // Short, self-closing pop-ups: how long they stay.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Short pop-ups stay for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Short pop-ups stay for"))
@@ -436,7 +436,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(shortPopupSec = 3)) }) { Text("Reset") }
                     }
                     ThinSlider(s.shortPopupSec.toFloat(), { v -> set(s.copy(shortPopupSec = Math.round(v).coerceIn(1, 10))) }, valueRange = 1f..10f, steps = 8,
-                        onValueChangeFinished = { if (helpersOn) lookHelp = "Short pop-ups stay for" })
+                        onHoldStill = { if (helpersOn) lookHelp = "Short pop-ups stay for" })
                     // Switch colours: only the current colour and a colour creation button for each.
                     var swEdit by remember { mutableStateOf("") }
                     val accArgb = accent().toArgb().toLong() and 0xFFFFFFFFL
