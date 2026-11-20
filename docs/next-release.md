@@ -300,3 +300,6 @@
   a vertical middle line, bass at the top (row height = bar thickness). Lava flow at a finer grid: starts at 1.5×
   (135 × 240) and adjusts itself to the phone up to 3× (270 × 480), smoothly enlarged; the lava has no history, so a
   grid change never restarts it.
+- Lava flow + spectrum (23:34): the bars use the lava's colour range — like a blob: the edge colour (first) at the
+  tips, hotter toward the middle line, reaching the core colour (last) when the band is loud; quiet rows stay in
+  the edge colours; peak marks in the edge colour.

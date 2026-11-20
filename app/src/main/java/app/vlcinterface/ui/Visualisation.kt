@@ -649,14 +649,23 @@ private fun DrawScope.drawSpectrumV(m: VisMotion, a: Float, cols: List<Color>, b
         val j = f.toInt().coerceIn(0, cols.size - 2)
         return lerpC(cols[j], cols[j + 1], f - j).copy(alpha = a)
     }
+    // Colours on the lava's range: like a blob, the edge colour (first) at the tips and hotter toward the middle —
+    // up to the core colour (last) when the band is loud; quiet rows stay in the edge colours.
+    fun heat(f: Float): Color {
+        if (cols.size < 2) return (cols.firstOrNull() ?: Color.White).copy(alpha = a)
+        val p = f.coerceIn(0f, 1f) * (cols.size - 1)
+        val j = p.toInt().coerceIn(0, cols.size - 2)
+        return lerpC(cols[j], cols[j + 1], p - j).copy(alpha = a)
+    }
     val mid = size.width / 2; val full = mid * 0.92f
     for (i in 0 until bars) {
         val y = i * (bh + gap)
-        val w = full * level(m.spec, i).coerceAtLeast(0.01f); val pw = full * level(m.specPeak, i)
-        val c = colAt(i)
-        drawRect(c, Offset(mid - w, y), androidx.compose.ui.geometry.Size(w * 2, bh))
-        drawRect(c.copy(alpha = c.alpha * 0.9f), Offset(mid - pw - 3f, y), androidx.compose.ui.geometry.Size(3f, bh))
-        drawRect(c.copy(alpha = c.alpha * 0.9f), Offset(mid + pw, y), androidx.compose.ui.geometry.Size(3f, bh))
+        val lv = level(m.spec, i)
+        val w = full * lv.coerceAtLeast(0.01f); val pw = full * level(m.specPeak, i)
+        val tip = heat(0f); val core = heat(lv)
+        drawRect(Brush.horizontalGradient(listOf(tip, core, tip), startX = mid - w, endX = mid + w), Offset(mid - w, y), androidx.compose.ui.geometry.Size(w * 2, bh))
+        drawRect(tip, Offset(mid - pw - 3f, y), androidx.compose.ui.geometry.Size(3f, bh))
+        drawRect(tip, Offset(mid + pw, y), androidx.compose.ui.geometry.Size(3f, bh))
     }
 }
 
