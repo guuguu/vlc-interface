@@ -15,3 +15,10 @@
     a "Both" (one switch / one time for clock and picture).
   - Switch colours: On / Off / Both (same colour for both positions — the knob's side still shows the state).
 - From now on, any new setting made for two items gets the same "Both" choice.
+
+## Switch between the players from their header (requested 2026-11-20 17:20)
+- Each player's header gets two small buttons for the other two players:
+  - song player → 📻 Radio and 🎬 Video; radio player → ♪ Songs and 🎬 Video; video player → ♪ Songs and 📻 Radio.
+- A tap opens that player with what it last played, resuming where it was (songs: last queue and position; radio:
+  last station; video: last video and position); what's playing now stops / pauses.
+- Nothing played there yet: it opens the matching list (Library songs, radio favourites, videos) instead.
