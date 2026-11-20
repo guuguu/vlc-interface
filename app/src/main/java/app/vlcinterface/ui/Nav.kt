@@ -43,6 +43,7 @@ sealed interface Screen {
     data class SettingsGroup(val id: String) : Screen
     data class Wizard(val page: Int = 0) : Screen
     data class Help(val chapter: String = "") : Screen
+    data object MediaFolders : Screen
     data object RgScan : Screen
     data object Backup : Screen
     data object Playlists : Screen
@@ -151,6 +152,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.SettingsGroup -> SettingsGroupScreen(nav, top.id)
                     is Screen.Wizard -> WizardScreen(nav, top.page)
                     is Screen.Help -> HelpScreen(nav, top.chapter)
+                    is Screen.MediaFolders -> MediaFoldersScreen(nav)
                     is Screen.RgScan -> RgScanScreen(nav)
                     is Screen.Backup -> BackupScreen(nav)
                     is Screen.Playlists -> PlaylistsScreen(nav, openOutput)

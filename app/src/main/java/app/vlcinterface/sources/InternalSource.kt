@@ -21,7 +21,40 @@ object InternalSource {
         MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL),
     )
 
-    suspend fun folders(ctx: Context): List<LocalFolder> = withContext(Dispatchers.IO) {
+    /** Folders on internal storage that are added to the Library without asking. */
+    val USUAL = setOf("music", "movies", "podcasts", "audiobooks", "recordings", "dcim")
+
+    /** "volume:Top/" of a folder: the place offered / approved as a whole. */
+    fun rootKey(volume: String, relativePath: String) = "$volume:" + relativePath.substringBefore('/') + "/"
+
+    fun isUsual(key: String) = key.substringBefore(':') == MediaStore.VOLUME_EXTERNAL_PRIMARY &&
+        key.substringAfter(':').trimEnd('/').lowercase() in USUAL
+
+    /** In the Library: always, unless media folders were chosen (first install / Find media folders) and this one wasn't. */
+    fun approved(key: String): Boolean {
+        val s = app.vlcinterface.App.instance.store.current.settings
+        return !s.phoneFoldersSet || isUsual(key) || key in s.phoneFolders
+    }
+
+    class MediaRoot(val key: String, val label: String, val songs: Int, val videos: Int) {
+        val usual get() = isUsual(key)
+    }
+
+    /** Every place on the phone holding songs or videos (approved or not), grouped by top folder; Downloads always listed. */
+    suspend fun roots(ctx: Context): List<MediaRoot> {
+        val all = folders(ctx, all = true)
+        val by = all.groupBy { rootKey(it.volume, it.relativePath) }
+        val list = by.map { (k, fs) ->
+            val vol = k.substringBefore(':'); val top = k.substringAfter(':').trimEnd('/')
+            val where = if (vol == MediaStore.VOLUME_EXTERNAL_PRIMARY) "Internal" else if (vol.contains("usb", true)) "USB" else "SD card"
+            MediaRoot(k, "$where · $top", fs.sumOf { it.songs }, fs.sumOf { it.videos })
+        }.toMutableList()
+        val dl = MediaStore.VOLUME_EXTERNAL_PRIMARY + ":" + Environment.DIRECTORY_DOWNLOADS + "/"
+        if (list.none { it.key.equals(dl, true) }) list += MediaRoot(dl, "Internal · " + Environment.DIRECTORY_DOWNLOADS, 0, 0)
+        return list.sortedWith(compareBy({ !it.usual }, { it.label.lowercase() }))
+    }
+
+    suspend fun folders(ctx: Context, all: Boolean = false): List<LocalFolder> = withContext(Dispatchers.IO) {
         val map = LinkedHashMap<String, LocalFolder>()
         for ((ci, coll) in collections.withIndex()) {
             val proj = arrayOf(MediaStore.MediaColumns.RELATIVE_PATH, MediaStore.MediaColumns.VOLUME_NAME)
@@ -33,6 +66,7 @@ object InternalSource {
                         val vol = c.getString(1) ?: MediaStore.VOLUME_EXTERNAL_PRIMARY
                         val id = "$vol:$rel"
                         if (Ignore.blacklisted("local:$id")) continue          // folder taken out of the lists
+                        if (!all && !approved(rootKey(vol, rel))) continue     // place not added to the Library
                         val prev = map[id]
                         val name = rel.trimEnd('/').substringAfterLast('/').ifEmpty { rel } +
                             if (vol != MediaStore.VOLUME_EXTERNAL_PRIMARY) " (SD card)" else ""

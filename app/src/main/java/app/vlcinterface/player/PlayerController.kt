@@ -142,6 +142,9 @@ class PlayerController(private val context: Context, private val store: Store) {
     private var offsetsApplied = false
     private var currentPfd: android.os.ParcelFileDescriptor? = null
     private var triedBridge = false
+    /** Phone file: retried once the other way (path ↔ file handle) after libVLC couldn't open it. */
+    private var triedOtherWay = false
+    private var phoneByPath = true
     private var dp: DynamicsProcessing? = null
     private var eq: MediaPlayer.Equalizer? = null
     /** The queue in its original order while it is shown/played in random order (null = queue is in order). */
@@ -1443,6 +1446,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (wanted != styleInUse || rgSignature() != rgInUse) recreateEngine(wanted)
         setCredentials(item.user, item.password)
         triedBridge = false
+        triedOtherWay = false; phoneByPath = true
         val oldPfd = currentPfd
         currentPfd = null
         // No Wi-Fi and mobile data not allowed yet: what needs internet waits for "Use NAS" on the player.
@@ -1566,12 +1570,33 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
+    /** A phone file's real path, when Android gives one and it can be read; null otherwise. */
+    private fun phonePath(item: PlayItem): String? = try {
+        app.vlcinterface.sources.PhysicalPath.of(context, item).takeIf { it.startsWith("/") && java.io.File(it).canRead() }
+    } catch (_: Exception) { null }
+
+    /** "SD card not available" when the file is on a removable card that isn't mounted. */
+    private fun cardMissing(item: PlayItem): Boolean {
+        val p = try { app.vlcinterface.sources.PhysicalPath.of(context, item) } catch (_: Exception) { return false }
+        val m = Regex("^/storage/([0-9A-Fa-f]{4}-[0-9A-Fa-f]{4})/").find(p) ?: return false
+        val sm = context.getSystemService(android.os.storage.StorageManager::class.java)
+        val mounted = try { sm.storageVolumes.any { it.uuid.equals(m.groupValues[1], true) && it.state == android.os.Environment.MEDIA_MOUNTED } } catch (_: Exception) { true }
+        return !mounted
+    }
+
     private fun makeMedia(item: PlayItem, s: PlayerState, useBridge: Boolean): Media {
         val media = when {
+            // Phone / SD card files: by their real path (like VLC's own app); the file handle only as the fallback.
             item.uri.startsWith("content://") -> {
-                val pfd = context.contentResolver.openFileDescriptor(Uri.parse(item.uri), "r")
-                currentPfd = pfd
-                if (pfd != null) Media(libVlc, pfd.fileDescriptor) else Media(libVlc, Uri.parse(item.uri))
+                if (cardMissing(item)) throw java.io.IOException("SD card not available")
+                val path = if (phoneByPath) phonePath(item) else null
+                if (path != null) Media(libVlc, path) else {
+                    val pfd = try { context.contentResolver.openFileDescriptor(Uri.parse(item.uri), "r") } catch (e: SecurityException) {
+                        throw java.io.IOException("No access to this folder any more (SD card changed?): pick the folder again")
+                    }
+                    currentPfd = pfd
+                    if (pfd != null) Media(libVlc, pfd.fileDescriptor) else Media(libVlc, Uri.parse(item.uri))
+                }
             }
             useBridge && item.uri.startsWith("smb://") ->
                 Media(libVlc, Uri.parse(SmbBridge.urlFor(item.uri, item.smbVersion.ifEmpty { "SMB1" }, item.user, item.password, item.domain)))
@@ -1955,7 +1980,29 @@ class PlayerController(private val context: Context, private val store: Store) {
                         mp.setMedia(m); m.release(); mp.play()
                         main.postDelayed({ stopping = false }, 500)
                     }
+                } else if (item != null && item.uri.startsWith("content://") && !triedOtherWay) {
+                    // Phone / SD card file libVLC couldn't open: once more the other way (path ↔ file handle).
+                    triedOtherWay = true
+                    val way = if (phoneByPath) "its path" else "a file handle"
+                    phoneByPath = !phoneByPath
+                    ServerLog.log("phone", "play", "FILE", "", false, "libVLC could not open ${item.title} by $way, retrying the other way",
+                        app.vlcinterface.sources.PhysicalPath.of(context, item))
+                    main.post {
+                        stopping = true
+                        val old = currentPfd; currentPfd = null
+                        try {
+                            val m = makeMedia(item, _state.value, useBridge = false)
+                            mp.setMedia(m); m.release(); mp.play()
+                        } catch (e: Exception) {
+                            _state.value = _state.value.copy(isPlaying = false, error = "Can't open ${item.title}: ${e.message ?: e.javaClass.simpleName}")
+                        }
+                        try { old?.close() } catch (_: Exception) {}
+                        main.postDelayed({ stopping = false }, 500)
+                    }
                 } else {
+                    if (item != null && item.uri.startsWith("content://")) ServerLog.log("phone", "play", "FILE", "", false,
+                        "libVLC could not open ${item.title} (by path and by file handle)" + if (cardMissing(item)) ": SD card not available" else "",
+                        app.vlcinterface.sources.PhysicalPath.of(context, item))
                     if (item != null && !item.uri.startsWith("content://")) ServerLog.log(item.uri, "play", item.uri.substringBefore("://").uppercase(), item.user, false, "Could not play ${item.title}")
                     _state.value = s.copy(isPlaying = false, error = "Could not play this item")
                     // A song that fails (can't open, or breaks near its end) doesn't halt the queue: go on with the next one.

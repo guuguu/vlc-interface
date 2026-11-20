@@ -38,6 +38,13 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
         // First start (or never finished): the setup wizard opens over the Library.
         if (savedInstanceState == null && !app.vlcinterface.App.instance.store.current.settings.wizardDone) nav.go(app.vlcinterface.ui.Screen.Wizard())
+        // First install: only the usual media folders join the Library by themselves; others wait for approval (wizard → Library).
+        if (savedInstanceState == null) try {
+            val pi = packageManager.getPackageInfo(packageName, 0)
+            val st = app.vlcinterface.App.instance.store
+            if (pi.firstInstallTime == pi.lastUpdateTime && !st.current.settings.phoneFoldersSet && !st.current.settings.wizardDone)
+                st.update { it.copy(settings = it.settings.copy(phoneFoldersSet = true)) }
+        } catch (_: Exception) {}
         setContent {
             androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize()) {
                 app.vlcinterface.ui.ExplainHost { AppRoot(nav) { finish() } }

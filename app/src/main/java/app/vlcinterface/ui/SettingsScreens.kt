@@ -57,13 +57,13 @@ import java.util.Locale
 /** Settings groups: id → name (the main page's links; their order is chosen in Look). */
 val SETTINGS_GROUPS: List<Pair<String, String>> = listOf("audio" to "Audio", "playback" to "Playback & gestures", "video" to "Video",
     "radio" to "Radio", "look" to "Look", "library" to "Library & files", "network" to "Network & NAS", "vpn" to "VPN",
-    "alarm" to "Alarm clock", "vis" to "Visualisation", "backup" to "Export / import", "logs" to "Logs")
+    "alarm" to "Alarm clock", "vis" to "Visualisation", "backup" to "Export / import", "logs" to "Logs", "folders" to "Find media folders")
 
 private val GROUP_HINTS = mapOf("audio" to "Start volume, preamp, ReplayGain, sound engine", "playback" to "Gestures, resume, background playback",
     "video" to "Subtitles, rotation", "radio" to "Saving songs, radio buffer, free space", "look" to "Colours, sizes, menus, order of these links",
     "library" to "Scanning, album pictures, deleting files", "network" to "SMB1, Spotify links", "vpn" to "Home NAS through ZeroTier / Tailscale",
     "alarm" to "Alarms, ringing, wake check, clock aspect", "vis" to "Patterns, colours, frequencies", "backup" to "Your whole setup in one file",
-    "logs" to "Errors, servers, indexing, crashes, caches")
+    "logs" to "Errors, servers, indexing, crashes, caches", "folders" to "Search the phone, SD card and Downloads for music and videos")
 
 /** The main Settings page's links, in the chosen order (new groups added at the end). */
 fun orderedGroups(order: List<String>): List<Pair<String, String>> {
@@ -88,6 +88,7 @@ fun SettingsLink(name: String, hint: String, onClick: () -> Unit) {
 fun openSettingsGroup(nav: Navigator, id: String) = when (id) {
     "alarm" -> nav.go(Screen.AlarmSettings)
     "backup" -> nav.go(Screen.Backup)
+    "folders" -> nav.go(Screen.MediaFolders)
     else -> nav.go(Screen.SettingsGroup(id))
 }
 
@@ -320,6 +321,19 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     OpacityPreview(s.popupOpacity / 100f, "Pop-up window", 15)
                     ThinSlider(s.popupOpacity.toFloat(), { v -> set(s.copy(popupOpacity = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f)
+                    // Floating play / pause on the players (shown when their buttons are scrolled away).
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                        Text("Floating button size", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Floating button size"))
+                        Text("${s.floatBtnSize} dp", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(floatBtnSize = 64)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.floatBtnSize.toFloat(), { v -> set(s.copy(floatBtnSize = (Math.round(v / 4f) * 4).coerceIn(40, 112))) }, valueRange = 40f..112f)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Floating button transparency", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Floating button transparency"))
+                        Text("${100 - s.floatBtnAlpha}%", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(floatBtnAlpha = 85)) }) { Text("Reset") }
+                    }
+                    ThinSlider((100 - s.floatBtnAlpha).toFloat(), { v -> set(s.copy(floatBtnAlpha = 100 - (Math.round(v / 5f) * 5).coerceIn(0, 70))) }, valueRange = 0f..70f)
                     // Players: faint shadow on buttons and slider knobs (knobs ringed in grey).
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { set(s.copy(controlShadow = !s.controlShadow)) },
                         onLongClick = { explainNow("Shadow on player buttons", "") })) {
@@ -327,7 +341,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                             Text("Shadow on player buttons", color = C.text, fontSize = 15.sp)
                             Text("Audio and radio players: faint grey shadow on buttons and slider knobs, knobs ringed in grey", color = C.muted, fontSize = 12.sp)
                         }
-                        androidx.compose.material3.Switch(s.controlShadow, { set(s.copy(controlShadow = it)) })
+                        AppSwitch(s.controlShadow, { set(s.copy(controlShadow = it)) })
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Menu opacity (menus and search results, own setting)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Menu opacity"))
@@ -792,7 +806,7 @@ fun DeviceSoundList() {
                 Text("Auto loudness", color = C.text, fontSize = 15.sp)
                 Text("Full Loudness up to each device's start %, flattening step by step above it, none at full volume", color = C.muted, fontSize = 12.sp)
             }
-            androidx.compose.material3.Switch(st.settings.autoLoud, { on ->
+            AppSwitch(st.settings.autoLoud, { on ->
                 store.update { it.copy(settings = it.settings.copy(autoLoud = on)) }; App.instance.player.applySoundChain()
             })
         }

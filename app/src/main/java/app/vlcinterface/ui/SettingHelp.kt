@@ -1,85 +1,203 @@
 package app.vlcinterface.ui
 
 /**
- * Explanations shown on a long-press of any setting. A setting without its own text here is explained by its short
- * description (the grey line under it), so every item gives an answer.
+ * Explanations shown on a long-press of any setting (and by the Helpers): always deeper than the grey line under the
+ * setting — what it does, what changes, when to use it, what it costs, and its default.
  */
 object SettingHelp {
     private val texts: Map<String, String> = mapOf(
-        // Playback & gestures
-        "Volume swipe" to "In the video player, sliding up or down on the right half of the screen changes the volume.",
-        "Brightness swipe" to "In the video player, sliding up or down on the left half of the screen changes the screen brightness (only for the player).",
-        "Double-tap seek" to "In the video player, a double tap on the left or right edge jumps back or forward by this many seconds. Tap the value to change it.",
-        "Hold for 2× speed" to "Keep a finger on the video: it plays twice as fast; let go and it goes back to normal speed.",
-        "Resume where I left off" to "A video starts again where you stopped it last time (per file). Songs always start from the beginning.",
-        "Keep audio in background" to "The sound keeps playing when you leave the app, with controls in the notification.",
-        "Background playback" to "Android may stop an app in the background to save battery. 'Unrestricted' lets playlists go on while you use other apps.",
-        // Audio
-        "Loudness, Treble and Preamp sliders" to "Shows the Loudness, Treble and Preamp sliders on the audio player.",
-        "Prevent clipping" to "Lowers the gain just enough that loud songs never distort (uses the ReplayGain peak values).",
-        "Bluetooth quality mode" to "On a Bluetooth output: the app's own volume stays at 100 % and the device volume is used instead, and the sound is sent at the Bluetooth link's rate, so less conversion happens on the way.",
-        "Remember last output per device" to "When a device connects again (headphones, Bluetooth speaker), the app picks it again as the sound output.",
-        "Pause when output disconnects" to "Headphones unplugged or Bluetooth lost: playback pauses, so the phone's speaker never starts playing out loud.",
-        // Radio & saved songs
-        "Keep radio ready to save" to "To save a song from the radio, the app records the playing station in the background (a second connection, so double data). Wi-Fi only, always, or off.",
-        "Format" to "How saved radio songs are stored: as the station sends them, or re-encoded as MP3 at the best variable quality (LAME V0).",
-        "Free space limit" to "When the phone's free space is low, radio recordings may only use part of it. Below 2 GB free nothing is recorded at all.",
-        "Share of free space" to "How much of the free space recordings may use when the limit above applies.",
-        "Saved songs" to "The songs saved from the radio: play or delete them.",
-        "Saved songs log" to "Each saved song, or the reason it couldn't be saved.",
-        "MP3 encoder" to "The MP3 encoder bundled in the app (LAME), used for 'MP3 V0'.",
-        "Radio buffer" to "The last minutes of the station are kept so a song that already started can still be saved; a lost connection that comes back within this time keeps the recording.",
-        // Network & VPN
-        "Allow SMB1" to "Lets the app reach very old NAS shares (SMB1). Fine on your home network; avoid it over the internet, it isn't encrypted.",
-        "Spotify links" to "Song links can include Spotify when you add a free Spotify developer app's Client ID and Secret (no Spotify login, the keys stay on the phone).",
-        "Status" to "Whether a VPN is running on the phone right now.",
-        "Home NAS through the VPN" to "Away from home with the VPN on, your home servers are reached through the VPN; at home, directly.",
-        "Ask to start the VPN" to "Away from home with the VPN off, the app offers to start it when you open a home server.",
-        "VPN app" to "Which VPN app is opened by 'Start the VPN' (its saved login is used): automatic, ZeroTier, Tailscale or Android's settings.",
-        "Home servers on the VPN" to "Your NAS addresses on the VPN, found by themselves when the VPN starts. 'Search for NAS now' looks again.",
-        "VPN log" to "VPN on and off, servers found, switches between home network and VPN.",
-        // Logs
-        "All errors" to "Every failure from every log, newest first.",
-        "Deleted files" to "Every file deleted from Settings, with its full path.",
-        "Network" to "One log page per server (home network and internet), with the reason of every failure.",
-        "Indexing" to "Folders indexed for search: songs found, or why not.",
-        "ReplayGain" to "Every ReplayGain scan, and each file that had a problem.",
-        "Crashes" to "App crashes, and why the app ended last time (as Android reports it).",
-        "Sound engine" to "The app's own sound output: switches and problems.",
-        "Radio pictures" to "For each song a station announced: the picture found, or what was searched.",
-        "Player" to "Songs skipped because they couldn't be found or reached.",
-        "Clear all caches" to "Deletes the radio buffer, songs being saved, radio pictures and temporary files. Settings, playlists, logs and saved songs stay.",
-        // Video
-        "Auto-download missing subtitles" to "When a film has no subtitles in your languages, the app downloads them from OpenSubtitles (needs your free account and API key).",
-        "Preferred languages" to "Subtitle languages in order of preference, e.g. en, es.",
-        "Auto-rotate" to "On: the app turns with the phone. Off: it stays upright (videos still turn with the rotate button).",
-        // Library
-        "Automatic scanning" to "The library is scanned by itself. Off: only when you tap Rescan.",
-        "Watch folders for changes" to "New or removed files in your folders are noticed by themselves. Off: no watching in the background.",
-        "Album pictures from the internet" to "Albums without a picture get one from MusicBrainz / Cover Art Archive (or an artist photo), saved in the album folder or the pictures folder.",
-        "Pictures folder" to "Where pictures go for songs that aren't in a one-album folder.",
-        "Phone music folders" to "Lets the app save album pictures next to the songs on the phone (allowed once, on the Music folder for example).",
-        "Removed from lists" to "Files you took out of the lists with 'Remove from this list' (never deleted): show them again.",
-        // Look
-        "Scroll bar width" to "Width of the bar on the right of long lists; drag it to scroll fast.",
-        "Button size" to "Size of every symbol button and its tap area, everywhere in the app.",
-        "Songs list horizontal autoscroll" to "Speed at which long song rows glide to their end and back in Library → Songs. 0 = they stay still.",
-        "Up next songs on the player" to "How many of the next songs the player shows under the controls.",
-        "Pop-up opacity" to "How see-through pop-up windows are.",
-        "Shadow on player buttons" to "A faint grey shadow on the players' buttons and slider knobs.",
-        "Menu opacity" to "How see-through menus and search results are (separate from pop-ups).",
-        "Menu row spacing" to "How close the rows of menus and search results are.",
+        // ---------------------------------------------------------------- Playback & gestures
+        "Volume swipe" to "In the video player, slide a finger up or down on the right half of the screen to change the volume, without reaching for the phone's buttons.\n\n" +
+            "On: the right half reacts to vertical slides; a short bar shows the level. Off: the right half ignores slides, useful if you often touch it by accident while holding the phone.\n\n" +
+            "It changes the media volume, the same one as the volume keys. Default: on.",
+        "Brightness swipe" to "In the video player, slide up or down on the left half of the screen to change the screen brightness while the video plays.\n\n" +
+            "The change is only for the player: leaving it brings back the phone's own brightness. Off: the left half ignores slides.\n\n" +
+            "Lower brightness also saves battery during long videos. Default: on.",
+        "Double-tap seek" to "In the video player, a double tap near the left or right edge jumps back or forward by the number of seconds shown.\n\n" +
+            "Tap the value to choose the jump (for example 10 s for films, 5 s for clips). Several double taps in a row add up.\n\n" +
+            "The middle of the screen is never used for seeking, so a single tap still shows the controls. Default: 10 s.",
+        "Hold for 2× speed" to "Keep a finger pressed on the video: it plays twice as fast, with the sound sped up; lift the finger and it goes back to normal speed.\n\n" +
+            "Handy to get through slow scenes or speeches without losing your place. Off: a long press does nothing.\n\n" +
+            "The speed chosen in the player's menu is not changed. Default: on.",
+        "Resume where I left off" to "A video opened again starts where you stopped it last time; the position is kept per file, on the phone, together with its audio and subtitle choices.\n\n" +
+            "Songs always start from their beginning (an album or playlist keeps its own place instead). Off: every video starts from 0.\n\n" +
+            "Positions can be exported with the setup (Resume positions). Default: on.",
+        "Keep audio in background" to "Music, radio and a video's sound go on when you leave the app or lock the screen, with Play / Pause / Next in the notification and on the lock screen.\n\n" +
+            "Off: leaving the app pauses playback. Background playback uses a little battery for the sound and, for network songs, the Wi-Fi or mobile data that streams them.\n\n" +
+            "Default: on.",
+        "Background playback" to "Android may stop apps in the background to save battery, which can cut a playlist, a radio recording or an alarm preparation while you use other apps or the screen is off.\n\n" +
+            "'Unrestricted' tells Android to leave the app running. The app only works in the background while it plays, records or prepares an alarm, so the cost is small.\n\n" +
+            "Tap it to open Android's battery page for the app.",
+        // ---------------------------------------------------------------- Audio
+        "Loudness, Treble and Preamp sliders" to "Shows three sliders on the audio and radio players: Loudness (more bass and treble at low volume, like a hi-fi's loudness button), Treble, and Preamp (overall gain before the volume).\n\n" +
+            "Off: the sliders are hidden, but their last values still apply. Loudness fades away by itself as the volume goes up, so loud listening is never boomy.\n\n" +
+            "Each output (speaker, headphones, Bluetooth) keeps its own values. Default: shown.",
+        "Prevent clipping" to "Loud songs boosted by Preamp or ReplayGain can go beyond the maximum and distort ('clip'). This lowers the gain just enough that the song's loudest peak stays clean.\n\n" +
+            "It uses the peak values stored in the song's tags (written by ReplayGain scans). Songs without peak tags play as they are.\n\n" +
+            "No battery or data cost. Default: on.",
+        "Bluetooth quality mode" to "On a Bluetooth output, the app keeps its own volume at 100 % and uses the device's volume instead, and sends the sound at the Bluetooth link's sample rate.\n\n" +
+            "That avoids one volume scaling and one rate conversion, so the sound reaches the codec (SBC, AAC, LDAC…) as clean as possible. The volume keys then move the device volume.\n\n" +
+            "Only for Bluetooth outputs; speaker and wired headphones are unchanged. Default: off.",
+        "Remember last output per device" to "When headphones or a Bluetooth speaker connect again, the app chooses them as the sound output by itself, with their own preamp, balance and loudness.\n\n" +
+            "Off: the app stays on the output you chose last, whatever connects.\n\nDefault: on.",
+        "Pause when output disconnects" to "When headphones are unplugged or a Bluetooth device goes away, playback pauses instead of going on through the phone's speaker.\n\n" +
+            "Off: the sound moves to the phone's speaker and keeps playing — fine at home, embarrassing on a bus.\n\nDefault: on.",
+        // ---------------------------------------------------------------- Radio & saved songs
+        "Keep radio ready to save" to "To save a song you hear on the radio — even one that already started — the app keeps a recording of the playing station in the background.\n\n" +
+            "That is a second connection to the station, so twice the data. 'Wi-Fi only' records on Wi-Fi, 'Always' also on mobile data, 'Off' never (then songs can't be saved).\n\n" +
+            "Recordings live in the radio buffer and are deleted as time passes. Default: Wi-Fi only.",
+        "Saving root" to "The folder where saved radio songs go. Inside it, 'raw' holds songs as the station sends them, 'mp3' the re-encoded copies.\n\n" +
+            "By default it is the root of your phone music library, so saved songs also appear in the Library. Tap to choose another folder (for example on the SD card).\n\n" +
+            "Space used depends on the format and how many songs you save.",
+        "Use the library root again" to "Goes back to saving radio songs in the root of your phone music library, forgetting the folder you chose.\n\n" +
+            "Songs already saved stay where they are.",
+        "Format" to "How saved radio songs are stored. 'Original' keeps the station's own stream (FLAC, AAC, OGG, MP3…) untouched — best quality, any size. 'MP3' re-encodes with LAME at V0 (the best variable quality).\n\n" +
+            "MP3 plays everywhere and is smaller than FLAC, but re-encoding a lossy stream loses a little quality.\n\nDefault: MP3.",
+        "Free space limit" to "Protects the phone from filling up: when free space is low, radio recordings may only use the share chosen below. Under 2 GB free nothing is recorded at all.\n\n" +
+            "Off: recordings use what they need (the buffer length still limits them).",
+        "Share of free space" to "When the free-space limit applies, the part of the remaining free space that radio recordings (kept minutes and songs being saved) may use.\n\n" +
+            "A smaller share keeps more room for photos and apps; a bigger one allows longer buffers.",
+        "Saved songs" to "The list of songs saved from the radio: play them, see where they are, or delete them (from the phone too).\n\n" +
+            "They're also in the Library under their folder.",
+        "Saved songs log" to "Each save attempt: the song saved and where, or why it couldn't be saved (not enough buffer, no space, station changed…).\n\n" +
+            "Useful when a save seems to be missing.",
+        "MP3 encoder" to "The LAME MP3 encoder bundled with the app, used when the format is MP3. It runs on the phone, no internet needed.\n\n" +
+            "LAME is free software (LGPL), included unchanged.",
+        "Radio buffer" to "How many minutes of the playing station are kept. A song that started up to this long ago can still be saved whole, and a connection lost and back within this time keeps the recording going.\n\n" +
+            "Longer buffers use more phone storage (about 1 MB per minute for MP3 stations, much more for FLAC). The buffer is deleted when you stop the radio or clear caches.",
+        // ---------------------------------------------------------------- Network & VPN
+        "Allow SMB1" to "SMB1 is the oldest version of Windows file sharing; some old NAS and routers only speak it. On: the app can reach them, through its own SMB bridge when libVLC can't.\n\n" +
+            "SMB1 isn't encrypted and has known weaknesses: fine on your home network, avoid it over the internet. Off: SMB1-only servers can't be opened.\n\nDefault: off.",
+        "Spotify links" to "Song links (the ⋯ menu of a song) can include Spotify when you add the Client ID and Secret of a free Spotify developer app.\n\n" +
+            "No Spotify login is needed and the keys stay on the phone (exported only with passwords). Without keys, links to other services still work.",
+        "Status" to "Whether a VPN is running on the phone right now, and which app runs it. It updates by itself.",
+        "Home NAS through the VPN" to "Away from home with the VPN on, your home servers are reached through the VPN; at home they're reached directly, which is faster.\n\n" +
+            "The app learns each server's VPN address the first time it is seen through the VPN. Off: home servers are only used at home.\n\n" +
+            "Data: songs stream through the VPN over mobile data when away. Default: on.",
+        "Ask to start the VPN" to "Away from home with the VPN off, when you open a home server, the app offers to start the VPN (it opens the VPN app chosen below, with its saved login).\n\n" +
+            "'Away from home' means the phone isn't on the network of any address stored for a home server. Off: no question; home servers just aren't reachable away.",
+        "VPN app" to "Which app 'Start the VPN' opens: automatic (the one installed), ZeroTier, Tailscale, or Android's VPN settings.\n\n" +
+            "The VPN app keeps its own login; the app never sees it.",
+        "Home servers on the VPN" to "The VPN addresses of your NAS, found by themselves when the VPN starts. 'Search for NAS now' looks again, for example after you add a server or change the VPN.\n\n" +
+            "If a server isn't found, its home address is tried through the VPN too.",
+        "VPN log" to "Everything the VPN link did: VPN on and off, servers found, switches between home network and VPN, and failures with their reason.",
+        // ---------------------------------------------------------------- Logs
+        "All errors" to "Every failure from every log in one list, newest first, with the page it came from. Start here when something didn't work.",
+        "Deleted files" to "Every file deleted from the app, with its full path and when — to check what went away, or find a file to restore from a backup.",
+        "Network" to "One log page per server (home network and internet): connections, listings, plays, and the reason of every failure (password, unreachable, protocol…).",
+        "Indexing" to "Home-network folders indexed for search: how many songs were found in each, or why a folder couldn't be read.",
+        "ReplayGain" to "Every ReplayGain scan (loudness measurement): files done, and each file that had a problem, with the reason.",
+        "Crashes" to "App crashes with their technical details, and why the app ended last time as Android reports it (killed for memory, battery, crash…). Useful to report a problem.",
+        "Sound engine" to "The app's own sound output (AAudio): output switches, sample rates and problems, such as a device that refused a format.",
+        "Radio pictures" to "For each song a station announced: the picture found and from where, or what was searched without result.",
+        "Player" to "Songs skipped because they couldn't be found or reached, and phone files libVLC couldn't open (with the way it tried: path or file handle).",
+        "Clear all caches" to "Deletes the radio buffer, songs being saved, radio pictures and temporary files, freeing their space now.\n\n" +
+            "Settings, playlists, logs, saved songs and your files stay. Caches fill up again as you use the app.",
+        // ---------------------------------------------------------------- Video
+        "Auto-download missing subtitles" to "When a film has no subtitles in your preferred languages, the app searches OpenSubtitles and downloads the best match, saved next to the film.\n\n" +
+            "It needs your free OpenSubtitles account and API key, and uses a little data per film. Off: only subtitles already in or next to the film are used.",
+        "Preferred languages" to "Subtitle (and audio track) languages in order of preference, as short codes separated by commas, for example 'en, es'.\n\n" +
+            "The first language found in a film is chosen; empty means the phone's language.",
+        "Auto-rotate" to "On: the app turns with the phone, upright or sideways. Off: the app stays upright whatever the phone does.\n\n" +
+            "Videos can always be turned with their own rotate button. Default: on.",
+        // ---------------------------------------------------------------- Library
+        "Automatic scanning" to "The library looks for new, changed and removed files by itself when the app starts and when sources come online.\n\n" +
+            "Off: only when you tap Rescan — saves battery and NAS traffic with very large libraries.\n\nDefault: on.",
+        "Watch folders for changes" to "While the app runs, phone folders are watched so new or removed files show up at once.\n\n" +
+            "Off: changes are seen at the next scan. The cost is very small. Default: on.",
+        "Album pictures from the internet" to "Albums without a picture get one from MusicBrainz / Cover Art Archive, and artists a photo from Wikimedia, when the album has none.\n\n" +
+            "Pictures are resized for the phone and saved as cover.jpg / artist.jpg in the album folder when it holds one album, else in the pictures folder. Uses a little data once per album. Default: on.",
+        "Pictures folder" to "Where pictures go for songs that aren't in a one-album folder: one file per picture, named by a unique id and tied to its song, album and artist.\n\n" +
+            "Deleting it only means pictures are downloaded again when needed.",
+        "Phone music folders" to "Android only lets an app write next to your songs after you allow a folder once (the Music folder, for example).\n\n" +
+            "Allowed: album pictures are saved next to the songs, and other music apps see them too. Not allowed: pictures stay in the app's pictures folder.",
+        "Removed from lists" to "Files and folders you took out of the lists with 'Remove from this list'. They were never deleted: open this to show them in the lists again.",
+        "Find media folders" to "Searches the phone's storage — internal storage, the SD card, USB storage and Downloads — for folders that hold songs or videos.\n\n" +
+            "The usual media folders on internal storage are in the Library already. Any other folder found is listed with a tick box: only the ones you tick are added. Folders already in the Library are shown as added and stay as they are (nothing is overwritten or added twice).\n\n" +
+            "Use it after inserting an SD card or USB stick, or when songs you copied don't appear. It only reads Android's media index: no data, almost no battery.",
+        "Launch the setup wizard" to "Opens the setup wizard again: the permissions page, then a page for each group of settings, with each setting's current value underneath.\n\n" +
+            "Nothing changes unless you change it; Skip leaves a page as it is.",
+        // ---------------------------------------------------------------- Look
+        "Scroll bar width" to "Width of the bar on the right of long lists, in pixels. Drag the bar to scroll fast through thousands of songs.\n\nWider is easier to grab, narrower hides less of the rows.",
+        "Button size" to "Size of every symbol button and its tap area, everywhere in the app. Bigger is easier to hit (in a car, with gloves); smaller shows more on screen.",
+        "Songs list horizontal autoscroll" to "Long song rows in Library → Songs glide to their end and back so you can read them whole. This is the speed; 0 keeps them still.",
+        "Up next songs on the player" to "How many of the coming songs the player shows under its controls (0–20). Tap one to jump to it.",
+        "Pop-up opacity" to "How see-through pop-up windows are. More see-through shows what's behind; fully opaque is easier to read.",
+        "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
+            "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
+        "Floating button transparency" to "How see-through the floating play / pause button is: 0 % is solid, higher lets the list show through it.\n\n" +
+            "It stays fully usable at any transparency. Default: 15 %.",
+        "Shadow on player buttons" to "A faint grey shadow under the players' buttons and slider knobs, so they stay visible over bright album pictures.",
+        "Menu opacity" to "How see-through menus and search results are — set apart from pop-ups, since menus often sit over lists.",
+        "Menu row spacing" to "How close the rows of menus and search results are: tighter shows more rows, looser is easier to tap.",
         "Menu text" to "Text size in menus and search results.",
-        "Colour for" to "The app's accent colour: one for files, one for the radio. Long-press a colour circle to edit it, '+' adds one (up to 5).",
-        "Order of the Settings links" to "The order of the links on the main Settings page. Move a link with ▲ ▼; Reset puts back the original order.",
-        // Export
-        "Include saved passwords" to "The export file also holds the passwords of your servers. Keep that file private.",
-        "Alarm clock" to "Alarms, ringing, snooze, wake check and the clock's look.",
+        "Colour for" to "The app's accent colour: one for files, one for the radio (so you see at a glance what's playing).\n\n" +
+            "Tap a circle to use it, long-press to edit it, '+' adds one (up to 5).",
+        "Order of the Settings links" to "The order of the links on the main Settings page, for example your most used groups first. Move a link with ▲ ▼; 'Reset order' puts back the original order.",
+        "Reset order" to "Puts the links of the main Settings page back in their original order.",
+        // ---------------------------------------------------------------- Export
+        "Include saved passwords" to "The export file also holds the passwords of your servers, encrypted with the passphrase you type. Without a passphrase, passwords are left out.\n\n" +
+            "Keep the file private anyway, and remember the passphrase: it can't be recovered.",
+        "Everything" to "Saves the whole setup: settings, NAS, VPN, Internet sources, passwords (with a passphrase), radio favourites, playlists, alarms, subtitles and resume positions.\n\n" +
+            "While ticked, the other boxes are greyed — they're all included. Untick it to choose part by part.",
+        // ---------------------------------------------------------------- Settings groups (main page links)
+        "Audio" to "Start volume, preamp, ReplayGain, loudness and treble, the sound engine and per-output settings (speaker, headphones, each Bluetooth device).",
+        "Playback & gestures" to "Gestures in the video player, resuming videos, background playback and its battery setting.",
+        "Video" to "Subtitle languages and downloads, and rotation. Picture settings (hue, saturation) are in the video player.",
+        "Radio" to "Keeping the radio ready to save songs, the buffer, where and how saved songs are stored, free-space limits.",
+        "Look" to "Colours, button size, menus and pop-ups, lists, and the order of these links.",
+        "Library & files" to "Scanning, watching folders, album pictures, removed files.",
+        "Network & NAS" to "SMB1, Spotify links and how home servers are reached.",
+        "VPN" to "Reaching your NAS away from home: VPN status, asking to start it, the VPN app and your servers' VPN addresses.",
+        "Alarm clock" to "Alarms, what wakes you and how, snooze, wake check, the clock's look and the screen saver.",
+        "Visualisation" to "Patterns and colours shown with the music, and the frequency range they follow.",
+        "Export / import" to "Save your setup to one file, or bring one in — whole or part by part.",
+        "Logs" to "What the app did and why something failed, page by page; caches.",
+        // ---------------------------------------------------------------- Clock aspect
+        "24-hour" to "The digital clock shows 0–23 h. Off: 12-hour with AM / PM.",
+        "Seconds" to "Shows the seconds hand (analogue) or seconds digits (digital). Off: a calmer clock that changes once a minute — slightly less battery on the screen saver.",
+        "Charging dimming" to "How dark the clock screen saver gets while the phone charges, for a bedside phone at night. Only the screen saver dims, never the clock in the player.",
+        "Thickness" to "Thickness of the hands and lines of this clock design. Each design keeps its own value.",
+        "Circle size" to "Size of the clock's round face inside its square.",
+        "Date size" to "Size of the date shown on the clock.",
+        "Ring" to "The circle around the clock face: shown or hidden.",
+        "Ticks" to "The hour (and minute) marks around the face.",
+        "Hands" to "Style of the clock's hands.",
+        "Digits size" to "Size of the hour digits around the face or of the digital time.",
+        "Bold digits" to "Heavier digits, easier to read from across a room.",
+        "Date under the time" to "The date sits under the time instead of inside the face; never covered by the hands.",
+        "Dimming" to "How dark the clock gets.",
+        "Start date" to "The first day this alarm can ring; the repeat (days or dates) begins from there.",
+        "Button" to "A snooze button on the ringing screen: tap the value to choose its snooze time.",
+        // ---------------------------------------------------------------- Visualisation
+        "Movement" to "How fast the pattern moves and changes shape with the music. Low is calm, for a bedside screen; high is lively.",
+        "Colour mixing" to "How much neighbouring colours blend into each other: low keeps clear patches, high gives soft gradients.",
+        "Colour speed" to "How fast the colours drift through your chosen colours.",
+        "Definition" to "How fine the pattern is drawn: more definition is sharper but uses more battery on long sessions.",
+        "Brightness" to "Overall brightness of the visualisation (also changed by sliding along the short side of the screen while it shows).",
+        "Frequency range" to "The part of the sound the pattern follows, from bass to treble. Narrow it to the bass to move with the beat; widen it for everything.",
+        // ---------------------------------------------------------------- Permissions (setup wizard)
+        "Notifications" to "Lets the app post notifications: the player's controls in the notification shade and on the lock screen, the alarm notice with Snooze / Stop, and the next alarm.\n\n" +
+            "Without it, playback still works inside the app, but there are no controls outside it and alarms ring without their notice.",
+        "Music and videos" to "Lets the app read the songs and videos stored on the phone and the SD card (through Android's media index).\n\n" +
+            "Without it, the Library only shows NAS and Internet sources.",
+        "Nearby devices (Bluetooth)" to "Lets the app see the names of Bluetooth outputs and ask which codec (SBC, AAC, LDAC…) and rate they use; needed for the Bluetooth quality mode.\n\n" +
+            "Without it, Bluetooth still plays, but outputs show without names and codec details.",
+        "Alarms and reminders" to "Lets alarms ring exactly on the minute, even with the phone asleep (Android's exact alarms).\n\n" +
+            "Without it, Android may deliver alarms minutes late, or not at all in deep sleep.",
+        "Full-screen notifications" to "Lets the ringing alarm screen open above the lock screen, so you can stop or snooze it without unlocking.\n\n" +
+            "Without it, a ringing alarm only shows as a notification.",
+        "Battery unrestricted" to "Tells Android not to pause the app in the background, so playlists, radio recordings and alarm preparation keep going with the screen off.\n\n" +
+            "The app only works in the background while it plays, records or prepares an alarm.",
+        "Calendar" to "Lets the app add your alarms to the phone's calendar (on the calendar you choose), so they show next to your appointments. Nothing else in your calendar is read or changed.",
+        "Location (optional)" to "Lets the clock's weather follow where you are. Only a rough location is used, once in a while.\n\nWithout it, the weather is for the city you choose on the Alarm clock page.",
+        "Screen saver" to "Android shows a screen saver while the phone charges; choose 'vlc interface clock' in Android's screen saver settings to see the app's clock there.\n\nNothing to grant: it's a choice in Android's settings.",
     )
 
     fun text(title: String, hint: String): String {
         texts[title]?.let { return it }
         texts.entries.firstOrNull { title.startsWith(it.key) }?.let { return it.value }
-        return hint.ifEmpty { "No further explanation for this setting." }
+        return if (hint.isNotEmpty()) hint + "\n\nChanges apply at once and stay until you change them again; the setting is saved with your setup."
+            else "This setting applies at once and is saved with your setup."
     }
 }

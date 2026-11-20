@@ -2,6 +2,12 @@
 
 package app.vlcinterface.ui
 
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -142,6 +148,12 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     // as fit under the controls (at least one; the full queue is one tap away). Scrolling stays as the fallback.
     var leftHpx by remember { mutableIntStateOf(0) }
     var rightHpx by remember { mutableIntStateOf(0) }
+    // Upright: the title block sticks under the header once the cover has scrolled away (portrait only).
+    var titleTopPx by remember { mutableIntStateOf(0) }
+    var titleHpx by remember { mutableIntStateOf(0) }
+    // Floating play / pause: shown when the player's buttons are scrolled out of view.
+    var ctlBottom by remember { mutableFloatStateOf(Float.MAX_VALUE) }
+    var viewTop by remember { mutableFloatStateOf(0f) }
     var upNextYpx by remember { mutableIntStateOf(-1) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val vuK = if (landscape) (conf.screenHeightDp.toFloat() / conf.screenWidthDp).coerceIn(0.35f, 1f) else 1f
@@ -211,7 +223,17 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     player.replacePicture(coverItem, clear) { note -> coverNote = note; coverRefresh++ }
                 })
             if (coverNote.isNotEmpty() && !clockOn) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)
-            if (item.isRadio) RadioHeader(item, p, tk) else
+            // Upright: stays at the top (under the header) once scrolled up to it; the rest scrolls underneath.
+            val stickMod = if (landscape) Modifier else Modifier.fillMaxWidth()
+                .onGloballyPositioned { titleTopPx = it.positionInParent().y.toInt(); titleHpx = it.size.height }
+                .zIndex(2f).graphicsLayer { translationY = (scroll.value - titleTopPx).coerceAtLeast(0).toFloat() }
+                .background(PLAYER_BG).padding(bottom = 6.dp)
+            Box(stickMod, contentAlignment = Alignment.TopCenter) {
+            if (item.isRadio) Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                RadioHeader(item, p, tk)
+                // Upright: "Live · listening …" stays with the station in the frozen block.
+                if (!landscape) RadioListening()
+            } else
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 // Tap the song name: its folder in Libraries.
                 // Long-press: the song's menu (ReplayGain scan, YouTube / Spotify links, file path).
@@ -243,17 +265,18 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     modifier = Modifier.clickable { showInfo = true }.padding(4.dp))
                 if (showInfo) TagInfoDialog(item) { showInfo = false }
             }
+            }
         }
         val partB: @Composable ColumnScope.() -> Unit = {
             val radio = item.isRadio
             // Radio: no position to move to — only how long this station has been on.
-            if (radio) RadioListening() else SeekBlock(item)
+            if (radio) { if (landscape) RadioListening() } else SeekBlock(item)
             // Skip buttons say where they skip in: the playlist or the folder playback started from.
             val within = if (radio) "station" else when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
             // Never overlapping: shrinks the controls if they don't fit the width (large Button size, narrow phone).
             // Clock button on the left in its own column, an equal empty column on the right: the player buttons stay
             // centred, and they get only the width in between (shrunk if needed), so nothing overlaps on any screen.
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().onGloballyPositioned { ctlBottom = it.boundsInRoot().bottom }, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(32.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { ClockToggleButton(30); VisButton(nav, 30) }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             AutoFitRow(spacing = 12.dp) {
@@ -410,19 +433,21 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (clockShown) {
                 // Clock alone on the left, as big as possible; titles, alarms and buttons on the right.
                 pinnedClock(Modifier.weight(1f).fillMaxHeight().padding(8.dp))
-                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.verticalScroll(scroll).padding(horizontal = 16.dp),
+                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top }
+                    .verticalScroll(scroll).padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partA(); partB() }
             } else {
                 // Left half: everything fits without scrolling — the picture shrinks to the room left.
                 Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { leftHpx = it.height }.padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) { partA() }
-                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.verticalScroll(scroll).padding(horizontal = 16.dp),
+                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top }
+                    .verticalScroll(scroll).padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partB() }
             }
         } else {
             // Upright: the clock stays at the top; the rest of the page scrolls underneath it.
             if (clockShown) pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(horizontal = 16.dp, vertical = 4.dp))
-            Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            Column(Modifier.weight(1f).onGloballyPositioned { viewTop = it.boundsInRoot().top }.verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(if (item.isRadio) 10.dp else 14.dp)) {
                 partA(); partB()
             }
@@ -430,6 +455,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     }
     // Stereo level meters: right edge, full height of the player.
     if (meters) StereoVu(Modifier.align(Alignment.CenterEnd).padding(end = (4 * vuK).dp).fillMaxHeight().width((15 * vuK).dp))
+    // Floating play / pause: only while the player's buttons are scrolled out of view (under the title block / off the top).
+    val ctlHidden = scroll.value > 0 && ctlBottom < viewTop + (if (landscape) 0 else titleHpx) + 2f
+    if (ctlHidden) FloatingPlayButton(p.isPlaying) { player.togglePause() }
     }
     }
 }
@@ -1895,5 +1923,32 @@ fun ClockWithGear(nav: Navigator, clock: @Composable () -> Unit) {
         clock()
         Text("⚙", color = C.muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.TopEnd).clip(CircleShape)
             .clickable { nav.go(Screen.AlarmSettings) }.padding(3.dp))
+    }
+}
+
+
+/** Round play / pause button floating over the player; drag it anywhere (its place is kept). Size and transparency in Look. */
+@Composable
+fun BoxScope.FloatingPlayButton(playing: Boolean, onToggle: () -> Unit) {
+    val store = App.instance.store
+    val s = store.state.collectAsState().value.settings
+    val dens = LocalDensity.current
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize()) {
+        val sizePx = with(dens) { s.floatBtnSize.dp.toPx() }
+        val wPx = constraints.maxWidth.toFloat(); val hPx = constraints.maxHeight.toFloat()
+        var x by remember { mutableFloatStateOf(if (s.floatBtnX >= 0f) s.floatBtnX * wPx else wPx - sizePx - with(dens) { 28.dp.toPx() }) }
+        var y by remember { mutableFloatStateOf(if (s.floatBtnY >= 0f) s.floatBtnY * hPx else hPx - sizePx - with(dens) { 96.dp.toPx() }) }
+        x = x.coerceIn(0f, (wPx - sizePx).coerceAtLeast(0f)); y = y.coerceIn(0f, (hPx - sizePx).coerceAtLeast(0f))
+        Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(x.toInt(), y.toInt()) }.size(s.floatBtnSize.dp)
+            .graphicsLayer { alpha = s.floatBtnAlpha / 100f }
+            .liteShadow(CircleShape).clip(CircleShape).background(accent())
+            .pointerInput(Unit) {
+                androidx.compose.foundation.gestures.detectDragGestures(onDragEnd = {
+                    store.update { it.copy(settings = it.settings.copy(floatBtnX = x / wPx, floatBtnY = y / hPx)) }
+                }) { ch, d -> ch.consume(); x = (x + d.x).coerceIn(0f, wPx - sizePx); y = (y + d.y).coerceIn(0f, hPx - sizePx) }
+            }
+            .clickable { onToggle() }, contentAlignment = Alignment.Center) {
+            Text(if (playing) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (s.floatBtnSize * 0.36f).sp, fontWeight = FontWeight.Bold)
+        }
     }
 }

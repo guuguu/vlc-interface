@@ -194,7 +194,7 @@ fun WizardScreen(nav: Navigator, page: Int) {
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Box(Modifier.height(6.dp))
             LinkRow("Close the wizard, use the default setup, I'll set it up later") { finish() }
-            LinkRow("Guide me through the setup step by step" + if (W.guided) " ✓" else "") {
+            LinkRow("Guide me through the setup step by step" + if (W.guided) "  ✓" else "") {
                 W.guided = true; if (pg.id == "perm" || pg.id == "summary") goTo(if (pg.id == "summary") 0 else page) }
             Text(pg.intro, color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
             if (W.guided) HelpGuide.chapter(pg.help)?.pages?.firstOrNull()?.let { (t, txt) ->
@@ -213,7 +213,7 @@ fun WizardScreen(nav: Navigator, page: Int) {
                             Column(Modifier.fillMaxWidth().explain(p.name, p.role).padding(horizontal = 14.dp, vertical = 10.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(p.name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                                    Text(if (g == true) "Open settings ▶" else if (p.runtime.isNotEmpty()) "Grant ▶" else "Open settings ▶", color = accent(), fontSize = 14.sp,
+                                    Text(if (g == true) "Open settings ▶" else if (p.runtime.isNotEmpty()) "Grant ▶" else "Open settings ▶", color = WIZ_GREEN, fontSize = 15.sp, fontWeight = FontWeight.Bold,
                                         modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable {
                                             if (g != true && p.runtime.isNotEmpty()) { askFor = p; req.launch(p.runtime) } else p.open(ctx)
                                         }.padding(6.dp))
@@ -250,6 +250,8 @@ fun WizardScreen(nav: Navigator, page: Int) {
                         ValueRow("Internet sources", "Add a server on the internet", "Add ▶") { nav.go(Screen.EditSource(Zone.INTERNET)) }
                         Column(Modifier.padding(start = 16.dp, bottom = 8.dp)) { NowLine(if (net.isEmpty()) "none" else net.joinToString { it.name.ifBlank { it.host } }) }
                     }
+                    SectionTitle("Media folders on the phone")
+                    MediaFoldersCard()
                     SettingsGroupBody(nav, "library")
                 }
                 "radio" -> {
@@ -264,7 +266,7 @@ fun WizardScreen(nav: Navigator, page: Int) {
                             if (i > 0) Divider()
                             val state = when (p.id) { in W.done -> "set ✓"; in W.skipped -> "skipped — defaults used"; else -> "not visited" }
                             Column(Modifier.fillMaxWidth().clickable { goTo(i) }.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                                Row { Text(p.title, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f)); Text("▶", color = accent(), fontSize = 16.sp) }
+                                Row { Text(p.title, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f)); Text("▶", color = WIZ_GREEN, fontSize = 18.sp) }
                                 NowLine(state, bad = p.id in W.skipped)
                             }
                         }

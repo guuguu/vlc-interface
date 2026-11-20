@@ -16,6 +16,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.composed
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -328,9 +329,8 @@ fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boo
         Column(Modifier.weight(1f)) {
             Text(label, color = C.text, fontSize = 15.sp)
             if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
-            if (LocalShowNow.current) NowLine(if (checked) "on" else "off")
         }
-        Switch(checked, onChange, colors = SwitchDefaults.colors(checkedTrackColor = accent()))
+        AppSwitch(checked, onChange)
     }
 }
 
@@ -347,8 +347,23 @@ fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Uni
             if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
             if (LocalShowNow.current && value.isNotBlank()) NowLine(value)
         }
-        Text(value, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        if (LocalShowNow.current && value.endsWith("▶")) Text(value, color = WIZ_GREEN, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        else Text(value, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
+}
+
+// ---------------------------------------------------------------- switches
+
+/** Switch of the app: on and off look the same (only the knob moves); greyed only when it can't be used. */
+@Composable
+fun AppSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    val a = accent(); val knob = Color(0xFF1A0E05)
+    androidx.compose.material3.Switch(checked, onChange, modifier, enabled = enabled,
+        colors = SwitchDefaults.colors(
+            checkedTrackColor = a, uncheckedTrackColor = a, checkedBorderColor = a, uncheckedBorderColor = a,
+            checkedThumbColor = knob, uncheckedThumbColor = knob,
+            disabledCheckedTrackColor = C.line, disabledUncheckedTrackColor = C.line, disabledCheckedBorderColor = C.line,
+            disabledUncheckedBorderColor = C.line, disabledCheckedThumbColor = C.muted.copy(alpha = 0.6f), disabledUncheckedThumbColor = C.muted.copy(alpha = 0.6f)))
 }
 
 // ---------------------------------------------------------------- current value (setup wizard)
@@ -359,8 +374,11 @@ val LocalShowNow = androidx.compose.runtime.staticCompositionLocalOf { false }
 /** "Now: …" row under a setting (red when something isn't granted / set). */
 @Composable
 fun NowLine(text: String, bad: Boolean = false) {
-    Text("Now: $text", color = if (bad) C.bad else Color(0xFF8FC3E8), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
+    Text("Now: $text", color = if (bad) C.bad else if (text.endsWith("✓")) WIZ_GREEN else Color(0xFF8FC3E8), fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp))
 }
+
+/** Light green of the setup wizard's ticks and forward arrows. */
+val WIZ_GREEN = Color(0xFF7CFC9A)
 
 // ---------------------------------------------------------------- explanations (long-press any setting)
 
@@ -380,10 +398,30 @@ fun ExplainHost(content: @Composable () -> Unit) {
     var shown by remember { mutableStateOf<Pair<String, String>?>(null) }
     androidx.compose.runtime.CompositionLocalProvider(LocalExplain provides { t, h -> shown = t to h }) { content() }
     shown?.let { (t, h) ->
-        val text = SettingHelp.text(t, h)
-        AlertDialog(onDismissRequest = { shown = null }, containerColor = C.panel,
-            title = { Text(t, color = C.text) }, text = { Text(text, color = C.muted, fontSize = 14.sp) },
-            confirmButton = { STextButton({ shown = null }) { Text("OK", color = accent()) } })
+        HelperDialog(t, SettingHelp.text(t, h)) { shown = null }
+    }
+}
+
+/** Helper pop-up: title and OK in a top bar that never scrolls; the explanation scrolls under it when long. */
+@Composable
+fun HelperDialog(title: String, text: String, extra: (@Composable () -> Unit)? = null, onClose: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+        androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().heightIn(max = 560.dp)
+            .background(C.panel, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))) {
+            Row(Modifier.fillMaxWidth().background(C.card, androidx.compose.foundation.shape.RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                .padding(start = 18.dp, end = 8.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, color = C.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                androidx.compose.foundation.layout.Box(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(16.dp)).background(accent())
+                    .clickable(onClick = onClose).padding(horizontal = 16.dp, vertical = 7.dp)) {
+                    Text("OK", color = Color(0xFF1A0E05), fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+            val sc = androidx.compose.foundation.rememberScrollState()
+            androidx.compose.foundation.layout.Column(Modifier.weight(1f, fill = false).verticalScroll(sc).padding(18.dp)) {
+                Text(text, color = C.muted, fontSize = 14.sp, lineHeight = 20.sp)
+                extra?.invoke()
+            }
+        }
     }
 }
 
@@ -832,17 +870,25 @@ fun AutoInfoDialog(
 ) {
     var pinned by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     androidx.compose.runtime.LaunchedEffect(pinned) { if (!pinned) { kotlinx.coroutines.delay(3000); if (!pinned) onDismissRequest() } }
-    // A touch outside it always closes it (kept open or not).
-    androidx.compose.material3.AlertDialog(onDismissRequest = onDismissRequest, confirmButton = confirmButton, dismissButton = dismissButton,
-        modifier = modifier.pointerInput(Unit) {
-            awaitEachGesture { awaitFirstDown(requireUnconsumed = false); pinned = true }
-        },
-        title = title, containerColor = containerColor,
-        text = {
-            androidx.compose.foundation.layout.Column {
-                text?.invoke()
+    // A touch outside it always closes it (kept open or not). Title and buttons in a top bar; the text scrolls under it.
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismissRequest) {
+        androidx.compose.foundation.layout.Column(modifier.fillMaxWidth().heightIn(max = 560.dp)
+            .background(containerColor, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
+            .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); pinned = true } }) {
+            Row(Modifier.fillMaxWidth().background(C.card, androidx.compose.foundation.shape.RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                .padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+                    androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides C.text,
+                        androidx.compose.material3.LocalTextStyle provides androidx.compose.ui.text.TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Bold)) { title?.invoke() }
+                }
+                dismissButton?.invoke(); confirmButton()
+            }
+            val sc = androidx.compose.foundation.rememberScrollState()
+            androidx.compose.foundation.layout.Column(Modifier.weight(1f, fill = false).verticalScroll(sc).padding(18.dp)) {
+                androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides C.muted) { text?.invoke() }
                 if (!pinned) Text("Closes in 3 s · touch it to keep it open", color = C.muted, fontSize = 11.sp,
                     modifier = Modifier.padding(top = 8.dp))
             }
-        })
+        }
+    }
 }

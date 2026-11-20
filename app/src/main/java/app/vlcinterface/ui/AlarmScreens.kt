@@ -107,7 +107,7 @@ fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
                     if (al.name.isNotEmpty()) Text(al.name, color = C.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(Alarm.whenText(al), color = C.muted, fontSize = 12.sp)
                 }
-                Switch(al.on, { Alarms.put(al.copy(on = it)) }, colors = SwitchDefaults.colors(checkedTrackColor = accent()))
+                AppSwitch(al.on, { Alarms.put(al.copy(on = it)) })
             }
             Divider()
         }
@@ -631,16 +631,13 @@ private val HELP: Map<String, String> = mapOf(
 @Composable
 fun HelpHost(content: @Composable () -> Unit) {
     var key by remember { mutableStateOf("") }
-    androidx.compose.runtime.CompositionLocalProvider(LocalHelp provides { k -> if (HELP.containsKey(k)) key = k }) { content() }
-    if (key.isNotEmpty()) AlertDialog(onDismissRequest = { key = "" }, containerColor = C.panel,
-        title = { Text(key, color = C.text) }, text = { Text(HELP[key] ?: "", color = C.muted, fontSize = 14.sp) },
-        confirmButton = { STextButton({ key = "" }) { Text("OK", color = accent()) } })
+    androidx.compose.runtime.CompositionLocalProvider(LocalHelp provides { k -> key = k }) { content() }
+    if (key.isNotEmpty()) HelperDialog(key, HELP[key] ?: SettingHelp.text(key, "")) { key = "" }
 }
 
 @Composable
 private fun Modifier.helpOn(key: String): Modifier {
     val help = LocalHelp.current
-    if (!HELP.containsKey(key)) return this
     return this.combinedClickable(interactionSource = null, indication = null, onClick = {}, onDoubleClick = { help(key) }, onLongClick = { help(key) })
 }
 
@@ -648,7 +645,7 @@ private fun Modifier.helpOn(key: String): Modifier {
 @Composable
 private fun HToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boolean) -> Unit) {
     val help = LocalHelp.current
-    val has = HELP.containsKey(label)
+    val has = true      // every setting explains itself (own text, or the general help texts)
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
         .then(if (has) Modifier.combinedClickable(onClick = { onChange(!checked) }, onDoubleClick = { help(label) }, onLongClick = { help(label) })
             else Modifier.clickable { onChange(!checked) })
@@ -656,16 +653,15 @@ private fun HToggleRow(label: String, hint: String = "", checked: Boolean, onCha
         Column(Modifier.weight(1f)) {
             Text(label, color = C.text, fontSize = 15.sp)
             if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
-            if (LocalShowNow.current) NowLine(if (checked) "on" else "off")
         }
-        Switch(checked, onChange, colors = SwitchDefaults.colors(checkedTrackColor = accent()))
+        AppSwitch(checked, onChange)
     }
 }
 
 @Composable
 private fun HValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) {
     val help = LocalHelp.current
-    val has = HELP.containsKey(label)
+    val has = true      // every setting explains itself (own text, or the general help texts)
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
         .then(if (has) Modifier.combinedClickable(onClick = onClick, onDoubleClick = { help(label) }, onLongClick = { help(label) }) else Modifier.clickable(onClick = onClick))
         .padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
