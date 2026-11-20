@@ -162,5 +162,6 @@
 - Video details show where each choice comes from: automatic / chosen for this video / default.
 - When a video file disappears from the library, everything kept for it is deleted: phone videos are checked a few
   seconds after the app starts; network videos when their folder is listed in Libraries and the file isn't there.
-- Its downloaded subtitles kept inside the app are deleted too (working and undo copies; requested 21:48).
-  Subtitle files on the NAS are never deleted (21:50).
+- Its subtitles are deleted automatically only on the phone and only those the app downloaded (OpenSubtitles):
+  the app's copy and its undo copy (21:48 / 21:51). Subtitle files on the NAS are never deleted (21:50); copies of
+  subtitles found next to a video are left alone.

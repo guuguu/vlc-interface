@@ -44,6 +44,13 @@ object VideoAuto {
     /** Subtitles the app saved next to this video on a server (source id, folder, name). */
     fun subs(uri: String): List<Triple<String, String, String>> = rec(uri).optJSONArray("subs")?.let { a ->
         (0 until a.length()).mapNotNull { i -> a.optJSONArray(i)?.let { Triple(it.optString(0), it.optString(1), it.optString(2)) } } } ?: emptyList()
+    /** Subtitle files downloaded by the app (OpenSubtitles) for this video, by name. */
+    fun downloaded(uri: String): List<String> = rec(uri).optJSONArray("dl")?.let { a -> (0 until a.length()).map { a.optString(it) } } ?: emptyList()
+    fun addDownloaded(uri: String, name: String) = edit(uri) { o ->
+        val a = o.optJSONArray("dl") ?: org.json.JSONArray()
+        if ((0 until a.length()).none { a.optString(it) == name }) a.put(name)
+        o.put("dl", a)
+    }
     fun addSub(uri: String, srcId: String, folder: String, name: String) = edit(uri) { o ->
         val a = o.optJSONArray("subs") ?: org.json.JSONArray()
         val have = (0 until a.length()).any { a.optJSONArray(it)?.optString(2) == name && a.optJSONArray(it)?.optString(1) == folder }
@@ -147,9 +154,9 @@ object VideoFileCleanup {
         // Downloaded subtitles of these videos (app copies and the ones saved next to the video) are deleted too.
         val app0 = app.vlcinterface.App.instance
         set.forEach { u ->
-            val written = VideoAuto.subs(u)
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
-                try { app.vlcinterface.sources.SubtitleFiles.forgetVideo(app0, u, written) } catch (_: Exception) {}
+            val written = VideoAuto.subs(u); val dl = VideoAuto.downloaded(u)
+            if (dl.isNotEmpty()) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try { app.vlcinterface.sources.SubtitleFiles.forgetVideo(app0, u, written, dl) } catch (_: Exception) {}
             }
         }
         set.forEach { VideoAuto.forget(it) }

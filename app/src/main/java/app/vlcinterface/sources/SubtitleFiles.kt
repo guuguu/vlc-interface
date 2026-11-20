@@ -40,15 +40,18 @@ object SubtitleFiles {
      * The video is gone: the app's own copies of its downloaded subtitles go too (working and undo copies).
      * Subtitle files on the NAS are left alone; [written] only helps find the undo copies.
      */
-    suspend fun forgetVideo(ctx: Context, uri: String, written: List<Triple<String, String, String>>) = withContext(Dispatchers.IO) {
+    suspend fun forgetVideo(ctx: Context, uri: String, written: List<Triple<String, String, String>>, downloaded: List<String>) = withContext(Dispatchers.IO) {
         refs.remove(uri)
+        // Only on the phone, and only the subtitles the app downloaded (OpenSubtitles): their copies in the app and
+        // their undo copies. Copies of subtitles found next to a video are left alone.
         val d = File(ctx.filesDir, "subtitles/" + hash(uri))
         val undo = File(ctx.filesDir, "subtitles-undo")
-        d.listFiles()?.forEach { f ->
-            val folders = written.map { it.second }.toMutableList().apply { add("") }
-            folders.forEach { fo -> File(undo, hash(fo + f.name + f.path) + ".orig").delete() }
+        downloaded.forEach { name ->
+            val f = File(d, name)
+            (written.map { it.second } + "").forEach { fo -> File(undo, hash(fo + f.name + f.path) + ".orig").delete() }
+            f.delete()
         }
-        d.deleteRecursively()
+        if (d.list()?.isEmpty() == true) d.delete()
         // Subtitle files on the NAS are never deleted (user rule): only the app's own copies go.
     }
     fun current(item: PlayItem): SubRef? = refs[item.uri]
@@ -73,8 +76,8 @@ object SubtitleFiles {
         val name = nameFor(item, ext)
         val local = File(dir(ctx, "subtitles/" + hash(item.uri)), name)
         local.writeBytes(bytes)
-        // Marks the video as having downloaded subtitles (so they're deleted when the video is gone).
-        app.vlcinterface.player.VideoAuto.setStr(item.uri, "subsLocal", "1")
+        // Remembered as downloaded by the app (OpenSubtitles): only these are deleted when the video is gone.
+        app.vlcinterface.player.VideoAuto.addDownloaded(item.uri, name)
         val t = target(item)
         val where = if (t != null) {
             val r = NasWriter.write(t.first, t.second, name, bytes, "subtitle")
