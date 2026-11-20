@@ -69,6 +69,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -1735,8 +1736,17 @@ fun StationSearch() {
                 if (rDetails) StationDetailsDialog(app.vlcinterface.data.Station(name = r.name, url = r.url, meta = r.meta, favicon = r.favicon)) { rDetails = false }
                 Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.playStation(r.name, r.url) }, onLongClick = { rMenu = true })
                     .padding(vertical = (3 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
-                    // The station's country flag (🌐 when the country isn't known).
-                    Text(flagOf(r.country), fontSize = 18.sp, lineHeight = 20.sp, modifier = Modifier.padding(end = 8.dp))
+                    // The station's country flag; when the country isn't known, a globe turned to where the station is
+                    // (Europe while looking it up and when nothing is found).
+                    val flag = flagOf(r.country)
+                    if (flag.isNotEmpty()) Text(flag, fontSize = 18.sp, lineHeight = 20.sp, modifier = Modifier.padding(end = 8.dp))
+                    else {
+                        val globe by produceState(app.vlcinterface.sources.Globe.known(r) ?: app.vlcinterface.sources.Globe.EUROPE, r.url) {
+                            if (app.vlcinterface.sources.Globe.known(r) == null) value = app.vlcinterface.sources.Globe.lookup(r)
+                        }
+                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(globe), "Station location",
+                            Modifier.padding(end = 8.dp).size(20.dp))
+                    }
                     Column(Modifier.weight(1f)) {
                         Text(r.name, color = C.text, fontSize = 14.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (r.meta.isNotEmpty()) Text(r.meta, color = if (r.isFlac) C.bad.copy(alpha = 0.8f) else C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -2122,6 +2132,6 @@ fun playerRowOrder(s: app.vlcinterface.data.Settings, radio: Boolean): List<Stri
 /** Flag emoji of a two-letter country code ("FR" → 🇫🇷); 🌐 when unknown. */
 fun flagOf(code: String): String {
     val c = code.trim().uppercase()
-    if (c.length != 2 || !c.all { it in 'A'..'Z' }) return "🌐"
+    if (c.length != 2 || !c.all { it in 'A'..'Z' }) return ""   // unknown: the caller shows a globe instead
     return String(Character.toChars(0x1F1E6 + (c[0] - 'A'))) + String(Character.toChars(0x1F1E6 + (c[1] - 'A')))
 }

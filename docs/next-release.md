@@ -12,7 +12,7 @@
 - The ▲ ▼ arrows are removed from this box; the result counter stays (requested 2026-11-20 18:09).
 - The results list is tighter: no extra gap between stations (only the thin grey line), slimmer rows with the
   name and its details close together (requested 2026-11-20 18:09).
-- In front of each station in the results: its country's flag, or a small 🌐 when the country isn't known
+- In front of each station in the results: its country's flag, or a globe picture when the country isn't known
   (requested 2026-11-20 18:11).
 - Unknown country: instead of the plain 🌐, a globe turned to where the station's server is (requested 2026-11-20 18:13):
   Europe · Africa · North America · South America · Asia · Australia globes (Africa, Australia added 18:16;

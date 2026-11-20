@@ -133,6 +133,8 @@ object M3u {
 data class RadioStation(
     val uuid: String, val name: String, val url: String, val codec: String,
     val bitrate: Int, val country: String, val tags: String, val favicon: String,
+    /** The directory's coordinates for the station (NaN when it has none). */
+    val lat: Double = Double.NaN, val lon: Double = Double.NaN,
 ) {
     val isFlac: Boolean get() = codec.contains("flac", true)
     val meta: String get() = listOfNotNull(
@@ -140,6 +142,12 @@ data class RadioStation(
         if (bitrate > 0) "$bitrate kbps ${codec}".trim() else codec.ifEmpty { null },
         country.ifEmpty { null },
     ).joinToString(" · ")
+}
+
+/** A coordinate from the directory: NaN when missing, null, out of range or exactly 0,0-ish placeholder. */
+private fun geo(o: org.json.JSONObject, k: String, max: Double): Double {
+    val v = o.opt(k)?.toString()?.toDoubleOrNull() ?: return Double.NaN
+    return if (v.isNaN() || kotlin.math.abs(v) > max) Double.NaN else v
 }
 
 /** radio-browser.info: free, open directory of internet radio stations (no API key). */
@@ -202,6 +210,7 @@ object RadioBrowser {
                             o.optString("url_resolved").ifEmpty { o.optString("url") },
                             o.optString("codec"), o.optInt("bitrate"), o.optString("countrycode"),
                             o.optString("tags"), o.optString("favicon"),
+                            geo(o, "geo_lat", 90.0), geo(o, "geo_long", 180.0),
                         )
                     }.filter { it.url.isNotEmpty() })
                 }
