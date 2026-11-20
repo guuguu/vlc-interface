@@ -222,3 +222,7 @@
   "Analyser: wave area" (smooth filled curve, edge thickens on the beat), "Analyser: radial" (bars round a circle
   that swells on the beat and turns). Bar thickness applies to all bar pictures; colour combinations to all.
 - projectM: four MilkDrop presets bundled, in the projectM step.
+- LED bars, light bars and radial centred on the middle and set on the vertical axis (22:51): LED segments grow up
+  and down from the middle line (peak LEDs both ways, no reflection); light bars glow from the middle line, their
+  light and reach following the band; radial is fixed (no turning) with bass at the top and treble at the bottom,
+  the left half mirroring the right.

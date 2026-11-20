@@ -386,10 +386,10 @@ private fun DrawScope.drawSpectrum(m: VisMotion, a: Float, cols: List<Color>, bg
 
 /**
  * Analyser pictures in the style of hi-fi spectrum analysers (the app's own drawing, from the 32 measured bands):
- * - "am_led": bars made of LED segments from the bottom, with a dim reflection under them and peak LEDs;
- * - "am_lumi": full-height bars whose light (not height) follows each band — a glowing curtain;
+ * - "am_led": LED segments growing up and down from the middle line, peak LEDs above and below;
+ * - "am_lumi": bars glowing from the middle line, their light and reach following each band;
  * - "am_area": a smooth curve over the bands, filled below, with a bright edge;
- * - "am_radial": bars all round a circle that swells on the beat and turns with the music.
+ * - "am_radial": bars all round a circle that swells on the beat, set on the vertical axis (mirrored left / right).
  * Bars fill the width at the chosen thickness (thicker → fewer); colours from the chosen combination.
  */
 private fun DrawScope.drawAnalyser(effect: String, m: VisMotion, a: Float, cols: List<Color>, bg: List<Color>, barPx: Float) {
@@ -408,35 +408,40 @@ private fun DrawScope.drawAnalyser(effect: String, m: VisMotion, a: Float, cols:
     val gap = (barPx * 0.3f).coerceAtLeast(2f)
     when (effect) {
         "am_led" -> {
+            // LED segments growing up and down from the middle line (mirrored), colour climbing away from the middle,
+            // peak LEDs above and below.
             val bars = ((size.width + gap) / (barPx + gap)).toInt().coerceIn(3, m.spec.size)
             val bw = (size.width - gap * (bars - 1)) / bars
-            val base = size.height * 0.78f; val top = size.height * 0.04f
+            val mid = size.height / 2; val half = mid * 0.94f
             val seg = (bw * 0.45f).coerceIn(4f, 18f); val sgap = seg * 0.35f
-            val nSeg = ((base - top) / (seg + sgap)).toInt().coerceAtLeast(4)
+            val nSeg = (half / (seg + sgap)).toInt().coerceAtLeast(3)
             for (i in 0 until bars) {
                 val x = i * (bw + gap)
                 val lit = (level(m.spec, i, bars) * nSeg).toInt()
                 val pk = (level(m.specPeak, i, bars) * nSeg).toInt().coerceAtMost(nSeg - 1)
                 for (sIdx in 0 until nSeg) {
-                    val y = base - (sIdx + 1) * (seg + sgap)
                     val on = sIdx < lit || sIdx == pk
-                    val c = colAt(sIdx / (nSeg - 1f))      // colour climbs with the height, like a hi-fi meter
-                    drawRect(if (on) c else c.copy(alpha = 0.08f * a), Offset(x, y), androidx.compose.ui.geometry.Size(bw, seg))
-                    if (on && sIdx < lit) {           // reflection
-                        val ry = base + (sIdx) * (seg + sgap) + sgap
-                        if (ry + seg < size.height) drawRect(c.copy(alpha = 0.18f * a), Offset(x, ry), androidx.compose.ui.geometry.Size(bw, seg))
-                    }
+                    val c = colAt(sIdx / (nSeg - 1f).coerceAtLeast(1f))
+                    val col = if (on) c else c.copy(alpha = 0.08f * a)
+                    val off = sgap / 2 + sIdx * (seg + sgap)
+                    drawRect(col, Offset(x, mid - off - seg), androidx.compose.ui.geometry.Size(bw, seg))
+                    drawRect(col, Offset(x, mid + off), androidx.compose.ui.geometry.Size(bw, seg))
                 }
             }
         }
         "am_lumi" -> {
+            // Bars glowing from the middle line: brightest in the middle, fading up and down; the glow (and its reach)
+            // follows each band.
             val bars = ((size.width + gap) / (barPx + gap)).toInt().coerceIn(3, m.spec.size)
             val bw = (size.width - gap * (bars - 1)) / bars
+            val mid = size.height / 2
             for (i in 0 until bars) {
                 val v = level(m.spec, i, bars)
                 val c = colAt(i / (bars - 1f).coerceAtLeast(1f))
-                drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(c.copy(alpha = 0.15f * a + 0.85f * a * v), c.copy(alpha = 0.05f * a + 0.5f * a * v * v))),
-                    Offset(i * (bw + gap), 0f), androidx.compose.ui.geometry.Size(bw, size.height))
+                val reach = mid * (0.35f + 0.65f * v)
+                val core = c.copy(alpha = (0.15f + 0.85f * v) * a); val edge = c.copy(alpha = 0.03f * a)
+                drawRect(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(edge, core, edge), startY = mid - reach, endY = mid + reach),
+                    Offset(i * (bw + gap), mid - reach), androidx.compose.ui.geometry.Size(bw, reach * 2))
             }
         }
         "am_area" -> {
@@ -463,11 +468,13 @@ private fun DrawScope.drawAnalyser(effect: String, m: VisMotion, a: Float, cols:
             val circ = 2f * Math.PI.toFloat() * r0
             val bars = ((circ / 2f + gap) / (barPx + gap)).toInt().coerceIn(3, m.spec.size)   // half circle, mirrored
             val bw = (circ / (bars * 2)) - gap
-            val turn = m.ps * 0.3f
             drawCircle(colAt(0f).copy(alpha = 0.2f * a + 0.35f * m.kickLo), r0 * 0.9f, c)
+            // Centred and set on the vertical axis: bass at the top, treble at the bottom, the left half the mirror
+            // of the right half (no turning).
             for (i in 0 until bars * 2) {
                 val b = if (i < bars) i else 2 * bars - 1 - i
-                val ang = turn + i * (2f * Math.PI.toFloat() / (bars * 2))
+                val step = Math.PI.toFloat() / bars
+                val ang = -Math.PI.toFloat() / 2 + (if (i < bars) (b + 0.5f) * step else -(b + 0.5f) * step)
                 val r2 = r0 + len * level(m.spec, b, bars).coerceAtLeast(0.02f)
                 drawLine(colAt(b / (bars - 1f).coerceAtLeast(1f)), Offset(c.x + cos(ang) * r0, c.y + sin(ang) * r0),
                     Offset(c.x + cos(ang) * r2, c.y + sin(ang) * r2), bw.coerceAtLeast(2f), androidx.compose.ui.graphics.StrokeCap.Butt)
