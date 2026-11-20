@@ -15,3 +15,5 @@
 - Look setting "Clock hidden for" (seconds after the last action; default 10).
 - Upright only: sideways the clock stays on the left as now. With a text helper pop-up while Helpers are on
   (requested 2026-11-20 13:28).
+- The clock doesn't come back while an option or settings window is open (a menu, pop-up, dialog, the output sheet…);
+  the countdown starts again only once it's closed (requested 2026-11-20 13:31).
