@@ -420,7 +420,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     Box(Modifier.size(30.dp).liteShadow(CircleShape).clip(CircleShape).background(if (on) ac.copy(alpha = 0.25f) else Color(0x24FFFFFF))
                         .border(1.dp, if (on) ac else Color.Transparent, CircleShape).clickable { sleepMenu = true }, contentAlignment = Alignment.Center) {
                         FitText("Sleep", color = if (on) ac else C.text, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                            textAlign = TextAlign.Center, minSize = 6.sp, modifier = Modifier.padding(horizontal = 2.dp))
+                            textAlign = TextAlign.Center, minSize = 5.sp, modifier = Modifier.padding(horizontal = 5.dp))   // clear of the circle's edge
                     }
                     SDropdownMenu(sleepMenu, { sleepMenu = false }) {
                         // Radio: time only (a station has no songs to count).
