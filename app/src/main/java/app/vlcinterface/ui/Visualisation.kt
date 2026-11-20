@@ -97,7 +97,9 @@ private fun c(vararg v: Long) = v.map { Color(it) }
 
 /** Each pattern's own colours: 4 spot colours + 3 background colours (top / middle / bottom). */
 private fun patternColours(effect: String): Pair<List<Color>, List<Color>> = when (effect) {
-    "lava", "lava_spec" -> c(0xFFFF5400, 0xFFFFBD00, 0xFFD00000, 0xFFFF8C3C) to c(0xFF2A0006, 0xFF4A000C, 0xFF6A0010)
+    "lava" -> c(0xFFFF5400, 0xFFFFBD00, 0xFFD00000, 0xFFFF8C3C) to c(0xFF2A0006, 0xFF4A000C, 0xFF6A0010)
+    // Lava flow + spectrum: ordered from the cool edge (deep red) to the hot core (gold).
+    "lava_spec" -> c(0xFFD00000, 0xFFFF5400, 0xFFFF8C3C, 0xFFFFBD00) to c(0xFF2A0006, 0xFF4A000C, 0xFF6A0010)
     "nebula" -> c(0xFFF72585, 0xFF4CC9F0, 0xFF7209B7, 0xFFFFFFFF) to c(0xFF0B0020, 0xFF2A0A6B, 0xFF10002B)
     "tides" -> c(0xFF00B4D8, 0xFF90E0EF, 0xFF0077B6, 0xFFCAF0F8) to c(0xFF023E8A, 0xFF0077B6, 0xFF03045E)
     "plasma" -> c(0xFF7209B7, 0xFFF72585, 0xFF4361EE, 0xFF4CC9F0) to c(0xFF240046, 0xFF3A0CA3, 0xFF10002B)
@@ -632,7 +634,7 @@ private fun DrawScope.spot(c: Color, alpha: Float, center: Offset, r: Float, sha
 
 /**
  * Centred spectrum on the vertical axis (over the lava flow): each band a row growing left and right from a vertical
- * middle line, bass at the top, with peak marks; row height = bar thickness (thicker → fewer rows); no background.
+ * middle line, bass at the bottom, red tips and peak marks; row height = bar thickness (thicker → fewer rows); no background.
  */
 private fun DrawScope.drawSpectrumV(m: VisMotion, a: Float, cols: List<Color>, barPx: Float) {
     val gap = (barPx * 0.35f).coerceAtLeast(2f)
@@ -658,11 +660,13 @@ private fun DrawScope.drawSpectrumV(m: VisMotion, a: Float, cols: List<Color>, b
         return lerpC(cols[j], cols[j + 1], p - j).copy(alpha = a)
     }
     val mid = size.width / 2; val full = mid * 0.92f
+    // Red tips (bar ends and peak marks), whatever the colours.
+    val red = Color(0xFFFF1A1A).copy(alpha = a)
     for (i in 0 until bars) {
-        val y = i * (bh + gap)
+        val y = size.height - bh - i * (bh + gap)        // bass at the bottom, treble at the top
         val lv = level(m.spec, i)
         val w = full * lv.coerceAtLeast(0.01f); val pw = full * level(m.specPeak, i)
-        val tip = heat(0f); val core = heat(lv)
+        val tip = red; val core = heat(lv)
         drawRect(Brush.horizontalGradient(listOf(tip, core, tip), startX = mid - w, endX = mid + w), Offset(mid - w, y), androidx.compose.ui.geometry.Size(w * 2, bh))
         drawRect(tip, Offset(mid - pw - 3f, y), androidx.compose.ui.geometry.Size(3f, bh))
         drawRect(tip, Offset(mid + pw, y), androidx.compose.ui.geometry.Size(3f, bh))

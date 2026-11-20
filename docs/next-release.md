@@ -303,3 +303,6 @@
 - Lava flow + spectrum (23:34): the bars use the lava's colour range — like a blob: the edge colour (first) at the
   tips, hotter toward the middle line, reaching the core colour (last) when the band is loud; quiet rows stay in
   the edge colours; peak marks in the edge colour.
+- Lava flow + spectrum (23:36): low frequencies at the bottom of the analyser, treble at the top; red tips (bar ends
+  and peak marks) whatever the colours; the lava's own colours ordered from the cool edge (deep red) to the hot core
+  (gold).
