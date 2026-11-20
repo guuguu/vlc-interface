@@ -2,6 +2,7 @@
 
 package app.vlcinterface.ui
 
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.platform.LocalDensity
@@ -1943,7 +1944,7 @@ fun BoxScope.FloatingPlayButton(playing: Boolean, onToggle: () -> Unit) {
             .graphicsLayer { alpha = s.floatBtnAlpha / 100f }
             .liteShadow(CircleShape).clip(CircleShape).background(accent())
             .pointerInput(Unit) {
-                androidx.compose.foundation.gestures.detectDragGestures(onDragEnd = {
+                detectDragGestures(onDragEnd = {
                     store.update { it.copy(settings = it.settings.copy(floatBtnX = x / wPx, floatBtnY = y / hPx)) }
                 }) { ch, d -> ch.consume(); x = (x + d.x).coerceIn(0f, wPx - sizePx); y = (y + d.y).coerceIn(0f, hPx - sizePx) }
             }
