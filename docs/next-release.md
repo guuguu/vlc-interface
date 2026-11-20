@@ -117,8 +117,11 @@
   16-bit colour banding on skies, gradients and dark scenes.
 - Small videos are enlarged to the screen edges and the format sizing no longer reloads the video (see above).
 - New on Settings → Video, section "Picture" (requested 2026-11-20 21:33, text helpers):
-  - Video decoding: Automatic (default: hardware, software when the hardware can't) / Hardware / Software — for
-    files that show green, grey or garbled pictures with this phone's hardware decoder.
-  - Deinterlacing: Off (default) / Automatic — only videos marked interlaced (TV recordings, DVDs) are smoothed,
-    removing the comb lines; uses more battery while such a video plays.
+  - Video decoding: Automatic (default) / Hardware / Software. Automatic is set by each video's encoding
+    (requested 21:33): the phone's hardware decoder when it can decode that codec at that size (checked against the
+    phone's decoders), otherwise software; if the hardware fails on a video it switches to software at once.
+  - Deinterlacing: Automatic (default) / On / Off. Automatic by encoding: on for TV-style videos (MPEG-2, DV,
+    .ts / .m2ts / .mts / .vob / .mpg at TV sizes), off for the rest so they keep the fastest hardware path.
+  - What Automatic learns about a file is kept, so it opens the right way at once next time; a file is re-opened
+    at most once per run (no loops).
   - Changing either reopens the playing video at the same spot.

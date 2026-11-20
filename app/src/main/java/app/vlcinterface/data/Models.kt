@@ -272,8 +272,8 @@ data class Settings(
     val visInsteadCover: String = "off",
     /** Video decoding: "auto" (hardware, software when it can't), "hw" (hardware only), "sw" (software only). */
     val videoDecoder: String = "auto",
-    /** Deinterlacing of interlaced videos (TV recordings, DVDs): "off" or "auto" (only videos marked interlaced). */
-    val videoDeinterlace: String = "off"
+    /** Deinterlacing: "auto" (by the video's encoding), "on", "off". */
+    val videoDeinterlace: String = "auto"
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -368,7 +368,7 @@ data class Settings(
                 switchOn = o.optLong("switchOn", 0L), switchOff = o.optLong("switchOff", 0xFF4A5568), floatBtnColor = o.optLong("floatBtnColor", 0L), clockHideSec = o.optInt("clockHideSec", 10), coverHideSec = o.optInt("coverHideSec", 10), floatBtnMode = o.optString("floatBtnMode", "always"), clockAutoHide = o.optBoolean("clockAutoHide", true), coverAutoHide = o.optBoolean("coverAutoHide", true),
                 rowOrderSong = o.optJSONArray("rowOrderSong")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
                 rowOrderRadio = o.optJSONArray("rowOrderRadio")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
-                playerGap = o.optInt("playerGap", 4), settingsTextPct = o.optInt("settingsTextPct", 100), settingsGapPct = o.optInt("settingsGapPct", 85), videoTallFull = o.optBoolean("videoTallFull", false), visInsteadCover = o.optString("visInsteadCover", "off"), videoDecoder = o.optString("videoDecoder", "auto"), videoDeinterlace = o.optString("videoDeinterlace", "off"),
+                playerGap = o.optInt("playerGap", 4), settingsTextPct = o.optInt("settingsTextPct", 100), settingsGapPct = o.optInt("settingsGapPct", 85), videoTallFull = o.optBoolean("videoTallFull", false), visInsteadCover = o.optString("visInsteadCover", "off"), videoDecoder = o.optString("videoDecoder", "auto"), videoDeinterlace = o.optString("videoDeinterlace", "auto"),
                 settingsOrder = o.optJSONArray("settingsOrder")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
                 customAccents = ((o.optJSONArray("customAccents")?.let { a -> (0 until a.length()).map { a.getLong(it) } }
                     ?: listOfNotNull(o.optLong("customAccent", 0L).takeIf { it != 0L }))

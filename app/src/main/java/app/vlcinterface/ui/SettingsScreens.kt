@@ -227,7 +227,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 CardBox {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                         Text("Video decoding", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Video decoding"))
-                        Text("Software: when a video shows green or garbled pictures", color = C.muted, fontSize = 13.sp)
+                        Text("Automatic: chosen for each video from its encoding", color = C.muted, fontSize = 13.sp)
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                             listOf("auto" to "Automatic", "hw" to "Hardware", "sw" to "Software").forEach { (m, l) ->
                                 Pill(l, selected = s.videoDecoder == m, filled = s.videoDecoder == m) { if (s.videoDecoder != m) changed(s.copy(videoDecoder = m), "Video decoding") }
@@ -237,9 +237,9 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     Divider()
                     Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                         Text("Deinterlacing", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Deinterlacing"))
-                        Text("Removes comb lines on TV recordings and DVDs", color = C.muted, fontSize = 13.sp)
+                        Text("Automatic: on for TV recordings and DVDs, off for the rest", color = C.muted, fontSize = 13.sp)
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
-                            listOf("off" to "Off", "auto" to "Automatic").forEach { (m, l) ->
+                            listOf("auto" to "Automatic", "on" to "On", "off" to "Off").forEach { (m, l) ->
                                 Pill(l, selected = s.videoDeinterlace == m, filled = s.videoDeinterlace == m) { if (s.videoDeinterlace != m) changed(s.copy(videoDeinterlace = m), "Deinterlacing") }
                             }
                         }

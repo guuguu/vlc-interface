@@ -126,14 +126,18 @@ object SettingHelp {
         "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
         "Video decoding" to "How videos are turned into pictures.\n\n" +
-            "Automatic: the phone's hardware decoder (fast, saves battery), and the app's own software decoder for files the hardware can't play. " +
+            "Automatic: chosen for each video from its encoding — the phone's hardware decoder (fast, saves battery) when it can decode that codec " +
+            "at that size, otherwise the app's own software decoder; if the hardware fails on a video, it switches to software at once and keeps that " +
+            "for the file next time. "  +
             "Hardware: only the phone's decoder — a file it can't handle shows an error instead of playing slowly. " +
             "Software: only the app's decoder — try it when a video shows green, grey or garbled pictures, blocks or stripes on this phone; " +
             "it uses more battery and very large videos (4K) may stutter.\n\n" +
             "Changing it reopens the playing video at the same spot. Default: Automatic.",
         "Deinterlacing" to "Old TV recordings, DVDs and some camcorder videos are 'interlaced': moving things show thin comb-like lines.\n\n" +
-            "Automatic: only videos marked as interlaced are smoothed (yadif), others aren't touched. Off: shown as they are.\n\n" +
-            "It uses more battery while such a video plays. Changing it reopens the playing video at the same spot. Default: Off.",
+            "Automatic: chosen for each video from its encoding — on for TV-style encodings (MPEG-2, DV, TV recordings .ts / .m2ts / .vob / .mpg " +
+            "at TV sizes), off for the rest so they keep the fastest hardware path; learnt per file. On: every video (only fields marked interlaced " +
+            "are smoothed, yadif). Off: shown as they are.\n\n" +
+            "It uses more battery while such a video plays. Changing it reopens the playing video at the same spot. Default: Automatic.",
         "Visualisation instead of album pictures" to "The song and / or radio player show the visualisation, always, in the place of the album picture or station logo — " +
             "with the patterns, colours and frequencies chosen on this page.\n\n" +
             "Off: the album picture as usual (the visualisation still fills the place when no picture is found). Songs: only the song player. " +

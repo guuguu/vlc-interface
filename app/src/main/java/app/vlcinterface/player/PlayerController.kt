@@ -1621,14 +1621,17 @@ class PlayerController(private val context: Context, private val store: Store) {
         val ps = store.current.settings
         // Settings → Video → Decoding: automatic (hardware, software when it can't), hardware only, software only.
         val isVideo = !item.isMusic && !item.isRadio
-        when (if (isVideo) ps.videoDecoder else "auto") {
+        // Automatic: chosen per file from its encoding (VideoAuto): software only for files the phone's hardware can't decode.
+        val dec = if (!isVideo) "auto" else if (ps.videoDecoder == "auto" && VideoAuto.software(item.uri)) "sw" else ps.videoDecoder
+        when (dec) {
             "hw" -> media.setHWDecoderEnabled(true, true)
             "sw" -> media.setHWDecoderEnabled(false, false)
             else -> media.setHWDecoderEnabled(true, false)
         }
-        // Settings → Video → Deinterlacing: only videos marked interlaced are treated; the filter needs frames it can
-        // touch (hardware decoding without direct rendering).
-        if (isVideo && ps.videoDeinterlace == "auto") {
+        // Settings → Video → Deinterlacing: Automatic = by the video's encoding (TV recordings / MPEG-2 / DV), On, Off.
+        // The filter treats only fields marked interlaced and needs frames it can touch (no direct rendering).
+        deintOn = isVideo && (ps.videoDeinterlace == "on" || (ps.videoDeinterlace == "auto" && VideoAuto.deinterlace(item.uri)))
+        if (deintOn) {
             media.addOption(":deinterlace=-1"); media.addOption(":deinterlace-mode=yadif")
             media.addOption(":no-mediacodec-dr")
         } else if (isVideo) media.addOption(":deinterlace=0")
@@ -2026,6 +2029,12 @@ class PlayerController(private val context: Context, private val store: Store) {
                         try { old?.close() } catch (_: Exception) {}
                         main.postDelayed({ stopping = false }, 500)
                     }
+                } else if (item != null && !item.isMusic && !item.isRadio && store.current.settings.videoDecoder == "auto" &&
+                    !VideoAuto.software(item.uri) && VideoAuto.mayReopen(item.uri)) {
+                    // Hardware decoder failed on this video: once more with the software decoder (kept for this file).
+                    VideoAuto.markSoftware(item.uri)
+                    val at = mp.time.coerceAtLeast(0)
+                    main.post { startItem(_state.value.index, at) }
                 } else {
                     if (item != null && item.uri.startsWith("content://")) ServerLog.log("phone", "play", "FILE", "", false,
                         "libVLC could not open ${item.title} (by path and by file handle)" + if (cardMissing(item)) ": SD card not available" else "",
@@ -2060,6 +2069,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
+    /** Deinterlacing applied to the playing video. */
+    private var deintOn = false
+
     private fun refreshTracks() {
         val a = mp.audioTracks?.map { Track(it.id, it.name ?: "Track ${it.id}") } ?: emptyList()
         val sp = mp.spuTracks?.map { Track(it.id, it.name ?: "Track ${it.id}") } ?: emptyList()
@@ -2078,6 +2090,14 @@ class PlayerController(private val context: Context, private val store: Store) {
             length = if (mp.length > 0) mp.length else _state.value.length,
         )
         if (sizeChanged) refreshSurface()
+        // Settings → Video "Automatic": learn from the video's encoding; re-open once the right way if needed.
+        val it0 = _state.value.item
+        if (vt != null && it0 != null && !it0.isMusic && !it0.isRadio) {
+            val ps = store.current.settings
+            if ((ps.videoDecoder == "auto" || ps.videoDeinterlace == "auto") &&
+                VideoAuto.learn(it0.uri, vt, ps.videoDecoder == "auto", ps.videoDeinterlace == "auto", deintOn))
+                main.postDelayed({ if (_state.value.item?.uri == it0.uri) reloadVideo() }, 300)
+        }
     }
 
     /** Radio "now playing" (ICY metadata) changes without any player event, so read it every few seconds. */
