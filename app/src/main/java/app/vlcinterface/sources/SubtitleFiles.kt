@@ -35,6 +35,25 @@ object SubtitleFiles {
     }
 
     fun remember(item: PlayItem, ref: SubRef) { refs[item.uri] = ref }
+
+    /**
+     * The video is gone: its downloaded subtitles go too — the app's working copies and undo copies, and the files
+     * the app saved next to the video on the server ([written]: source id, folder, name).
+     */
+    suspend fun forgetVideo(ctx: Context, uri: String, written: List<Triple<String, String, String>>) = withContext(Dispatchers.IO) {
+        refs.remove(uri)
+        val d = File(ctx.filesDir, "subtitles/" + hash(uri))
+        val undo = File(ctx.filesDir, "subtitles-undo")
+        d.listFiles()?.forEach { f ->
+            val folders = written.map { it.second }.toMutableList().apply { add("") }
+            folders.forEach { fo -> File(undo, hash(fo + f.name + f.path) + ".orig").delete() }
+        }
+        d.deleteRecursively()
+        written.forEach { (srcId, folder, name) ->
+            val src = App.instance.store.current.sources.firstOrNull { it.id == srcId } ?: return@forEach
+            NasWriter.delete(src, folder, name, "subtitle")
+        }
+    }
     fun current(item: PlayItem): SubRef? = refs[item.uri]
 
     private fun sourceOf(item: PlayItem): Source? = App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }
@@ -57,9 +76,13 @@ object SubtitleFiles {
         val name = nameFor(item, ext)
         val local = File(dir(ctx, "subtitles/" + hash(item.uri)), name)
         local.writeBytes(bytes)
+        // Marks the video as having downloaded subtitles (so they're deleted when the video is gone).
+        app.vlcinterface.player.VideoAuto.setStr(item.uri, "subsLocal", "1")
         val t = target(item)
         val where = if (t != null) {
             val r = NasWriter.write(t.first, t.second, name, bytes, "subtitle")
+            // Remembered with the video, so it's deleted together with the video's data when the video is gone.
+            if (r.isSuccess) app.vlcinterface.player.VideoAuto.addSub(item.uri, t.first.id, t.second, name)
             r.fold({ "Saved next to the video as $name" }, { "Kept in the app as $name (${it.message})" })
         } else "Kept in the app as $name"
         val ref = SubRef(local, t?.first, t?.second ?: "", name)

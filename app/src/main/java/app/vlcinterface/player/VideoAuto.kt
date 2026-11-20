@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaCodecList
 import android.os.Build
 import org.videolan.libvlc.interfaces.IMedia
+import kotlinx.coroutines.launch
 
 /**
  * Settings → Video "Automatic": decoding and deinterlacing chosen per video from its encoding.
@@ -39,6 +40,16 @@ object VideoAuto {
     /** Every video file that has something saved. */
     fun files(): Set<String> = prefs.all.keys.filter { it.startsWith("f:") }.map { it.removePrefix("f:") }.toSet()
     fun forget(uri: String) = prefs.edit().remove("f:$uri").apply()
+
+    /** Subtitles the app saved next to this video on a server (source id, folder, name). */
+    fun subs(uri: String): List<Triple<String, String, String>> = rec(uri).optJSONArray("subs")?.let { a ->
+        (0 until a.length()).mapNotNull { i -> a.optJSONArray(i)?.let { Triple(it.optString(0), it.optString(1), it.optString(2)) } } } ?: emptyList()
+    fun addSub(uri: String, srcId: String, folder: String, name: String) = edit(uri) { o ->
+        val a = o.optJSONArray("subs") ?: org.json.JSONArray()
+        val have = (0 until a.length()).any { a.optJSONArray(it)?.optString(2) == name && a.optJSONArray(it)?.optString(1) == folder }
+        if (!have) a.put(org.json.JSONArray().put(srcId).put(folder).put(name))
+        o.put("subs", a)
+    }
 
     /** Decoder chosen by hand for this file, or "" (Automatic / the general setting). */
     fun manualDecoder(uri: String) = str(uri, "dec")
@@ -133,6 +144,14 @@ object VideoFileCleanup {
     fun forget(uris: Collection<String>) {
         if (uris.isEmpty()) return
         val set = uris.toSet()
+        // Downloaded subtitles of these videos (app copies and the ones saved next to the video) are deleted too.
+        val app0 = app.vlcinterface.App.instance
+        set.forEach { u ->
+            val written = VideoAuto.subs(u)
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try { app.vlcinterface.sources.SubtitleFiles.forgetVideo(app0, u, written) } catch (_: Exception) {}
+            }
+        }
         set.forEach { VideoAuto.forget(it) }
         app.vlcinterface.App.instance.store.update { st ->
             st.copy(

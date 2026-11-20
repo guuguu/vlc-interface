@@ -162,3 +162,5 @@
 - Video details show where each choice comes from: automatic / chosen for this video / default.
 - When a video file disappears from the library, everything kept for it is deleted: phone videos are checked a few
   seconds after the app starts; network videos when their folder is listed in Libraries and the file isn't there.
+- Its downloaded subtitles are deleted too (requested 21:48): the app's working and undo copies, and the subtitle
+  files the app saved next to the video on the NAS (only those the app downloaded; logged in the server log).

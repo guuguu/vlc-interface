@@ -233,6 +233,24 @@ object NasWriter {
         } catch (_: Exception) { false }
     }
 
+    /** Deletes a file the app wrote earlier (e.g. a downloaded subtitle whose video is gone). */
+    suspend fun delete(src: Source, folderUrl: String, name: String, what: String): Boolean = withContext(Dispatchers.IO) {
+        val ok = try {
+            when (src.proto) {
+                "smb" -> SmbFile(VpnLink.route(Uri.decode(folderUrl.trimEnd('/') + "/" + name)), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain))
+                    .let { if (it.exists()) { it.delete(); true } else true }
+                "webdav" -> {
+                    val req = Request.Builder().url(folderUrl.trimEnd('/') + "/" + Uri.encode(name)).delete()
+                        .apply { if (src.user.isNotEmpty()) header("Authorization", Credentials.basic(src.user, src.password)) }.build()
+                    Net.http.newCall(req).execute().use { it.isSuccessful || it.code == 404 }
+                }
+                else -> false
+            }
+        } catch (_: Exception) { false }
+        ServerLog.log(src.host, "delete $what", src.proto.uppercase(), src.user, ok, if (ok) "Deleted $name" else "Could not delete $name")
+        ok
+    }
+
     suspend fun write(src: Source, folderUrl: String, name: String, bytes: ByteArray, what: String): Result<String> = withContext(Dispatchers.IO) {
         val started = System.currentTimeMillis()
         val target = folderUrl.trimEnd('/') + "/" + name
