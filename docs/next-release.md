@@ -13,3 +13,6 @@
   (requested 2026-11-20 12:12).
 - The alarms list under the clock on the player shows every alarm (the whole collection, not only the next ones) and
   scrolls on its own within its area when they don't all fit (requested 2026-11-20 12:14).
+- The switch of each listed alarm (alarm list and the list under the clock) is drawn wider, horizontally elongated,
+  so it's easy to hit; switching it raises a short live pop-up (about 2 s, closes by itself) confirming what was
+  done, e.g. "07:30 Mon–Fri will ring" / "07:30 Mon–Fri won't ring" (requested 2026-11-20 12:17).
