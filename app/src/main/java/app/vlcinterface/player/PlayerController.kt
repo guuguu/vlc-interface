@@ -1218,9 +1218,10 @@ class PlayerController(private val context: Context, private val store: Store) {
                         val tall = if (turned) w > h else h > w
                         val shape = if (w == h) "Square" else if (tall) "Portrait (upright, tall)" else "Landscape (wide)"
                         val rot = when (vt.orientation) {
-                            0 -> "stored as recorded"; 1 -> "stored mirrored"; 2 -> "stored upside down (turned 180°)"; 3 -> "stored mirrored upside down"
-                            4 -> "stored turned 90° (transposed)"; 5 -> "stored turned 90° (rotated right)"; 6 -> "stored turned 270° (rotated left)"
-                            7 -> "stored turned 90° and mirrored"; else -> "rotation flag ${vt.orientation}"
+                            // libVLC order: top-left, top-right, bottom-left, bottom-right, left-top, left-bottom, right-top, right-bottom.
+                            0 -> "stored as recorded"; 1 -> "stored mirrored"; 2 -> "stored flipped upside down"; 3 -> "stored turned 180°"
+                            4 -> "stored turned 90° and mirrored"; 5 -> "stored turned 90°"; 6 -> "stored turned 270°"
+                            7 -> "stored turned 270° and mirrored"; else -> "rotation flag ${vt.orientation}"
                         }
                         add("Original orientation" to "$shape · $rot")
                     }
