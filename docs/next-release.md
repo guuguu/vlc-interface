@@ -27,9 +27,10 @@
 - No "on / off" words anywhere for switches, the wizard's "Now:" row included (switch rows show no "Now:" row;
   other settings keep theirs) (requested 2026-11-20 10:55).
 
-## Radio player scrolling (requested 2026-11-20 11:25)
-- Scrolling up on the radio player moves the cover (album picture / clock) up and out of view.
-- The station block then stays frozen under the header: "RADIO STATION", station name, address, Live, format line,
-  the VPN-NAS button and "Live · listening …".
+## Radio and audio player scrolling (requested 2026-11-20 11:25; audio player and portrait only: 11:27)
+- Upright (portrait) only; sideways stays as now. On the radio player and the audio (songs) player, scrolling up moves the cover (album picture / clock) up and out of view.
+- The title block then stays frozen under the header (songs: title, artist / album, format line, VPN-NAS button and
+  its status line; radio: "RADIO STATION", station name, address, Live, format line,
+  the VPN-NAS button and "Live · listening …").
 - Scrolling on moves all the rest underneath it (controls, Up next, the other items); scrolling back down
   brings the cover back.
