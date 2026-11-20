@@ -204,3 +204,13 @@
   still adds a little. The automatic level adapts within a few seconds. Still no flashing.
 - Movement speed mostly from the music (22:28, dance music felt slow): a calm drift between beats, about 3× faster
   moves on the beats than before.
+
+## Beat-synced visualisations (requested 2026-11-20 22:38; chosen: projectM, spectrum analyser, beat engine)
+- Beat engine: onsets of the bass are found against their own recent statistics; the tempo (70–180 BPM) comes from
+  the spacing of recent onsets; beats keep coming on time between clear onsets (phase-locked), so every pattern
+  pulses on the beat and keeps time through quieter bars.
+- Spectrum analyser (new patterns): "Spectrum bars" (with falling peak caps), "Spectrum mirror" (from the middle
+  line), "Spectrum circle" (round, swells on the beat, turns with the music). 20 bands from ~40 Hz to 16 kHz,
+  measured in the app's sound engine only while such a pattern is shown; colours from the chosen colours.
+- projectM (MilkDrop presets): planned as the next step — libprojectM (LGPL 2.1, OpenGL ES 3) built into the app and
+  fed with the app's own sound, with a preset pack; its own pattern group on the Visualisation page.

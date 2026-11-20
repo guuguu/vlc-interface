@@ -80,7 +80,7 @@ static peak_t g_ring[RING];
 
 /* Diagnostics, read by Kotlin (watchdog + Settings → Sound). */
 static atomic_long st_setup, st_setupRes = -99, st_play, st_frames, st_lastWrite, st_startRes = -99, st_ptsDelta, st_rate, st_open = -99;
-static atomic_uint g_w, g_r, g_r2;
+static atomic_uint g_w, g_r, g_r2, g_r3;
 
 /* Visualisation: two frequency bands (lower and upper part of the chosen range), measured on the song's samples
    before the volume, so the pictures don't depend on how loud it is played. */
@@ -88,6 +88,34 @@ static _Atomic float g_bandLo = 30.f, g_bandHi = 150.f;
 static float g_bandUsed[3] = { 0, 0, 0 };     /* lo, hi, rate the filters were made for */
 typedef struct { float b0, b1, b2, a1, a2, z0, z1; } vbq_t;
 static vbq_t g_vb[4];                          /* band A: hp, lp; band B: hp, lp */
+
+/* Spectrum analyser: SPEC_N log-spaced bands (≈ 40 Hz … 16 kHz), band-pass filters on the song's samples,
+   measured only while a spectrum picture is shown. RMS per written chunk, kept in step with the peaks ring. */
+#define SPEC_N 20
+typedef struct { float b0, b2, a1, a2, z0, z1; } sbp_t;      /* band-pass (b1 = 0) */
+static sbp_t g_sb[SPEC_N];
+static float g_specUsed = 0.f;
+static atomic_bool g_specOn;
+static float g_spec[RING * SPEC_N];
+
+static void spec_update(float fs) {
+    if (fs == g_specUsed) return;
+    g_specUsed = fs;
+    for (int i = 0; i < SPEC_N; i++) {
+        float f = 40.f * powf(16000.f / 40.f, (i + 0.5f) / SPEC_N);
+        if (f > fs * 0.45f) f = fs * 0.45f;
+        float w0 = 2.f * (float)M_PI * f / fs, al = sinf(w0) / (2.f * 2.2f), a0 = 1.f + al;
+        g_sb[i].b0 = al / a0; g_sb[i].b2 = -al / a0;
+        g_sb[i].a1 = -2.f * cosf(w0) / a0; g_sb[i].a2 = (1.f - al) / a0; g_sb[i].z0 = g_sb[i].z1 = 0.f;
+    }
+}
+
+static inline float sbp_run(sbp_t *q, float x) {
+    float y = q->b0 * x + q->z0;
+    q->z0 = -q->a1 * y + q->z1;
+    q->z1 = q->b2 * x - q->a2 * y;
+    return y;
+}
 
 static void vbq_design(vbq_t *q, bool high, float f, float fs) {
     if (f > fs * 0.45f) f = fs * 0.45f;
@@ -393,6 +421,9 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     unsigned done = 0;
     float pl = 0.f, pr = 0.f;
     double ea = 0.0, eb = 0.0;
+    double es[SPEC_N] = { 0 };
+    const bool specOn = atomic_load(&g_specOn);
+    if (specOn) spec_update((float)(g_src ? g_src : g_rate));
     bands_update();
     while (done < count) {
         unsigned n = count - done; if (n > 4096) n = 4096;
@@ -401,6 +432,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
             float m = (x + y) * 0.5f;
             float va = vbq_run(&g_vb[1], vbq_run(&g_vb[0], m)), vb = vbq_run(&g_vb[3], vbq_run(&g_vb[2], m));
             ea += va * va; eb += vb * vb;
+            if (specOn) for (int b = 0; b < SPEC_N; b++) { float s = sbp_run(&g_sb[b], m); es[b] += s * s; }
             if (g_eqActive) { x = eq_run(x, 0); y = eq_run(y, 1); }
             float k = (float)(done + i);
             float l = x * (sl + dl * k), r = y * (sr + dr * k);
@@ -423,6 +455,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     int64_t when = (delta > -3000000 && delta < 3000000) ? pts : now_us() + latency_us();
     float ra = count ? sqrtf((float)(ea / count)) : 0.f, rb = count ? sqrtf((float)(eb / count)) : 0.f;
     g_ring[wi % RING] = (peak_t){ when, pl > 1.f ? 1.f : pl, pr > 1.f ? 1.f : pr, ra, rb };
+    for (int b = 0; b < SPEC_N; b++) g_spec[(wi % RING) * SPEC_N + b] = (specOn && count) ? sqrtf((float)(es[b] / count)) : 0.f;
     atomic_store(&g_w, wi + 1);
     pthread_mutex_unlock(&g_lock);
 }
@@ -688,6 +721,28 @@ Java_app_vlcinterface_player_NativeAudio_readBands(JNIEnv *env, jobject thiz, jf
     atomic_store(&g_r2, r);
     jfloat v[2] = { a, b };
     (*env)->SetFloatArrayRegion(env, out, 0, 2, v);
+}
+
+/* Spectrum (SPEC_N bands, RMS) of the audio being heard now: the loudest value of each band since the last read. */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_readSpectrum(JNIEnv *env, jobject thiz, jfloatArray out) {
+    (void)thiz;
+    float v[SPEC_N] = { 0 };
+    int64_t now = now_us();
+    unsigned r = atomic_load(&g_r3), w = atomic_load(&g_w);
+    if (w - r > RING) r = w - RING;
+    while (r != w && g_ring[r % RING].pts <= now) {
+        for (int b = 0; b < SPEC_N; b++) { float x = g_spec[(r % RING) * SPEC_N + b]; if (x > v[b]) v[b] = x; }
+        r++;
+    }
+    atomic_store(&g_r3, r);
+    (*env)->SetFloatArrayRegion(env, out, 0, SPEC_N, v);
+}
+
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_setSpectrum(JNIEnv *env, jobject thiz, jboolean on) {
+    (void)env; (void)thiz;
+    atomic_store(&g_specOn, on ? true : false);
 }
 
 JNIEXPORT void JNICALL

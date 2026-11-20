@@ -74,7 +74,8 @@ private val PALETTES: List<Pair<String, String>> = listOf("pattern" to "Pattern 
 private val EFFECT_NAMES = listOf("clouds" to "Colour clouds", "lava" to "Lava glow", "nebula" to "Nebula", "tides" to "Tides",
     "plasma" to "Plasma", "silk" to "Silk bands", "sunset" to "Sunset sky", "ocean" to "Deep ocean", "embers" to "Embers",
     "ink" to "Ink flow", "reaction" to "Reaction–diffusion", "phase" to "Phase portrait", "chladni" to "Chladni waves",
-    "mandel" to "Mandelbrot dive", "epicycles" to "Fourier epicycles")
+    "mandel" to "Mandelbrot dive", "epicycles" to "Fourier epicycles",
+    "bars" to "Spectrum bars", "mirror" to "Spectrum mirror", "radial" to "Spectrum circle")
 
 /** Mathematical patterns: drawn as a colour field (cosine palettes, or the chosen colour combination). */
 private val FIELD_FX = setOf("ink", "reaction", "phase", "chladni", "mandel", "epicycles")
@@ -164,6 +165,63 @@ private class VisMotion {
     // Beat following: fast envelope, short average, and a pulse fired on each detected beat (per band).
     var envLo = 0f; var avgLo = 0.001f; var kickLo = 0f; var lastLo = -1f
     var envHi = 0f; var avgHi = 0.001f; var kickHi = 0f; var lastHi = -1f
+    /** Beat engine (low band): onset strength history, recent onsets, tempo and the next expected beat. */
+    val odf = FloatArray(96); var odfI = 0; var prevLo = 0f
+    val onsets = ArrayDeque<Float>()
+    var period = 0f; var lastBeat = -10f; var confidence = 0f
+    /** Tempo found (beats per minute; 0 = not yet). */
+    var bpm = 0f
+    /** Spectrum analyser: band levels (0…1), their slow references and the falling peak caps. */
+    val spec = FloatArray(NativeAudio.SPEC_N); val specRaw = FloatArray(NativeAudio.SPEC_N)
+    val specRef = FloatArray(NativeAudio.SPEC_N) { 0.01f }; val specPeak = FloatArray(NativeAudio.SPEC_N)
+}
+
+/** Spectrum pictures (bars from the 20-band analyser). */
+val SPEC_FX = setOf("bars", "mirror", "radial")
+
+/**
+ * Beat engine: onsets of the low band are found against their own recent statistics (mean + 1.6 × spread), the
+ * tempo from the spacing of the recent onsets (folded into 70–180 BPM), and beats keep coming on time between
+ * clear onsets (phase-locked: a clear onset near the expected beat moves the beat onto it). Returns true on a beat.
+ */
+private fun beatStep(m: VisMotion, x: Float, clock: Float): Boolean {
+    // Onset strength: rise of the (normalised) level since the last frame.
+    val d = max(0f, x - m.prevLo); m.prevLo = x
+    m.odf[m.odfI % m.odf.size] = d; m.odfI++
+    val n = minOf(m.odfI, m.odf.size)
+    var mean = 0f; for (i in 0 until n) mean += m.odf[i]; mean /= n
+    var vr = 0f; for (i in 0 until n) { val e = m.odf[i] - mean; vr += e * e }; val sd = kotlin.math.sqrt(vr / n)
+    val onset = n > 20 && d > mean + 1.6f * sd && d > 0.04f && clock - (m.onsets.lastOrNull() ?: -10f) > 0.22f
+    if (onset) {
+        m.onsets.addLast(clock); while (m.onsets.size > 16) m.onsets.removeFirst()
+        // Tempo: histogram of the spacings between recent onsets, folded into 0.33 … 0.86 s.
+        if (m.onsets.size >= 4) {
+            val hist = FloatArray(54)          // 10 ms bins from 0.33 s
+            val list = m.onsets.toList()
+            for (i in list.indices) for (j in i + 1 until list.size) {
+                var ioi = list[j] - list[i]
+                if (ioi > 2.6f) continue
+                while (ioi > 0.86f) ioi /= 2f
+                while (ioi < 0.33f) ioi *= 2f
+                val bin = ((ioi - 0.33f) / 0.01f).toInt().coerceIn(0, 53)
+                for (k in -2..2) { val b = bin + k; if (b in 0..53) hist[b] += exp(-(k * k) / 2f) }
+            }
+            var best = 0; for (i in hist.indices) if (hist[i] > hist[best]) best = i
+            val p = 0.33f + best * 0.01f + 0.005f
+            m.period = if (m.period == 0f) p else m.period + (p - m.period) * 0.3f
+            m.confidence = (hist[best] / (list.size * 1.5f)).coerceIn(0f, 1f)
+            m.bpm = 60f / m.period
+        }
+    }
+    // Beat: a clear onset near where the beat is expected (or any clear onset before the tempo is known) …
+    val expected = m.lastBeat + m.period
+    if (onset && (m.period == 0f || kotlin.math.abs(clock - expected) < m.period * 0.3f || clock - m.lastBeat > m.period * 1.5f)) {
+        m.lastBeat = clock; return true
+    }
+    // … or, with a steady tempo, the expected time itself (keeps time through quiet bars).
+    if (m.period > 0f && m.confidence > 0.35f && clock >= expected && clock - expected < 0.05f) { m.lastBeat = expected; return true }
+    if (m.period > 0f && clock - m.lastBeat > m.period * 4f) { m.period = 0f; m.bpm = 0f; m.confidence = 0f }   // lost: start over
+    return false
 }
 
 /**
@@ -200,10 +258,8 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
                         val hit = x > av * 1.35f + 0.0005f && x > env * 0.9f && clock - last > minGap
                         return Triple(e, av, hit)
                     }
-                    beat(buf[0], m.envLo, m.avgLo, m.lastLo, 0.2f).let { (e, av, hit) ->
-                        m.envLo = e; m.avgLo = av
-                        if (hit) { m.kickLo = 1f; m.lastLo = clock; m.pb += 0.35f }   // a step forward on every beat
-                    }
+                    // Low band: the beat engine (onsets + tempo, keeps time between clear onsets).
+                    if (beatStep(m, (buf[0] / m.refLo).coerceIn(0f, 1f), clock)) { m.kickLo = 1f; m.lastLo = clock; m.pb += 0.35f }
                     beat(buf[1], m.envHi, m.avgHi, m.lastHi, 0.1f).let { (e, av, hit) ->
                         m.envHi = e; m.avgHi = av
                         if (hit) { m.kickHi = 1f; m.lastHi = clock; m.ps += 0.25f }
@@ -218,6 +274,20 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
                     b = 0.7f * exp(-((clock + 0.125f) % 0.25f) / 0.05f) * (0.6f + 0.4f * sin(clock * 1.3f))
                     a = (a * 0.7f).coerceIn(0f, 1f); b = b.coerceIn(0f, 1f)
                 } else { a = 0f; b = 0f }
+                // Spectrum analyser: levels on a 60 dB scale against each band's own slow reference; bars rise at once
+                // and fall smoothly, peak caps hold and drop slowly.
+                if (vs.effect in SPEC_FX) {
+                    if (live && NativeAudio.active) NativeAudio.spectrum(m.specRaw)
+                    else for (i in m.specRaw.indices) m.specRaw[i] = if (!live || playing)
+                        (0.05f + 0.6f * m.lo * exp(-i / 4f) + 0.3f * m.hi * exp(-(19 - i) / 6f) + 0.08f * (0.5f + 0.5f * sin(clock * 3f + i))) else 0f
+                    for (i in m.spec.indices) {
+                        val raw = m.specRaw[i]
+                        m.specRef[i] = max(m.specRef[i] * (1f - dt * 0.2f), max(raw, 1e-4f))
+                        val db = if (raw <= 1e-6f) 0f else ((20f * kotlin.math.log10(raw / m.specRef[i]) + 42f) / 42f).coerceIn(0f, 1f)
+                        m.spec[i] = if (db > m.spec[i]) db else max(db, m.spec[i] - dt * 1.6f)
+                        m.specPeak[i] = if (m.spec[i] >= m.specPeak[i]) m.spec[i] else max(m.spec[i], m.specPeak[i] - dt * 0.5f)
+                    }
+                }
                 val k = vs.move.coerceIn(0.2f, 2f)
                 a = (a * k).coerceIn(0f, 1f); b = (b * k).coerceIn(0f, 1f)
                 // Rises at once on a beat, falls back within a fraction of a second (follows the rhythm, still no flashing).
@@ -250,9 +320,14 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
     val plasma = remember { android.graphics.Bitmap.createBitmap(18, 32, android.graphics.Bitmap.Config.ARGB_8888) }
     val px = remember { IntArray(18 * 32) }
     val field = remember(v.effect) { arrayOfNulls<VisField>(1) }
+    // The analyser is measured only while a live spectrum picture is shown (saves battery otherwise).
+    if (live) androidx.compose.runtime.DisposableEffect(v.effect in SPEC_FX) {
+        NativeAudio.spectrumOn(v.effect in SPEC_FX); onDispose { if (v.effect in SPEC_FX) NativeAudio.spectrumOn(false) }
+    }
     Canvas(modifier) {
         val t = m.t
         val a = v.brightness.coerceIn(0.2f, 1f)
+        if (v.effect in SPEC_FX) { drawSpectrum(v.effect, m, a, visColours(v), bg); return@Canvas }
         if (v.effect in FIELD_FX) {
             val land = size.width > size.height
             val fw = if (land) 128 else 72; val fh = if (land) 72 else 128
@@ -262,6 +337,56 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
         }
         drawBackground(v.effect, bg, t, m.lo, a, plasma, px, m.tc)
         drawSpots(spots, m, a, v.mix.coerceIn(0f, 1f), v.effect, v.sharp)
+    }
+}
+
+/**
+ * Spectrum pictures: "bars" (from the bottom, peak caps), "mirror" (from the middle line up and down), "radial"
+ * (around a circle that swells on the beat and turns with the music). Colours run across the bands.
+ */
+private fun DrawScope.drawSpectrum(effect: String, m: VisMotion, a: Float, cols: List<Color>, bg: List<Color>) {
+    drawRect(lerpC(Color.Black, bg.firstOrNull() ?: Color.Black, 0.25f + 0.25f * m.kickLo))
+    val n = m.spec.size
+    fun colAt(i: Int): Color {
+        val f = i / (n - 1f) * (cols.size - 1)
+        val j = f.toInt().coerceIn(0, cols.size - 2)
+        return lerpC(cols[j], cols[j + 1], f - j).copy(alpha = a)
+    }
+    when (effect) {
+        "radial" -> {
+            val c = Offset(size.width / 2, size.height / 2)
+            val base = minOf(size.width, size.height) * (0.18f + 0.05f * m.kickLo)
+            val len = minOf(size.width, size.height) * 0.30f
+            val turn = m.ps * 0.3f
+            val bw = (2f * Math.PI.toFloat() * base / (n * 2)) * 0.7f
+            drawCircle(colAt(0).copy(alpha = 0.25f * a + 0.35f * m.kickLo), base * 0.92f, c)
+            for (i in 0 until n * 2) {
+                val b = if (i < n) i else 2 * n - 1 - i             // mirrored all round
+                val ang = turn + i * (2f * Math.PI.toFloat() / (n * 2))
+                val r1 = base; val r2 = base + len * m.spec[b].coerceAtLeast(0.02f)
+                drawLine(colAt(b), Offset(c.x + cos(ang) * r1, c.y + sin(ang) * r1), Offset(c.x + cos(ang) * r2, c.y + sin(ang) * r2), bw, androidx.compose.ui.graphics.StrokeCap.Round)
+            }
+        }
+        else -> {
+            val gap = size.width * 0.012f
+            val bw = (size.width - gap * (n + 1)) / n
+            val mirror = effect == "mirror"
+            val mid = size.height / 2
+            for (i in 0 until n) {
+                val x = gap + i * (bw + gap)
+                val h = (if (mirror) mid * 0.92f else size.height * 0.9f) * m.spec[i].coerceAtLeast(0.01f)
+                val ph = (if (mirror) mid * 0.92f else size.height * 0.9f) * m.specPeak[i]
+                val col = colAt(i)
+                if (mirror) {
+                    drawRect(col, Offset(x, mid - h), androidx.compose.ui.geometry.Size(bw, h * 2))
+                    drawRect(col.copy(alpha = col.alpha * 0.9f), Offset(x, mid - ph - 3f), androidx.compose.ui.geometry.Size(bw, 3f))
+                    drawRect(col.copy(alpha = col.alpha * 0.9f), Offset(x, mid + ph), androidx.compose.ui.geometry.Size(bw, 3f))
+                } else {
+                    drawRect(col, Offset(x, size.height - h), androidx.compose.ui.geometry.Size(bw, h))
+                    drawRect(Color.White.copy(alpha = 0.8f * a), Offset(x, size.height - ph - 4f), androidx.compose.ui.geometry.Size(bw, 3f))
+                }
+            }
+        }
     }
 }
 

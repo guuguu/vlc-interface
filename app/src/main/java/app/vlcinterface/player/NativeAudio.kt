@@ -25,6 +25,8 @@ object NativeAudio {
     private external fun readPeaks(out: FloatArray)
     private external fun readBands(out: FloatArray)
     private external fun setBands(lo: Float, hi: Float)
+    private external fun readSpectrum(out: FloatArray)
+    private external fun setSpectrum(on: Boolean)
     private external fun stats(out: LongArray)
     private external fun reroute()
     private external fun setDevice(id: Int)
@@ -111,5 +113,9 @@ object NativeAudio {
         try { setPreferredRate(hz); if (active) reroute() } catch (_: Throwable) {}
     }
     fun bandRange(lo: Float, hi: Float) { if (loaded) try { setBands(lo, hi) } catch (_: Throwable) {} }
+    /** Spectrum analyser: 20 bands (≈ 40 Hz … 16 kHz), measured only while [spectrumOn] is set. */
+    const val SPEC_N = 20
+    fun spectrumOn(on: Boolean) { if (loaded) try { setSpectrum(on) } catch (_: Throwable) {} }
+    fun spectrum(out: FloatArray) { if (active) try { readSpectrum(out) } catch (_: Throwable) { out.fill(0f) } else out.fill(0f) }
     fun peaks(out: FloatArray) { if (active) readPeaks(out) else { out[0] = 0f; out[1] = 0f } }
 }
