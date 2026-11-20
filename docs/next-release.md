@@ -27,3 +27,9 @@
 - On the clock front the shrinking has a firm floor: text always stays comfortably readable (never below about 14 sp for
   the date / weather / alarms, the time digits never below a large size); when it still doesn't fit, a line is
   shortened (e.g. weekday abbreviated) rather than made smaller (requested 2026-11-20 16:54).
+
+## More weather icons on the clock (requested 2026-11-20 16:56)
+- Snow gets its own icons: snowflakes alone, and a cloud with snowflakes.
+- Rain gets an icon without the cloud too: raindrops alone (the cloud with drops stays).
+- Which one: light (drizzle, light rain / light snow, snow grains, light showers) → the symbol alone;
+  moderate / heavy (rain, snow, heavy showers, freezing rain) → the symbol with its cloud.
