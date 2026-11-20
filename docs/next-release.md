@@ -38,3 +38,6 @@
 - Every triangle arrow on the settings pages (▶ on links, ▲ ▼ for ordering, ▶ in the wizard / help, ▾ on menus) has
   one size and is clearly visible: the same bright colour, with a disabled arrow (first ▲ / last ▼) still visible
   as a dimmer grey, never near-invisible (requested 2026-11-20 17:24).
+- The same for every other symbol on the settings pages (☑ ☐ ✓ ⚙ ⚠ ✕ + ↻ ⓘ, the Wi-Fi / mobile symbol, the colour
+  circles…): one consistent size and clearly visible colours, disabled ones dimmer but still easy to see
+  (requested 2026-11-20 17:25).
