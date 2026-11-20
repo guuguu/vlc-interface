@@ -33,3 +33,5 @@
 - Rain gets an icon without the cloud too: raindrops alone (the cloud with drops stays).
 - Which one: light (drizzle, light rain / light snow, snow grains, light showers) → the symbol alone;
   moderate / heavy (rain, snow, heavy showers, freezing rain) → the symbol with its cloud.
+- The weather icon shows the forecast for 12:00 noon today at the chosen city (its local time), instead of the
+  weather right now; it changes to the next day's noon after midnight (requested 2026-11-20 16:58).
