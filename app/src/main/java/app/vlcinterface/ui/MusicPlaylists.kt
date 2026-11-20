@@ -171,7 +171,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     val topSec = if (clockTop) setsP.clockHideSec else setsP.coverHideSec
     // Look switches "Hide the clock / album picture while scrolling": off = the clock stays pinned above the page,
     // the picture simply scrolls with the page; neither is ever taken away.
-    val topAuto = if (clockTop) setsP.clockAutoHide else setsP.coverAutoHide
+    // (The album picture only when it's the first row of the page.)
+    val topAuto = if (clockTop) setsP.clockAutoHide else setsP.coverAutoHide && playerRowOrder(setsP, item.isRadio).first() == "picture"
     var lastAct by remember { mutableLongStateOf(0L) }
     var topHidden by remember { mutableStateOf(false) }
     var topHpx by remember { mutableIntStateOf(0) }
@@ -237,7 +238,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 ClockWithGear(nav) { ClockFace(asp, Modifier.size(minOf(maxWidth, maxHeight))) }
             }
         }
-        val partA: @Composable ColumnScope.() -> Unit = {
+        // The page's rows, in the order chosen in Look → "Order of the player rows" (songs and radio apart).
+        val rowsOf: @Composable ColumnScope.(List<String>) -> Unit = { ids ->
             var coverNote by remember(item.uri) { mutableStateOf("") }
             // Long-press the picture: look for it online again (also when it wasn't found before).
             var coverRetry by remember(item.uri) { mutableIntStateOf(0) }
@@ -258,6 +260,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     item = if (p.songOver) null else coverItem, download = !p.songOver, refresh = coverRefresh,
                     onNote = { coverNote = it }, onFound = { player.useDownloadedArtwork(item, "mem:" + item.uri) })
             }
+            val rowPicture: @Composable () -> Unit = {
             // Sideways: the picture / clock takes the height left by the rest of the left half (no scrolling).
             // Upright: the clock takes the whole width; the album picture keeps its size.
             if (clockOn) Unit   // the clock is pinned outside the scrolling page
@@ -278,6 +281,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     player.replacePicture(coverItem, clear) { note -> coverNote = note; coverRefresh++ }
                 })
             if (coverNote.isNotEmpty() && !clockOn) Text(coverNote, color = C.muted, fontSize = 11.sp, textAlign = TextAlign.Center)
+            }
+            val rowTitle: @Composable () -> Unit = {
             // Upright: stays at the top (under the header) once scrolled up to it; the rest scrolls underneath.
             val stickMod = if (landscape) Modifier else Modifier.fillMaxWidth()
                 .onGloballyPositioned { titleTopPx = it.positionInParent().y.toInt(); titleHpx = it.size.height }
@@ -321,13 +326,17 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 if (showInfo) TagInfoDialog(item) { showInfo = false }
             }
             }
-        }
-        val partB: @Composable ColumnScope.() -> Unit = {
+            }
             val radio = item.isRadio
-            // Radio: no position to move to — only how long this station has been on.
-            if (radio) { if (landscape) RadioListening() } else SeekBlock(item)
             // Skip buttons say where they skip in: the playlist or the folder playback started from.
             val within = if (radio) "station" else when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
+            val rowPosition: @Composable () -> Unit = {
+            // Radio: no position to move to — only how long this station has been on.
+            if (radio) { if (landscape) RadioListening() } else SeekBlock(item)
+            }
+            val rowButtons: @Composable () -> Unit = {
+            // Sideways radio: how long the station has been on, above its buttons.
+            if (radio && landscape) RadioListening()
             // Never overlapping: shrinks the controls if they don't fit the width (large Button size, narrow phone).
             // Clock button on the left in its own column, an equal empty column on the right: the player buttons stay
             // centred, and they get only the width in between (shrunk if needed), so nothing overlaps on any screen.
@@ -352,8 +361,12 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             Box(Modifier.width(32.dp))
             }
+            }
+            val rowTone: @Composable () -> Unit = {
             // Loudness, treble and preamp, right under the player buttons (unless switched off in Settings).
             if (st.settings.toneSliders) ToneSliders()
+            }
+            val rowFrom: @Composable () -> Unit = {
             // Prominent shortcut: where the music is playing from (playlist or Library folder).
             val fromLabel = when {
                 radio && p.origin.kind == "radio" -> "Favourites: ${p.queue.size} station" + if (p.queue.size == 1) "" else "s"
@@ -366,8 +379,12 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             var originPick by remember { mutableStateOf(false) }
             Pill("☰  $fromLabel", filled = true, modifier = Modifier.fillMaxWidth()) { originPick = true }
             if (originPick) OriginPickDialog(fromLabel, onOpen = { originPick = false; openOrigin(nav) }, onDismiss = { originPick = false })
+            }
+            val rowPlayNext: @Composable () -> Unit = {
             // Search all songs; the one picked plays next (inserted after the current song), window closes by itself.
             if (!radio) Pill("♪  Play next…", modifier = Modifier.fillMaxWidth()) { playNextPick = true }
+            }
+            val rowExtra: @Composable () -> Unit = {
             // Sleep: number input (up to 3 digits) for "After … songs" and "Custom minutes…".
             var sleepAsk by remember { mutableStateOf("") }
             var sleepNote by remember { mutableStateOf("") }
@@ -453,6 +470,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     }
                 }
             }
+            }
+            val rowUpNext: @Composable () -> Unit = {
             // Radio: favourite stations and the station search instead of "Up next".
             if (radio) RadioPanel(nav)
             val next0 = if (radio) emptyList() else if (p.index >= 0) p.queue.drop(p.index + 1).take(st.settings.upNextCount) else emptyList()
@@ -482,15 +501,31 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     }
                 }
             }
-            Box(Modifier.height(if (landscape) 0.dp else 16.dp))
+            }
+            for (id in ids) when (id) {
+                "picture" -> rowPicture()
+                "title" -> rowTitle()
+                "position" -> rowPosition()
+                "buttons" -> rowButtons()
+                "tone" -> rowTone()
+                "from" -> rowFrom()
+                "playnext" -> rowPlayNext()
+                "extra" -> rowExtra()
+                "upnext" -> rowUpNext()
+            }
+            if (ids.any { it !in PLAYER_LEFT_ROWS }) Box(Modifier.height(if (landscape) 0.dp else 16.dp))
         }
+        val rowOrder = playerRowOrder(setsP, item.isRadio)
+        val partA: @Composable ColumnScope.() -> Unit = { rowsOf(rowOrder.filter { it in PLAYER_LEFT_ROWS }) }
+        val partB: @Composable ColumnScope.() -> Unit = { rowsOf(rowOrder.filter { it !in PLAYER_LEFT_ROWS }) }
+        val allRows: @Composable ColumnScope.() -> Unit = { rowsOf(rowOrder) }
         if (landscape) Row(Modifier.weight(1f).fillMaxWidth()) {
             if (clockShown) {
                 // Clock alone on the left, as big as possible; titles, alarms and buttons on the right.
                 pinnedClock(Modifier.weight(1f).fillMaxHeight().padding(8.dp))
                 Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top }
                     .verticalScroll(scroll).padding(horizontal = 16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partA(); partB() }
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { allRows() }
             } else {
                 // Left half: everything fits without scrolling — the picture shrinks to the room left.
                 Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { leftHpx = it.height }.padding(horizontal = 16.dp),
@@ -508,7 +543,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 if (clockShown && setsP.clockAutoHide) Box(Modifier.fillMaxWidth().keepWhenHidden(topHidden).onSizeChanged { topHpx = it.height }) {
                     pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(vertical = 4.dp))
                 }
-                partA(); partB()
+                allRows()
             }
         }
     }
@@ -2030,4 +2065,19 @@ fun FloatingButtonSample(color: Long, playing: Boolean, size: Int = 56) {
 fun Modifier.keepWhenHidden(hidden: Boolean): Modifier = this.layout { m, c ->
     val pl = m.measure(c)
     layout(pl.width, if (hidden) 0 else pl.height) { if (!hidden) pl.place(0, 0) }
+}
+
+
+/** Player rows (Look → "Order of the player rows"); sideways the picture and title stay on the left side. */
+val PLAYER_SONG_ROWS = listOf("picture", "title", "position", "buttons", "tone", "from", "playnext", "extra", "upnext")
+val PLAYER_RADIO_ROWS = listOf("picture", "title", "buttons", "tone", "from", "extra", "upnext")
+val PLAYER_LEFT_ROWS = setOf("picture", "title")
+val PLAYER_ROW_NAMES = mapOf("picture" to "Picture / clock with alarms", "title" to "Title block", "position" to "Position bar",
+    "buttons" to "Player buttons", "tone" to "Tone sliders", "from" to "Playing from", "playnext" to "Play next…",
+    "extra" to "Extra buttons (random, repeat, RGain, sleep)", "upnext" to "Up next / favourites and search")
+
+fun playerRowOrder(s: app.vlcinterface.data.Settings, radio: Boolean): List<String> {
+    val def = if (radio) PLAYER_RADIO_ROWS else PLAYER_SONG_ROWS
+    val saved = (if (radio) s.rowOrderRadio else s.rowOrderSong).filter { it in def }
+    return saved + def.filter { it !in saved }
 }

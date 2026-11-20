@@ -357,6 +357,27 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     ThinSlider(s.alarmRowPct.toFloat(), { v -> set(s.copy(alarmRowPct = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f,
                         onValueChangeFinished = { if (helpersOn) lookHelp = "Alarm rows under the clock" })
+                    // Order of the player rows, songs and radio apart.
+                    var rowsRadio by remember { mutableStateOf(false) }
+                    Text("Order of the player rows", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp).explain("Order of the player rows"))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Pill("Songs", selected = !rowsRadio, filled = !rowsRadio) { rowsRadio = false }
+                        Pill("Radio", selected = rowsRadio, filled = rowsRadio) { rowsRadio = true }
+                    }
+                    val rowOrd = playerRowOrder(s, rowsRadio)
+                    fun saveRows(l: List<String>) { set(if (rowsRadio) s.copy(rowOrderRadio = l) else s.copy(rowOrderSong = l)); if (helpersOn) lookHelp = "Order of the player rows" }
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF))) {
+                        rowOrd.forEachIndexed { i, id ->
+                            Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(PLAYER_ROW_NAMES[id] ?: id, color = C.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                                STextButton({ if (i > 0) saveRows(rowOrd.toMutableList().also { java.util.Collections.swap(it, i, i - 1) }) }, enabled = i > 0) {
+                                    Text("▲", fontSize = 16.sp, color = if (i > 0) WIZ_GREEN else C.muted) }
+                                STextButton({ if (i < rowOrd.lastIndex) saveRows(rowOrd.toMutableList().also { java.util.Collections.swap(it, i, i + 1) }) }, enabled = i < rowOrd.lastIndex) {
+                                    Text("▼", fontSize = 16.sp, color = if (i < rowOrd.lastIndex) WIZ_GREEN else C.muted) }
+                            }
+                        }
+                    }
+                    STextButton({ saveRows(emptyList()) }) { Text("Reset order", color = accent()) }
                     // Upright player: the clock / album picture hide while scrolling (on), or not (off: clock pinned).
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                         Text("Hide the clock while scrolling", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Hide the clock while scrolling"))
@@ -428,6 +449,21 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                         Text(t, color = if (on) C.text else C.muted, fontSize = (12 + 8 * (k - 0.5f) * 2).sp, fontWeight = FontWeight.SemiBold)
                                         Text(w, color = C.muted, fontSize = 11.sp, modifier = Modifier.weight(1f).padding(start = 10.dp), maxLines = 1)
                                         WideSwitch(on, height = (14 + 12 * (k - 0.5f) * 2).dp) {}
+                                    }
+                                }
+                            }
+                            lookHelp.startsWith("Order of the player rows") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                listOf(false to "Songs", true to "Radio").forEach { (r, t) ->
+                                    Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF16181C)).padding(6.dp),
+                                        verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        Text(t, color = C.muted, fontSize = 11.sp)
+                                        playerRowOrder(s, r).forEach { id ->
+                                            val h = when (id) { "picture" -> 34; "upnext" -> 22; "title" -> 16; else -> 10 }
+                                            Box(Modifier.fillMaxWidth().height(h.dp).clip(RoundedCornerShape(4.dp))
+                                                .background(if (id == "picture") accent().copy(alpha = 0.5f) else Color(0xFF2A2E35)), contentAlignment = Alignment.CenterStart) {
+                                                Text((PLAYER_ROW_NAMES[id] ?: id).substringBefore(" ("), color = C.text, fontSize = 8.sp, maxLines = 1, modifier = Modifier.padding(start = 3.dp))
+                                            }
+                                        }
                                     }
                                 }
                             }
