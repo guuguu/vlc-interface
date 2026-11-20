@@ -306,3 +306,5 @@
 - Lava flow + spectrum (23:36): low frequencies at the bottom of the analyser, treble at the top; red tips (bar ends
   and peak marks) whatever the colours; the lava's own colours ordered from the cool edge (deep red) to the hot core
   (gold).
+- Lava flow + spectrum (23:38): the Amplitude slider also drives the lava — how far the blobs wander (smaller
+  steadier, larger reaching the edges) and how much they swell with the bass — one slider for bars and lava.

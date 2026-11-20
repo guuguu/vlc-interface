@@ -432,7 +432,7 @@ private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
             val lb = lavaBmp[0]?.takeIf { it.width == lw && it.height == lh && !it.isRecycled }
                 ?: android.graphics.Bitmap.createBitmap(lw, lh, android.graphics.Bitmap.Config.ARGB_8888).also { old -> lavaBmp[0]?.recycle(); lavaBmp[0] = old; lavaPxBox[0] = IntArray(lw * lh) }
             val t0 = System.nanoTime()
-            drawLava(m, a, cols, lb, lavaPxBox[0]!!)
+            drawLava(m, a, cols, lb, lavaPxBox[0]!!, v.specAmp)
             val nowMs = (t0 / 1_000_000L % 10_000_000L).toFloat()
             if (nowMs - lavaRes[3] > 500f || nowMs < lavaRes[3]) { lavaRes[1] = 0f; lavaRes[2] = -30f }   // waking up: not counted
             lavaRes[3] = nowMs
@@ -678,15 +678,18 @@ private fun DrawScope.drawSpectrumV(m: VisMotion, a: Float, cols: List<Color>, b
  * small grid, smoothly enlarged). They swell with the bass and move faster on the beat; colours run through the
  * chosen combination from the blob edges (first colour) to their hot cores (last), over a dark glowing background.
  */
-private fun DrawScope.drawLava(m: VisMotion, a: Float, cols: List<Color>, bmp: android.graphics.Bitmap, px: IntArray) {
+private fun DrawScope.drawLava(m: VisMotion, a: Float, cols: List<Color>, bmp: android.graphics.Bitmap, px: IntArray, amp0: Float = 1f) {
     val gw = bmp.width; val gh = bmp.height
+    // Amplitude (the same slider as the bars): how far the blobs wander and how much they swell with the bass.
+    val amp = amp0.coerceIn(0.4f, 2.5f)
+    val wander = (0.6f + 0.4f * amp).coerceAtMost(1.25f)
     val n = 7
     val bx = FloatArray(n); val by = FloatArray(n); val br = FloatArray(n)
     for (i in 0 until n) {
         val sp = 0.18f + i * 0.045f
-        bx[i] = gw * (0.5f + 0.38f * sin(m.pb * sp * 0.7f + i * 2.1f))
-        by[i] = gh * (0.5f + 0.44f * sin(m.pb * sp + i * 1.7f))          // rising and sinking
-        br[i] = gw * (0.13f + 0.03f * (i % 3)) * (0.85f + 0.35f * m.lo)
+        bx[i] = gw * (0.5f + 0.38f * wander * sin(m.pb * sp * 0.7f + i * 2.1f))
+        by[i] = gh * (0.5f + 0.44f * wander * sin(m.pb * sp + i * 1.7f))          // rising and sinking
+        br[i] = gw * (0.13f + 0.03f * (i % 3)) * (0.85f + 0.35f * amp * m.lo)
     }
     val dark = cols.first().let { Color(it.red * 0.10f, it.green * 0.06f, it.blue * 0.10f) }
     fun mix(f: Float): Int {
