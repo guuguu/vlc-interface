@@ -16,3 +16,7 @@
   Sound, ReplayGain) gets one box for all its items — not one box per item (requested 2026-11-20 17:44): nicely rounded corners, a slightly
   lighter shade of the page's own colour as background and a faint border tinted with the accent colour, so categories
   stand apart; inside a box the items are separated by thin lines; only the section titles sit outside the boxes.
+- Separators between the items inside a box stay (requested 2026-11-20 17:45).
+- Classification redone on all settings pages (requested 2026-11-20 17:45): headings that sit inside a box and look like
+  category titles (e.g. Audio → "Per output device", "Sound engine") become their own categories — a section title
+  with its own box — and every item belongs to exactly one category, styled as an item (setting title + text under it).
