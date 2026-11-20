@@ -1212,7 +1212,18 @@ class PlayerController(private val context: Context, private val store: Store) {
                     if (vt.frameRateNum > 0 && vt.frameRateDen > 0) add("Frame rate" to "%.3f".format(java.util.Locale.US, vt.frameRateNum.toDouble() / vt.frameRateDen).trimEnd('0').trimEnd('.') + " fps")
                     if (vt.bitrate > 0) add("Bitrate" to "${vt.bitrate / 1000} kbps")
                     if (vt.profile > 0) add("Profile / level" to "${vt.profile} / ${vt.level}")
-                    if (vt.orientation != 0) add("Orientation" to when (vt.orientation) { 1 -> "Flipped"; 2 -> "Upside down"; 3 -> "Flipped vertically"; 5 -> "Turned 90°"; 6 -> "Turned 270°"; else -> "Turned" })
+                    // Original orientation: how the video was recorded (stored size + the rotation flag in the file).
+                    if (w > 0 && h > 0) {
+                        val turned = vt.orientation >= 4
+                        val tall = if (turned) w > h else h > w
+                        val shape = if (w == h) "Square" else if (tall) "Portrait (upright, tall)" else "Landscape (wide)"
+                        val rot = when (vt.orientation) {
+                            0 -> "stored as recorded"; 1 -> "stored mirrored"; 2 -> "stored upside down (turned 180°)"; 3 -> "stored mirrored upside down"
+                            4 -> "stored turned 90° (transposed)"; 5 -> "stored turned 90° (rotated right)"; 6 -> "stored turned 270° (rotated left)"
+                            7 -> "stored turned 90° and mirrored"; else -> "rotation flag ${vt.orientation}"
+                        }
+                        add("Original orientation" to "$shape · $rot")
+                    }
                     add("Language" to vt.language.orEmpty())
                 }
                 val n = videoNow()

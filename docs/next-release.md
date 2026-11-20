@@ -138,7 +138,8 @@
   - File: name, title, type (container), size, duration, folder, place on the phone.
   - Source: source name, kind (phone / SMB with its version / SFTP / web), address (no password), VPN, user.
   - Video: codec (name and code), resolution with its name (SD / HD 720p / Full HD / QHD / 4K / 8K), pixel aspect,
-    picture shape (16:9, 2.39:1 …), frame rate, bitrate, profile / level, orientation, decoder and deinterlacing
+    picture shape (16:9, 2.39:1 …), original orientation (portrait / landscape as recorded and how it is stored:
+    as recorded, turned 90° / 180° / 270°, mirrored — added 21:41), frame rate, bitrate, profile / level, decoder and deinterlacing
     (automatic or not), colour filter.
   - Audio (each track, the playing one marked): codec, language, name, channels (5.1 …), sample rate, bitrate.
   - Subtitles: each track (language, name, format, the shown one marked), added files, delay.
