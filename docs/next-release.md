@@ -75,3 +75,6 @@
   settings currently chosen (effect, colours, brightness, …), moving with the music.
 - Only after the search for a picture has finished (no flash of it while still looking); between songs the place
   stays empty as before.
+- It is the cover for every rule (requested 2026-11-20 21:19): it scrolls with the page, is taken away after
+  scrolling out and comes back after the set seconds with the "Hide the album picture while scrolling" switch,
+  stays when that switch is off, follows the player rows order, and shrinks to fit sideways — exactly like a cover.
