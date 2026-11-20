@@ -9,3 +9,10 @@
 - Look slider "Player rows spacing" for these gaps (between and around the VPN-NAS button, Track / RG line, position
   bar and times): from tight to today's spacing, default the new tight one; helper pop-up with a preview sketch of the
   rows at the chosen spacing while Helpers are on (requested 2026-11-20 16:46).
+
+## Uniform text in Settings (requested 2026-11-20 16:51)
+- Every settings page and subpage uses the same sizes: one size for setting titles (bigger), one for the text under
+  them / explanations, one for values — no block bigger or smaller than another (e.g. Look: "Auto-rotate" vs
+  "Scroll bar width" / "Button size" differ today).
+- Main Settings page: a slider "Text size" (only a slider) scaling all the text in the settings pages, the setup
+  wizard, the help guide and the helper pop-ups together; titles stay proportionally bigger.
