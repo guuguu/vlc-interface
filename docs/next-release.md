@@ -226,3 +226,5 @@
   and down from the middle line (peak LEDs both ways, no reflection); light bars glow from the middle line, their
   light and reach following the band; radial is fixed (no turning) with bass at the top and treble at the bottom,
   the left half mirroring the right.
+- Radial: the centre is the bass colour (same as the bass bars at the top), solid and glowing brighter with the bass
+  and the beat (22:53).

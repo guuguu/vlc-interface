@@ -468,7 +468,10 @@ private fun DrawScope.drawAnalyser(effect: String, m: VisMotion, a: Float, cols:
             val circ = 2f * Math.PI.toFloat() * r0
             val bars = ((circ / 2f + gap) / (barPx + gap)).toInt().coerceIn(3, m.spec.size)   // half circle, mirrored
             val bw = (circ / (bars * 2)) - gap
-            drawCircle(colAt(0f).copy(alpha = 0.2f * a + 0.35f * m.kickLo), r0 * 0.9f, c)
+            // Centre: the bass colour (the same as the bass bars at the top), glowing with the bass and the beat.
+            val bassCol = colAt(0f)
+            val bassLv = level(m.spec, 0, bars)
+            drawCircle(bassCol.copy(alpha = (0.45f + 0.4f * bassLv + 0.15f * m.kickLo).coerceAtMost(1f) * a), r0 * 0.9f, c)
             // Centred and set on the vertical axis: bass at the top, treble at the bottom, the left half the mirror
             // of the right half (no turning).
             for (i in 0 until bars * 2) {
