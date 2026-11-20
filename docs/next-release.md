@@ -172,5 +172,8 @@
   password are for, the site's daily download limit, how the key and password are kept, and auto-download.
 
 ## Video player: current format shown, format button names the next one (requested 2026-11-20 21:53)
-- Next to the format button: "Format: Fit" (the format shown now). The button itself shows what a press will set:
-  "→ Fill", then "→ Crop", "→ 16:9", "→ 4:3", "→ 1:1", "→ Fit". Upright and sideways, in both control layouts.
+- The format button shows what a press will set: "→ Fill", then "→ Crop", "→ 16:9", "→ 4:3", "→ 1:1", "→ Fit"
+  (the button row otherwise unchanged).
+- The format shown now is written on the picture ("Format: Fit", white with a soft shadow, at the right under the
+  top bar); it comes and goes with the other controls (hidden when left alone or after a tap on an empty part of
+  the video) — 21:55.

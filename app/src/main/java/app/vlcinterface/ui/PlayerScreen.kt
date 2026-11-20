@@ -507,6 +507,10 @@ private fun BoxScope.ControlsOverlayBody(
         }
     }
     }
+    // The format shown now, written on the picture (comes and goes with the other controls).
+    Text("Format: " + scaleLabel.substringBefore('\u0000'), color = Color.White, fontSize = maxOf(13f * ks, 13f).sp, fontWeight = FontWeight.SemiBold,
+        style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black, androidx.compose.ui.geometry.Offset(1f, 1f), 4f)),
+        modifier = Modifier.align(Alignment.End).padding(horizontal = 12.dp))
     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
     AutoFitRow(Modifier.padding(horizontal = 8.dp), spacing = if (compact) 28.dp else 56.dp) {
         RoundBtn("−10", 52) { player.seekBy(-10_000); onTouch() }
@@ -1083,15 +1087,12 @@ private fun VideoDetailsDialog(onDone: () -> Unit) {
 
 
 /**
- * Picture format on the video: the format shown now as a label, and the button names the format a press will set
- * ("Format: Fit" · "→ Fill"). [label] = current + '\u0000' + next.
+ * Picture format button: names the format a press will set ("→ Fill"). [label] = current + '\u0000' + next.
+ * The format shown now is written on the picture with the other controls (see ControlsOverlayBody).
  */
 @Composable
 private fun FormatControl(label: String, onScale: () -> Unit) {
     val parts = label.split('\u0000')
     val cur = parts[0]; val nxt = parts.getOrElse(1) { "" }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Format: $cur", color = Color.White.copy(alpha = 0.9f), fontSize = maxOf(13f * btnScale(), 13f).sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-        OverlayChip(if (nxt.isEmpty()) cur else "→ $nxt", onScale)
-    }
+    OverlayChip(if (nxt.isEmpty()) cur else "→ $nxt", onScale)
 }
