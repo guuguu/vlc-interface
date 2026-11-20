@@ -12,6 +12,7 @@
 - A thin grey separator line between stations.
 
 ## Every settings block in its own box (requested 2026-11-20 17:42)
-- On every settings page (and the wizard), each block / category gets its own box: nicely rounded corners, a slightly
-  lighter shade of the page's own colour as background and a faint border tinted with the accent colour, so blocks
-  stand apart; no two blocks share a box, and nothing sits outside a box except the section titles.
+- On every settings page (and the wizard), each category (the group of settings under one section title, e.g.
+  Sound, ReplayGain) gets one box for all its items — not one box per item (requested 2026-11-20 17:44): nicely rounded corners, a slightly
+  lighter shade of the page's own colour as background and a faint border tinted with the accent colour, so categories
+  stand apart; inside a box the items are separated by thin lines; only the section titles sit outside the boxes.
