@@ -80,3 +80,12 @@
   stays when that switch is off, follows the player rows order, and shrinks to fit sideways — exactly like a cover.
 - Long press on it: opens the Visualisation settings page (patterns, colours, frequencies); the red ✕ there goes
   straight back to the player (requested 2026-11-20 21:20).
+
+## Setting: visualisation instead of album pictures (requested 2026-11-20 21:22)
+- Settings → Visualisation, at the top: "Visualisation instead of album pictures" — Off / Songs / Radio / Both.
+  Songs: the song player always shows the visualisation in the album picture's place; Radio: the radio player in
+  the station logo's place; Both: the two. Off (default): pictures as usual (the visualisation still fills in when
+  no picture is found).
+- Same place, size and rules as the picture (scrolling, hiding, row order, sideways); long press opens the
+  Visualisation settings; the clock, when on, still takes that place.
+- Text helper (hold the setting; also pops up on a change when Helpers are on).

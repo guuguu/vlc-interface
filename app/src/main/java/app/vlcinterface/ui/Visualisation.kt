@@ -407,6 +407,28 @@ fun VisualisationSettings() {
     var previewAt by remember { mutableLongStateOf(0L) }
     LaunchedEffect(previewAt) { if (previewAt > 0) { kotlinx.coroutines.delay(3000); preview = null } }
     val dens = LocalDensity.current
+    // Songs / Radio / Both / Off: the visualisation always in the album picture's place.
+    run {
+        val store = app.vlcinterface.App.instance.store
+        val s = store.state.collectAsState().value.settings
+        var visHelp by remember { mutableStateOf(false) }
+        if (visHelp) HelperDialog("Visualisation instead of album pictures", SettingHelp.text("Visualisation instead of album pictures", "")) { visHelp = false }
+        CardBox {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
+                Text("Visualisation instead of album pictures", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Visualisation instead of album pictures"))
+                Text("Always in the picture's place on the players", color = C.muted, fontSize = 13.sp)
+                androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp),
+                    verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+                    listOf("off" to "Off", "songs" to "Songs", "radio" to "Radio", "both" to "Both").forEach { (m, l) ->
+                        Pill(l, selected = s.visInsteadCover == m, filled = s.visInsteadCover == m) {
+                            store.update { it.copy(settings = it.settings.copy(visInsteadCover = m)) }
+                            if (Alarms.current.global.helpers) visHelp = true
+                        }
+                    }
+                }
+            }
+        }
+    }
     CardBox {
         Text("Pattern", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 10.dp))
         Box {

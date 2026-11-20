@@ -276,8 +276,13 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Clock button pressed: the clock and the alarms in the picture's place, whatever the player does.
             val alarmData = app.vlcinterface.alarm.Alarms.state.collectAsState().value
             val clockOn = alarmData.showClock
+            // Settings → Visualisation: always the visualisation in the picture's place (songs / radio / both).
+            val visAlways = setsP.visInsteadCover.let { it == "both" || (it == "radio" && item.isRadio) || (it == "songs" && !item.isRadio) }
             val pic: @Composable (Int) -> Unit = { sz ->
                 if (clockOn) Box(Modifier.padding(top = 8.dp)) { ClockWithGear(nav) { ClockFace(alarmData.aspect, Modifier.size(sz.dp)) } } else
+                if (visAlways) Box(Modifier.padding(top = 8.dp).size(sz.dp).background(Color.Black)) {
+                    VisArea(Modifier.fillMaxSize().combinedClickable(onClick = {}, onLongClick = { nav.go(Screen.SettingsGroup("vis")) }))
+                } else
                 // No picture found (song or station): the visualisation with its current settings fills that place;
                 // a long press on it opens the Visualisation settings.
                 if (item.isRadio) Cover(p.artworkUrl.ifEmpty { item.artwork }, sz, Modifier.padding(top = 8.dp), noCover = { VisArea(Modifier.fillMaxSize().combinedClickable(onClick = {}, onLongClick = { nav.go(Screen.SettingsGroup("vis")) })) }) else

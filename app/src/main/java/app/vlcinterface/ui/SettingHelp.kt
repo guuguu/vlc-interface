@@ -125,6 +125,12 @@ object SettingHelp {
         "Pop-up opacity" to "How see-through pop-up windows are. More see-through shows what's behind; fully opaque is easier to read.",
         "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
+        "Visualisation instead of album pictures" to "The song and / or radio player show the visualisation, always, in the place of the album picture or station logo — " +
+            "with the patterns, colours and frequencies chosen on this page.\n\n" +
+            "Off: the album picture as usual (the visualisation still fills the place when no picture is found). Songs: only the song player. " +
+            "Radio: only the radio player. Both: the two players.\n\n" +
+            "It keeps the picture's place and rules: scrolls and hides with the page like the picture, and a long press opens this page. " +
+            "The clock, when on, still takes that place. The visualisation uses a little more battery than a still picture. Default: Off.",
         "Floating play / pause button" to "A round play / pause button floating over the audio and radio players, that you can drag anywhere (its place is kept).\n\n" +
             "'Always': it's always there, handy when the album picture or clock takes the screen. 'When the buttons scroll away': it appears only while the player's own buttons are out of view. 'Off': never shown.\n\nDefault: Always.",
         "Cover hidden for" to "With the phone upright and the album picture shown on the player, scrolling the player hides the picture completely, so the list and buttons get its room.\n\n" +
