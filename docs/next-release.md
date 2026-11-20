@@ -44,3 +44,9 @@
   player's "Up next": the coming videos in order, tap to jump to one, long-press for its menu (move up / down,
   remove from the queue, file actions), duration on the right.
 - Sideways, or with a tall video filling the screen, no box (the picture keeps the whole screen).
+
+## Tall (portrait) videos (requested 2026-11-20 17:53)
+- A video taller than wide, with the phone upright, takes the upper two thirds of the screen; the lower third is
+  kept for the buttons (position bar, −10 / play / +10, the bottom row), shown there instead of over the picture.
+- Except in full screen: a "Full screen" choice (with Fit) gives the video the whole screen with the controls over it
+  as today; the choice is remembered.
