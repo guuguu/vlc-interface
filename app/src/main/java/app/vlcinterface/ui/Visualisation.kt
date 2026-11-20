@@ -286,7 +286,8 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
                     for (i in m.spec.indices) {
                         val raw = m.specRaw[i]
                         m.specRef[i] = max(m.specRef[i] * (1f - dt * 0.2f), max(raw, 1e-4f))
-                        val db = if (raw <= 1e-6f) 0f else ((20f * kotlin.math.log10(raw / m.specRef[i]) + 42f) / 42f).coerceIn(0f, 1f)
+                        // Sensitivity: higher values lift the bars so loud parts reach the edges of the frame.
+                        val db = if (raw <= 1e-6f) 0f else (((20f * kotlin.math.log10(raw / m.specRef[i]) + 42f) / 42f) * vs.specGain.coerceIn(0.5f, 3f)).coerceIn(0f, 1f)
                         m.spec[i] = if (db > m.spec[i]) db else max(db, m.spec[i] - dt * 1.6f)
                         m.specPeak[i] = if (m.spec[i] >= m.specPeak[i]) m.spec[i] else max(m.spec[i], m.specPeak[i] - dt * 0.5f)
                     }
@@ -721,6 +722,18 @@ fun VisualisationSettings() {
         VisSlider("Definition", v.sharp, 0f..1f, if (v.sharp < 0.15f) "soft" else if (v.sharp > 0.85f) "sharp" else "${(v.sharp * 100).toInt()} %") { set(v.copy(sharp = it)) }
         VisSlider("Brightness", v.brightness, 0.2f..1f, "${(v.brightness * 100).toInt()} %") { set(v.copy(brightness = it)) }
         // Centred spectrum: bar thickness (thicker → fewer bars). Helper with a live preview on a still hold.
+        if (v.effect in SPEC_FX) {
+            var gainHelp by remember { mutableStateOf(false) }
+            if (gainHelp) HelperDialog("Sensitivity", SettingHelp.text("Sensitivity", ""), extra = {
+                VisCanvas(v, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)), live = true)
+            }) { gainHelp = false }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Sensitivity", color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain("Sensitivity"))
+                ThinSlider(v.specGain, { set(v.copy(specGain = (Math.round(it * 10f) / 10f))) }, Modifier.weight(1f), valueRange = 0.5f..3f,
+                    onHoldStill = { if (Alarms.current.global.helpers) gainHelp = true })
+                Text("×%.1f".format(v.specGain), color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
+            }
+        }
         if (v.effect in BAR_FX) {
             var barHelp by remember { mutableStateOf(false) }
             if (barHelp) HelperDialog("Bar thickness", "How thick each bar of the spectrum and analyser pictures is. The bars always fill the whole width, " +

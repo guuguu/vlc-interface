@@ -231,3 +231,5 @@
 - LED bars and light bars turned 90° (22:54): the origin is a vertical line in the middle; each band is a row growing
   left and right from it, bass at the top and treble at the bottom; bar thickness sets the row height (thicker →
   fewer rows).
+- Sensitivity (22:55): new slider for all spectrum / analyser pictures, ×0.5 … ×3 (default ×1.3); higher makes the
+  bars / rows / rays / wave reach the edges of the frame. Helper with a live preview on a still hold.

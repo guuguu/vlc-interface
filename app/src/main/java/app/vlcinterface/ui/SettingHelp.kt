@@ -125,6 +125,9 @@ object SettingHelp {
         "Pop-up opacity" to "How see-through pop-up windows are. More see-through shows what's behind; fully opaque is easier to read.",
         "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
+        "Sensitivity" to "How strongly the spectrum and analyser pictures react. Higher: the bars, rows, rays and wave reach the edges of " +
+            "the frame (fill it) on the loud parts; lower: they stay calmer and rarely touch the edges. Quiet passages are lifted too. " +
+            "From ×0.5 to ×3; default ×1.3. The preview shows it live while you hold the slider still.",
         "Bar thickness" to "How thick each bar of the spectrum and analyser pictures is (centred spectrum, LED bars, light bars, radial). The bars always fill the whole width, so thicker bars means fewer " +
             "of them, each covering a wider slice of the sound: thin bars show more detail, thick bars a bolder beat. From 3 to 40 dp; default 10 dp.",
         "OpenSubtitles account" to "Subtitles are searched and downloaded from OpenSubtitles.com. It needs three things from a free account there:\n\n" +
