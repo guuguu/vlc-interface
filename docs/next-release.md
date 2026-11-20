@@ -14,3 +14,8 @@
   name and its details close together (requested 2026-11-20 18:09).
 - In front of each station in the results: its country's flag, or a small 🌐 when the country isn't known
   (requested 2026-11-20 18:11).
+- Unknown country: instead of the plain 🌐, a globe turned to where the station's server is (requested 2026-11-20 18:13):
+  🌎 Americas · 🌍 Europe / Africa · 🌏 Asia / Australia.
+  - Where: the station directory's own coordinates when it has them; otherwise the server's address (its IP) looked up
+    once with a free geolocation service (ipwho.is), kept so each server is asked only once.
+  - Plain 🌐 only while it's being looked up or when nothing can be found.
