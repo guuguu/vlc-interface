@@ -116,3 +116,9 @@
 - Full 32-bit colour for pictures shown through the app's own display path (software decoding, Hue & sat): no
   16-bit colour banding on skies, gradients and dark scenes.
 - Small videos are enlarged to the screen edges and the format sizing no longer reloads the video (see above).
+- New on Settings → Video, section "Picture" (requested 2026-11-20 21:33, text helpers):
+  - Video decoding: Automatic (default: hardware, software when the hardware can't) / Hardware / Software — for
+    files that show green, grey or garbled pictures with this phone's hardware decoder.
+  - Deinterlacing: Off (default) / Automatic — only videos marked interlaced (TV recordings, DVDs) are smoothed,
+    removing the comb lines; uses more battery while such a video plays.
+  - Changing either reopens the playing video at the same spot.

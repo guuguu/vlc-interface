@@ -61,7 +61,7 @@ val SETTINGS_GROUPS: List<Pair<String, String>> = listOf("audio" to "Audio", "pl
     "alarm" to "Alarm clock", "vis" to "Visualisation", "backup" to "Export / import", "logs" to "Logs", "folders" to "Find media folders")
 
 private val GROUP_HINTS = mapOf("audio" to "Start volume, preamp, ReplayGain, sound engine", "playback" to "Gestures, resume, background playback",
-    "video" to "Subtitles, rotation", "radio" to "Saving songs, radio buffer, free space", "look" to "Colours, sizes, menus, order of these links",
+    "video" to "Decoding, deinterlacing, subtitles", "radio" to "Saving songs, radio buffer, free space", "look" to "Colours, sizes, menus, order of these links",
     "library" to "Scanning, album pictures, deleting files", "network" to "SMB1, Spotify links", "vpn" to "Home NAS through ZeroTier / Tailscale",
     "alarm" to "Alarms, ringing, wake check, clock aspect", "vis" to "Patterns, colours, frequencies", "backup" to "Your whole setup in one file",
     "logs" to "Errors, servers, indexing, crashes, caches", "folders" to "Search the phone, SD card and Downloads for music and videos")
@@ -215,6 +215,37 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             SoundSettings(s, ::set)
                 }
                 "video" -> {
+            SectionTitle("Picture")
+            run {
+                var vHelp by remember { mutableStateOf("") }
+                if (vHelp.isNotEmpty()) HelperDialog(vHelp, SettingHelp.text(vHelp, "")) { vHelp = "" }
+                fun changed(n: Settings, key: String) {
+                    set(n)
+                    App.instance.player.reloadVideo()       // the playing video (if any) reopens at the same spot with it
+                    if (app.vlcinterface.alarm.Alarms.current.global.helpers) vHelp = key
+                }
+                CardBox {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+                        Text("Video decoding", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Video decoding"))
+                        Text("Software: when a video shows green or garbled pictures", color = C.muted, fontSize = 13.sp)
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+                            listOf("auto" to "Automatic", "hw" to "Hardware", "sw" to "Software").forEach { (m, l) ->
+                                Pill(l, selected = s.videoDecoder == m, filled = s.videoDecoder == m) { if (s.videoDecoder != m) changed(s.copy(videoDecoder = m), "Video decoding") }
+                            }
+                        }
+                    }
+                    Divider()
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+                        Text("Deinterlacing", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Deinterlacing"))
+                        Text("Removes comb lines on TV recordings and DVDs", color = C.muted, fontSize = 13.sp)
+                        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+                            listOf("off" to "Off", "auto" to "Automatic").forEach { (m, l) ->
+                                Pill(l, selected = s.videoDeinterlace == m, filled = s.videoDeinterlace == m) { if (s.videoDeinterlace != m) changed(s.copy(videoDeinterlace = m), "Deinterlacing") }
+                            }
+                        }
+                    }
+                }
+            }
             SectionTitle("Subtitles")
             CardBox {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {

@@ -1618,9 +1618,21 @@ class PlayerController(private val context: Context, private val store: Store) {
             // LAN servers: their VPN address while away from home with the VPN on.
             else -> Media(libVlc, Uri.parse(app.vlcinterface.sources.VpnLink.route(item.uri)))
         }
-        media.setHWDecoderEnabled(true, false)
-        // Hue/saturation need decoded frames the filter can touch: hardware decoding without direct rendering.
         val ps = store.current.settings
+        // Settings → Video → Decoding: automatic (hardware, software when it can't), hardware only, software only.
+        val isVideo = !item.isMusic && !item.isRadio
+        when (if (isVideo) ps.videoDecoder else "auto") {
+            "hw" -> media.setHWDecoderEnabled(true, true)
+            "sw" -> media.setHWDecoderEnabled(false, false)
+            else -> media.setHWDecoderEnabled(true, false)
+        }
+        // Settings → Video → Deinterlacing: only videos marked interlaced are treated; the filter needs frames it can
+        // touch (hardware decoding without direct rendering).
+        if (isVideo && ps.videoDeinterlace == "auto") {
+            media.addOption(":deinterlace=-1"); media.addOption(":deinterlace-mode=yadif")
+            media.addOption(":no-mediacodec-dr")
+        } else if (isVideo) media.addOption(":deinterlace=0")
+        // Hue/saturation need decoded frames the filter can touch: hardware decoding without direct rendering.
         pictureFilterOn = !item.isMusic && !item.isRadio && (!pictureNeutral(ps.pictureHue, ps.pictureSat) || ps.pictureHighlights > 0.01f)
         if (pictureFilterOn) {
             val (c, b, g) = highlightTone(ps.pictureHighlights)
