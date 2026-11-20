@@ -163,8 +163,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     var ctlBottom by remember { mutableFloatStateOf(Float.MAX_VALUE) }
     var viewTop by remember { mutableFloatStateOf(0f) }
     // Where the scrolling page and the tone sliders are on screen (for the sine button: scroll to the sliders).
-    val viewBox = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
-    val toneBox = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
+    // Live layout handles (read at the moment of the tap, never an old position).
+    val viewBox = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
+    val toneBox = remember { arrayOfNulls<androidx.compose.ui.layout.LayoutCoordinates>(1) }
     var upNextYpx by remember { mutableIntStateOf(-1) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val vuK = if (landscape) (conf.screenHeightDp.toFloat() / conf.screenWidthDp).coerceIn(0.35f, 1f) else 1f
@@ -400,11 +401,15 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (st.settings.toneSliders && "tone" in playerRowOrder(setsP, radio)) Box(Modifier.size(30.dp).liteShadow(CircleShape).clip(CircleShape)
                     .background(Color(0x24FFFFFF)).clickable {
-                        val v = viewBox[0]; val t = toneBox[0]
-                        if (v != null && t != null) {
-                            // Free space: the page's area below the frozen title block (upright).
-                            val top = v.top + (if (landscape) 0f else titleHpx.toFloat())
-                            val delta = t.center.y - (top + v.bottom) / 2f
+                        val vc = viewBox[0]?.takeIf { it.isAttached }; val tc = toneBox[0]?.takeIf { it.isAttached }
+                        if (vc == null || tc == null) ShortNote.show("The tone sliders aren't on this page (Look → player rows)")
+                        else {
+                            // Positions measured now, inside the page's visible area.
+                            val tTop = vc.localPositionOf(tc, androidx.compose.ui.geometry.Offset.Zero).y
+                            val tMid = tTop + tc.size.height / 2f
+                            // Free space: the visible area below the frozen title block (upright).
+                            val top = if (landscape) 0f else titleHpx.toFloat()
+                            val delta = tMid - (top + vc.size.height) / 2f
                             val target = (scroll.value + delta).toInt().coerceIn(0, scroll.maxValue)
                             if (kotlin.math.abs(target - scroll.value) < 4) ShortNote.show("Tone sliders are in view")
                             // The cover / clock hiding must not take part in this scroll (it used to stop it half-way
@@ -457,7 +462,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             val rowTone: @Composable () -> Unit = {
             // Loudness, treble and preamp, right under the player buttons (unless switched off in Settings).
-            if (st.settings.toneSliders) Box(Modifier.fillMaxWidth().onGloballyPositioned { toneBox[0] = it.boundsInRoot() }) { ToneSliders() }
+            if (st.settings.toneSliders) Box(Modifier.fillMaxWidth().onGloballyPositioned { toneBox[0] = it }) { ToneSliders() }
             }
             val rowFrom: @Composable () -> Unit = {
             // Prominent shortcut: where the music is playing from (playlist or Library folder).
@@ -599,14 +604,14 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (clockShown) {
                 // Clock alone on the left, as big as possible; titles, alarms and buttons on the right.
                 pinnedClock(Modifier.weight(1f).fillMaxHeight().padding(8.dp))
-                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top; viewBox[0] = it.boundsInRoot() }
+                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top; viewBox[0] = it }
                     .verticalScroll(scroll).padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { allRows() }
             } else {
                 // Left half: everything fits without scrolling — the picture shrinks to the room left.
                 Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { leftHpx = it.height }.padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) { partA() }
-                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top; viewBox[0] = it.boundsInRoot() }
+                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top; viewBox[0] = it }
                     .verticalScroll(scroll).padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partB() }
             }
@@ -614,7 +619,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Upright, clock pinned (Look switch off): it stays above the page; only the page scrolls.
             if (clockShown && !setsP.clockAutoHide) pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(horizontal = 16.dp, vertical = 4.dp))
             // Otherwise the clock is the top of the page and scrolls away with it (taken away once out of view).
-            Column(Modifier.weight(1f).onGloballyPositioned { viewTop = it.boundsInRoot().top; viewBox[0] = it.boundsInRoot() }.verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            Column(Modifier.weight(1f).onGloballyPositioned { viewTop = it.boundsInRoot().top; viewBox[0] = it }.verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(rowGap)) {
                 if (clockShown && setsP.clockAutoHide) Box(Modifier.fillMaxWidth().keepWhenHidden(topHidden).onSizeChanged { topHpx = it.height }) {
                     pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(vertical = 4.dp))

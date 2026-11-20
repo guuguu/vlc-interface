@@ -189,3 +189,8 @@
 - Its scroll was cut short by the cover / clock hiding (which also scrolled the page back up later). Now the
   page glides straight to the sliders (centred in the free space, or as far as the page goes) with the hiding
   kept out of it; when they're already where they'd go, a short note says "Tone sliders are in view".
+
+## Sine button said "in view" while the tone sliders weren't on screen (reported 2026-11-20 22:20)
+- It used remembered screen positions, which could be old. Now it measures the sliders' place inside the page at the
+  moment of the tap and scrolls there; if the sliders aren't on the page at all it says so (pointing to Look →
+  player rows) instead of "in view".
