@@ -324,6 +324,9 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
     val plasma = remember { android.graphics.Bitmap.createBitmap(18, 32, android.graphics.Bitmap.Config.ARGB_8888) }
     val px = remember { IntArray(18 * 32) }
     val field = remember(v.effect) { arrayOfNulls<VisField>(1) }
+    // Field patterns: as fine a grid as the phone draws smoothly. Starts at 1.6× the old grid and adjusts itself
+    // (finer while frames are cheap, coarser if they get slow), up to 3× (≈ 216 × 384 cells).
+    val res = remember(v.effect) { floatArrayOf(1.6f, 0f, 0f) }   // scale, summed ms, frames
     // The analyser is measured only while a live spectrum picture is shown (saves battery otherwise).
     if (live && v.effect in SPEC_FX) androidx.compose.runtime.DisposableEffect(Unit) {
         NativeAudio.spectrumOn(true); onDispose { NativeAudio.spectrumOn(false) }
@@ -340,9 +343,18 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
         }
         if (v.effect in FIELD_FX) {
             val land = size.width > size.height
-            val fw = if (land) 128 else 72; val fh = if (land) 72 else 128
+            val shortS = (72 * res[0]).toInt(); val longS = (128 * res[0]).toInt()
+            val fw = if (land) longS else shortS; val fh = if (land) shortS else longS
             val f = field[0]?.takeIf { it.w == fw && it.h == fh } ?: VisField(fw, fh).also { field[0] = it }
+            val t0 = System.nanoTime()
             drawField(v.effect, f, m, a, paletteColours(v), cosOffsets(v.effect), v)
+            res[1] += (System.nanoTime() - t0) / 1e6f; res[2] += 1f
+            if (res[2] >= 90f) {       // every ~1.5 s
+                val avg = res[1] / res[2]
+                if (avg > 9f && res[0] > 0.8f) res[0] = (res[0] - 0.2f).coerceAtLeast(0.8f)
+                else if (avg < 4f && res[0] < 3f) res[0] = (res[0] + 0.2f).coerceAtMost(3f)
+                res[1] = 0f; res[2] = 0f
+            }
             return@Canvas
         }
         drawBackground(v.effect, bg, t, m.lo, a, plasma, px, m.tc)
@@ -920,7 +932,7 @@ private fun DrawScope.drawField(effect: String, f: VisField, m: VisMotion, a: Fl
         }
     }
     f.bmp.setPixels(px, 0, w, 0, 0, w, h)
-    drawImage(f.bmp.asImageBitmap(), dstSize = IntSize(size.width.toInt(), size.height.toInt()), filterQuality = FilterQuality.Low)
+    drawImage(f.bmp.asImageBitmap(), dstSize = IntSize(size.width.toInt(), size.height.toInt()), filterQuality = FilterQuality.High)
     if (effect == "epicycles") drawEpicycles(m, a, ::col)
 }
 

@@ -233,3 +233,7 @@
   fewer rows).
 - Sensitivity (22:55): new slider for all spectrum / analyser pictures, ×0.5 … ×3 (default ×1.3); higher makes the
   bars / rows / rays / wave reach the edges of the frame. Helper with a live preview on a still hold.
+- Good resolution for the visualisations (22:56): the mathematical patterns (ink, reaction, phase, Chladni,
+  Mandelbrot, epicycles) are computed on a finer grid — starting at 1.6× the old one and adjusting itself to the
+  phone (finer while frames are cheap, up to 3×; coarser only if drawing gets slow) — and enlarged with high-quality
+  smoothing instead of the plain one. Spectrum / analyser pictures are drawn at the screen's full resolution.
