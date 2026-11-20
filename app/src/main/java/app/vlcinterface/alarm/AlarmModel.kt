@@ -135,6 +135,11 @@ data class AlarmGlobal(
     /** Phone music root folder for the alarms (relative path, e.g. "Music/"; "" = not chosen yet) and its volume. */
     val localRoot: String = "",
     val localVolume: String = "",
+    /** Stations chosen last on an alarm: already selected on new alarms. */
+    val lastStationUrl: String = "",
+    val lastStationName: String = "",
+    val lastFallbackUrl: String = "",
+    val lastFallbackName: String = "",
 ) {
     fun toJson(): JSONObject = JSONObject().put("vibrate", vibrate).put("led", led).put("crescendo", crescendo)
         .put("snooze1", snooze1).put("snooze2", snooze2).put("snooze3", snooze3).put("pattern", pattern)
@@ -144,6 +149,7 @@ data class AlarmGlobal(
         .put("helpers", helpers).put("calSync", calSync).put("calId", calId).put("calName", calName)
         .put("cityName", cityName).put("cityShort", cityShort).put("cityLat", cityLat).put("cityLon", cityLon).put("cityTz", cityTz)
         .put("showWeather", showWeather).put("localRoot", localRoot).put("localVolume", localVolume)
+        .put("lastStationUrl", lastStationUrl).put("lastStationName", lastStationName).put("lastFallbackUrl", lastFallbackUrl).put("lastFallbackName", lastFallbackName)
 
     val snoozes: List<Int> get() = listOf(snooze1, snooze2, snooze3)
 
@@ -155,7 +161,8 @@ data class AlarmGlobal(
             o.optString("missed", "ring30"), o.optString("lowBattery", "normal"), o.optBoolean("nextInNotif", true),
             o.optBoolean("helpers", true), o.optBoolean("calSync", false), o.optLong("calId", -1), o.optString("calName"),
             o.optString("cityName"), o.optString("cityShort"), o.optDouble("cityLat", 0.0), o.optDouble("cityLon", 0.0), o.optString("cityTz"),
-            o.optBoolean("showWeather", true), o.optString("localRoot"), o.optString("localVolume"))
+            o.optBoolean("showWeather", true), o.optString("localRoot"), o.optString("localVolume"),
+            o.optString("lastStationUrl"), o.optString("lastStationName"), o.optString("lastFallbackUrl"), o.optString("lastFallbackName"))
     }
 }
 
@@ -289,7 +296,10 @@ object Alarms {
 
     fun put(a: Alarm) {
         val list = current.alarms
-        save(current.copy(alarms = if (list.any { it.id == a.id }) list.map { if (it.id == a.id) a else it } else list + a))
+        // The stations chosen here come already selected on the next new alarm.
+        val g = if (a.stationUrl.isNotEmpty()) current.global.copy(lastStationUrl = a.stationUrl, lastStationName = a.stationName,
+            lastFallbackUrl = a.fallbackUrl, lastFallbackName = a.fallbackName) else current.global
+        save(current.copy(alarms = if (list.any { it.id == a.id }) list.map { if (it.id == a.id) a else it } else list + a, global = g))
         AlarmScheduler.reschedule(ctx)
     }
 

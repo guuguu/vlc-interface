@@ -152,7 +152,14 @@ private fun minText(s: Int) = if (s == 0) "Off" else if (s < 60) "$s s" else "${
 @Composable
 fun AlarmEditScreen(nav: Navigator, id: String) {
     val st by App.instance.store.state.collectAsState()
-    val start = remember(id) { Alarms.get(id) ?: Alarm() }
+    // New alarm (or one without stations): the stations chosen last come already selected.
+    val start = remember(id) {
+        val g = Alarms.current.global
+        val a0 = Alarms.get(id) ?: Alarm()
+        if (a0.stationUrl.isEmpty() && g.lastStationUrl.isNotEmpty())
+            a0.copy(stationUrl = g.lastStationUrl, stationName = g.lastStationName, fallbackUrl = g.lastFallbackUrl, fallbackName = g.lastFallbackName)
+        else a0
+    }
     var a by remember(id) { mutableStateOf(start) }
     var timeAsk by remember { mutableStateOf(false) }
     var dateAsk by remember { mutableStateOf(false) }
@@ -255,11 +262,14 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                         Explain("The preferred station plays live (no buffer). Not heard within 15 s → the fallback station; not heard either → the alarm sound.")
                         if (st.stations.isEmpty()) Explain("No favourite stations yet: add some in the radio player first.")
                         Label("Preferred station")
-                        Choices(st.stations.map { it.name to it.url }, a.stationUrl) { u -> a = a.copy(stationUrl = u, stationName = st.stations.firstOrNull { it.url == u }?.name ?: "",
+                        // The alarm's own station stays selected even if it's no longer a favourite.
+                        fun keep(url: String, name: String) = if (url.isNotEmpty() && st.stations.none { it.url == url })
+                            listOf("${name.ifEmpty { url.substringAfter("://").take(30) }} (not in favourites)" to url) else emptyList()
+                        Choices(st.stations.map { it.name to it.url } + keep(a.stationUrl, a.stationName), a.stationUrl) { u -> a = a.copy(stationUrl = u, stationName = st.stations.firstOrNull { it.url == u }?.name ?: a.stationName,
                             fallbackUrl = if (a.fallbackUrl == u) "" else a.fallbackUrl, fallbackName = if (a.fallbackUrl == u) "" else a.fallbackName) }
                         Label("Fallback station", "Used when the preferred one can't be reached")
-                        Choices(listOf("None" to "") + st.stations.filter { it.url != a.stationUrl }.map { it.name to it.url }, a.fallbackUrl) { u ->
-                            a = a.copy(fallbackUrl = u, fallbackName = st.stations.firstOrNull { it.url == u }?.name ?: "") }
+                        Choices(listOf("None" to "") + st.stations.filter { it.url != a.stationUrl }.map { it.name to it.url } + keep(a.fallbackUrl, a.fallbackName),
+                            a.fallbackUrl) { u -> a = a.copy(fallbackUrl = u, fallbackName = st.stations.firstOrNull { it.url == u }?.name ?: if (u == a.fallbackUrl) a.fallbackName else "") }
                     }
                     else -> Explain("Only the alarm sound below.")
                 }
