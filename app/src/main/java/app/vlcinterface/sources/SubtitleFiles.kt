@@ -37,8 +37,8 @@ object SubtitleFiles {
     fun remember(item: PlayItem, ref: SubRef) { refs[item.uri] = ref }
 
     /**
-     * The video is gone: its downloaded subtitles go too — the app's working copies and undo copies, and the files
-     * the app saved next to the video on the server ([written]: source id, folder, name).
+     * The video is gone: the app's own copies of its downloaded subtitles go too (working and undo copies).
+     * Subtitle files on the NAS are left alone; [written] only helps find the undo copies.
      */
     suspend fun forgetVideo(ctx: Context, uri: String, written: List<Triple<String, String, String>>) = withContext(Dispatchers.IO) {
         refs.remove(uri)
@@ -49,10 +49,7 @@ object SubtitleFiles {
             folders.forEach { fo -> File(undo, hash(fo + f.name + f.path) + ".orig").delete() }
         }
         d.deleteRecursively()
-        written.forEach { (srcId, folder, name) ->
-            val src = App.instance.store.current.sources.firstOrNull { it.id == srcId } ?: return@forEach
-            NasWriter.delete(src, folder, name, "subtitle")
-        }
+        // Subtitle files on the NAS are never deleted (user rule): only the app's own copies go.
     }
     fun current(item: PlayItem): SubRef? = refs[item.uri]
 
