@@ -21,3 +21,9 @@
 - A Look setting "Short pop-ups stay for" sets how long every short, self-closing pop-up stays on screen (alarm
   switch confirmations, the 3 s helper pop-ups, saved / added notes…), e.g. 1–10 s; default as today.
 - With a text helper pop-up while Helpers are on (requested 2026-11-20 12:17).
+
+## Switch colours (requested 2026-11-20 12:20)
+- Every switch in the app gets a background (track) colour for the on position and a different one for the off
+  position, so the two states differ by colour as well as by the knob's place (replaces "off looks like on" from 1.37).
+- Look settings: "Switch colour · on" and "Switch colour · off", chosen like the accent colours (default: on = accent,
+  off = a muted grey-blue). Greyed only when a switch can't be used, as before; still no on / off words.
