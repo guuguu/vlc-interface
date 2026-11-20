@@ -24,3 +24,5 @@
 - Everywhere in the app, a switch that is off keeps the same look and colours as when it's on; only the knob's
   position changes (left = off, right = on).
 - A switch is greyed only when it can't be used (not available in the current state).
+- No "on / off" words anywhere for switches, the wizard's "Now:" row included (switch rows show no "Now:" row;
+  other settings keep theirs) (requested 2026-11-20 10:55).
