@@ -247,8 +247,10 @@ fun SmallSearchBar(value: String, onChange: (String) -> Unit, placeholder: Strin
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { onSearch?.invoke() }))
         }
         if (onSearch != null) Text("🔍", fontSize = 16.sp, modifier = Modifier.clickable { onSearch() }.padding(horizontal = 8.dp))
-        // With onClose: no counter / arrows, only ✕ which closes the search (clears it and shrinks the box back).
-        if (onClose != null) { if (value.isNotEmpty() || count > 0) Text("✕", color = C.text, fontSize = SYM, modifier = Modifier.clickable { onClose() }.padding(horizontal = 10.dp)) }
+        // With onClose: the result count and ✕ (no arrows); ✕ which closes the search (clears it and shrinks the box back).
+        if (onClose != null) { if (value.isNotEmpty() || count > 0) {
+            Text(if (count == 0) "0" else "$count", color = if (count == 0) C.bad else C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
+            Text("✕", color = C.text, fontSize = SYM, modifier = Modifier.clickable { onClose() }.padding(horizontal = 10.dp)) } }
         else if (value.isNotEmpty() || count > 0) SearchSteps(count, at, prev, next) { onChange("") }
     }
 }
