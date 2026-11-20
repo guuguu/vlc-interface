@@ -19,3 +19,8 @@
 ## Wizard symbols easy to see (requested 2026-11-20 10:53)
 - On every wizard page the tick symbols (☑ ✓) and the small forward arrows (▶, "Grant ▶", "Open ▶", "Add ▶") are drawn
   bigger and in a bright light green, so they stand out from the text.
+
+## Switches (requested 2026-11-20 10:55)
+- Everywhere in the app, a switch that is off keeps the same look and colours as when it's on; only the knob's
+  position changes (left = off, right = on).
+- A switch is greyed only when it can't be used (not available in the current state).
