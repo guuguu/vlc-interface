@@ -128,3 +128,6 @@
 - Image quality first (requested 2026-11-20 21:34): the decoder never skips frames or decoding steps to save time;
   the fast direct hardware path is kept whenever nothing needs the frames (no colour filter, no deinterlacing);
   deinterlacing uses yadif 2× (every field shown: full, smooth motion instead of half).
+- Settings → Video shows what the playing video uses right now (requested 2026-11-20 21:36): under each choice a
+  line "Now: Hardware / Software" and "Now: On / Off", with "(chosen automatically)" on Automatic and the video's
+  encoding and size (e.g. H264 1920×1080); "Now: no video playing" otherwise. Updates while the page is open.

@@ -219,6 +219,11 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             run {
                 var vHelp by remember { mutableStateOf("") }
                 if (vHelp.isNotEmpty()) HelperDialog(vHelp, SettingHelp.text(vHelp, "")) { vHelp = "" }
+                // What the playing video uses right now (Automatic chooses it per video).
+                App.instance.player.state.collectAsState().value
+                val now = App.instance.player.videoNow()
+                val enc = now?.let { n -> listOf(n.codec.uppercase(), if (n.w > 0) "${n.w}×${n.h}" else "").filter { it.isNotEmpty() }.joinToString(" ") }.orEmpty()
+                @Composable fun NowLine(text: String) = Text(text, color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 fun changed(n: Settings, key: String) {
                     set(n)
                     App.instance.player.reloadVideo()       // the playing video (if any) reopens at the same spot with it
@@ -233,6 +238,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                 Pill(l, selected = s.videoDecoder == m, filled = s.videoDecoder == m) { if (s.videoDecoder != m) changed(s.copy(videoDecoder = m), "Video decoding") }
                             }
                         }
+                        NowLine(if (now == null) "Now: no video playing" else "Now: " + (if (now.software) "Software" else "Hardware") +
+                            (if (s.videoDecoder == "auto") " (chosen automatically)" else "") + (if (enc.isNotEmpty()) " · $enc" else ""))
                     }
                     Divider()
                     Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
@@ -243,6 +250,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                 Pill(l, selected = s.videoDeinterlace == m, filled = s.videoDeinterlace == m) { if (s.videoDeinterlace != m) changed(s.copy(videoDeinterlace = m), "Deinterlacing") }
                             }
                         }
+                        NowLine(if (now == null) "Now: no video playing" else "Now: " + (if (now.deinterlace) "On" else "Off") +
+                            (if (s.videoDeinterlace == "auto") " (chosen automatically)" else "") + (if (enc.isNotEmpty()) " · $enc" else ""))
                     }
                 }
             }

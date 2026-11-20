@@ -1626,6 +1626,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val isVideo = !item.isMusic && !item.isRadio
         // Automatic: chosen per file from its encoding (VideoAuto): software only for files the phone's hardware can't decode.
         val dec = if (!isVideo) "auto" else if (ps.videoDecoder == "auto" && VideoAuto.software(item.uri)) "sw" else ps.videoDecoder
+        if (isVideo) decoderNow = if (dec == "sw") "sw" else "hw"
         when (dec) {
             "hw" -> media.setHWDecoderEnabled(true, true)
             "sw" -> media.setHWDecoderEnabled(false, false)
@@ -2074,6 +2075,20 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** Deinterlacing applied to the playing video. */
     private var deintOn = false
+    /** Decoder used for the playing video: "hw" (hardware, software only if libVLC must) or "sw". */
+    private var decoderNow = "hw"
+
+    /**
+     * What the playing video uses now (for Settings → Video): decoder, deinterlacing and its encoding, or null when
+     * no video is playing.
+     */
+    data class VideoNow(val software: Boolean, val deinterlace: Boolean, val codec: String, val w: Int, val h: Int)
+    fun videoNow(): VideoNow? {
+        val it0 = _state.value.item ?: return null
+        if (it0.isMusic || it0.isRadio) return null
+        val vt = try { mp.currentVideoTrack } catch (_: Throwable) { null }
+        return VideoNow(decoderNow == "sw", deintOn, vt?.codec?.trim().orEmpty(), vt?.width ?: 0, vt?.height ?: 0)
+    }
 
     private fun refreshTracks() {
         val a = mp.audioTracks?.map { Track(it.id, it.name ?: "Track ${it.id}") } ?: emptyList()
