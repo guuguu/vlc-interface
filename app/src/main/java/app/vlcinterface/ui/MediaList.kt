@@ -107,10 +107,13 @@ fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayIte
         }
         looked = true
     }
-    Box(modifier.size(sizeDp.dp).clip(RoundedCornerShape(8.dp)).background(C.card2), contentAlignment = Alignment.Center) {
-        val b = bmp
+    val b = bmp
+    // The visualisation in place of a missing cover: the cover's full square area, square corners.
+    val visHere = b == null && noCover != null && looked
+    Box(modifier.size(sizeDp.dp).clip(if (visHere) androidx.compose.ui.graphics.RectangleShape else RoundedCornerShape(8.dp))
+        .background(if (visHere) androidx.compose.ui.graphics.Color.Black else C.card2), contentAlignment = Alignment.Center) {
         if (b != null) Image(b.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-        else if (noCover != null && looked) noCover()
+        else if (visHere) noCover!!()
         else Text("♪", color = accent(), fontSize = (sizeDp / 2.6).sp)
     }
 }

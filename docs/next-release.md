@@ -71,7 +71,7 @@
 
 ## No cover → the visualisation in its place (requested 2026-11-20 21:16)
 - In the song and radio players, when no picture is found (none in the file or folder, none online, no station
-  logo), the visualisation plays in the picture's place, same size and rounded corners, with the visualisation
+  logo), the visualisation plays in the picture's place, filling exactly the square a cover takes (square corners, no rounding), with the visualisation
   settings currently chosen (effect, colours, brightness, …), moving with the music.
 - Only after the search for a picture has finished (no flash of it while still looking); between songs the place
   stays empty as before.
