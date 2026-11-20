@@ -179,6 +179,12 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
         else a0
     }
     var a by remember(id) { mutableStateOf(start) }
+    // No Save button: leaving the page (back, home, ✕, another page) saves the alarm if something was set by hand;
+    // untouched (new or existing), nothing is saved again. A deleted alarm isn't saved back.
+    var deleted by remember(id) { mutableStateOf(false) }
+    val latest by androidx.compose.runtime.rememberUpdatedState(a)
+    val gone by androidx.compose.runtime.rememberUpdatedState(deleted)
+    androidx.compose.runtime.DisposableEffect(id) { onDispose { if (!gone && latest != start) Alarms.put(latest) } }
     var timeAsk by remember { mutableStateOf(false) }
     var dateAsk by remember { mutableStateOf(false) }
     var datesAsk by remember { mutableStateOf(false) }
@@ -205,7 +211,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     val scroll = rememberScrollState()
     HelpHost {
     Column(Modifier.fillMaxSize()) {
-        BackHeader(if (Alarms.get(id) == null) "New alarm" else "Alarm", nav, actions = { SaveTopButton { Alarms.put(a); nav.back() } })
+        BackHeader(if (Alarms.get(id) == null) "New alarm" else "Alarm", nav)
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             CardBox {
                 HToggleRow("Alarm on", "", a.on) { a = a.copy(on = it) }; Divider()
@@ -317,7 +323,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                     a.output) { a = a.copy(output = it) }
             }
             Row(Modifier.fillMaxWidth().padding(vertical = (14 * sg()).dp), horizontalArrangement = Arrangement.spacedBy((10 * sg()).dp)) {
-                if (Alarms.get(id) != null) Pill("Delete alarm", modifier = Modifier.weight(1f)) { Alarms.delete(a.id); nav.back() }
+                if (Alarms.get(id) != null) Pill("Delete alarm", modifier = Modifier.weight(1f)) { deleted = true; Alarms.delete(a.id); nav.back() }
             }
         }
     }

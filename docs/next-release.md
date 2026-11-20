@@ -177,3 +177,10 @@
 - The format shown now is written on the picture (just the value, e.g. "Fit" — 21:56; white with a soft shadow, at the right under the
   top bar); it comes and goes with the other controls (hidden when left alone or after a tap on an empty part of
   the video) — 21:55.
+
+# Next release (after 1.52.0)
+
+## Alarm page: no Save button, saved when leaving (requested 2026-11-20 22:11)
+- The Save button on the alarm page (new or existing alarm) is gone. Leaving the page — back, home, the red ✕,
+  any other page — saves the alarm when something was set by hand. Left untouched, nothing is saved: a new alarm
+  isn't created, an existing one isn't saved again. "Delete alarm" still deletes it (not saved back).
