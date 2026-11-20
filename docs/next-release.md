@@ -241,3 +241,7 @@
   isn't in the foreground (also another app / window on top), nor while the player's picture place is hidden or
   scrolled out of view; the spectrum measuring in the sound engine is switched off at the same times. It all
   resumes at once when the visualisation is visible again.
+- No restart when shown again (22:58): coming back on screen the visualisation carries on where it was (same
+  picture, tempo, levels; nothing rebuilt); only the sound measured meanwhile is dropped so there's no jump to an old
+  level. The slow first frames after waking up don't count toward the grid adjustment, and once the grid had to go
+  coarser it stays settled — so patterns aren't restarted by resizing.

@@ -245,11 +245,17 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean, shown: () -> Boolea
         var last = 0L
         var clock = 0f
         // Works only while the screen is on and the app is in the foreground (resumed); stopped otherwise.
+        // Coming back on screen: carry on from where it was (same picture, tempo, levels) — nothing is rebuilt; only the
+        // sound measured while it was away is dropped, so the first frame doesn't jump to a level from seconds ago.
+        val skip = FloatArray(NativeAudio.SPEC_N)
+        fun resync() { last = 0L; if (live && NativeAudio.active) { NativeAudio.bands(buf); NativeAudio.spectrum(skip) } }
         life.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
-        last = 0L
+        resync()
+        var wasShown = true
         while (true) {
             // Not on screen (cover place hidden or scrolled away, zero size): nothing is computed, checked 4× a second.
-            if (!shownNow()) { kotlinx.coroutines.delay(250); last = 0L; continue }
+            if (!shownNow()) { kotlinx.coroutines.delay(250); wasShown = false; continue }
+            if (!wasShown) { resync(); wasShown = true }
             withFrameNanos { n ->
                 val dt = if (last == 0L) 0.016f else ((n - last) / 1e9f).coerceIn(0f, 0.1f)
                 last = n; clock += dt
@@ -339,7 +345,8 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
     val field = remember(v.effect) { arrayOfNulls<VisField>(1) }
     // Field patterns: as fine a grid as the phone draws smoothly. Starts at 1.6× the old grid and adjusts itself
     // (finer while frames are cheap, coarser if they get slow), up to 3× (≈ 216 × 384 cells).
-    val res = remember(v.effect) { floatArrayOf(1.6f, 0f, 0f) }   // scale, summed ms, frames
+    // scale, summed ms, frames, last draw (ms), locked (1 = settled: never grows again after having to shrink)
+    val res = remember(v.effect) { floatArrayOf(1.6f, 0f, 0f, 0f, 0f) }
     // The analyser is measured only while a live spectrum picture is shown (saves battery otherwise).
     // Measured only while the screen is on and the app is in the foreground.
     if (live && v.effect in SPEC_FX) {
@@ -371,11 +378,18 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
             val f = field[0]?.takeIf { it.w == fw && it.h == fh } ?: VisField(fw, fh).also { field[0] = it }
             val t0 = System.nanoTime()
             drawField(v.effect, f, m, a, paletteColours(v), cosOffsets(v.effect), v)
-            res[1] += (System.nanoTime() - t0) / 1e6f; res[2] += 1f
-            if (res[2] >= 90f) {       // every ~1.5 s
+            val nowMs = (t0 / 1_000_000L % 10_000_000L).toFloat()
+            // Back on screen after a pause: the first frames are slow while the phone wakes up — they don't count,
+            // so the picture isn't rebuilt (restarted) because of them.
+            if (nowMs - res[3] > 500f || nowMs < res[3]) { res[1] = 0f; res[2] = -30f }
+            res[3] = nowMs
+            if (res[2] >= 0f) res[1] += (System.nanoTime() - t0) / 1e6f
+            res[2] += 1f
+            if (res[2] >= 90f) {       // every ~1.5 s of steady drawing
                 val avg = res[1] / res[2]
-                if (avg > 9f && res[0] > 0.8f) res[0] = (res[0] - 0.2f).coerceAtLeast(0.8f)
-                else if (avg < 4f && res[0] < 3f) res[0] = (res[0] + 0.2f).coerceAtMost(3f)
+                // Changing the grid restarts the pattern, so it settles: once it had to go coarser it never grows again.
+                if (avg > 9f && res[0] > 0.8f) { res[0] = (res[0] - 0.2f).coerceAtLeast(0.8f); res[4] = 1f }
+                else if (avg < 4f && res[0] < 3f && res[4] == 0f) res[0] = (res[0] + 0.2f).coerceAtMost(3f)
                 res[1] = 0f; res[2] = 0f
             }
             return@Canvas
