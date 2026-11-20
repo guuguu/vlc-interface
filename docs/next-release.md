@@ -248,3 +248,6 @@
 - When the player shows a cover or the clock (22:59), the visualisation isn't running at all: it's removed — its
   frame loop and the spectrum measuring stop and its picture memory is freed at once; it's started fresh only when
   the visualisation is shown again in that place.
+- Full-screen visualisation (23:00): the same rules (it's the same drawing) — stops when the screen is locked / off
+  or the app leaves the foreground, carries on without restarting when shown again, and is removed with its memory
+  freed when the full-screen page is closed.
