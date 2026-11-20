@@ -54,3 +54,10 @@
 - New settings: asked each time whether a helper pop-up is wanted.
 - Helper pop-ups scroll when the text is long; the OK (close) button stays always visible, in the pop-up's top bar
   next to the title, never scrolling away (requested 2026-11-20 11:33).
+
+## Floating play / pause button (requested 2026-11-20 11:43)
+- A round floating button on the audio and radio players, with text symbols only: ▶ (play) / ❚❚ (pause), one tap
+  switches between the two.
+- It appears only when the player's controls are scrolled up out of view, and disappears when they're back.
+- It can be dragged anywhere on the player; its place is remembered.
+- Look settings: "Floating button size" and "Floating button transparency" (explained on long-press; no helper pop-up).
