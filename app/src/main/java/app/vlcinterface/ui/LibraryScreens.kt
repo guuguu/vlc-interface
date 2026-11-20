@@ -114,8 +114,40 @@ fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Comp
             if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         actions()
-        // Settings symbol on every page: opens the main Settings page.
-        if (gear) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
+        // Settings pages: a red ✕ straight back to the player (main page when no player is open) instead of the gear.
+        if (LocalSettingsClose.current) CloseToPlayerButton(nav)
+        // Settings symbol on every other page: opens the main Settings page.
+        else if (gear) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
+    }
+}
+
+/** True on the Settings pages (main and sub-pages): their header shows the red ✕ instead of the gear. */
+val LocalSettingsClose = androidx.compose.runtime.staticCompositionLocalOf { false }
+
+/** Red ✕ in a settings page's top-right corner: back to the player that was open, else the main page. */
+@Composable
+fun CloseToPlayerButton(nav: Navigator) {
+    Box(Modifier.padding(horizontal = 6.dp).size(36.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFFE24B4A))
+        .clickable { SettingsNav.toPlayer(nav) }, contentAlignment = Alignment.Center) {
+        Text("✕", color = Color.White, fontSize = 20.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+object SettingsNav {
+    fun isSettingsPage(s: Screen) = s is Screen.Settings || s is Screen.SoundSettings || s is Screen.SettingsGroup ||
+        s is Screen.MediaFolders || s is Screen.Backup || s is Screen.AlarmSettings || s is Screen.ClockAspect
+
+    /** Back to the most recent player in the stack (songs / radio or video); none → the app's main page. */
+    fun toPlayer(nav: Navigator) {
+        val i = nav.stack.indexOfLast { it is Screen.Music || it is Screen.Player }
+        if (i < 0) { nav.home(); nav.replace(Screen.Library()) }
+        else while (nav.stack.lastIndex > i) nav.stack.removeAt(nav.stack.lastIndex)
+    }
+
+    /** A sub-page's parent: the settings page it was opened from, else the main Settings page. */
+    fun toParent(nav: Navigator) {
+        val prev = nav.stack.getOrNull(nav.stack.lastIndex - 1)
+        if (prev != null && isSettingsPage(prev)) nav.back() else nav.replace(Screen.Settings)
     }
 }
 

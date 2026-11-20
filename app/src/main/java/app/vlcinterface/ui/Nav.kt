@@ -22,6 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.Color
 import app.vlcinterface.App
 import app.vlcinterface.data.Source
@@ -138,6 +140,35 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     kept.filter { (it.substringBefore(':').toIntOrNull() ?: 0) > depth }.forEach { holder.removeState(it); kept.remove(it) }
                 }
                 kept += pageKey
+                // Settings pages: red ✕ to the player in the header; sub-pages also go back to their parent page
+                // with a swipe to the right or by pulling down further when already at the top.
+                val settingsPage = SettingsNav.isSettingsPage(top)
+                val subPage = settingsPage && top !is Screen.Settings
+                val dens = androidx.compose.ui.platform.LocalDensity.current
+                val pullBack = remember(top) { object : androidx.compose.ui.input.nestedscroll.NestedScrollConnection {
+                    var acc = 0f
+                    override fun onPostScroll(consumed: androidx.compose.ui.geometry.Offset, available: androidx.compose.ui.geometry.Offset,
+                                              source: androidx.compose.ui.input.nestedscroll.NestedScrollSource): androidx.compose.ui.geometry.Offset {
+                        if (source == androidx.compose.ui.input.nestedscroll.NestedScrollSource.UserInput && available.y > 0f) {
+                            acc += available.y
+                            if (acc > with(dens) { 140.dp.toPx() }) { acc = Float.NEGATIVE_INFINITY; SettingsNav.toParent(nav) }
+                        } else if (consumed.y != 0f) acc = 0f
+                        return androidx.compose.ui.geometry.Offset.Zero
+                    }
+                    override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                        if (acc != Float.NEGATIVE_INFINITY) acc = 0f; return androidx.compose.ui.unit.Velocity.Zero
+                    }
+                } }
+                CompositionLocalProvider(LocalSettingsClose provides settingsPage) {
+                Box(Modifier.fillMaxSize().then(if (!subPage) Modifier else Modifier
+                    .nestedScroll(pullBack)
+                    .pointerInput(top) {
+                        var dx = 0f
+                        androidx.compose.foundation.gestures.detectHorizontalDragGestures(
+                            onDragStart = { dx = 0f },
+                            onDragEnd = { if (dx > 120.dp.toPx()) SettingsNav.toParent(nav) },
+                        ) { ch, d -> dx += d; ch.consume() }
+                    })) {
                 holder.SaveableStateProvider(pageKey) {
                 when (top) {
                     is Screen.Library -> LibraryScreen(nav, top, openOutput)
@@ -168,6 +199,8 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.LogView -> LogViewScreen(nav, top.kind)
                     is Screen.PickCue -> PickCueScreen(nav, top)
                     is Screen.PickMedia -> PickMediaScreen(nav, top)
+                }
+                }
                 }
                 }
                 if (showOutput) OutputSheet(onDismiss = { showOutput = false })

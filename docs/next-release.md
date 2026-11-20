@@ -29,3 +29,12 @@
   output pill on the right, with room for its full name.
 - Sideways: one row, everything spread evenly from edge to edge (same as the video bar).
 - Player buttons slightly bigger (13 sp, more padding) with even spacing between them.
+
+## Settings pages: back to the parent page, red ✕ back to the player (requested 2026-11-20 18:23)
+- On every settings sub-page (each settings group, Sound settings, Find media folders, Export & import, Alarm clock
+  settings, Clock aspect): swipe right anywhere on the page, or pull down further when already at the top, to go back
+  to the parent page (the settings page it was opened from, else the main Settings page).
+- Main Settings page and all sub-pages: a white ✕ on a red square in the top-right corner (where the gear was)
+  goes straight back to the player that was open (songs / radio or video); when no player was open, to the app's
+  main page.
+- The home symbol stays as it is: it goes to the app's main page.
