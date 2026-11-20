@@ -77,6 +77,7 @@ private val PALETTES: List<Pair<String, String>> = listOf("pattern" to "Pattern 
 /** The visualisations offered (23:06: only the chosen ones — centred spectrum and the four analysers; projectM follows). */
 private val EFFECT_NAMES = listOf("mirror" to "Spectrum (centred)",
     "am_led" to "Analyser: LED bars", "am_lumi" to "Analyser: light bars", "am_area" to "Analyser: wave area", "am_radial" to "Analyser: radial",
+    "lava_spec" to "Lava flow + spectrum",
     "pm1" to "MilkDrop: Tunnel", "pm2" to "MilkDrop: Kaleidoscope", "pm3" to "MilkDrop: Rings", "pm4" to "MilkDrop: Starburst")
 
 /** projectM (MilkDrop) presets: drawn by projectM on its own OpenGL surface. */
@@ -96,7 +97,7 @@ private fun c(vararg v: Long) = v.map { Color(it) }
 
 /** Each pattern's own colours: 4 spot colours + 3 background colours (top / middle / bottom). */
 private fun patternColours(effect: String): Pair<List<Color>, List<Color>> = when (effect) {
-    "lava" -> c(0xFFFF5400, 0xFFFFBD00, 0xFFD00000, 0xFFFF8C3C) to c(0xFF2A0006, 0xFF4A000C, 0xFF6A0010)
+    "lava", "lava_spec" -> c(0xFFFF5400, 0xFFFFBD00, 0xFFD00000, 0xFFFF8C3C) to c(0xFF2A0006, 0xFF4A000C, 0xFF6A0010)
     "nebula" -> c(0xFFF72585, 0xFF4CC9F0, 0xFF7209B7, 0xFFFFFFFF) to c(0xFF0B0020, 0xFF2A0A6B, 0xFF10002B)
     "tides" -> c(0xFF00B4D8, 0xFF90E0EF, 0xFF0077B6, 0xFFCAF0F8) to c(0xFF023E8A, 0xFF0077B6, 0xFF03045E)
     "plasma" -> c(0xFF7209B7, 0xFFF72585, 0xFF4361EE, 0xFF4CC9F0) to c(0xFF240046, 0xFF3A0CA3, 0xFF10002B)
@@ -182,9 +183,9 @@ private class VisMotion {
 }
 
 /** Spectrum pictures (bars from the 20-band analyser). */
-val SPEC_FX = setOf("bars", "mirror", "radial", "am_led", "am_lumi", "am_area", "am_radial")
+val SPEC_FX = setOf("bars", "mirror", "radial", "am_led", "am_lumi", "am_area", "am_radial", "lava_spec")
 /** Patterns whose bars follow the "Bar thickness" setting. */
-val BAR_FX = setOf("mirror", "am_led", "am_lumi", "am_radial")
+val BAR_FX = setOf("mirror", "am_led", "am_lumi", "am_radial", "lava_spec")
 
 /**
  * Beat engine: onsets of the low band are found against their own recent statistics (mean + 1.6 × spread), the
@@ -389,6 +390,9 @@ private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
     val spots = visColours(v)
     val bg = visBackground(v)
     val plasma = remember { android.graphics.Bitmap.createBitmap(18, 32, android.graphics.Bitmap.Config.ARGB_8888) }
+    // Lava flow grid: 90 × 160 upright, 160 × 90 when the picture is wider than tall (round blobs either way).
+    val lavaBmp = remember { arrayOfNulls<android.graphics.Bitmap>(1) }
+    val lavaPxBox = remember { arrayOfNulls<IntArray>(1) }
     val px = remember { IntArray(18 * 32) }
     val field = remember(v.effect) { arrayOfNulls<VisField>(1) }
     // Field patterns: as fine a grid as the phone draws smoothly. Starts at 1.6× the old grid and adjusts itself
@@ -397,7 +401,7 @@ private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
     val res = remember(v.effect) { floatArrayOf(1.6f, 0f, 0f, 0f, 0f) }
     // Gone from the screen for good (cover found, clock switched on, another page): its picture memory is freed at once.
     // (Its frame loop and the spectrum measuring stop with it.)
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { try { field[0]?.bmp?.recycle(); field[0] = null; plasma.recycle() } catch (_: Exception) {} } }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { try { field[0]?.bmp?.recycle(); field[0] = null; plasma.recycle(); lavaBmp[0]?.recycle(); lavaBmp[0] = null } catch (_: Exception) {} } }
     // The analyser is measured only while a live spectrum picture is shown (saves battery otherwise).
     // Measured only while the screen is on and the app is in the foreground.
     if (live && v.effect in SPEC_FX) {
@@ -415,6 +419,16 @@ private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
     }) {
         val t = m.t
         val a = v.brightness.coerceIn(0.2f, 1f)
+        if (v.effect == "lava_spec") {
+            // Lava flow underneath, the centred spectrum over it, see-through, both in the same colours.
+            val cols = visColours(v)
+            val (lw, lh) = if (size.width > size.height) 160 to 90 else 90 to 160
+            val lb = lavaBmp[0]?.takeIf { it.width == lw && it.height == lh && !it.isRecycled }
+                ?: android.graphics.Bitmap.createBitmap(lw, lh, android.graphics.Bitmap.Config.ARGB_8888).also { old -> lavaBmp[0]?.recycle(); lavaBmp[0] = old; lavaPxBox[0] = IntArray(lw * lh) }
+            drawLava(m, a, cols, lb, lavaPxBox[0]!!)
+            drawSpectrum(m, a, cols, bg, v.specBar.dp.toPx(), alphaK = 0.55f, withBg = false)
+            return@Canvas
+        }
         if (v.effect in SPEC_FX) {
             when (v.effect) {
                 "am_led", "am_lumi", "am_area", "am_radial" -> drawAnalyser(v.effect, m, a, visColours(v), bg, v.specBar.dp.toPx())
@@ -455,8 +469,10 @@ private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
  * user ([barPx]); the number of bars is what fits across the width at that thickness (thicker → fewer bars), each
  * bar taking its share of the 32 measured bands. Colours run across the bars from the chosen colour combination.
  */
-private fun DrawScope.drawSpectrum(m: VisMotion, a: Float, cols: List<Color>, bg: List<Color>, barPx: Float) {
-    drawRect(lerpC(Color.Black, bg.firstOrNull() ?: Color.Black, 0.25f + 0.25f * m.kickLo))
+private fun DrawScope.drawSpectrum(m: VisMotion, a0: Float, cols: List<Color>, bg: List<Color>, barPx: Float,
+                                   alphaK: Float = 1f, withBg: Boolean = true) {
+    val a = a0 * alphaK
+    if (withBg) drawRect(lerpC(Color.Black, bg.firstOrNull() ?: Color.Black, 0.25f + 0.25f * m.kickLo))
     val gap = (barPx * 0.35f).coerceAtLeast(2f)
     val bars = ((size.width + gap) / (barPx + gap)).toInt().coerceIn(3, m.spec.size)
     val bw = (size.width - gap * (bars - 1)) / bars        // fills the width exactly
@@ -595,6 +611,43 @@ private fun DrawScope.spot(c: Color, alpha: Float, center: Offset, r: Float, sha
     val edge = 0.35f + 0.62f * s
     drawCircle(Brush.radialGradient(0f to c.copy(alpha = alpha), edge to c.copy(alpha = alpha * (0.4f + 0.55f * s)), 1f to Color.Transparent,
         center = center, radius = rr), rr, center, blendMode = BlendMode.Plus)
+}
+
+/**
+ * Lava flow (lava lamp): soft blobs rising and sinking, merging and splitting as they meet (a metaball field on a
+ * small grid, smoothly enlarged). They swell with the bass and move faster on the beat; colours run through the
+ * chosen combination from the blob edges (first colour) to their hot cores (last), over a dark glowing background.
+ */
+private fun DrawScope.drawLava(m: VisMotion, a: Float, cols: List<Color>, bmp: android.graphics.Bitmap, px: IntArray) {
+    val gw = bmp.width; val gh = bmp.height
+    val n = 7
+    val bx = FloatArray(n); val by = FloatArray(n); val br = FloatArray(n)
+    for (i in 0 until n) {
+        val sp = 0.18f + i * 0.045f
+        bx[i] = gw * (0.5f + 0.38f * sin(m.pb * sp * 0.7f + i * 2.1f))
+        by[i] = gh * (0.5f + 0.44f * sin(m.pb * sp + i * 1.7f))          // rising and sinking
+        br[i] = gw * (0.13f + 0.03f * (i % 3)) * (0.85f + 0.35f * m.lo)
+    }
+    val dark = cols.first().let { Color(it.red * 0.10f, it.green * 0.06f, it.blue * 0.10f) }
+    fun mix(f: Float): Int {
+        val p = f.coerceIn(0f, 1f) * (cols.size - 1)
+        val j = p.toInt().coerceIn(0, cols.size - 2)
+        val c = lerpC(cols[j], cols[j + 1], p - j)
+        return android.graphics.Color.argb(255, (c.red * a * 255).toInt().coerceIn(0, 255), (c.green * a * 255).toInt().coerceIn(0, 255), (c.blue * a * 255).toInt().coerceIn(0, 255))
+    }
+    val darkI = android.graphics.Color.argb(255, (dark.red * 255).toInt(), (dark.green * 255).toInt(), (dark.blue * 255).toInt())
+    for (y in 0 until gh) for (x in 0 until gw) {
+        var f = 0f
+        for (i in 0 until n) { val dx = x - bx[i]; val dy = y - by[i]; f += br[i] * br[i] / (dx * dx + dy * dy + 1f) }
+        px[y * gw + x] = if (f < 0.55f) {
+            // Background with a faint glow near the blobs.
+            val g = (f / 0.55f).let { it * it * 0.35f }
+            val c = lerpC(dark, cols.first(), g)
+            android.graphics.Color.argb(255, (c.red * a * 255).toInt().coerceIn(0, 255), (c.green * a * 255).toInt().coerceIn(0, 255), (c.blue * a * 255).toInt().coerceIn(0, 255))
+        } else if (cols.size < 2) darkI else mix(((f - 0.55f) / 2.2f).let { kotlin.math.sqrt(it) })
+    }
+    bmp.setPixels(px, 0, gw, 0, 0, gw, gh)
+    drawImage(bmp.asImageBitmap(), dstSize = IntSize(size.width.toInt(), size.height.toInt()), filterQuality = FilterQuality.High)
 }
 
 /** Big spots follow the low part, small spots the high part; both travel across the whole screen. */

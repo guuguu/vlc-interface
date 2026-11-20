@@ -290,3 +290,9 @@
 - New slider on Settings → Visualisation for all spectrum / analyser pictures: how much the bars jump between quiet
   and loud — ×0.4 (steady height, small ripples) … ×2.5 (from almost nothing to the full frame), default ×1.
   Works with Sensitivity (which lifts the whole movement). Helper with a live preview on a still hold.
+
+## Lava flow + spectrum (requested 2026-11-20 23:30)
+- New visualisation "Lava flow + spectrum": a lava lamp — soft blobs rising and sinking, merging and splitting when
+  they meet, swelling with the bass and moving faster on the beat, with a dark glowing background — and the
+  centred spectrum drawn over it, see-through (≈ 55 %). Both use the same colour combination (pattern colours: the
+  lava's reds and golds, or the chosen custom colours). Bar thickness, Sensitivity and Amplitude apply to its bars.
