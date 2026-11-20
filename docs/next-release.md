@@ -20,3 +20,4 @@
 ## How long short pop-ups stay (requested 2026-11-20 12:17)
 - A Look setting "Short pop-ups stay for" sets how long every short, self-closing pop-up stays on screen (alarm
   switch confirmations, the 3 s helper pop-ups, saved / added notes…), e.g. 1–10 s; default as today.
+- With a text helper pop-up while Helpers are on (requested 2026-11-20 12:17).
