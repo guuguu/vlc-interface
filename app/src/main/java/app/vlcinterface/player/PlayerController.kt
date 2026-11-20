@@ -1208,7 +1208,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                     add("Codec" to listOf(codecName(c), c.uppercase()).filter { it.isNotEmpty() }.distinct().joinToString(" · "))
                     add("Resolution" to if (w > 0) "$w × $h" + resName(w, h).let { if (it.isEmpty()) "" else "  ($it)" } else "")
                     if (vt.sarNum > 0 && vt.sarDen > 0 && vt.sarNum != vt.sarDen) add("Pixel aspect" to "${vt.sarNum}:${vt.sarDen} → shown ${s.videoW} × ${s.videoH}")
-                    if (w > 0 && h > 0) add("Picture shape" to ratioName(s.videoW.takeIf { it > 0 } ?: w, s.videoH.takeIf { it > 0 } ?: h))
+                    if (w > 0 && h > 0) add("Picture format" to ratioName(s.videoW.takeIf { it > 0 } ?: w, s.videoH.takeIf { it > 0 } ?: h))
                     if (vt.frameRateNum > 0 && vt.frameRateDen > 0) add("Frame rate" to "%.3f".format(java.util.Locale.US, vt.frameRateNum.toDouble() / vt.frameRateDen).trimEnd('0').trimEnd('.') + " fps")
                     if (vt.bitrate > 0) add("Bitrate" to "${vt.bitrate / 1000} kbps")
                     if (vt.profile > 0) add("Profile / level" to "${vt.profile} / ${vt.level}")
