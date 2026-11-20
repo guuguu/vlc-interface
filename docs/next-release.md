@@ -320,3 +320,5 @@
   buttons, on the right) showing the chosen pattern with every setting change at once, moving with the music. Drag
   it anywhere (its place is kept); tap it to switch small / large. Replaces the 3-second preview after picking a
   pattern.
+- Export / import (23:44): the setup file now carries every visualisation pattern's own settings (not only the one
+  in use); importing brings them back (the file's ones replace this phone's for the same patterns).
