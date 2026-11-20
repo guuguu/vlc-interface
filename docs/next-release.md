@@ -16,3 +16,5 @@
   "Scroll bar width" / "Button size" differ today).
 - Main Settings page: a slider "Text size" (only a slider) scaling all the text in the settings pages, the setup
   wizard, the help guide and the helper pop-ups together; titles stay proportionally bigger.
+- With a helper pop-up while Helpers are on, previewing a sample setting (title + text) at the chosen size
+  (requested 2026-11-20 16:51).
