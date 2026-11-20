@@ -12,3 +12,5 @@
   N seconds after the last action, any action restarts the count, and never while a menu, pop-up or settings
   window is open.
 - Its own Look setting "Cover hidden for" (seconds; default 10), like "Clock hidden for".
+- Upright only (sideways the cover stays on the left); own setting, separate from the clock; text helper pop-up
+  while Helpers are on (requested 2026-11-20 15:44).
