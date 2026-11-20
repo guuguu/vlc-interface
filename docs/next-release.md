@@ -34,3 +34,5 @@
   the VPN-NAS button and "Live · listening …").
 - Scrolling on moves all the rest underneath it (controls, Up next, the other items); scrolling back down
   brings the cover back.
+- Sideways (landscape), on both players: the left side (cover or clock, and what's shown with it) is always shown
+  whole, sized to fit the screen height, never needing to scroll (requested 2026-11-20 11:28).
