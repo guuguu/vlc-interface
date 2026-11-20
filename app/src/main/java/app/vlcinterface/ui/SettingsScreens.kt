@@ -367,10 +367,19 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                     .clickable { swEdit = which }.padding(horizontal = 10.dp, vertical = 4.dp))
                         }
                     }
-                    if (swEdit.isNotEmpty()) ColorPickDialog(if (swEdit == "on") (if (s.switchOn != 0L) s.switchOn else accArgb) else s.switchOff,
+                    // Floating play / pause: its own colour.
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                        Text("Floating button colour", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Floating button colour"))
+                        Box(Modifier.size(22.dp).clip(CircleShape).background(Color(if (s.floatBtnColor != 0L) s.floatBtnColor else accArgb)))
+                        Text("+ Create", color = WIZ_GREEN, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 10.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, WIZ_GREEN, RoundedCornerShape(10.dp))
+                                .clickable { swEdit = "float" }.padding(horizontal = 10.dp, vertical = 4.dp))
+                    }
+                    if (swEdit.isNotEmpty()) ColorPickDialog(when (swEdit) { "on" -> if (s.switchOn != 0L) s.switchOn else accArgb
+                        "float" -> if (s.floatBtnColor != 0L) s.floatBtnColor else accArgb; else -> s.switchOff },
                         onDismiss = { swEdit = "" }) { c ->
-                        set(if (swEdit == "on") s.copy(switchOn = c) else s.copy(switchOff = c))
-                        val l = if (swEdit == "on") "Switch colour · on" else "Switch colour · off"
+                        set(when (swEdit) { "on" -> s.copy(switchOn = c); "float" -> s.copy(floatBtnColor = c); else -> s.copy(switchOff = c) })
+                        val l = when (swEdit) { "on" -> "Switch colour · on"; "float" -> "Floating button colour"; else -> "Switch colour · off" }
                         swEdit = ""; if (helpersOn) lookHelp = l
                     }
                     if (lookHelp.isNotEmpty()) HelperDialog(lookHelp, SettingHelp.text(lookHelp, ""), extra = {
@@ -386,6 +395,10 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                         WideSwitch(on, height = (14 + 12 * (k - 0.5f) * 2).dp) {}
                                     }
                                 }
+                            }
+                            lookHelp.startsWith("Floating button colour") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                FloatingButtonSample(s.floatBtnColor, playing = true); FloatingButtonSample(s.floatBtnColor, playing = false)
                             }
                             lookHelp.startsWith("Switch colour") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp),
                                 verticalAlignment = Alignment.CenterVertically) {

@@ -78,6 +78,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -1942,14 +1943,25 @@ fun BoxScope.FloatingPlayButton(playing: Boolean, onToggle: () -> Unit) {
         x = x.coerceIn(0f, (wPx - sizePx).coerceAtLeast(0f)); y = y.coerceIn(0f, (hPx - sizePx).coerceAtLeast(0f))
         Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(x.toInt(), y.toInt()) }.size(s.floatBtnSize.dp)
             .graphicsLayer { alpha = s.floatBtnAlpha / 100f }
-            .liteShadow(CircleShape).clip(CircleShape).background(accent())
+            .liteShadow(CircleShape).clip(CircleShape).background(if (s.floatBtnColor != 0L) Color(s.floatBtnColor) else accent())
             .pointerInput(Unit) {
                 detectDragGestures(onDragEnd = {
                     store.update { it.copy(settings = it.settings.copy(floatBtnX = x / wPx, floatBtnY = y / hPx)) }
                 }) { ch, d -> ch.consume(); x = (x + d.x).coerceIn(0f, wPx - sizePx); y = (y + d.y).coerceIn(0f, hPx - sizePx) }
             }
             .clickable { onToggle() }, contentAlignment = Alignment.Center) {
-            Text(if (playing) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (s.floatBtnSize * 0.36f).sp, fontWeight = FontWeight.Bold)
+            Text(if (playing) "❚❚" else "▶", color = floatSymbolColor(s.floatBtnColor), fontSize = (s.floatBtnSize * 0.36f).sp, fontWeight = FontWeight.Bold)
         }
+    }
+}
+
+/** Symbol colour readable on the floating button's colour: dark on light colours, white on dark ones. */
+fun floatSymbolColor(c: Long): Color = if (c == 0L || Color(c).luminance() > 0.4f) Color(0xFF1A0E05) else Color.White
+
+/** The floating button as drawn on the player (for previews). */
+@Composable
+fun FloatingButtonSample(color: Long, playing: Boolean, size: Int = 56) {
+    Box(Modifier.size(size.dp).clip(CircleShape).background(if (color != 0L) Color(color) else accent()), contentAlignment = Alignment.Center) {
+        Text(if (playing) "❚❚" else "▶", color = floatSymbolColor(color), fontSize = (size * 0.36f).sp, fontWeight = FontWeight.Bold)
     }
 }

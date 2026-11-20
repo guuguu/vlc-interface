@@ -245,7 +245,9 @@ data class Settings(
     val shortPopupSec: Int = 3,
     /** Switch track colours: on (0 = accent) and off. */
     val switchOn: Long = 0L,
-    val switchOff: Long = 0xFF4A5568
+    val switchOff: Long = 0xFF4A5568,
+    /** Floating play / pause colour (0 = accent). */
+    val floatBtnColor: Long = 0L
 ) {
     fun toJson(passwordTransform: (String) -> String): JSONObject = JSONObject()
         .put("volumeSwipe", volumeSwipe).put("brightnessSwipe", brightnessSwipe)
@@ -262,7 +264,7 @@ data class Settings(
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
         .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccents", org.json.JSONArray(customAccents)).put("menuOpacity", menuOpacity).put("menuGap", menuGap).put("vpnNas", vpnNas).put("vpnAskStart", vpnAskStart).put("vpnApp", vpnApp).put("vpnRetrySec", vpnRetrySec).put("upNextCount", upNextCount).put("radioAccent", radioAccent).put("autoLoud", autoLoud).put("toneSliders", toneSliders).put("controlShadow", controlShadow).put("toneLoud", toneLoud.toDouble()).put("toneTreble", toneTreble.toDouble()).put("radioPreLast", radioPreLast.toDouble()).put("songPreLast", songPreLast.toDouble()).put("saveFolder", saveFolder).put("saveFormat", saveFormat).put("radioCapture", radioCapture).put("scrollbarPx", scrollbarPx).put("spaceUnderGb", spaceUnderGb).put("radioBufferMin", radioBufferMin).put("spotifyId", spotifyId).put("spotifySecret", spotifySecret).put("spacePercent", spacePercent).put("btQuality", btQuality).put("settingsOrder", org.json.JSONArray(settingsOrder)).put("wizardDone", wizardDone).put("phoneFolders", org.json.JSONArray(phoneFolders)).put("phoneFoldersSet", phoneFoldersSet).put("floatBtnSize", floatBtnSize).put("floatBtnAlpha", floatBtnAlpha).put("floatBtnX", floatBtnX.toDouble()).put("floatBtnY", floatBtnY.toDouble())
-            .put("alarmRowPct", alarmRowPct).put("shortPopupSec", shortPopupSec).put("switchOn", switchOn).put("switchOff", switchOff)
+            .put("alarmRowPct", alarmRowPct).put("shortPopupSec", shortPopupSec).put("switchOn", switchOn).put("switchOff", switchOff).put("floatBtnColor", floatBtnColor)
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -337,7 +339,7 @@ data class Settings(
                 floatBtnSize = o.optInt("floatBtnSize", 64), floatBtnAlpha = o.optInt("floatBtnAlpha", 85),
                 floatBtnX = o.optDouble("floatBtnX", -1.0).toFloat(), floatBtnY = o.optDouble("floatBtnY", -1.0).toFloat(),
                 alarmRowPct = o.optInt("alarmRowPct", 50), shortPopupSec = o.optInt("shortPopupSec", 3),
-                switchOn = o.optLong("switchOn", 0L), switchOff = o.optLong("switchOff", 0xFF4A5568),
+                switchOn = o.optLong("switchOn", 0L), switchOff = o.optLong("switchOff", 0xFF4A5568), floatBtnColor = o.optLong("floatBtnColor", 0L),
                 settingsOrder = o.optJSONArray("settingsOrder")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
                 customAccents = ((o.optJSONArray("customAccents")?.let { a -> (0 until a.length()).map { a.getLong(it) } }
                     ?: listOfNotNull(o.optLong("customAccent", 0L).takeIf { it != 0L }))

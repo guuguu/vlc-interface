@@ -125,6 +125,8 @@ object SettingHelp {
         "Pop-up opacity" to "How see-through pop-up windows are. More see-through shows what's behind; fully opaque is easier to read.",
         "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
+        "Floating button colour" to "The colour of the round play / pause button that floats over the players, separate from the accent colour so it stands out over album pictures and lists.\n\n" +
+            "'+ Create' opens the colour editor; the ▶ / ❚❚ symbol turns dark or white by itself to stay readable. Default: the accent colour.",
         "Floating button transparency" to "How see-through the floating play / pause button is: 0 % is solid, higher lets the list show through it.\n\n" +
             "It stays fully usable at any transparency. Default: 15 %.",
         "Alarm rows under the clock" to "Height of each alarm row in the list under the clock on the player (and the alarms list), as a share of the original rows.\n\n" +
