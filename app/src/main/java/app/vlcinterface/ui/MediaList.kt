@@ -74,11 +74,15 @@ import kotlinx.coroutines.withContext
 /** Album cover / thumbnail from a content:// uri (phone) or a file:// / path (libVLC cache). */
 @Composable
 fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayItem? = null,
-          download: Boolean = false, onNote: (String) -> Unit = {}, onFound: () -> Unit = {}, retry: Int = 0, refresh: Int = 0) {
+          download: Boolean = false, onNote: (String) -> Unit = {}, onFound: () -> Unit = {}, retry: Int = 0, refresh: Int = 0,
+          noCover: (@Composable () -> Unit)? = null) {
     val ctx = LocalContext.current
+    // True once the search for a picture has finished (so [noCover] isn't shown while still looking).
+    var looked by remember(url, item?.uri, retry, refresh) { mutableStateOf(false) }
     val online = download && App.instance.store.current.settings.coverDownload
     val bmp by produceState<Bitmap?>(null, url, item?.uri, online, retry, refresh) {
         value = null          // a new song: the old picture goes at once, not when the new one has loaded
+        looked = false
         value = withContext(Dispatchers.IO) {
             // A picture chosen by hand (refresh) wins over the one inside the file.
             val own = if (refresh > 0 || (item != null && app.vlcinterface.sources.CoverArt.bannedFile(item, url))) null else try {
@@ -101,10 +105,12 @@ fun Cover(url: String, sizeDp: Int, modifier: Modifier = Modifier, item: PlayIte
                 } else app.vlcinterface.sources.CoverArt.folderOnly(ctx, it0)
             }
         }
+        looked = true
     }
     Box(modifier.size(sizeDp.dp).clip(RoundedCornerShape(8.dp)).background(C.card2), contentAlignment = Alignment.Center) {
         val b = bmp
         if (b != null) Image(b.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        else if (noCover != null && looked) noCover()
         else Text("♪", color = accent(), fontSize = (sizeDp / 2.6).sp)
     }
 }

@@ -68,3 +68,10 @@
 - The sine button scrolls the page to the tone sliders: they end up in the middle of the free space (under the
   title block upright); when they're near the end of the page, it scrolls as far as the page goes.
 - Shown only while the tone sliders are on (Settings) and their row is in the player.
+
+## No cover → the visualisation in its place (requested 2026-11-20 21:16)
+- In the song and radio players, when no picture is found (none in the file or folder, none online, no station
+  logo), the visualisation plays in the picture's place, same size and rounded corners, with the visualisation
+  settings currently chosen (effect, colours, brightness, …), moving with the music.
+- Only after the search for a picture has finished (no flash of it while still looking); between songs the place
+  stays empty as before.

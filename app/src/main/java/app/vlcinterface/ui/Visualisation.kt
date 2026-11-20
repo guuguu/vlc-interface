@@ -211,6 +211,13 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
     return m
 }
 
+/** The visualisation with the current settings, live, in any area (the player's picture place when there's no cover). */
+@Composable
+fun VisArea(modifier: Modifier) {
+    val v = Alarms.state.collectAsState().value.vis
+    VisCanvas(v, modifier, live = true)
+}
+
 /** The visualisation itself (full screen or a preview). */
 @Composable
 private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
