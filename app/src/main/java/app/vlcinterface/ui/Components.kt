@@ -354,16 +354,49 @@ fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Uni
 
 // ---------------------------------------------------------------- switches
 
-/** Switch of the app: on and off look the same (only the knob moves); greyed only when it can't be used. */
+/** Switch of the app: its own colours for on and off (Look); greyed only when it can't be used. */
 @Composable
 fun AppSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {
-    val a = accent(); val knob = Color(0xFF1A0E05)
+    val s = app.vlcinterface.App.instance.store.state.collectAsState().value.settings
+    val on = if (s.switchOn != 0L) Color(s.switchOn) else accent(); val off = Color(s.switchOff)
     androidx.compose.material3.Switch(checked, onChange, modifier, enabled = enabled,
         colors = SwitchDefaults.colors(
-            checkedTrackColor = a, uncheckedTrackColor = a, checkedBorderColor = a, uncheckedBorderColor = a,
-            checkedThumbColor = knob, uncheckedThumbColor = knob,
+            checkedTrackColor = on, uncheckedTrackColor = off, checkedBorderColor = on, uncheckedBorderColor = off,
+            checkedThumbColor = Color(0xFF1A0E05), uncheckedThumbColor = Color(0xFFE8E8E8),
             disabledCheckedTrackColor = C.line, disabledUncheckedTrackColor = C.line, disabledCheckedBorderColor = C.line,
             disabledUncheckedBorderColor = C.line, disabledCheckedThumbColor = C.muted.copy(alpha = 0.6f), disabledUncheckedThumbColor = C.muted.copy(alpha = 0.6f)))
+}
+
+/** Wide, horizontally elongated switch (alarm rows): easier to hit; same colours as the other switches. */
+@Composable
+fun WideSwitch(checked: Boolean, height: androidx.compose.ui.unit.Dp = 26.dp, onChange: (Boolean) -> Unit) {
+    val s = app.vlcinterface.App.instance.store.state.collectAsState().value.settings
+    val on = if (s.switchOn != 0L) Color(s.switchOn) else accent(); val off = Color(s.switchOff)
+    val knob = height - 6.dp
+    Box(Modifier.width(height * 2.8f).height(height).clip(androidx.compose.foundation.shape.RoundedCornerShape(height / 2))
+        .background(if (checked) on else off).clickable { onChange(!checked) }.padding(3.dp),
+        contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart) {
+        Box(Modifier.size(knob).clip(androidx.compose.foundation.shape.CircleShape).background(if (checked) Color(0xFF1A0E05) else Color(0xFFE8E8E8)))
+    }
+}
+
+/** Short, self-closing note at the bottom of the screen (how long: Look → Short pop-ups stay for). */
+object ShortNote {
+    var text by androidx.compose.runtime.mutableStateOf("")
+    var stamp by androidx.compose.runtime.mutableLongStateOf(0L)
+    fun show(t: String) { text = t; stamp = System.currentTimeMillis() }
+}
+
+@Composable
+fun ShortNoteHost(modifier: Modifier) {
+    val sec = app.vlcinterface.App.instance.store.state.collectAsState().value.settings.shortPopupSec
+    val t = ShortNote.text; val st = ShortNote.stamp
+    androidx.compose.runtime.LaunchedEffect(st) { if (t.isNotEmpty()) { kotlinx.coroutines.delay(sec * 1000L); if (ShortNote.stamp == st) ShortNote.text = "" } }
+    if (t.isNotEmpty()) Box(modifier.padding(bottom = 90.dp, start = 24.dp, end = 24.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+        .background(Color(0xF02A2E35)).border(1.dp, WIZ_GREEN, androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+        .clickable { ShortNote.text = "" }.padding(horizontal = 16.dp, vertical = 9.dp)) {
+        Text("✓ $t", color = WIZ_GREEN, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    }
 }
 
 // ---------------------------------------------------------------- current value (setup wizard)
@@ -869,7 +902,8 @@ fun AutoInfoDialog(
     containerColor: Color = C.panel,
 ) {
     var pinned by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    androidx.compose.runtime.LaunchedEffect(pinned) { if (!pinned) { kotlinx.coroutines.delay(3000); if (!pinned) onDismissRequest() } }
+    val sec = app.vlcinterface.App.instance.store.state.collectAsState().value.settings.shortPopupSec
+    androidx.compose.runtime.LaunchedEffect(pinned) { if (!pinned) { kotlinx.coroutines.delay(sec * 1000L); if (!pinned) onDismissRequest() } }
     // A touch outside it always closes it (kept open or not). Title and buttons in a top bar; the text scrolls under it.
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismissRequest) {
         androidx.compose.foundation.layout.Column(modifier.fillMaxWidth().heightIn(max = 560.dp)
@@ -886,7 +920,7 @@ fun AutoInfoDialog(
             val sc = androidx.compose.foundation.rememberScrollState()
             androidx.compose.foundation.layout.Column(Modifier.weight(1f, fill = false).verticalScroll(sc).padding(18.dp)) {
                 androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides C.muted) { text?.invoke() }
-                if (!pinned) Text("Closes in 3 s · touch it to keep it open", color = C.muted, fontSize = 11.sp,
+                if (!pinned) Text("Closes in $sec s · touch it to keep it open", color = C.muted, fontSize = 11.sp,
                     modifier = Modifier.padding(top = 8.dp))
             }
         }

@@ -50,6 +50,7 @@ class MainActivity : ComponentActivity() {
                 app.vlcinterface.ui.ExplainHost { AppRoot(nav) { finish() } }
                 // An alarm ringing (or snoozed / being checked): always a way back to its screen, whatever page is open.
                 app.vlcinterface.alarm.AlarmBanner(androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopCenter))
+                app.vlcinterface.ui.ShortNoteHost(androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.BottomCenter))
             }
         }
     }

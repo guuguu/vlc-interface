@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -80,17 +81,14 @@ private fun AlarmScreen(close: () -> Unit) {
     var pattern by remember(u.phase) { mutableStateOf(false) }
     val g = Alarms.current.global
     fun hm(t: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).apply { timeZone = Alarms.zone() }.format(Date(t))
-    Box(Modifier.fillMaxSize().background(Color.Black).padding(24.dp), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            // The clock as set in Settings → Alarm clock → Clock aspect (also for the test alarm), as big as fits.
-            val aspect = Alarms.state.collectAsState().value.aspect
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                val side = minOf(maxWidth * 0.85f, androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * (if (pattern) 0.3f else 0.42f))
-                app.vlcinterface.ui.ClockFace(aspect, Modifier.size(side))
-            }
-            if (u.name.isNotEmpty()) Text(u.name, color = Color(0xFFB0B0B0), fontSize = 18.sp, textAlign = TextAlign.Center)
+    val aspect = Alarms.state.collectAsState().value.aspect
+    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).padding(20.dp), contentAlignment = Alignment.Center) {
+        // Sideways: clock and name on the left, the buttons / the pattern on the right; everything sized to fit, never cut.
+        val land = maxWidth > maxHeight
+        val fullH = maxHeight; val fullW = maxWidth
+        val actions: @Composable (androidx.compose.ui.unit.Dp) -> Unit = { availH ->
             when {
-                pattern -> PatternPad { pattern = false; AlarmEngine.stop(ctx) }
+                pattern -> PatternPad(dot = ((availH - 44.dp) / 3 - 14.dp).coerceIn(34.dp, 68.dp)) { pattern = false; AlarmEngine.stop(ctx) }
                 u.phase == "ringing" -> {
                     if (u.snoozesLeft > 0) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         g.snoozes.forEachIndexed { i, m -> Btn("$m min", Modifier.weight(1f)) { AlarmEngine.snooze(ctx, i) } }
@@ -114,6 +112,22 @@ private fun AlarmScreen(close: () -> Unit) {
                 }
             }
         }
+        if (land) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically)) {
+                // The clock as set in Settings → Alarm clock → Clock aspect, as big as the left half allows.
+                app.vlcinterface.ui.ClockFace(aspect, Modifier.size(minOf(fullH - (if (u.name.isNotEmpty()) 40.dp else 0.dp), fullW / 2 - 20.dp).coerceAtLeast(60.dp)))
+                if (u.name.isNotEmpty()) Text(u.name, color = Color(0xFFB0B0B0), fontSize = 16.sp, textAlign = TextAlign.Center, maxLines = 1)
+            }
+            Column(Modifier.weight(1f).fillMaxHeight(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)) {
+                actions(fullH)
+            }
+        } else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            // The clock as set in Settings → Alarm clock → Clock aspect (also for the test alarm), as big as fits.
+            val side = minOf(fullW * 0.85f, fullH * (if (pattern) 0.3f else 0.42f))
+            app.vlcinterface.ui.ClockFace(aspect, Modifier.size(side))
+            if (u.name.isNotEmpty()) Text(u.name, color = Color(0xFFB0B0B0), fontSize = 18.sp, textAlign = TextAlign.Center)
+            actions(fullH - side - 60.dp)
+        }
     }
 }
 
@@ -128,22 +142,22 @@ private fun Btn(text: String, modifier: Modifier, filled: Boolean = false, onCli
 
 /** Random pattern: tap the numbered dots in order (a wrong dot gives a new pattern). */
 @Composable
-private fun PatternPad(onDone: () -> Unit) {
+private fun PatternPad(dot: androidx.compose.ui.unit.Dp = 68.dp, onDone: () -> Unit) {
     var attempt by remember { mutableIntStateOf(0) }
     val seq = remember(attempt) { (0..8).shuffled().take(4) }
     var step by remember(attempt) { mutableIntStateOf(0) }
     Text("Tap the dots in order: 1 → 4", color = Color(0xFFB0B0B0), fontSize = 15.sp)
-    Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        for (r in 0 until 3) Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        for (r in 0 until 3) Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
             for (col in 0 until 3) {
                 val i = r * 3 + col
                 val n = seq.indexOf(i)
                 val done = n in 0 until step
-                Box(Modifier.size(68.dp).clip(CircleShape).background(if (done) GOLD else DARK).border(2.dp, if (n >= 0) GOLD else Color(0xFF444444), CircleShape)
+                Box(Modifier.size(dot).clip(CircleShape).background(if (done) GOLD else DARK).border(2.dp, if (n >= 0) GOLD else Color(0xFF444444), CircleShape)
                     .clickable {
                         if (n == step) { step++; if (step == seq.size) onDone() } else if (!done) attempt++
                     }, contentAlignment = Alignment.Center) {
-                    if (n >= 0) Text("${n + 1}", color = if (done) Color(0xFF1A0E05) else Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    if (n >= 0) Text("${n + 1}", color = if (done) Color(0xFF1A0E05) else Color.White, fontSize = (dot.value * 0.32f).sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

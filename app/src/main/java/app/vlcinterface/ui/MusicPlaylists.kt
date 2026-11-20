@@ -1420,7 +1420,7 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
             if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else null)
         if (details.isNotEmpty()) Text(details.joinToString(" · "), color = accent(), fontSize = 12.sp, lineHeight = 14.sp, textAlign = TextAlign.Center, modifier = station.padding(horizontal = 4.dp, vertical = 3.dp))
         if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        UseNasButton()
+        // No VPN-NAS button on the radio player: radio doesn't use the NAS.
         // Mobile data only: what this station has used so far, live.
         val cell by app.vlcinterface.player.NetGuard.cellular.collectAsState()
         if (cell) {

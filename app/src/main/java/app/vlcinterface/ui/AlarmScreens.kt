@@ -99,22 +99,40 @@ fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x14FFFFFF))) {
         if (warn) Text("⚠  Alarms may not ring: " + issues.joinToString(" · ") { it.title } + "  ›", color = C.bad, fontSize = 13.sp,
             modifier = Modifier.fillMaxWidth().clickable { nav.go(Screen.AlarmSettings) }.padding(12.dp))
-        list.forEach { al ->
-            Row(Modifier.fillMaxWidth().clickable { nav.go(Screen.AlarmEdit(al.id)) }.padding(horizontal = 12.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                Text(al.timeText, color = if (al.on) C.text else C.muted, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                    if (al.name.isNotEmpty()) Text(al.name, color = C.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(Alarm.whenText(al), color = C.muted, fontSize = 12.sp)
-                }
-                AppSwitch(al.on, { Alarms.put(al.copy(on = it)) })
-            }
-            Divider()
+        // Row height from Look → "Alarm rows under the clock" (50 % = half the old 56 dp rows); every alarm listed,
+        // the list scrolls on its own when they don't all fit.
+        val k = App.instance.store.state.collectAsState().value.settings.alarmRowPct.coerceIn(50, 100) / 100f
+        val rowH = (56 * k).dp
+        val maxRows = 5
+        val listScroll = rememberScrollState()
+        Column(Modifier.fillMaxWidth().heightIn(max = (rowH + 1.dp) * maxRows).verticalScroll(listScroll)) {
+            list.forEach { al -> AlarmRow(nav, al, k); Divider() }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("+  Add alarm", color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f).clickable { nav.go(Screen.AlarmEdit("")) }.padding(12.dp))
             Text("⚙", color = C.muted, fontSize = 18.sp, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(12.dp))
+        }
+    }
+}
+
+/** One alarm row: time, name / when, and a wide switch; switching it confirms with a short note. Height scaled by [k]. */
+@Composable
+fun AlarmRow(nav: Navigator, al: Alarm, k: Float) {
+    Row(Modifier.fillMaxWidth().height((56 * k).dp).clickable { nav.go(Screen.AlarmEdit(al.id)) }.padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(al.timeText, color = if (al.on) C.text else C.muted, fontSize = (12 + 8 * (k - 0.5f) * 2).sp, fontWeight = FontWeight.SemiBold)
+        Column(Modifier.weight(1f).padding(start = 10.dp)) {
+            if (k >= 0.75f) {
+                if (al.name.isNotEmpty()) Text(al.name, color = C.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(Alarm.whenText(al), color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            } else Text(listOf(al.name, Alarm.whenText(al)).filter { it.isNotEmpty() }.joinToString(" · "), color = C.muted,
+                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        WideSwitch(al.on, height = (14 + 12 * (k - 0.5f) * 2).dp) { on ->
+            Alarms.put(al.copy(on = on))
+            val what = listOf(al.timeText, Alarm.daysText(al.days).takeIf { al.mode == "weekly" && al.days != 0 } ?: "", al.name).filter { it.isNotEmpty() }.joinToString(" ")
+            ShortNote.show(if (on) "$what will ring" else "$what won't ring")
         }
     }
 }

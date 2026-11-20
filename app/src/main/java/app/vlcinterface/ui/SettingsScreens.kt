@@ -41,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -334,6 +335,66 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(floatBtnAlpha = 85)) }) { Text("Reset") }
                     }
                     ThinSlider((100 - s.floatBtnAlpha).toFloat(), { v -> set(s.copy(floatBtnAlpha = 100 - (Math.round(v / 5f) * 5).coerceIn(0, 70))) }, valueRange = 0f..70f)
+                    // Helpers (Settings → Alarm clock → Helpers): explanation, with a preview where useful, after a change.
+                    val helpersOn = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.helpers
+                    var lookHelp by remember { mutableStateOf("") }
+                    // Alarm rows under the clock: height (50 % = half the old rows).
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                        Text("Alarm rows under the clock", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Alarm rows under the clock"))
+                        Text("${s.alarmRowPct}%", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(alarmRowPct = 50)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.alarmRowPct.toFloat(), { v -> set(s.copy(alarmRowPct = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f,
+                        onValueChangeFinished = { if (helpersOn) lookHelp = "Alarm rows under the clock" })
+                    // Short, self-closing pop-ups: how long they stay.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Short pop-ups stay for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Short pop-ups stay for"))
+                        Text("${s.shortPopupSec} s", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(shortPopupSec = 3)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.shortPopupSec.toFloat(), { v -> set(s.copy(shortPopupSec = Math.round(v).coerceIn(1, 10))) }, valueRange = 1f..10f, steps = 8,
+                        onValueChangeFinished = { if (helpersOn) lookHelp = "Short pop-ups stay for" })
+                    // Switch colours: only the current colour and a colour creation button for each.
+                    var swEdit by remember { mutableStateOf("") }
+                    val accArgb = accent().toArgb().toLong() and 0xFFFFFFFFL
+                    listOf("on" to "Switch colour · on", "off" to "Switch colour · off").forEach { (which, label) ->
+                        val cur = if (which == "on") (if (s.switchOn != 0L) s.switchOn else accArgb) else s.switchOff
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
+                            Text(label, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain(label))
+                            Box(Modifier.size(22.dp).clip(CircleShape).background(Color(cur)))
+                            Text("+ Create", color = WIZ_GREEN, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(start = 10.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, WIZ_GREEN, RoundedCornerShape(10.dp))
+                                    .clickable { swEdit = which }.padding(horizontal = 10.dp, vertical = 4.dp))
+                        }
+                    }
+                    if (swEdit.isNotEmpty()) ColorPickDialog(if (swEdit == "on") (if (s.switchOn != 0L) s.switchOn else accArgb) else s.switchOff,
+                        onDismiss = { swEdit = "" }) { c ->
+                        set(if (swEdit == "on") s.copy(switchOn = c) else s.copy(switchOff = c))
+                        val l = if (swEdit == "on") "Switch colour · on" else "Switch colour · off"
+                        swEdit = ""; if (helpersOn) lookHelp = l
+                    }
+                    if (lookHelp.isNotEmpty()) HelperDialog(lookHelp, SettingHelp.text(lookHelp, ""), extra = {
+                        when {
+                            lookHelp.startsWith("Alarm rows") -> Column(Modifier.padding(top = 12.dp)) {
+                                Text("Preview · ${s.alarmRowPct} %", color = C.muted, fontSize = 12.sp)
+                                val k = s.alarmRowPct / 100f
+                                listOf(Triple("07:30", "Work · Mon–Fri", true), Triple("09:00", "Sat", false)).forEach { (t, w, on) ->
+                                    Row(Modifier.padding(top = 4.dp).fillMaxWidth().height((56 * k).dp).clip(RoundedCornerShape(8.dp)).background(Color(0x14FFFFFF))
+                                        .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text(t, color = if (on) C.text else C.muted, fontSize = (12 + 8 * (k - 0.5f) * 2).sp, fontWeight = FontWeight.SemiBold)
+                                        Text(w, color = C.muted, fontSize = 11.sp, modifier = Modifier.weight(1f).padding(start = 10.dp), maxLines = 1)
+                                        WideSwitch(on, height = (14 + 12 * (k - 0.5f) * 2).dp) {}
+                                    }
+                                }
+                            }
+                            lookHelp.startsWith("Switch colour") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                AppSwitch(true, {}); AppSwitch(false, {})
+                                WideSwitch(true) {}; WideSwitch(false) {}
+                            }
+                            else -> Unit
+                        }
+                    }) { lookHelp = "" }
                     // Players: faint shadow on buttons and slider knobs (knobs ringed in grey).
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().combinedClickable(onClick = { set(s.copy(controlShadow = !s.controlShadow)) },
                         onLongClick = { explainNow("Shadow on player buttons", "") })) {

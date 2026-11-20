@@ -127,6 +127,14 @@ object SettingHelp {
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
         "Floating button transparency" to "How see-through the floating play / pause button is: 0 % is solid, higher lets the list show through it.\n\n" +
             "It stays fully usable at any transparency. Default: 15 %.",
+        "Alarm rows under the clock" to "Height of each alarm row in the list under the clock on the player (and the alarms list), as a share of the original rows.\n\n" +
+            "50 % fits twice as many alarms in the same space; the list shows every alarm and scrolls on its own when they don't all fit. Low rows show the name and repetition on one line; from 75 % on two.\n\n" +
+            "The wide switch of each row shrinks with it but stays easy to hit. Default: 50 %.",
+        "Short pop-ups stay for" to "How long short notes that close by themselves stay on screen: an alarm switched on or off, the explanation pop-ups of the alarm pages, and similar confirmations.\n\n" +
+            "Longer gives time to read; shorter gets them out of the way sooner. A pop-up you touch stays open until you close it. Default: 3 s.",
+        "Switch colour" to "The colour of every switch in the app, one for the on position and one for the off position, so the state shows at a glance as well as by the knob's place.\n\n" +
+            "'+ Create' opens the colour editor (hue, saturation, brightness); the new colour replaces the current one. Switches that can't be used stay dark grey.\n\n" +
+            "Default: on = your accent colour, off = a muted grey-blue.",
         "Shadow on player buttons" to "A faint grey shadow under the players' buttons and slider knobs, so they stay visible over bright album pictures.",
         "Menu opacity" to "How see-through menus and search results are — set apart from pop-ups, since menus often sit over lists.",
         "Menu row spacing" to "How close the rows of menus and search results are: tighter shows more rows, looser is easier to tap.",
