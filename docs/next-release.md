@@ -24,3 +24,6 @@
   text sizes itself automatically to what fits: long titles, station names, artist / album lines, badges and times
   shrink (down to a readable minimum) instead of being cut or wrapping badly, and use the room when there is some.
 - These aren't governed by the Settings "Text size" slider (which is for Settings, wizard, help and helpers only).
+- On the clock front the shrinking has a firm floor: text always stays comfortably readable (never below about 14 sp for
+  the date / weather / alarms, the time digits never below a large size); when it still doesn't fit, a line is
+  shortened (e.g. weekday abbreviated) rather than made smaller (requested 2026-11-20 16:54).
