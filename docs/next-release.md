@@ -255,3 +255,6 @@
   level 1–100 % used while the visualisation is full screen. The brightness swipe on the full screen (left / right
   upright, up / down sideways) changes it and is kept as the setting. Leaving full screen gives the phone its own
   brightness back. Text helper.
+- Only the chosen visualisations are offered (23:06): Spectrum (centred) and the four analysers (LED bars, light
+  bars, wave area, radial); projectM's four follow when its library is built. A previously chosen old pattern
+  (clouds, plasma, …) becomes the centred spectrum.

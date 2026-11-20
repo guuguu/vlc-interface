@@ -74,11 +74,8 @@ import kotlin.math.sin
 private val PALETTES: List<Pair<String, String>> = listOf("pattern" to "Pattern colours", "sunset" to "Sunset", "ocean" to "Ocean",
     "forest" to "Forest", "neon" to "Neon", "fire" to "Fire", "aurora" to "Aurora", "custom" to "Custom")
 
-private val EFFECT_NAMES = listOf("clouds" to "Colour clouds", "lava" to "Lava glow", "nebula" to "Nebula", "tides" to "Tides",
-    "plasma" to "Plasma", "silk" to "Silk bands", "sunset" to "Sunset sky", "ocean" to "Deep ocean", "embers" to "Embers",
-    "ink" to "Ink flow", "reaction" to "Reaction–diffusion", "phase" to "Phase portrait", "chladni" to "Chladni waves",
-    "mandel" to "Mandelbrot dive", "epicycles" to "Fourier epicycles",
-    "mirror" to "Spectrum (centred)",
+/** The visualisations offered (23:06: only the chosen ones — centred spectrum and the four analysers; projectM follows). */
+private val EFFECT_NAMES = listOf("mirror" to "Spectrum (centred)",
     "am_led" to "Analyser: LED bars", "am_lumi" to "Analyser: light bars", "am_area" to "Analyser: wave area", "am_radial" to "Analyser: radial")
 
 /** Mathematical patterns: drawn as a colour field (cosine palettes, or the chosen colour combination). */
