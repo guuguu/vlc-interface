@@ -72,8 +72,8 @@ object PlayerSwitch {
 @Composable
 fun PlayerSwitchButtons(nav: Navigator, current: String, color: Color = C.text) {
     listOf("songs" to "Songs", "radio" to "Radio", "video" to "Video").filter { it.first != current }.forEach { (k, l) ->
-        Text(l, color = color, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-            modifier = Modifier.padding(start = 6.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                .clickable { PlayerSwitch.go(nav, k) }.padding(horizontal = 8.dp, vertical = 3.dp))
+        Text(l, color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+            modifier = Modifier.padding(horizontal = 4.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, color.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                .clickable { PlayerSwitch.go(nav, k) }.padding(horizontal = 12.dp, vertical = 5.dp))
     }
 }

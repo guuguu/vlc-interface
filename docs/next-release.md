@@ -22,3 +22,10 @@
   - 🌍 (Europe) by default: while it's being looked up and when nothing can be found — no plain 🌐 (requested 2026-11-20 18:14).
 - Globes drawn from real coastlines (shaded, light from the upper left), not emoji: Europe-centred (Africa pushed to
   the bottom edge), Africa, North America, South America, Asia, Australia; shipped as small pictures in the app (shown 2026-11-20 18:15).
+
+## Song / radio player header: no more colliding buttons (reported 2026-11-20 18:20)
+- Upright: two rows. Row 1 — back, home, settings, find song, Shazam, background-work sign, screen-on sign, exit,
+  spread evenly across the bar. Row 2 — the other two player buttons (Songs / Radio / Video) on the left and the
+  output pill on the right, with room for its full name.
+- Sideways: one row, everything spread evenly from edge to edge (same as the video bar).
+- Player buttons slightly bigger (13 sp, more padding) with even spacing between them.

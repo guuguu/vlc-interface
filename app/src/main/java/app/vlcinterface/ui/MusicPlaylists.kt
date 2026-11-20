@@ -43,6 +43,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -219,16 +220,30 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     }) {   // players: 90 % black
     Column(Modifier.fillMaxSize().padding(end = if (meters) (21 * vuK).dp else 0.dp)) {
         // No page title: the song name is already shown in the middle of the player.
-        BackHeader("", nav, gear = false, afterHome = {
-            // Shortcut to the sound settings (preamp, balance per device, ReplayGain, sound engine).
-            // The full Settings page (all sections, Sound included).
+        // Header spread evenly over the bar, nothing touching: upright on two rows (symbols, then the player switches
+        // and the output), sideways on one row.
+        val headSyms: @Composable () -> Unit = {
+            SymButton(onClick = { nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
+            HomeButton(nav)
             // Audio player → Audio settings; radio player → Radio settings.
             SymButton({ nav.go(Screen.SettingsGroup(if (item.isRadio) "radio" else "audio")) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.text) }
             // Jump to a song: search the queue and the Library; plays it (added after the current song if new).
             SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
-            // The other two players (each resumes what it last played).
-            PlayerSwitchButtons(nav, if (item.isRadio) "radio" else "songs")
-        }) { ShazamButton(); BackgroundWorkButton(); ScreenOnSign(C.text); OutputPill(openOutput); ExitButton() }
+            ShazamButton(); BackgroundWorkButton(); ScreenOnSign(C.text); ExitButton()
+        }
+        Scaled {
+            if (landscape) Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween) {
+                headSyms(); PlayerSwitchButtons(nav, if (item.isRadio) "radio" else "songs"); OutputPill(openOutput)
+            } else Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) { headSyms() }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // The other two players (each resumes what it last played), then the output on the right.
+                    PlayerSwitchButtons(nav, if (item.isRadio) "radio" else "songs")
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { OutputPill(openOutput) }
+                }
+            }
+        }
         SaveSongBar()
         if (jump) JumpDialog(nav = nav) { jump = false }
         if (playNextPick) JumpDialog(playNext = true, nav = nav) { playNextPick = false }
