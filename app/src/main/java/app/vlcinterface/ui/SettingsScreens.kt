@@ -224,34 +224,53 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 val now = App.instance.player.videoNow()
                 val enc = now?.let { n -> listOf(n.codec.uppercase(), if (n.w > 0) "${n.w}×${n.h}" else "").filter { it.isNotEmpty() }.joinToString(" ") }.orEmpty()
                 @Composable fun NowLine(text: String) = Text(text, color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                fun changed(n: Settings, key: String) {
-                    set(n)
+                // A video is playing: the choice is for that video file only (kept with it); otherwise it's the default for all.
+                val vItem = App.instance.player.state.value.item?.takeIf { !it.isMusic && !it.isRadio }
+                val fileDec = vItem?.let { app.vlcinterface.player.VideoAuto.manualDecoder(it.uri) }.orEmpty()
+                val fileDi = vItem?.let { app.vlcinterface.player.VideoAuto.manualDeinterlace(it.uri) }.orEmpty()
+                val decSel = fileDec.ifEmpty { s.videoDecoder }
+                val diSel = fileDi.ifEmpty { s.videoDeinterlace }
+                var refresh by remember { mutableStateOf(0) }; refresh
+                fun named(v: String) = when (v) { "hw" -> "Hardware"; "sw" -> "Software"; "on" -> "On"; "off" -> "Off"; else -> "Automatic" }
+                fun pick(k: String, v: String, helpKey: String) {
+                    if (vItem != null) {
+                        app.vlcinterface.player.VideoAuto.setStr(vItem.uri, k, v)
+                        // Hardware / Software chosen by hand on more than 5 videos: it becomes the default for new videos.
+                        if (k == "dec" && (v == "hw" || v == "sw") && s.videoDecoder != v) {
+                            val n = app.vlcinterface.player.VideoAuto.files().count { app.vlcinterface.player.VideoAuto.manualDecoder(it) == v }
+                            if (n > 5) { set(s.copy(videoDecoder = v)); ShortNote.show("${named(v)} chosen for $n videos: now the default for new videos") }
+                        }
+                    } else set(if (k == "dec") s.copy(videoDecoder = v) else s.copy(videoDeinterlace = v))
+                    refresh++
                     App.instance.player.reloadVideo()       // the playing video (if any) reopens at the same spot with it
-                    if (app.vlcinterface.alarm.Alarms.current.global.helpers) vHelp = key
+                    if (app.vlcinterface.alarm.Alarms.current.global.helpers) vHelp = helpKey
                 }
+                val forWhat = if (vItem != null) "For this video (kept with the file)" else "Default for all videos"
                 CardBox {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                         Text("Video decoding", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Video decoding"))
-                        Text("Automatic: chosen for each video from its encoding", color = C.muted, fontSize = 13.sp)
+                        Text("$forWhat · Automatic: chosen from the video's encoding", color = C.muted, fontSize = 13.sp)
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                             listOf("auto" to "Automatic", "hw" to "Hardware", "sw" to "Software").forEach { (m, l) ->
-                                Pill(l, selected = s.videoDecoder == m, filled = s.videoDecoder == m) { if (s.videoDecoder != m) changed(s.copy(videoDecoder = m), "Video decoding") }
+                                Pill(l, selected = decSel == m, filled = decSel == m) { if (decSel != m || (vItem != null && fileDec.isEmpty())) pick("dec", m, "Video decoding") }
                             }
                         }
                         NowLine(if (now == null) "Now: no video playing" else "Now: " + (if (now.software) "Software" else "Hardware") +
-                            (if (s.videoDecoder == "auto") " (chosen automatically)" else "") + (if (enc.isNotEmpty()) " · $enc" else ""))
+                            (if (decSel == "auto") " (chosen automatically)" else "") + (if (enc.isNotEmpty()) " · $enc" else ""))
+                        if (vItem != null) Text("Default for other videos: " + named(s.videoDecoder), color = C.muted, fontSize = 12.sp)
                     }
                     Divider()
                     Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                         Text("Deinterlacing", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Deinterlacing"))
-                        Text("Automatic: on for TV recordings and DVDs, off for the rest", color = C.muted, fontSize = 13.sp)
+                        Text("$forWhat · Automatic: on for TV recordings and DVDs", color = C.muted, fontSize = 13.sp)
                         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                             listOf("auto" to "Automatic", "on" to "On", "off" to "Off").forEach { (m, l) ->
-                                Pill(l, selected = s.videoDeinterlace == m, filled = s.videoDeinterlace == m) { if (s.videoDeinterlace != m) changed(s.copy(videoDeinterlace = m), "Deinterlacing") }
+                                Pill(l, selected = diSel == m, filled = diSel == m) { if (diSel != m || (vItem != null && fileDi.isEmpty())) pick("di", m, "Deinterlacing") }
                             }
                         }
                         NowLine(if (now == null) "Now: no video playing" else "Now: " + (if (now.deinterlace) "On" else "Off") +
-                            (if (s.videoDeinterlace == "auto") " (chosen automatically)" else "") + (if (enc.isNotEmpty()) " · $enc" else ""))
+                            (if (diSel == "auto") " (chosen automatically)" else "") + (if (enc.isNotEmpty()) " · $enc" else ""))
+                        if (vItem != null) Text("Default for other videos: " + named(s.videoDeinterlace), color = C.muted, fontSize = 12.sp)
                     }
                 }
             }

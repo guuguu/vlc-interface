@@ -1229,8 +1229,10 @@ class PlayerController(private val context: Context, private val store: Store) {
                 }
                 val n = videoNow()
                 if (n != null) {
-                    add("Decoder" to (if (n.software) "Software" else "Hardware") + if (store.current.settings.videoDecoder == "auto") " (automatic)" else "")
-                    add("Deinterlacing" to (if (n.deinterlace) "On" else "Off") + if (store.current.settings.videoDeinterlace == "auto") " (automatic)" else "")
+                    val decM = VideoAuto.manualDecoder(item.uri); val diM = VideoAuto.manualDeinterlace(item.uri)
+                    fun how(m: String, def: String) = if (m.ifEmpty { def } == "auto") " (automatic)" else if (m.isNotEmpty()) " (chosen for this video)" else " (default)"
+                    add("Decoder" to (if (n.software) "Software" else "Hardware") + how(decM, store.current.settings.videoDecoder))
+                    add("Deinterlacing" to (if (n.deinterlace) "On" else "Off") + how(diM, store.current.settings.videoDeinterlace))
                 }
                 if (pictureFilterOn) add("Colour filter" to "Hue / saturation / bright areas on")
             }
@@ -1789,7 +1791,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         // Settings → Video → Decoding: automatic (hardware, software when it can't), hardware only, software only.
         val isVideo = !item.isMusic && !item.isRadio
         // Automatic: chosen per file from its encoding (VideoAuto): software only for files the phone's hardware can't decode.
-        val dec = if (!isVideo) "auto" else if (ps.videoDecoder == "auto" && VideoAuto.software(item.uri)) "sw" else ps.videoDecoder
+        // A choice made by hand for this file wins; then the general setting; Automatic uses what was learnt for the file.
+        val decSet = if (!isVideo) "auto" else VideoAuto.manualDecoder(item.uri).ifEmpty { ps.videoDecoder }
+        val dec = if (decSet == "auto" && isVideo && VideoAuto.software(item.uri)) "sw" else decSet
         if (isVideo) decoderNow = if (dec == "sw") "sw" else "hw"
         when (dec) {
             "hw" -> media.setHWDecoderEnabled(true, true)
@@ -1798,7 +1802,11 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
         // Settings → Video → Deinterlacing: Automatic = by the video's encoding (TV recordings / MPEG-2 / DV), On, Off.
         // The filter treats only fields marked interlaced and needs frames it can touch (no direct rendering).
-        deintOn = isVideo && (ps.videoDeinterlace == "on" || (ps.videoDeinterlace == "auto" && VideoAuto.deinterlace(item.uri)))
+        val diSet = if (!isVideo) "off" else VideoAuto.manualDeinterlace(item.uri).ifEmpty { ps.videoDeinterlace }
+        deintOn = isVideo && (diSet == "on" || (diSet == "auto" && VideoAuto.deinterlace(item.uri)))
+        // The picture format chosen for this file (Fit when none).
+        if (isVideo) scale = VideoAuto.str(item.uri, "scale").let { n -> MediaPlayer.ScaleType.values().firstOrNull { it.name == n } } ?: MediaPlayer.ScaleType.SURFACE_BEST_FIT
+        tracksRestored = !isVideo; audioRestored = !isVideo; spuRestored = !isVideo
         if (deintOn) {
             media.addOption(":deinterlace=-1"); media.addOption(":deinterlace-mode=yadif2x")   // full motion (every field), best quality
             media.addOption(":no-mediacodec-dr")
@@ -1925,8 +1933,34 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun seekBy(ms: Long) { mp.setTime((mp.time + ms).coerceIn(0, if (mp.length > 0) mp.length else Long.MAX_VALUE)) }
     fun setRate(r: Float) { mp.setRate(r); _state.value = _state.value.copy(rate = r) }
 
-    fun selectAudio(id: Int) { mp.setAudioTrack(id); refreshTracks() }
-    fun selectSpu(id: Int) { mp.setSpuTrack(id); refreshTracks() }
+    fun selectAudio(id: Int) { mp.setAudioTrack(id); refreshTracks(); keepTrack("a", id, _state.value.audioTracks) }
+    fun selectSpu(id: Int) { mp.setSpuTrack(id); refreshTracks(); keepTrack("s", id, _state.value.spuTracks) }
+
+    /** The audio / subtitle track chosen by hand is kept for this video file. */
+    private fun keepTrack(k: String, id: Int, list: List<Track>) {
+        val item = _state.value.item ?: return
+        if (item.isMusic || item.isRadio) return
+        VideoAuto.setInt(item.uri, "${k}Id", id)
+        VideoAuto.setStr(item.uri, "${k}Name", list.firstOrNull { it.id == id }?.name ?: "")
+    }
+
+    /** Tracks kept for this file put back once its tracks are known (by name first, then by number). */
+    private var tracksRestored = true
+    private var audioRestored = true
+    private var spuRestored = true
+    private fun restoreTracks() {
+        if (tracksRestored) { audioRestored = true; spuRestored = true; return }
+        val s = _state.value; val item = s.item ?: return
+        fun pick(k: String, list: List<Track>): Int? {
+            val id = VideoAuto.int(item.uri, "${k}Id") ?: return null
+            val name = VideoAuto.str(item.uri, "${k}Name")
+            return list.firstOrNull { name.isNotEmpty() && it.name == name }?.id ?: list.firstOrNull { it.id == id }?.id ?: if (id < 0) id else null
+        }
+        // Each kind once its tracks are listed (they arrive one by one while the file opens).
+        if (!audioRestored && s.audioTracks.isNotEmpty()) { audioRestored = true; pick("a", s.audioTracks)?.let { if (it != s.audioTrack) mp.setAudioTrack(it) } }
+        if (!spuRestored && s.spuTracks.any { it.id >= 0 }) { spuRestored = true; pick("s", s.spuTracks)?.let { if (it != s.spuTrack) mp.setSpuTrack(it) } }
+        if (audioRestored && spuRestored) tracksRestored = true
+    }
 
     fun addSubtitleFile(uri: Uri) {
         mp.addSlave(IMedia.Slave.Type.Subtitle, uri, true)
@@ -1945,7 +1979,11 @@ class PlayerController(private val context: Context, private val store: Store) {
     private val vlcScale: MediaPlayer.ScaleType
         get() = if (scale == MediaPlayer.ScaleType.SURFACE_FIT_SCREEN) MediaPlayer.ScaleType.SURFACE_FIT_SCREEN else MediaPlayer.ScaleType.SURFACE_FILL
 
-    fun setScale(s: MediaPlayer.ScaleType) { scale = s; mp.setVideoScale(vlcScale); refreshSurface() }
+    fun setScale(s: MediaPlayer.ScaleType) {
+        scale = s; mp.setVideoScale(vlcScale); refreshSurface()
+        // Kept for this video file (Fit, the default, isn't stored).
+        _state.value.item?.takeIf { !it.isMusic && !it.isRadio }?.let { VideoAuto.setStr(it.uri, "scale", if (s == MediaPlayer.ScaleType.SURFACE_BEST_FIT) "" else s.name) }
+    }
 
     /** Re-fits the picture to the current size of the video area (rotation, split screen, PiP, new video size). */
     fun refreshSurface() {
@@ -2197,7 +2235,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                         try { old?.close() } catch (_: Exception) {}
                         main.postDelayed({ stopping = false }, 500)
                     }
-                } else if (item != null && !item.isMusic && !item.isRadio && store.current.settings.videoDecoder == "auto" &&
+                } else if (item != null && !item.isMusic && !item.isRadio && VideoAuto.manualDecoder(item.uri).ifEmpty { store.current.settings.videoDecoder } == "auto" &&
                     !VideoAuto.software(item.uri) && VideoAuto.mayReopen(item.uri)) {
                     // Hardware decoder failed on this video: once more with the software decoder (kept for this file).
                     VideoAuto.markSoftware(item.uri)
@@ -2272,12 +2310,14 @@ class PlayerController(private val context: Context, private val store: Store) {
             length = if (mp.length > 0) mp.length else _state.value.length,
         )
         if (sizeChanged) refreshSurface()
+        restoreTracks()
         // Settings → Video "Automatic": learn from the video's encoding; re-open once the right way if needed.
         val it0 = _state.value.item
         if (vt != null && it0 != null && !it0.isMusic && !it0.isRadio) {
             val ps = store.current.settings
-            if ((ps.videoDecoder == "auto" || ps.videoDeinterlace == "auto") &&
-                VideoAuto.learn(it0.uri, vt, ps.videoDecoder == "auto", ps.videoDeinterlace == "auto", deintOn))
+            val decA = VideoAuto.manualDecoder(it0.uri).ifEmpty { ps.videoDecoder } == "auto"
+            val diA = VideoAuto.manualDeinterlace(it0.uri).ifEmpty { ps.videoDeinterlace } == "auto"
+            if ((decA || diA) && VideoAuto.learn(it0.uri, vt, decA, diA, deintOn))
                 main.postDelayed({ if (_state.value.item?.uri == it0.uri) reloadVideo() }, 300)
         }
     }

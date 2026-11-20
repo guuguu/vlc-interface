@@ -628,6 +628,8 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
         val r = Browse.list(src, b.uri, if (reload > 0) "rescan" else "browse")
         r.onSuccess { l ->
             entries = MusicLibrary.withCachedTags(l).also { ListCache.put(b.uri, it) }
+            // Videos of this folder that are gone: what was kept for them (settings, position, delays…) is forgotten.
+            app.vlcinterface.player.VideoFileCleanup.folderListed(b.uri, l.map { it.uri })
             // Tags are read only on a manual Rescan (no automatic scanning).
             if (reload > 0 && l.any { it.isAudio }) {
                 scanning = true

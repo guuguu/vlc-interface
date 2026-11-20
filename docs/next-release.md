@@ -148,3 +148,17 @@
     damaged data blocks.
 - The long press no longer gives 2× speed (the speed button does that); "Hold for 2× speed" is removed from
   Settings → Playback & gestures.
+
+## Everything per video file, forgotten when the file is gone (requested 2026-11-20 21:44 / 21:47)
+- Settings → Video → Picture while a video is playing: Decoding and Deinterlacing choices are for that video file
+  only ("For this video (kept with the file)"), with "Default for other videos: …" shown under them. With no video
+  playing they set the default for all videos.
+- Kept per video file: decoder and deinterlacing chosen by hand, what Automatic learnt (software needed,
+  interlaced or not), the picture format (Fit / Fill / Crop / 16:9 / 4:3 / 1:1), the audio and subtitle track
+  chosen (found again by name, else by number) — besides what was already per file: Hue & sat, resume position,
+  audio / subtitle delays.
+- Hardware or Software chosen by hand on more than 5 videos becomes the default for new videos (a short note says
+  so); the videos with their own choice keep it.
+- Video details show where each choice comes from: automatic / chosen for this video / default.
+- When a video file disappears from the library, everything kept for it is deleted: phone videos are checked a few
+  seconds after the app starts; network videos when their folder is listed in Libraries and the file isn't there.

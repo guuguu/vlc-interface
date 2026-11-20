@@ -128,6 +128,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     var controls by remember { mutableStateOf(true) }
     var locked by remember { mutableStateOf(false) }
     var scaleIdx by remember { mutableIntStateOf(scales.indexOfFirst { it.first == player.scale }.coerceAtLeast(0)) }
+    // Each video opens with the picture format kept for it.
+    LaunchedEffect(p.item?.uri) { kotlinx.coroutines.delay(100); scaleIdx = scales.indexOfFirst { it.first == player.scale }.coerceAtLeast(0) }
     // One video view for the whole player screen: it moves between the portrait and landscape layouts
     // instead of being recreated, and the picture is re-fitted every time its area changes size.
     val videoView = remember {
