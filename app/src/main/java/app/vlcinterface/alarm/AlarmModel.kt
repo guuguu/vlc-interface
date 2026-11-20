@@ -250,7 +250,8 @@ data class VisSettings(
         .put("mix", mix.toDouble()).put("fLo", fLo.toDouble()).put("fHi", fHi.toDouble()).put("sharp", sharp.toDouble()).put("colourSpeed", colourSpeed.toDouble()).put("specBar", specBar.toDouble())
     companion object {
         val EFFECTS = listOf("clouds", "lava", "nebula", "tides", "plasma", "silk", "sunset", "ocean", "embers",
-            "ink", "reaction", "phase", "chladni", "mandel", "epicycles", "mirror")
+            "ink", "reaction", "phase", "chladni", "mandel", "epicycles", "mirror",
+            "am_led", "am_lumi", "am_area", "am_radial")
         fun fromJson(o: JSONObject?) = if (o == null) VisSettings() else VisSettings(o.optString("palette", "pattern"),
             o.optDouble("hue1", 20.0).toFloat(), o.optDouble("hue2", 200.0).toFloat(), o.optDouble("hue3", 300.0).toFloat(),
             o.optDouble("brightness", 0.85).toFloat(), o.optString("effect", "clouds").let { if (it in EFFECTS) it else "clouds" },

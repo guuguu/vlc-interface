@@ -216,3 +216,9 @@
   width, so thicker bars = fewer bars. Helper with a live preview on a still hold.
 - projectM (MilkDrop presets): planned as the next step — libprojectM (LGPL 2.1, OpenGL ES 3) built into the app and
   fed with the app's own sound, with a preset pack; its own pattern group on the Visualisation page.
+- "Four of each" (22:46): four analyser pictures in the style of hi-fi analysers like audioMotion (the app's own
+  drawing, from the same 32 bands; AGPL code not used): "Analyser: LED bars" (LED segments, colour climbing with
+  height, peak LEDs, reflection), "Analyser: light bars" (full-height bars whose glow follows the band),
+  "Analyser: wave area" (smooth filled curve, edge thickens on the beat), "Analyser: radial" (bars round a circle
+  that swells on the beat and turns). Bar thickness applies to all bar pictures; colour combinations to all.
+- projectM: four MilkDrop presets bundled, in the projectM step.
