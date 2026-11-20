@@ -268,7 +268,9 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 fun CardBox(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.card), content = content)
+    // One box per category: rounded, a lighter shade of the page, a faint accent-tinted border.
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(C.card)
+        .border(1.dp, accent().copy(alpha = 0.3f), RoundedCornerShape(16.dp)), content = content)
 }
 
 /** Players' background: 90 % black. */

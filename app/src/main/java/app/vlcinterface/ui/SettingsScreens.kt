@@ -992,10 +992,9 @@ fun DeviceSoundList() {
     val st by store.state.collectAsState()
     val devices by App.instance.output.devices.collectAsState()
     val names = (devices.filter { it.connected }.map { it.name } + st.devicePreamp.keys + st.deviceBalance.keys).distinct()
-    Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
-        Text("Per output device", color = C.text, fontSize = 15.sp)
-        val na = app.vlcinterface.player.NativeAudio
-        Text("Sound engine", color = C.text, fontSize = 15.sp)
+    val na = app.vlcinterface.player.NativeAudio
+    SectionTitle("Sound engine")
+    CardBox { Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
             listOf("app" to "App output", "libvlc" to "libVLC output").forEach { (k, l) ->
                 val inUse = if (k == "app") na.active else !na.active
@@ -1016,6 +1015,9 @@ fun DeviceSoundList() {
             LaunchedEffect(Unit) { while (true) { diag = na.stats()?.toString() ?: ""; kotlinx.coroutines.delay(1000) } }
             if (diag.isNotEmpty()) Text(diag, color = C.muted, fontSize = 11.sp)
         }
+    } }
+    SectionTitle("Per output device")
+    CardBox { Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
         Text("Added on top of the general preamp (total max +12 dB). Applied automatically when the output changes.", color = C.muted, fontSize = 13.sp)
         // Auto loudness: Loudness follows the phone's volume; each device below has its own start %.
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1027,8 +1029,8 @@ fun DeviceSoundList() {
                 store.update { it.copy(settings = it.settings.copy(autoLoud = on)) }; App.instance.player.applySoundChain()
             })
         }
-        names.forEach { n -> DeviceSoundControls(n) }
-    }
+        names.forEach { n -> Divider(); DeviceSoundControls(n) }
+    } }
 }
 
 @Composable
@@ -1104,9 +1106,11 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
         ToggleRow("Loudness, Treble and Preamp sliders", "On the audio and radio players", s.toneSliders) { on ->
             set(s.copy(toneSliders = on)); App.instance.player.applySoundChain()
         }
-        Divider()
-        DeviceSoundList()
-        Divider()
+    }
+    // Own categories (they were headings inside the Sound box): sound engine, per output device, ReplayGain.
+    DeviceSoundList()
+    SectionTitle("ReplayGain")
+    CardBox {
         Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             Text("ReplayGain (tagged music only)", color = C.text, fontSize = 15.sp)
             Row(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
@@ -1121,6 +1125,7 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
             }
             ThinSlider(s.rgPreampDb, { v -> set(s.copy(rgPreampDb = Math.round(v * 2) / 2f)) }, valueRange = -6f..6f)
         }
+        Divider()
         ToggleRow("Prevent clipping", "Uses the peak values in the tags", s.rgClipProtect) { set(s.copy(rgClipProtect = it)) }
     }
 }

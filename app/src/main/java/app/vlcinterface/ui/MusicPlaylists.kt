@@ -334,6 +334,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             val radio = item.isRadio
             // Skip buttons say where they skip in: the playlist or the folder playback started from.
             val within = if (radio) "station" else when (p.origin.kind) { "playlist" -> "playlist"; "folder", "local" -> "folder"; else -> "queue" }
+            var sleepAsk by remember { mutableStateOf("") }
+            var sleepNote by remember { mutableStateOf("") }
+            val sleepScope = rememberCoroutineScope()
             val rowPosition: @Composable () -> Unit = {
             // Radio: no position to move to — only how long this station has been on.
             if (radio) { if (landscape) RadioListening() } else SeekBlock(item)
@@ -345,7 +348,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Clock button on the left in its own column, an equal empty column on the right: the player buttons stay
             // centred, and they get only the width in between (shrunk if needed), so nothing overlaps on any screen.
             Row(Modifier.fillMaxWidth().onGloballyPositioned { ctlBottom = it.boundsInRoot().bottom }, verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.width(32.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { ClockToggleButton(30); VisButton(nav, 30) }
+            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) { ClockToggleButton(30); VisButton(nav, 30) }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             AutoFitRow(spacing = 12.dp) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
@@ -363,7 +366,29 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 }
             }
             }
-            Box(Modifier.width(32.dp))
+            // Sleep: on the right of the player buttons (mirroring the clock / visualisation buttons); what's left under it.
+            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box {
+                    val on = p.sleepUntil > 0 || p.sleepSongs > 0
+                    Text("Sleep", color = if (on) Color(0xFF1A0E05) else C.text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(if (on) accent() else Color(0x1FFFFFFF))
+                            .clickable { sleepMenu = true }.padding(horizontal = 5.dp, vertical = 4.dp))
+                    SDropdownMenu(sleepMenu, { sleepMenu = false }) {
+                        // Radio: time only (a station has no songs to count).
+                        if (!radio) {
+                        SMenuItem({ Text("After 1 song (this one)") }, { player.setSleepSongs(1); sleepMenu = false })
+                        SMenuItem({ Text("After this album") }, { sleepMenu = false; sleepScope.launch { val n = player.sleepAfterAlbum(); if (n <= 1) sleepNote = "No more songs of this album after this one: stops after this song" } })
+                        SMenuItem({ Text("After … songs") }, { sleepMenu = false; sleepAsk = "songs" })
+                        }
+                        SMenuItem({ Text("30 minutes") }, { player.setSleep(30); sleepMenu = false })
+                        SMenuItem({ Text("Custom minutes…") }, { sleepMenu = false; sleepAsk = "minutes" })
+                        if (p.sleepUntil > 0 || p.sleepSongs > 0) SMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
+                    }
+                }
+                val left = if (p.sleepUntil > 0) "${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min"
+                    else if (p.sleepSongs > 0) "${p.sleepSongs} song" + (if (p.sleepSongs == 1) "" else "s") else ""
+                if (left.isNotEmpty()) Text(left, color = C.muted, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+            }
             }
             }
             val rowTone: @Composable () -> Unit = {
@@ -390,9 +415,6 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             val rowExtra: @Composable () -> Unit = {
             // Sleep: number input (up to 3 digits) for "After … songs" and "Custom minutes…".
-            var sleepAsk by remember { mutableStateOf("") }
-            var sleepNote by remember { mutableStateOf("") }
-            val sleepScope = rememberCoroutineScope()
             if (sleepAsk.isNotEmpty()) {
                 var num by remember(sleepAsk) { mutableStateOf("") }
                 AlertDialog(onDismissRequest = { sleepAsk = "" }, containerColor = C.panel,
@@ -457,20 +479,6 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                         // Both values in the song's tags: ask which one (album gain is then kept for the whole album).
                         val rg = app.vlcinterface.sources.ReplayGain.read(ctxRg, item.uri, item.user, item.password, item.domain, item.smbVersion)
                         if (rg?.trackGain != null && rg.albumGain != null) rgAsk = rg else player.toggleReplayGain()
-                    }
-                }
-                Box {
-                    Pill("Sleep", selected = p.sleepUntil > 0 || p.sleepSongs > 0) { sleepMenu = true }
-                    SDropdownMenu(sleepMenu, { sleepMenu = false }) {
-                        // Radio: time only (a station has no songs to count).
-                        if (!radio) {
-                        SMenuItem({ Text("After 1 song (this one)") }, { player.setSleepSongs(1); sleepMenu = false })
-                        SMenuItem({ Text("After this album") }, { sleepMenu = false; sleepScope.launch { val n = player.sleepAfterAlbum(); if (n <= 1) sleepNote = "No more songs of this album after this one: stops after this song" } })
-                        SMenuItem({ Text("After … songs") }, { sleepMenu = false; sleepAsk = "songs" })
-                        }
-                        SMenuItem({ Text("30 minutes") }, { player.setSleep(30); sleepMenu = false })
-                        SMenuItem({ Text("Custom minutes…") }, { sleepMenu = false; sleepAsk = "minutes" })
-                        if (p.sleepUntil > 0 || p.sleepSongs > 0) SMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
                     }
                 }
             }
@@ -1701,6 +1709,8 @@ fun StationSearch() {
             results == null -> Box(Modifier.fillMaxWidth().padding(10.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
             error.isNotEmpty() -> Text(error, color = C.bad, fontSize = 13.sp)
             else -> results!!.forEachIndexed { ri, r ->
+                // Thin grey line between stations; spacing like the settings pages.
+                if (ri > 0) Divider()
               Box(Modifier.then(if (ri < reqs.size) Modifier.bringIntoViewRequester(reqs[ri]) else Modifier)
                   .background(if (ri == at) accent().copy(alpha = 0.18f) else Color.Transparent, RoundedCornerShape(8.dp))) {
                 val fav = st.stations.any { it.url == r.url }
@@ -1709,7 +1719,7 @@ fun StationSearch() {
                 var rDetails by remember(r.url) { mutableStateOf(false) }
                 if (rDetails) StationDetailsDialog(app.vlcinterface.data.Station(name = r.name, url = r.url, meta = r.meta, favicon = r.favicon)) { rDetails = false }
                 Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.playStation(r.name, r.url) }, onLongClick = { rMenu = true })
-                    .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    .heightIn(min = (48 * sg()).dp).padding(vertical = (5 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(r.name, color = C.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (r.meta.isNotEmpty()) Text(r.meta, color = if (r.isFlac) C.bad.copy(alpha = 0.8f) else C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

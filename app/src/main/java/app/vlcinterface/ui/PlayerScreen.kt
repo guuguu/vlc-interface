@@ -23,6 +23,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -215,6 +216,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 onVolume = { total -> if (st.settings.volumeSwipe) toast = "Volume ${volDrag.update(total)}%" },
                 onBrightness = { d -> if (st.settings.brightnessSwipe) toast = "Brightness ${changeBrightness(activity, d)}%" },
                 locked = locked,
+                onCenterDouble = if (videoPortrait && !landscape) ({ App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) } }) else null,
             )
             if (p.buffering < 100f && !p.isPlaying && p.error.isEmpty()) CircularProgressIndicator(Modifier.align(Alignment.Center), color = accent())
             if (p.error.isNotEmpty()) Text(p.error, color = C.bad, modifier = Modifier.align(Alignment.Center).background(Color(0xAA000000)).padding(12.dp))
@@ -224,14 +226,17 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     }
 
     val syncPanelOpen = panel == Panel.SYNC_SUB || panel == Panel.SYNC_AUDIO
-    val fullscreen = inPip || landscape || videoPortrait
+    // Tall video upright: upper two thirds, buttons in the lower third — unless "Full screen" (double tap in the middle toggles).
+    val tallFull = st.settings.videoTallFull
+    val fullscreen = inPip || landscape || (videoPortrait && tallFull)
     val syncBelowVideo = !fullscreen
     val ratio = (if (p.videoW > 0 && p.videoH > 0) p.videoW.toFloat() / p.videoH else 16f / 9f).coerceIn(1f, 3f)
 
     // The video is always drawn from this one place, so its view is never moved or recreated when the
     // phone rotates or PiP starts (moving it made the picture disappear): only its size and position change.
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        video(if (fullscreen) Modifier.fillMaxSize() else Modifier.safeDrawingPadding().fillMaxWidth().aspectRatio(ratio))
+        video(if (fullscreen) Modifier.fillMaxSize() else if (videoPortrait) Modifier.safeDrawingPadding().fillMaxWidth().fillMaxHeight(0.667f)
+            else Modifier.safeDrawingPadding().fillMaxWidth().aspectRatio(ratio))
         if (inPip) {
             // Minimised (picture-in-picture): thin progress bar along the bottom (not for live radio/streams).
             if (p.length > 0) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x55FFFFFF))) {
@@ -259,7 +264,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         } else {
             // Phone upright with a widescreen video: video on top, everything else below it.
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-                Box(Modifier.fillMaxWidth().aspectRatio(ratio)) {
+                Box(Modifier.fillMaxWidth().then(if (videoPortrait) Modifier.fillMaxHeight(0.667f) else Modifier.aspectRatio(ratio))) {
                     if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second,
                         onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS }, onPicture = { panel = Panel.PICTURE },
                         onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first) },
@@ -280,7 +285,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                                     }
                                     PanelContent(panel, p, onPanel = { panel = it })
                                 }
-                                else -> PortraitIdle(p, onPanel = { panel = Panel.TRACKS }, onOutput = openOutput)
+                                else -> PortraitIdle(p, nav, showList = !videoPortrait, onPanel = { panel = Panel.TRACKS }, onOutput = openOutput)
                             }
                         }
                     }
@@ -348,6 +353,7 @@ private fun changeBrightness(a: Activity?, delta: Float): Int {
 private fun GestureLayer(
     onTap: () -> Unit, onSeek: (Boolean) -> Unit, onHold: (Boolean) -> Unit,
     onVolumeStart: () -> Unit, onVolume: (Float) -> Unit, onBrightness: (Float) -> Unit, locked: Boolean,
+    onCenterDouble: (() -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     // A slow volume/brightness swipe must not also count as "hold for 2× speed".
@@ -356,7 +362,11 @@ private fun GestureLayer(
         .pointerInput(locked) {
             detectTapGestures(
                 onTap = { onTap() },
-                onDoubleTap = { o -> if (!locked) onSeek(o.x > size.width / 2) },
+                onDoubleTap = { o ->
+                    if (locked) return@detectTapGestures
+                    // Middle of a tall video: switch full screen / two thirds; near the edges: seek as before.
+                    if (onCenterDouble != null && o.x > size.width / 3f && o.x < size.width * 2f / 3f) onCenterDouble() else onSeek(o.x > size.width / 2)
+                },
                 onPress = {
                     if (locked) return@detectTapGestures
                     var held = false
@@ -477,29 +487,35 @@ private fun BoxScope.ControlsOverlayBody(
     AutoFitRow(Modifier.align(Alignment.Center).padding(horizontal = 8.dp), spacing = if (compact) 28.dp else 56.dp) {
         RoundBtn("−10", 52) { player.seekBy(-10_000); onTouch() }
         val k = btnScale()
-        Box(Modifier.size(((if (compact) 60 else 76) * k).dp).clip(CircleShape).background(accent()).clickable { player.togglePause(); onTouch() }, contentAlignment = Alignment.Center) {
-            Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (24 * k).sp, fontWeight = FontWeight.Bold)
+        Box(Modifier.size(maxOf((if (compact) 60 else 76) * k, 56f).dp).clip(CircleShape).background(accent()).clickable { player.togglePause(); onTouch() }, contentAlignment = Alignment.Center) {
+            Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = maxOf(24 * k, 20f).sp, fontWeight = FontWeight.Bold)
         }
         RoundBtn("+10", 52) { player.seekBy(10_000); onTouch() }
     }
-    if (!compact) Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp)) {
-        SeekRow(p, Modifier)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AutoFitRow(spacing = 0.dp) {
-                OverlayChip(scaleLabel, onScale)
-                Text("  🔄", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable(onClick = onRotate).padding((10 * ks).dp))
-            }
-            Grow()
-            AutoFitRow(spacing = 0.dp) {
-                Text("⏮", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable { player.prev() }.padding((10 * ks).dp))
-                Text("⏭", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable { player.next() }.padding((10 * ks).dp))
-                Text("PiP", color = Color.White, fontSize = (14 * ks).sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.clickable(onClick = onPip).padding((10 * ks).dp))
-            }
-        }
-    } else AutoFitRow(Modifier.align(Alignment.BottomEnd).padding(6.dp), spacing = 0.dp) {
+    // Bottom controls: never shrunk (symbols at least 22 sp, text at least 13 sp). Sideways one row; upright it wraps if needed.
+    val tallVid = p.videoH > p.videoW && p.videoW > 0
+    val landB = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
+    val symSize = maxOf(20 * ks, 22f).sp
+    val bottomItems: @Composable () -> Unit = {
         OverlayChip(scaleLabel, onScale)
-        Text("  🔄 ", color = Color.White, fontSize = (20 * ks).sp, modifier = Modifier.clickable(onClick = onRotate).padding((8 * ks).dp))
-        Text("PiP", color = Color.White, fontSize = (14 * ks).sp, modifier = Modifier.clickable(onClick = onPip).padding((8 * ks).dp))
+        if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
+            App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
+        Text("🔄", color = Color.White, fontSize = symSize, modifier = Modifier.clickable(onClick = onRotate).padding(8.dp))
+        Text("⏮", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.prev() }.padding(8.dp))
+        Text("⏭", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.next() }.padding(8.dp))
+        OverlayChip("PiP", onPip)
+    }
+    if (!compact) Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+        SeekRow(p, Modifier)
+        if (landB) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { bottomItems() }
+        else androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)) { bottomItems() }
+    } else androidx.compose.foundation.layout.FlowRow(Modifier.align(Alignment.BottomEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        OverlayChip(scaleLabel, onScale)
+        if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
+            App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
+        Text("🔄", color = Color.White, fontSize = symSize, modifier = Modifier.clickable(onClick = onRotate).padding(6.dp))
+        OverlayChip("PiP", onPip)
     }
 }
 
@@ -509,11 +525,15 @@ private fun SeekRow(p: PlayerState, modifier: Modifier) {
     val frac = if (p.length > 0) (p.time.toFloat() / p.length).coerceIn(0f, 1f) else 0f
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(fmtTime(if (dragging != null) (dragging!! * p.length).toLong() else p.time), color = Color.White, fontSize = 13.sp)
+        // Thin track and small knob, like the song player's position bar.
+        val sc = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = Color(0x55FFFFFF))
         Slider(
             value = dragging ?: frac, onValueChange = { dragging = it },
             onValueChangeFinished = { dragging?.let { App.instance.player.seekFraction(it) }; dragging = null },
-            enabled = p.length > 0 || p.item != null, modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
-            colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = Color(0x55FFFFFF)),
+            enabled = p.length > 0 || p.item != null, modifier = Modifier.weight(1f).padding(horizontal = 10.dp).height(26.dp),
+            colors = sc, thumb = { KnobThumb(Color.White) },
+            track = { stt -> SliderDefaults.Track(sliderState = stt, modifier = Modifier.height(4.dp), colors = sc, enabled = p.length > 0 || p.item != null,
+                drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) },
         )
         Text(if (p.length > 0) "-" + fmtTime(p.length - p.time) else "Live", color = Color.White, fontSize = 13.sp)
     }
@@ -530,20 +550,42 @@ private fun OverlayChip(text: String, onClick: () -> Unit) {
 @Composable
 private fun RoundBtn(text: String, sizeDp: Int, onClick: () -> Unit) {
     val k = btnScale()
-    Box(Modifier.size((sizeDp * k).dp).clip(CircleShape).background(Color(0x24FFFFFF)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(text, color = Color.White, fontSize = (15 * k).sp, fontWeight = FontWeight.SemiBold)
+    Box(Modifier.size(maxOf(sizeDp * k, 44f).dp).clip(CircleShape).background(Color(0x33FFFFFF)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Text(text, color = Color.White, fontSize = maxOf(15 * k, 14f).sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
-private fun PortraitIdle(p: PlayerState, onPanel: () -> Unit, onOutput: () -> Unit) {
+private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPanel: () -> Unit, onOutput: () -> Unit) {
     val player = App.instance.player
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(p.item?.title ?: "", color = C.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        FitText(p.item?.title ?: "", color = C.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, minSize = 13.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Pill(if (p.isPlaying) "Pause" else "Play", filled = true) { player.togglePause() }
             Pill("Audio & subs") { onPanel() }
             OutputPill(onOutput)
+        }
+        // Wide video upright: the video collection in its own scrolling box, like the song player's "Up next".
+        val next = if (p.index >= 0) p.queue.drop(p.index + 1) else emptyList()
+        if (showList && next.isNotEmpty()) {
+            var upMenu by remember { mutableIntStateOf(-1) }
+            SectionTitle("Up next")
+            Column(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.card)
+                .border(1.dp, accent().copy(alpha = 0.3f), RoundedCornerShape(14.dp)).verticalScroll(rememberScrollState())) {
+                next.forEachIndexed { i, n ->
+                    if (i > 0) Divider()
+                    Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
+                        .padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("${i + 1}.", color = C.muted, maxLines = 1, modifier = Modifier.width(30.dp))
+                        MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 8.dp), fontSize = 15.sp)
+                        if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
+                        Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
+                            onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
+                            onMoveDown = if (p.index + 2 + i < p.queue.size) ({ player.moveInQueue(p.index + 1 + i, 1) }) else null,
+                            removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
+                    }
+                }
+            }
         }
     }
 }
