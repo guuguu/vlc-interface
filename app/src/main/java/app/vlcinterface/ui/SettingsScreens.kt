@@ -197,8 +197,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 ToggleRow("Brightness swipe", "Left half, vertical", s.brightnessSwipe) { set(s.copy(brightnessSwipe = it)) }; Divider()
                 ValueRow("Double-tap seek", "Left / right edge", "${s.doubleTapSeekSec} s") {
                     val opts = listOf(5, 10, 15, 30); set(s.copy(doubleTapSeekSec = opts[(opts.indexOf(s.doubleTapSeekSec) + 1) % opts.size]))
-                }; Divider()
-                ToggleRow("Hold for 2× speed", "Release to return", s.holdForSpeed) { set(s.copy(holdForSpeed = it)) }
+                }
+                // (Long press on the video now shows its details; the speed is chosen with the speed button.)
             }
             SectionTitle("Playback")
             CardBox {

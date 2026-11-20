@@ -131,3 +131,19 @@
 - Settings → Video shows what the playing video uses right now (requested 2026-11-20 21:36): under each choice a
   line "Now: Hardware / Software" and "Now: On / Off", with "(chosen automatically)" on Automatic and the video's
   encoding and size (e.g. H264 1920×1080); "Now: no video playing" otherwise. Updates while the page is open.
+
+## Video details on a long press (requested 2026-11-20 21:38)
+- Long press on a playing video: a pop-up over the video with all its details, in fixed sections and order, label
+  on the left and value on the right (tap a line to copy it, "Copy all" for everything; refreshed every 2 s):
+  - File: name, title, type (container), size, duration, folder, place on the phone.
+  - Source: source name, kind (phone / SMB with its version / SFTP / web), address (no password), VPN, user.
+  - Video: codec (name and code), resolution with its name (SD / HD 720p / Full HD / QHD / 4K / 8K), pixel aspect,
+    picture shape (16:9, 2.39:1 …), frame rate, bitrate, profile / level, orientation, decoder and deinterlacing
+    (automatic or not), colour filter.
+  - Audio (each track, the playing one marked): codec, language, name, channels (5.1 …), sample rate, bitrate.
+  - Subtitles: each track (language, name, format, the shown one marked), added files, delay.
+  - Tags: title, artist, album, date, genre, description, encoded by, copyright, language.
+  - Playback: position, speed, sound output, audio delay, data rate now, data read, frames decoded / shown / lost,
+    damaged data blocks.
+- The long press no longer gives 2× speed (the speed button does that); "Hold for 2× speed" is removed from
+  Settings → Playback & gestures.

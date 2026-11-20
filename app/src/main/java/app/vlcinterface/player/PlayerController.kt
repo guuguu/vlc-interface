@@ -1144,6 +1144,158 @@ class PlayerController(private val context: Context, private val store: Store) {
         return out
     }
 
+    /**
+     * Everything known about the playing video, in fixed sections and order (long press on the video):
+     * File, Source, Video, Audio tracks, Subtitles, Tags, Playback. Empty values are left out.
+     */
+    fun videoDetails(): List<Pair<String, List<Pair<String, String>>>> {
+        val s = _state.value
+        val item = s.item ?: return emptyList()
+        val out = ArrayList<Pair<String, List<Pair<String, String>>>>()
+        fun sec(title: String, b: MutableList<Pair<String, String>>.() -> Unit) {
+            val l = ArrayList<Pair<String, String>>().apply(b).filter { it.second.isNotBlank() }
+            if (l.isNotEmpty()) out += title to l
+        }
+        fun hms(v: Long): String { val t = v.coerceAtLeast(0) / 1000; return if (t >= 3600) "%d:%02d:%02d".format(t / 3600, t / 60 % 60, t % 60) else "%d:%02d".format(t / 60, t % 60) }
+        fun ms(v: Long) = if (v <= 0) "" else hms(v)
+        fun size(b: Long) = if (b <= 0) "" else app.vlcinterface.player.NetGuard.fmt(b) + " (" + "%,d".format(java.util.Locale.US, b) + " bytes)"
+        val uri = item.uri
+        val shown = app.vlcinterface.sources.VpnLink.route(uri).replace(Regex("//[^/@]*@"), "//")
+        // File name and size.
+        var name = item.fileName; var bytes = 0L
+        try {
+            when {
+                uri.startsWith("content://") -> context.contentResolver.query(Uri.parse(uri), arrayOf(android.provider.OpenableColumns.DISPLAY_NAME, android.provider.OpenableColumns.SIZE), null, null, null)?.use { c ->
+                    if (c.moveToFirst()) { if (name.isEmpty()) name = c.getString(0) ?: ""; bytes = c.getLong(1) } }
+                uri.startsWith("file://") || uri.startsWith("/") -> java.io.File(Uri.parse(uri).path ?: uri).let { if (name.isEmpty()) name = it.name; bytes = it.length() }
+            }
+        } catch (_: Exception) {}
+        if (name.isEmpty()) name = Uri.decode(uri.substringBefore('?').substringAfterLast('/'))
+        val ext = name.substringAfterLast('.', "").lowercase()
+        val m = try { mp.media } catch (_: Exception) { null }
+        try {
+            sec("File") {
+                add("Name" to name)
+                add("Title" to item.title.takeIf { it != name }.orEmpty())
+                add("Type" to when (ext) { "mkv" -> "Matroska (.mkv)"; "mp4", "m4v" -> "MPEG-4 (.$ext)"; "avi" -> "AVI (.avi)"; "mov" -> "QuickTime (.mov)"
+                    "webm" -> "WebM (.webm)"; "ts", "m2ts", "mts" -> "MPEG transport stream (.$ext)"; "mpg", "mpeg", "vob" -> "MPEG program stream (.$ext)"
+                    "wmv" -> "Windows Media (.wmv)"; "flv" -> "Flash video (.flv)"; "3gp" -> "3GPP (.3gp)"; "" -> ""; else -> ".$ext" })
+                add("Size" to size(bytes))
+                add("Duration" to ms(if (s.length > 0) s.length else item.durationMs))
+                add("Folder" to Uri.decode(shown.substringBeforeLast('/')))
+                if (uri.startsWith("content://")) add("Place on the phone" to (try { app.vlcinterface.sources.PhysicalPath.of(context, item) } catch (_: Exception) { "" }))
+            }
+            sec("Source") {
+                val src = store.current.sources.firstOrNull { it.id == item.sourceId }
+                add("Source" to (src?.name?.ifBlank { src.host } ?: ""))
+                add("Kind" to when {
+                    uri.startsWith("content://") || uri.startsWith("file://") || uri.startsWith("/") -> "On the phone"
+                    uri.startsWith("smb://") -> "Network share (SMB" + (item.smbVersion.takeIf { it.isNotEmpty() }?.let { ", $it" } ?: "") + ")"
+                    uri.startsWith("sftp://") -> "SFTP server"
+                    uri.startsWith("http") -> "Web (HTTP)"
+                    else -> uri.substringBefore(':').uppercase()
+                })
+                add("Address" to Uri.decode(shown))
+                if (shown != uri.replace(Regex("//[^/@]*@"), "//")) add("Reached through" to "VPN")
+                add("User" to item.user)
+            }
+            val tracks = (0 until (m?.trackCount ?: 0)).mapNotNull { m?.getTrack(it) }
+            val vt = try { mp.currentVideoTrack } catch (_: Throwable) { null } ?: tracks.filterIsInstance<IMedia.VideoTrack>().firstOrNull()
+            sec("Video") {
+                if (vt != null) {
+                    val w = vt.width; val h = vt.height
+                    val c = vt.codec?.trim().orEmpty()
+                    add("Codec" to listOf(codecName(c), c.uppercase()).filter { it.isNotEmpty() }.distinct().joinToString(" · "))
+                    add("Resolution" to if (w > 0) "$w × $h" + resName(w, h).let { if (it.isEmpty()) "" else "  ($it)" } else "")
+                    if (vt.sarNum > 0 && vt.sarDen > 0 && vt.sarNum != vt.sarDen) add("Pixel aspect" to "${vt.sarNum}:${vt.sarDen} → shown ${s.videoW} × ${s.videoH}")
+                    if (w > 0 && h > 0) add("Picture shape" to ratioName(s.videoW.takeIf { it > 0 } ?: w, s.videoH.takeIf { it > 0 } ?: h))
+                    if (vt.frameRateNum > 0 && vt.frameRateDen > 0) add("Frame rate" to "%.3f".format(java.util.Locale.US, vt.frameRateNum.toDouble() / vt.frameRateDen).trimEnd('0').trimEnd('.') + " fps")
+                    if (vt.bitrate > 0) add("Bitrate" to "${vt.bitrate / 1000} kbps")
+                    if (vt.profile > 0) add("Profile / level" to "${vt.profile} / ${vt.level}")
+                    if (vt.orientation != 0) add("Orientation" to when (vt.orientation) { 1 -> "Flipped"; 2 -> "Upside down"; 3 -> "Flipped vertically"; 5 -> "Turned 90°"; 6 -> "Turned 270°"; else -> "Turned" })
+                    add("Language" to vt.language.orEmpty())
+                }
+                val n = videoNow()
+                if (n != null) {
+                    add("Decoder" to (if (n.software) "Software" else "Hardware") + if (store.current.settings.videoDecoder == "auto") " (automatic)" else "")
+                    add("Deinterlacing" to (if (n.deinterlace) "On" else "Off") + if (store.current.settings.videoDeinterlace == "auto") " (automatic)" else "")
+                }
+                if (pictureFilterOn) add("Colour filter" to "Hue / saturation / bright areas on")
+            }
+            val auds = tracks.filterIsInstance<IMedia.AudioTrack>()
+            auds.forEachIndexed { i, t ->
+                sec(if (auds.size > 1) "Audio track ${i + 1}" + (if (t.id == s.audioTrack) " (playing)" else "") else "Audio") {
+                    add("Codec" to listOf(codecName(t.codec?.trim().orEmpty()), t.codec?.trim()?.uppercase().orEmpty()).filter { it.isNotEmpty() }.distinct().joinToString(" · "))
+                    add("Language" to t.language.orEmpty())
+                    add("Name" to t.description.orEmpty())
+                    if (t.channels > 0) add("Channels" to when (t.channels) { 1 -> "1 (mono)"; 2 -> "2 (stereo)"; 6 -> "6 (5.1)"; 8 -> "8 (7.1)"; else -> "${t.channels}" })
+                    if (t.rate > 0) add("Sample rate" to "${t.rate} Hz")
+                    if (t.bitrate > 0) add("Bitrate" to "${t.bitrate / 1000} kbps")
+                }
+            }
+            val subs = tracks.filterIsInstance<IMedia.SubtitleTrack>()
+            sec("Subtitles") {
+                if (subs.isEmpty() && s.spuTracks.none { it.id >= 0 }) add("Subtitles" to "None")
+                subs.forEachIndexed { i, t ->
+                    add("Track ${i + 1}" + (if (t.id == s.spuTrack) " (shown)" else "") to listOf(t.language.orEmpty(), t.description.orEmpty(), t.codec?.trim()?.uppercase().orEmpty()).filter { it.isNotBlank() }.joinToString(" · ").ifEmpty { "—" })
+                }
+                s.spuTracks.filter { it.id >= 0 && subs.none { t -> t.id == it.id } }.forEach { add("Added" + (if (it.id == s.spuTrack) " (shown)" else "") to it.name) }
+                if (s.spuDelayMs != 0L) add("Subtitle delay" to "${s.spuDelayMs} ms")
+            }
+            if (m != null) sec("Tags") {
+                fun meta(k: Int, l: String) { try { m.getMeta(k)?.trim()?.let { add(l to it) } } catch (_: Exception) {} }
+                meta(IMedia.Meta.Title, "Title"); meta(IMedia.Meta.Artist, "Artist"); meta(IMedia.Meta.Album, "Album")
+                meta(IMedia.Meta.Date, "Date"); meta(IMedia.Meta.Genre, "Genre"); meta(IMedia.Meta.Description, "Description")
+                meta(IMedia.Meta.EncodedBy, "Encoded by"); meta(IMedia.Meta.Copyright, "Copyright"); meta(IMedia.Meta.Language, "Language")
+            }
+            sec("Playback") {
+                add("Position" to hms(s.time) + (if (s.length > 0) " of " + hms(s.length) else ""))
+                if (kotlin.math.abs(s.rate - 1f) > 0.01f) add("Speed" to "%.2f×".format(java.util.Locale.US, s.rate))
+                add("Sound output" to currentOutputName)
+                if (s.audioDelayMs != 0L) add("Audio delay" to "${s.audioDelayMs} ms")
+                m?.stats?.let { st ->
+                    if (st.inputBitrate > 0) add("Data rate now" to "${Math.round(st.inputBitrate * 8000)} kbps")
+                    if (st.readBytes > 0) add("Data read" to app.vlcinterface.player.NetGuard.fmt(st.readBytes.toLong()))
+                    if (st.decodedVideo > 0) add("Frames decoded" to "${st.decodedVideo}")
+                    if (st.displayedPictures > 0) add("Frames shown" to "${st.displayedPictures}")
+                    add("Frames lost" to "${st.lostPictures}")
+                    if (st.demuxCorrupted > 0) add("Damaged data blocks" to "${st.demuxCorrupted}")
+                }
+            }
+        } catch (_: Exception) {
+        } finally { m?.release() }
+        return out
+    }
+
+    private fun codecName(c: String): String = when (c.lowercase()) {
+        "h264", "avc1", "x264" -> "H.264 / AVC"; "hevc", "h265", "hvc1", "hev1" -> "H.265 / HEVC"; "av01", "av1" -> "AV1"
+        "vp90", "vp9" -> "VP9"; "vp80", "vp8" -> "VP8"; "mp4v", "xvid", "divx", "dx50", "fmp4" -> "MPEG-4 Part 2 (Xvid / DivX)"
+        "mpgv", "mp2v", "mpg2" -> "MPEG-2"; "mp1v" -> "MPEG-1"; "wmv3", "wmv2", "wmv1" -> "Windows Media Video"; "vc-1", "wvc1" -> "VC-1"
+        "theo" -> "Theora"; "dvsd" -> "DV"; "mjpg" -> "Motion JPEG"; "h263" -> "H.263"
+        "mp4a" -> "AAC"; "a52 ", "a52" -> "Dolby Digital (AC-3)"; "eac3" -> "Dolby Digital Plus (E-AC-3)"; "dts " , "dts" -> "DTS"
+        "mpga", "mp3 ", "mp3" -> "MPEG audio (MP3)"; "opus" -> "Opus"; "vorb" -> "Vorbis"; "flac" -> "FLAC"; "truehd", "mlp " -> "Dolby TrueHD"
+        "araw", "s16l", "s24l", "lpcm" -> "PCM (uncompressed)"; "alac" -> "ALAC"; "wma2", "wmap" -> "Windows Media Audio"
+        "subt" -> "Text (SRT)"; "ssa " , "ssa" -> "SSA / ASS"; "spu " , "spu" -> "DVD"; "pgs " -> "Blu-ray (PGS)"; "tx3g" -> "MP4 text"
+        else -> ""
+    }
+
+    private fun resName(w: Int, h: Int): String {
+        val big = maxOf(w, h); val small = minOf(w, h)
+        return when {
+            big >= 7600 -> "8K"; big >= 3800 || small >= 2100 -> "4K UHD"; big >= 2500 || small >= 1400 -> "QHD 1440p"
+            big >= 1900 || small >= 1000 -> "Full HD 1080p"; big >= 1260 || small >= 700 -> "HD 720p"
+            small >= 560 -> "SD 576"; small >= 470 -> "SD 480"; small >= 350 -> "360p"; small > 0 -> "Low ${small}p"; else -> ""
+        }
+    }
+
+    private fun ratioName(w: Int, h: Int): String {
+        val r = w.toDouble() / h
+        val known = listOf(1.0 to "1:1", 4.0 / 3 to "4:3", 3.0 / 2 to "3:2", 16.0 / 9 to "16:9", 1.85 to "1.85:1 (cinema)", 2.0 to "2:1",
+            2.39 to "2.39:1 (cinemascope)", 9.0 / 16 to "9:16 (upright)", 3.0 / 4 to "3:4 (upright)")
+        val best = known.minByOrNull { kotlin.math.abs(it.first - r) }!!
+        return if (kotlin.math.abs(best.first - r) < 0.03) best.second else "%.2f:1".format(java.util.Locale.US, r)
+    }
+
     /** Starts the current item again (a radio stream after the connection changed). */
     fun replayCurrent() { val s = _state.value; if (s.item != null) startItem(s.index, -1) }
 

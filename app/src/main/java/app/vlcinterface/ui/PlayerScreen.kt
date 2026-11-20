@@ -150,6 +150,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     // (the picture stayed black on the first minimise until going back and forth).
     LaunchedEffect(inPip) { kotlinx.coroutines.delay(250); player.reattach(videoView) }
     var toast by remember { mutableStateOf("") }
+    var showDetails by remember { mutableStateOf(false) }
     val volDrag = remember { VolumeDrag(ctx) }
     var touchTick by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
@@ -226,7 +227,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
             if (!inPip) GestureLayer(
                 onTap = { controls = !controls; touchTick++ },
                 onSeek = { fwd -> val s = st.settings.doubleTapSeekSec * 1000L; player.seekBy(if (fwd) s else -s); toast = if (fwd) "+${st.settings.doubleTapSeekSec} s" else "−${st.settings.doubleTapSeekSec} s" },
-                onHold = { on -> if (st.settings.holdForSpeed) { player.setRate(if (on) 2f else 1f); toast = if (on) "2× speed" else "" } },
+                // Long press on the picture: the video's details (replaces the old "hold for 2× speed").
+                onHold = { on -> if (on) showDetails = true },
                 onVolumeStart = { volDrag.start() },
                 onVolume = { total -> if (st.settings.volumeSwipe) toast = "Volume ${volDrag.update(total)}%" },
                 onBrightness = { d -> if (st.settings.brightnessSwipe) toast = "Brightness ${changeBrightness(activity, d)}%" },
@@ -249,6 +251,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
 
     // The video is always drawn from this one place, so its view is never moved or recreated when the
     // phone rotates or PiP starts (moving it made the picture disappear): only its size and position change.
+    if (showDetails) VideoDetailsDialog { showDetails = false }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         video(if (fullscreen) Modifier.fillMaxSize() else if (videoPortrait) Modifier.safeDrawingPadding().fillMaxWidth().fillMaxHeight(0.667f)
             else Modifier.safeDrawingPadding().fillMaxWidth().aspectRatio(ratio))
@@ -1036,4 +1039,42 @@ private fun PortraitSync(which: Int, p: PlayerState, onSwitch: (Int) -> Unit, on
         }
         SyncControls(which == 0, p, compact = false, onDone = onDone)
     }
+}
+
+
+/**
+ * Long press on a playing video: all its details in fixed sections and order (File, Source, Video, Audio, Subtitles,
+ * Tags, Playback), label on the left, value on the right; refreshed every 2 s; tap a line to copy it.
+ */
+@Composable
+private fun VideoDetailsDialog(onDone: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var secs by remember { mutableStateOf(App.instance.player.videoDetails()) }
+    LaunchedEffect(Unit) { while (true) { delay(2000); secs = App.instance.player.videoDetails() } }
+    fun copy(text: String, what: String) {
+        ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("video", text))
+        android.widget.Toast.makeText(ctx, "$what copied", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    fun report() = buildString { secs.forEach { (t, rows) -> append(t).append('\n'); rows.forEach { (k, v) -> append("  ").append(k).append(": ").append(v).append('\n') }; append('\n') } }
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("Video details", color = C.text) },
+        text = {
+            Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Tap a line to copy it.", color = C.muted, fontSize = 12.sp)
+                if (secs.isEmpty()) Text("No video playing.", color = C.text)
+                secs.forEach { (title, rows) ->
+                    Text(title, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
+                    rows.forEachIndexed { i, (k, v) ->
+                        if (i > 0) Divider()
+                        Row(Modifier.fillMaxWidth().clickable { copy(v, k) }.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+                            Text(k, color = C.muted, fontSize = 13.sp, modifier = Modifier.width(118.dp).padding(end = 8.dp))
+                            Text(v, color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
+        dismissButton = { STextButton({ copy(report(), "Details") }) { Text("Copy all") } },
+    )
 }
