@@ -23,3 +23,11 @@
 - A tap opens that player with what it last played, resuming where it was (songs: last queue and position; radio:
   last station; video: last video and position); what's playing now stops / pauses.
 - Nothing played there yet: it opens the matching list (Library songs, radio favourites, videos) instead.
+
+## Vertical spacing slider in Settings (requested 2026-11-20 17:23)
+- Main Settings page: a second slider, "Vertical spacing", under "Text size": the empty space between and inside the
+  setting rows (title ↔ text under it ↔ slider, row ↔ row, section titles) on every settings page, the wizard and
+  the help guide — from tight to roomy, default a little tighter than today.
+- Helper pop-up while Helpers are on (only on a still hold), previewing two sample setting rows at the chosen spacing.
+- Also: every setting row keeps the same left margin (e.g. Audio → "Loudness, Treble and Preamp sliders" is indented
+  more than the rows around it today).
