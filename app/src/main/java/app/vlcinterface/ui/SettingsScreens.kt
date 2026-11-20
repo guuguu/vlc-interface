@@ -357,6 +357,15 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     ThinSlider(s.alarmRowPct.toFloat(), { v -> set(s.copy(alarmRowPct = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f,
                         onValueChangeFinished = { if (helpersOn) lookHelp = "Alarm rows under the clock" })
+                    // Upright player: the clock / album picture hide while scrolling (on), or not (off: clock pinned).
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                        Text("Hide the clock while scrolling", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Hide the clock while scrolling"))
+                        AppSwitch(s.clockAutoHide, { set(s.copy(clockAutoHide = it)); if (helpersOn) lookHelp = "Hide the clock while scrolling" })
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Hide the album picture while scrolling", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Hide the album picture while scrolling"))
+                        AppSwitch(s.coverAutoHide, { set(s.copy(coverAutoHide = it)); if (helpersOn) lookHelp = "Hide the album picture while scrolling" })
+                    }
                     // Upright player: how long the clock stays hidden after the last action.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Clock hidden for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Clock hidden for"))

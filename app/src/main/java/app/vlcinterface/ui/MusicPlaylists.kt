@@ -167,16 +167,19 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     val setsP = App.instance.store.state.collectAsState().value.settings
     val clockTop = app.vlcinterface.alarm.Alarms.state.collectAsState().value.showClock
     val topSec = if (clockTop) setsP.clockHideSec else setsP.coverHideSec
+    // Look switches "Hide the clock / album picture while scrolling": off = the clock stays pinned above the page,
+    // the picture simply scrolls with the page; neither is ever taken away.
+    val topAuto = if (clockTop) setsP.clockAutoHide else setsP.coverAutoHide
     var lastAct by remember { mutableLongStateOf(0L) }
     var topHidden by remember { mutableStateOf(false) }
     var topHpx by remember { mutableIntStateOf(0) }
     var ignoreScrollUntil by remember { mutableLongStateOf(0L) }
     val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { (if (item.isRadio) 10.dp else 14.dp).toPx() }.toInt()
     val winFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
-    LaunchedEffect(clockTop, landscape) { topHidden = false }
-    LaunchedEffect(scroll, landscape) {
+    LaunchedEffect(clockTop, landscape, topAuto) { topHidden = false }
+    LaunchedEffect(scroll, landscape, topAuto) {
         androidx.compose.runtime.snapshotFlow { scroll.value }.collect { v ->
-            if (landscape || System.currentTimeMillis() < ignoreScrollUntil) return@collect
+            if (landscape || !topAuto || System.currentTimeMillis() < ignoreScrollUntil) return@collect
             if (topHidden) { lastAct = System.currentTimeMillis(); return@collect }
             if (topHpx > 0 && v >= topHpx + gapPx) {
                 // Fully scrolled out: take it away and move the page by the same amount, so nothing on screen moves.
@@ -489,10 +492,12 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partB() }
             }
         } else {
-            // Upright: the clock is the top of the page and scrolls away with it (taken away once out of view).
+            // Upright, clock pinned (Look switch off): it stays above the page; only the page scrolls.
+            if (clockShown && !setsP.clockAutoHide) pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(horizontal = 16.dp, vertical = 4.dp))
+            // Otherwise the clock is the top of the page and scrolls away with it (taken away once out of view).
             Column(Modifier.weight(1f).onGloballyPositioned { viewTop = it.boundsInRoot().top }.verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(if (item.isRadio) 10.dp else 14.dp)) {
-                if (clockShown && !topHidden) Box(Modifier.fillMaxWidth().onSizeChanged { topHpx = it.height }) {
+                if (clockShown && setsP.clockAutoHide && !topHidden) Box(Modifier.fillMaxWidth().onSizeChanged { topHpx = it.height }) {
                     pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(vertical = 4.dp))
                 }
                 partA(); partB()
