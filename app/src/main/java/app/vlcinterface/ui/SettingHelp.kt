@@ -142,6 +142,8 @@ object SettingHelp {
             "Off: the picture just scrolls with the page and is never taken away. Sideways it always stays on the left. Default: on.",
         "Player rows spacing" to "The empty space between the rows of the song and radio players: title block, VPN-NAS button and badges, position bar and its times, player buttons and the rest.\n\n" +
             "Small gaps keep everything up to the player buttons on screen at once; bigger gaps are airier. The rows themselves stay slim. Default: 4 dp.",
+        "Vertical spacing" to "The empty space between and inside the rows of the settings pages, the setup wizard and the help guide: between a setting's title, the text under it and its slider or buttons, between rows, and around section titles and graphical items.\n\n" +
+            "Lower fits more settings on screen; higher is airier. Touch areas stay easy to hit. Default: 85 %.",
         "Text size" to "The size of all the text on the settings pages, the setup wizard, the help guide and the helper pop-ups — titles stay a step bigger than the text under them.\n\n" +
             "The players and the clock aren't affected: their text fits itself to the room. Default: 100 %.",
         "Order of the player rows" to "The order of the rows on the song player and on the radio player, each with its own order: picture (or clock with alarms), title block, position bar, player buttons, tone sliders, 'Playing from', 'Play next…', extra buttons, and Up next (radio: favourites and search).\n\n" +
@@ -151,7 +153,7 @@ object SettingHelp {
             "The clock comes back this many seconds after your last action; every scroll, touch or button press starts the count again, and it never comes back while a menu, pop-up or settings window is open. Sideways the clock stays on the left.\n\nDefault: 10 s.",
         "Short pop-ups stay for" to "How long short notes that close by themselves stay on screen: an alarm switched on or off, the explanation pop-ups of the alarm pages, and similar confirmations.\n\n" +
             "Longer gives time to read; shorter gets them out of the way sooner. A pop-up you touch stays open until you close it. Default: 3 s.",
-        "Switch colour" to "The colour of every switch in the app, one for the on position and one for the off position, so the state shows at a glance as well as by the knob's place.\n\n" +
+        "Switch colour" to "The colour of every switch in the app, one for the on position and one for the off position, so the state shows at a glance as well as by the knob's place. Choose On, Off, or Both (the same colour for the two positions — then only the knob's side shows the state).\n\n" +
             "'+ Create' opens the colour editor (hue, saturation, brightness); the new colour replaces the current one. Switches that can't be used stay dark grey.\n\n" +
             "Default: on = your accent colour, off = a muted grey-blue.",
         "Shadow on player buttons" to "A faint grey shadow under the players' buttons and slider knobs, so they stay visible over bright album pictures.",

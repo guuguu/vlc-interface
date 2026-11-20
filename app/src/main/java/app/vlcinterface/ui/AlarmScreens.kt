@@ -85,14 +85,14 @@ fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
     val list = d.alarms.filter { it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID }.sortedBy { it.hour * 60 + it.minute }
     val warn = issues.isNotEmpty() && list.any { it.on }
     if (compact) {
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (warn) Text("⚠", color = C.bad, fontSize = 14.sp, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(4.dp))
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
+            if (warn) Text("⚠", color = C.bad, fontSize = SYM, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(4.dp))
             list.forEach { al ->
                 Text(al.timeText, color = if (al.on) C.text else C.muted, fontSize = 13.sp, fontWeight = if (al.on) FontWeight.SemiBold else FontWeight.Normal,
-                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF)).clickable { nav.go(Screen.AlarmEdit(al.id)) }.padding(horizontal = 8.dp, vertical = 3.dp))
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF)).clickable { nav.go(Screen.AlarmEdit(al.id)) }.padding(horizontal = 8.dp, vertical = (3 * sg()).dp))
             }
-            Text("+", color = accent(), fontSize = 14.sp, modifier = Modifier.clickable { nav.go(Screen.AlarmEdit("")) }.padding(horizontal = 6.dp, vertical = 2.dp))
-            Text("⚙", color = C.muted, fontSize = 14.sp, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(horizontal = 6.dp, vertical = 2.dp))
+            Text("+", color = accent(), fontSize = SYM, modifier = Modifier.clickable { nav.go(Screen.AlarmEdit("")) }.padding(horizontal = 6.dp, vertical = (2 * sg()).dp))
+            Text("⚙", color = C.text, fontSize = SYM, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(horizontal = 6.dp, vertical = (2 * sg()).dp))
         }
         return
     }
@@ -111,7 +111,7 @@ fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("+  Add alarm", color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f).clickable { nav.go(Screen.AlarmEdit("")) }.padding(12.dp))
-            Text("⚙", color = C.muted, fontSize = 18.sp, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(12.dp))
+            Text("⚙", color = C.text, fontSize = SYM, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(12.dp))
         }
     }
 }
@@ -141,7 +141,7 @@ fun AlarmRow(nav: Navigator, al: Alarm, k: Float) {
 
 @Composable
 private fun <T> Choices(options: List<Pair<String, T>>, selected: T, onPick: (T) -> Unit) {
-    FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    FlowRow(Modifier.padding(horizontal = 16.dp, vertical = (6 * sg()).dp), horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
         options.forEach { (label, v) -> Pill(label, selected = v == selected) { onPick(v) } }
     }
 }
@@ -206,7 +206,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     HelpHost {
     Column(Modifier.fillMaxSize()) {
         BackHeader(if (Alarms.get(id) == null) "New alarm" else "Alarm", nav, actions = { SaveTopButton { Alarms.put(a); nav.back() } })
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             CardBox {
                 HToggleRow("Alarm on", "", a.on) { a = a.copy(on = it) }; Divider()
                 Row(Modifier.fillMaxWidth().clickable { timeAsk = true }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -240,12 +240,12 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                     }
                     "dates" -> {
                         val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).apply { timeZone = Alarms.zone() }.format(java.util.Date())
-                        FlowRow(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        FlowRow(Modifier.padding(horizontal = 16.dp, vertical = (8 * sg()).dp), horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                             a.dates.filter { it >= today }.sorted().forEach { d ->
                                 Row(Modifier.clip(RoundedCornerShape(14.dp)).background(Color(0x1FFFFFFF)).padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically) {
                                     Text(Alarm.whenText(Alarm(mode = "once", date = d)), color = C.text, fontSize = 13.sp)
-                                    Text("✕", color = C.muted, fontSize = 13.sp, modifier = Modifier.clickable { a = a.copy(dates = a.dates - d); showHelp(a) }.padding(horizontal = 6.dp))
+                                    Text("✕", color = C.text, fontSize = SYM, modifier = Modifier.clickable { a = a.copy(dates = a.dates - d); showHelp(a) }.padding(horizontal = 6.dp))
                                 }
                             }
                             Pill("+ Add dates") { datesAsk = true }
@@ -316,7 +316,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                 Choices(listOf("As it is" to "", "Phone speaker" to "speaker") + devs.filter { it.connected && it.kind != app.vlcinterface.player.OutputKind.SPEAKER }.map { it.name to it.key },
                     a.output) { a = a.copy(output = it) }
             }
-            Row(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.fillMaxWidth().padding(vertical = (14 * sg()).dp), horizontalArrangement = Arrangement.spacedBy((10 * sg()).dp)) {
                 if (Alarms.get(id) != null) Pill("Delete alarm", modifier = Modifier.weight(1f)) { Alarms.delete(a.id); nav.back() }
             }
         }
@@ -356,7 +356,7 @@ fun AlarmSettingsScreen(nav: Navigator) {
     HelpHost {
     Column(Modifier.fillMaxSize()) {
         BackHeader("Alarm clock", nav)
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             AlarmSettingsBody(nav)
             Box(Modifier.height(24.dp))
         }
@@ -512,7 +512,7 @@ fun ClockAspectScreen(nav: Navigator) {
             ClockFace(a, Modifier.padding(8.dp).size(190.dp).then(if (showDim) Modifier.alpha(1f - a.dim / 100f) else Modifier))
             if (showDim) Text("Charging screen preview", color = C.muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp))
         }
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             SectionTitle("Design")
             CardBox {
                 Choices(listOf("1" to 1, "2" to 2, "4" to 4, "5" to 5, "8" to 8, "Digital" to 0), if (a.analog) a.design else 0) {
@@ -523,7 +523,7 @@ fun ClockAspectScreen(nav: Navigator) {
             }
             SectionTitle("Colours")
             CardBox {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = (8 * sg()).dp)) {
                     HueSatBars("Disk (inside the circle)", a.diskHue, a.diskSat, ::clockDisk, round = true) { h, s -> set(a.copy(diskHue = h, diskSat = s)) }
                     HueSatBars("Ring, ticks, numbers, hands", a.mainHue, a.mainSat, ::clockMain) { h, s -> set(a.copy(mainHue = h, mainSat = s)) }
                     HueSatBars("Date", a.dateHue, a.dateSat, ::clockMain) { h, s -> set(a.copy(dateHue = h, dateSat = s)) }
@@ -585,7 +585,7 @@ private fun CityDialog(onDone: () -> Unit) {
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
         title = { Text("City", color = C.text) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedTextField(q, { q = it }, singleLine = true, label = { Text("Name") }, modifier = Modifier.weight(1f),
                         keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { search() }),
@@ -599,7 +599,7 @@ private fun CityDialog(onDone: () -> Unit) {
                             Alarms.setGlobal(Alarms.current.global.copy(cityName = c.name, cityShort = c.short, cityLat = c.lat, cityLon = c.lon, cityTz = c.tz))
                             app.vlcinterface.alarm.Weather.refresh(force = true)
                             onDone()
-                        }.padding(vertical = 8.dp)) {
+                        }.padding(vertical = (8 * sg()).dp)) {
                             Text(c.name + "  ·  " + c.short, color = C.text, fontSize = 15.sp)
                             Text(listOf(c.detail, c.tz).filter { it.isNotEmpty() }.joinToString(" · "), color = C.muted, fontSize = 13.sp)
                         }
@@ -688,7 +688,7 @@ private fun HToggleRow(label: String, hint: String = "", checked: Boolean, onCha
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
         .then(if (has) Modifier.combinedClickable(onClick = { onChange(!checked) }, onDoubleClick = { help(label) }, onLongClick = { help(label) })
             else Modifier.clickable { onChange(!checked) })
-        .padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        .padding(horizontal = 16.dp, vertical = (6 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label, color = C.text, fontSize = 15.sp)
             if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
@@ -703,7 +703,7 @@ private fun HValueRow(label: String, hint: String = "", value: String, onClick: 
     val has = true      // every setting explains itself (own text, or the general help texts)
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
         .then(if (has) Modifier.combinedClickable(onClick = onClick, onDoubleClick = { help(label) }, onLongClick = { help(label) }) else Modifier.clickable(onClick = onClick))
-        .padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        .padding(horizontal = 16.dp, vertical = (6 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(label, color = C.text, fontSize = 15.sp)
             if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
@@ -715,7 +715,7 @@ private fun HValueRow(label: String, hint: String = "", value: String, onClick: 
 }
 
 @Composable
-private fun Explain(text: String) = Text(text, color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+private fun Explain(text: String) = Text(text, color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = (2 * sg()).dp))
 
 // ---------------------------------------------------------------- music folder, alarm sound
 
@@ -743,7 +743,7 @@ private fun RootFolderDialog(onDone: () -> Unit) {
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
         title = { Text("Music folder for alarms", color = C.text) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                 Text("Alarms play songs stored on the phone from this folder and all its subfolders, in random order — no network needed. " +
                     "If none of them can play, the alarm sound rings.", color = C.muted, fontSize = 13.sp)
                 if (folders == null) Text("Looking for music on the phone…", color = C.muted, fontSize = 13.sp)
@@ -754,7 +754,7 @@ private fun RootFolderDialog(onDone: () -> Unit) {
                         val on = g.localRoot == rel && g.localVolume == vol
                         Row(Modifier.fillMaxWidth().clickable {
                             Alarms.setGlobal(Alarms.current.global.copy(localRoot = rel, localVolume = vol)); onDone()
-                        }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        }.padding(vertical = (8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(rel, color = if (on) accent() else C.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
                             Text("$n songs", color = C.muted, fontSize = 13.sp)
                         }
@@ -810,11 +810,11 @@ private fun AlarmSoundDialog(onDone: () -> Unit) {
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
         title = { Text("Alarm sound", color = C.text) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
                 Text("Rings when nothing else can play, when music was already playing, and with low battery (if chosen). " +
                     "Tap a sound: it is chosen and plays for 3 s. Browse… picks your own sound file.", color = C.muted, fontSize = 13.sp)
                 Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
-                    Row(Modifier.fillMaxWidth().clickable { browse.launch(arrayOf("audio/*")) }.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clickable { browse.launch(arrayOf("audio/*")) }.padding(vertical = (9 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                         SRadioButton(own, null)
                         Text(if (own) "My file: " + g.toneName else "Browse… (your own file)", color = if (own) accent() else C.text, fontSize = 14.sp,
                             modifier = Modifier.padding(start = 8.dp).weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -824,7 +824,7 @@ private fun AlarmSoundDialog(onDone: () -> Unit) {
                         val on = g.toneUri == uri
                         Row(Modifier.fillMaxWidth().clickable {
                             Alarms.setGlobal(Alarms.current.global.copy(toneUri = uri, toneName = if (uri.isEmpty()) "" else title)); play(uri)
-                        }.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                        }.padding(vertical = (9 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                             SRadioButton(on, null)
                             Text(title, color = if (on) accent() else C.text, fontSize = 14.sp, modifier = Modifier.padding(start = 8.dp))
                         }
@@ -877,7 +877,7 @@ private fun HealthCard() {
         if (issues.isEmpty()) Text("✓  Everything Android needs for the alarms is allowed", color = C.ok, fontSize = 14.sp,
             modifier = Modifier.fillMaxWidth().helpOn("Alarm health").padding(16.dp))
         issues.forEach { i ->
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = (8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("⚠  " + i.title, color = C.bad, fontSize = 15.sp)
                     Text(i.text, color = C.muted, fontSize = 13.sp)
@@ -895,13 +895,13 @@ private fun HealthCard() {
             else -> ""
         }
         if (sleepList.isNotEmpty()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = (8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(sleepList, color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 Pill("Open") { try { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName))) } catch (_: Exception) {} }
             }
             Divider()
         }
-        Row(Modifier.fillMaxWidth().helpOn("Test alarm in 1 minute").padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().helpOn("Test alarm in 1 minute").padding(horizontal = 16.dp, vertical = (8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Test alarm in 1 minute", color = C.text, fontSize = 15.sp)
                 Text(testNote.ifEmpty { "Then press Exit and lock the phone" }, color = if (testNote.isEmpty()) C.muted else accent(), fontSize = 12.sp)
@@ -958,7 +958,7 @@ private fun MonthDatesDialog(initial: List<String>, onDone: (List<String>?) -> U
             Column {
                 Row(Modifier.fillMaxWidth()) { listOf("M", "T", "W", "T", "F", "S", "S").forEach { Text(it, color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
                 val cells = first + daysIn
-                for (r in 0 until (cells + 6) / 7) Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+                for (r in 0 until (cells + 6) / 7) Row(Modifier.fillMaxWidth().padding(vertical = (2 * sg()).dp)) {
                     for (c in 0 until 7) {
                         val day = r * 7 + c - first + 1
                         Box(Modifier.weight(1f).height(38.dp), contentAlignment = Alignment.Center) {
@@ -996,7 +996,7 @@ private fun CalendarPickDialog(onDone: () -> Unit) {
             Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
                 if (cals.isEmpty()) Text("No calendar on this phone can take events. Add your account in Android's settings first.", color = C.muted, fontSize = 13.sp)
                 cals.forEach { c ->
-                    Row(Modifier.fillMaxWidth().clickable { sel = c }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clickable { sel = c }.padding(vertical = (8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                         SRadioButton(sel?.id == c.id, null)
                         Column(Modifier.padding(start = 8.dp)) {
                             Text(c.name + if (c.primary) "  (main)" else "", color = C.text, fontSize = 14.sp)

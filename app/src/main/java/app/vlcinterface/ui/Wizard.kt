@@ -174,7 +174,7 @@ fun WizardScreen(nav: Navigator, page: Int) {
         // Fixed header: never scrolls with the page.
         Scaled {
             Column(Modifier.fillMaxWidth().background(C.card)) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = (6 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                     HeaderPill("‹", false) { if (page > 0) goTo(page - 1) else nav.back() }
                     Column(Modifier.weight(1f).padding(start = 4.dp)) {
                         Text("Setup · ${page + 1} of ${W.pages.size}", color = C.muted, fontSize = 12.sp)
@@ -191,12 +191,12 @@ fun WizardScreen(nav: Navigator, page: Int) {
         }
         val scroll = rememberScrollState()
         LaunchedEffect(page) { scroll.scrollTo(0) }
-        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             Box(Modifier.height(6.dp))
             LinkRow("Close the wizard, use the default setup, I'll set it up later") { finish() }
             LinkRow("Guide me through the setup step by step" + if (W.guided) "  ✓" else "") {
                 W.guided = true; if (pg.id == "perm" || pg.id == "summary") goTo(if (pg.id == "summary") 0 else page) }
-            Text(pg.intro, color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+            Text(pg.intro, color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = (4 * sg()).dp))
             if (W.guided) HelpGuide.chapter(pg.help)?.pages?.firstOrNull()?.let { (t, txt) ->
                 Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).border(1.dp, accent().copy(alpha = 0.5f), RoundedCornerShape(12.dp)).padding(12.dp)) {
                     Text(t, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
@@ -210,7 +210,7 @@ fun WizardScreen(nav: Navigator, page: Int) {
                         list.forEachIndexed { i, p ->
                             if (i > 0) Divider()
                             val g = p.granted(ctx)
-                            Column(Modifier.fillMaxWidth().explain(p.name, p.role).padding(horizontal = 14.dp, vertical = 10.dp)) {
+                            Column(Modifier.fillMaxWidth().explain(p.name, p.role).padding(horizontal = 14.dp, vertical = (10 * sg()).dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(p.name, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                     Text(if (g == true) "Open settings ▶" else if (p.runtime.isNotEmpty()) "Grant ▶" else "Open settings ▶", color = WIZ_GREEN, fontSize = 15.sp, fontWeight = FontWeight.Bold,
@@ -265,8 +265,8 @@ fun WizardScreen(nav: Navigator, page: Int) {
                         W.pages.dropLast(1).forEachIndexed { i, p ->
                             if (i > 0) Divider()
                             val state = when (p.id) { in W.done -> "set ✓"; in W.skipped -> "skipped — defaults used"; else -> "not visited" }
-                            Column(Modifier.fillMaxWidth().clickable { goTo(i) }.padding(horizontal = 14.dp, vertical = 10.dp)) {
-                                Row { Text(p.title, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f)); Text("▶", color = WIZ_GREEN, fontSize = 18.sp) }
+                            Column(Modifier.fillMaxWidth().clickable { goTo(i) }.padding(horizontal = 14.dp, vertical = (10 * sg()).dp)) {
+                                Row { Text(p.title, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f)); Text("▶", color = WIZ_GREEN, fontSize = SYM) }
                                 NowLine(state, bad = p.id in W.skipped)
                             }
                         }
@@ -283,7 +283,7 @@ fun WizardScreen(nav: Navigator, page: Int) {
     if (missing.isNotEmpty()) AlertDialog(onDismissRequest = { missing = emptyList() }, containerColor = C.panel,
         title = { Text("Not everything is set", color = C.text) },
         text = {
-            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                 Text("Without these, this is what won't work or won't appear:", color = C.muted, fontSize = 13.sp)
                 missing.forEach { Text("• $it", color = C.text, fontSize = 14.sp) }
             }
@@ -303,7 +303,7 @@ fun WizardScreen(nav: Navigator, page: Int) {
 private fun HeaderPill(t: String, filled: Boolean, onClick: () -> Unit) {
     val a = accent()
     Box(Modifier.padding(start = 4.dp).clip(RoundedCornerShape(18.dp)).background(if (filled) a else Color.Transparent)
-        .border(1.dp, if (filled) a else C.line, RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 7.dp),
+        .border(1.dp, if (filled) a else C.line, RoundedCornerShape(18.dp)).clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = (7 * sg()).dp),
         contentAlignment = Alignment.Center) {
         Text(t, color = if (filled) Color(0xFF1A0E05) else C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
@@ -312,5 +312,5 @@ private fun HeaderPill(t: String, filled: Boolean, onClick: () -> Unit) {
 @Composable
 private fun LinkRow(t: String, onClick: () -> Unit) {
     Text("› $t", color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = 6.dp))
+        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable(onClick = onClick).padding(vertical = (6 * sg()).dp))
 }

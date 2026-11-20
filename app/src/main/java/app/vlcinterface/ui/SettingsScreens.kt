@@ -77,12 +77,12 @@ fun orderedGroups(order: List<String>): List<Pair<String, String>> {
 fun SettingsLink(name: String, hint: String, onClick: () -> Unit) {
     val ex = LocalExplain.current
     Row(Modifier.fillMaxWidth().heightIn(min = 58.dp).combinedClickable(onClick = onClick, onLongClick = { ex(name, hint) })
-        .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        .padding(horizontal = 16.dp, vertical = (8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(name, color = C.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
         }
-        Text("▶", color = accent(), fontSize = 20.sp)
+        Text("▶", color = accent(), fontSize = SYM)
     }
 }
 
@@ -109,7 +109,7 @@ fun SettingsScreen(nav: Navigator) {
             catch (_: Exception) { "vlc interface ${app.vlcinterface.App.VERSION}" }
         }
         BackHeader("Settings", nav, version)
-        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             CardBox {
                 orderedGroups(s.settingsOrder).forEachIndexed { i, (id, name) ->
                     if (i > 0) Divider()
@@ -123,7 +123,7 @@ fun SettingsScreen(nav: Navigator) {
             val helpersOnM = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.helpers
             var sizeHelp by remember { mutableStateOf(false) }
             CardBox {
-                Column(Modifier.explain("Text size").padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Column(Modifier.explain("Text size").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Text size", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                         Text("${s.settingsTextPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
@@ -132,6 +132,27 @@ fun SettingsScreen(nav: Navigator) {
                         onHoldStill = { if (helpersOnM) sizeHelp = true })
                 }
             }
+            var gapHelp by remember { mutableStateOf(false) }
+            CardBox {
+                Column(Modifier.explain("Vertical spacing").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Vertical spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("${s.settingsGapPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
+                    }
+                    ThinSlider(s.settingsGapPct.toFloat(), { v -> set(s.copy(settingsGapPct = (Math.round(v / 5f) * 5).coerceIn(40, 160))) }, valueRange = 40f..160f,
+                        onHoldStill = { if (helpersOnM) gapHelp = true })
+                }
+            }
+            if (gapHelp) HelperDialog("Vertical spacing", SettingHelp.text("Vertical spacing", ""), extra = {
+                Column(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card)) {
+                    listOf("Sample setting" to "The line under it", "Another setting" to "Its explanation").forEachIndexed { i, (t, h) ->
+                        if (i > 0) Divider()
+                        Column(Modifier.fillMaxWidth().heightIn(min = (48 * s.settingsGapPct / 100f).dp).padding(horizontal = 14.dp, vertical = (5 * s.settingsGapPct / 100f).dp)) {
+                            Text(t, color = C.text, fontSize = 15.sp); Text(h, color = C.muted, fontSize = 13.sp)
+                        }
+                    }
+                }
+            }) { gapHelp = false }
             if (sizeHelp) HelperDialog("Text size", SettingHelp.text("Text size", ""), extra = {
                 Column(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(12.dp)) {
                     Text("Sample setting", color = C.text, fontSize = 15.sp)
@@ -139,7 +160,7 @@ fun SettingsScreen(nav: Navigator) {
                 }
             }) { sizeHelp = false }
             Text("Long-press any setting for an explanation", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
-            Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 16.dp))
+            Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = (16 * sg()).dp))
         }
     }
 }
@@ -150,7 +171,7 @@ fun SettingsGroupScreen(nav: Navigator, id: String) {
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
         BackHeader(SETTINGS_GROUPS.toMap()[id] ?: "Settings", nav)
-        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             SettingsGroupBody(nav, id)
             Box(Modifier.height(24.dp))
         }
@@ -196,14 +217,14 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 "video" -> {
             SectionTitle("Subtitles")
             CardBox {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
                     Text("Preferred languages", color = C.muted, fontSize = 13.sp, modifier = Modifier.explain("Preferred languages"))
                     Field("Preferred languages (e.g. en, es)", s.subLangs.joinToString(", ")) { v ->
                         set(s.copy(subLangs = v.split(',', ' ').map { it.trim().lowercase() }.filter { it.isNotEmpty() }))
                     }
                 }
                 ToggleRow("Auto-download missing subtitles", "When a movie has none in your languages", s.autoDownloadSubs) { set(s.copy(autoDownloadSubs = it)) }
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
                     Text("OpenSubtitles.com account (free). Create an API key under your profile → API consumers.", color = C.muted, fontSize = 13.sp)
                     Field("API key", s.osApiKey, password = true) { set(s.copy(osApiKey = it.trim())) }
                     Field("Username", s.osUser) { set(s.copy(osUser = it.trim())) }
@@ -250,7 +271,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
                 Divider()
                 // Radio buffer: the last N minutes kept for saving, and how long a lost connection may take to come back.
-                Column(Modifier.explain("Radio buffer").padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Column(Modifier.explain("Radio buffer").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
                     Text("Radio buffer: ${s.radioBufferMin} min", color = C.text, fontSize = 15.sp)
                     Text("The last ${s.radioBufferMin} min are kept for saving (longer while a song is being saved); a lost connection back within ${s.radioBufferMin} min keeps the recording",
                         color = C.muted, fontSize = 13.sp)
@@ -287,16 +308,16 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 ToggleRow("Auto-rotate", "On: the app turns with the phone · Off: stays upright (videos still turn with the rotate button)", s.autoRotate) { set(s.copy(autoRotate = it)) }
                 Divider()
                 // All long lists: the bar on the right; drag it (or touch the right edge) to jump anywhere fast.
-                Column(Modifier.explain("Scroll bar width").padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Column(Modifier.explain("Scroll bar width").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
                     Text("Scroll bar width", color = C.text, fontSize = 15.sp)
                     Text("All lists: drag the bar on the right edge to scroll fast", color = C.muted, fontSize = 13.sp)
-                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                         (4..9).forEach { px -> Pill("$px px", selected = s.scrollbarPx == px) { set(s.copy(scrollbarPx = px)) } }
                     }
                 }
             }
             CardBox {
-                Column(Modifier.explain("Button size").padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Column(Modifier.explain("Button size").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Button size", color = C.text, fontSize = 15.sp)
@@ -310,7 +331,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
             }
             CardBox {
-                Column(Modifier.explain("Songs list horizontal autoscroll").padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Column(Modifier.explain("Songs list horizontal autoscroll").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("Songs list horizontal autoscroll", color = C.text, fontSize = 15.sp)
@@ -324,7 +345,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
             }
             CardBox {
-                Row(Modifier.explain("Up next songs on the player").padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.explain("Up next songs on the player").padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Up next songs on the player", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                     Pill("−") { set(s.copy(upNextCount = (s.upNextCount - 1).coerceAtLeast(0))) }
                     Text("${s.upNextCount}", color = accent(), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
@@ -333,7 +354,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
             }
             CardBox {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Pop-up opacity", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Pop-up opacity"))
                         Text("${s.popupOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)
@@ -345,7 +366,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     var floatHelp by remember { mutableStateOf(false) }
                     if (floatHelp) HelperDialog("Floating play / pause button", SettingHelp.text("Floating play / pause button", "")) { floatHelp = false }
                     Text("Floating play / pause button", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp).explain("Floating play / pause button"))
-                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                         listOf("always" to "Always", "scroll" to "When the buttons scroll away", "off" to "Off").forEach { (m, l) ->
                             Pill(l, selected = s.floatBtnMode == m) {
                                 set(s.copy(floatBtnMode = m))
@@ -377,22 +398,29 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     ThinSlider(s.alarmRowPct.toFloat(), { v -> set(s.copy(alarmRowPct = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f,
                         onHoldStill = { if (helpersOn) lookHelp = "Alarm rows under the clock" })
                     // Order of the player rows, songs and radio apart.
-                    var rowsRadio by remember { mutableStateOf(false) }
+                    // Songs / Radio / Both ("Both": one order for the rows the two players share).
+                    var rowsMode by remember { mutableStateOf("song") }
                     Text("Order of the player rows", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp).explain("Order of the player rows"))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Pill("Songs", selected = !rowsRadio, filled = !rowsRadio) { rowsRadio = false }
-                        Pill("Radio", selected = rowsRadio, filled = rowsRadio) { rowsRadio = true }
+                    Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
+                        listOf("song" to "Songs", "radio" to "Radio", "both" to "Both").forEach { (m, l) -> Pill(l, selected = rowsMode == m, filled = rowsMode == m) { rowsMode = m } }
                     }
-                    val rowOrd = playerRowOrder(s, rowsRadio)
-                    fun saveRows(l: List<String>) { set(if (rowsRadio) s.copy(rowOrderRadio = l) else s.copy(rowOrderSong = l)); if (helpersOn) lookHelp = "Order of the player rows" }
+                    val rowOrd = playerRowOrder(s, rowsMode == "radio")
+                    fun saveRows(l: List<String>) {
+                        set(when (rowsMode) {
+                            "radio" -> s.copy(rowOrderRadio = l)
+                            "both" -> s.copy(rowOrderSong = l, rowOrderRadio = l.filter { it in PLAYER_RADIO_ROWS })
+                            else -> s.copy(rowOrderSong = l)
+                        })
+                        if (helpersOn) lookHelp = "Order of the player rows"
+                    }
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF))) {
                         rowOrd.forEachIndexed { i, id ->
                             Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(PLAYER_ROW_NAMES[id] ?: id, color = C.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                                Text(PLAYER_ROW_NAMES[id] ?: id, color = C.text, fontSize = 14.sp, maxLines = 1, modifier = Modifier.weight(1f))
                                 STextButton({ if (i > 0) saveRows(rowOrd.toMutableList().also { java.util.Collections.swap(it, i, i - 1) }) }, enabled = i > 0) {
-                                    Text("▲", fontSize = 16.sp, color = if (i > 0) WIZ_GREEN else C.muted) }
+                                    Text("▲", fontSize = SYM, color = if (i > 0) WIZ_GREEN else SYM_OFF) }
                                 STextButton({ if (i < rowOrd.lastIndex) saveRows(rowOrd.toMutableList().also { java.util.Collections.swap(it, i, i + 1) }) }, enabled = i < rowOrd.lastIndex) {
-                                    Text("▼", fontSize = 16.sp, color = if (i < rowOrd.lastIndex) WIZ_GREEN else C.muted) }
+                                    Text("▼", fontSize = SYM, color = if (i < rowOrd.lastIndex) WIZ_GREEN else SYM_OFF) }
                             }
                         }
                     }
@@ -405,30 +433,31 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     ThinSlider(s.playerGap.toFloat(), { v -> set(s.copy(playerGap = Math.round(v).coerceIn(0, 16))) }, valueRange = 0f..16f, steps = 15,
                         onHoldStill = { if (helpersOn) lookHelp = "Player rows spacing" })
-                    // Upright player: the clock / album picture hide while scrolling (on), or not (off: clock pinned).
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
-                        Text("Hide the clock while scrolling", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Hide the clock while scrolling"))
-                        AppSwitch(s.clockAutoHide, { set(s.copy(clockAutoHide = it)); if (helpersOn) lookHelp = "Hide the clock while scrolling" })
+                    // Upright player: the clock / album picture hide while scrolling (on) or not (off: clock pinned), and for how long.
+                    // Clock / Picture / Both ("Both": one switch and one time for the two).
+                    var hideMode by remember { mutableStateOf("clock") }
+                    Text("Hiding while scrolling", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp).explain("Hide the clock while scrolling"))
+                    Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
+                        listOf("clock" to "Clock", "cover" to "Picture", "both" to "Both").forEach { (m, l) -> Pill(l, selected = hideMode == m, filled = hideMode == m) { hideMode = m } }
+                    }
+                    val hideOn = when (hideMode) { "clock" -> s.clockAutoHide; "cover" -> s.coverAutoHide; else -> s.clockAutoHide && s.coverAutoHide }
+                    val hideSecV = when (hideMode) { "cover" -> s.coverHideSec; else -> s.clockHideSec }
+                    val hideLabel = when (hideMode) { "clock" -> "Hide the clock while scrolling"; "cover" -> "Hide the album picture while scrolling"; else -> "Hide the clock and picture while scrolling" }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(hideLabel, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain(if (hideMode == "cover") "Hide the album picture while scrolling" else "Hide the clock while scrolling"))
+                        AppSwitch(hideOn, { v ->
+                            set(when (hideMode) { "clock" -> s.copy(clockAutoHide = v); "cover" -> s.copy(coverAutoHide = v); else -> s.copy(clockAutoHide = v, coverAutoHide = v) })
+                            if (helpersOn) lookHelp = if (hideMode == "cover") "Hide the album picture while scrolling" else "Hide the clock while scrolling" })
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Hide the album picture while scrolling", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Hide the album picture while scrolling"))
-                        AppSwitch(s.coverAutoHide, { set(s.copy(coverAutoHide = it)); if (helpersOn) lookHelp = "Hide the album picture while scrolling" })
+                        val tl = when (hideMode) { "clock" -> "Clock hidden for"; "cover" -> "Cover hidden for"; else -> "Clock and picture hidden for" }
+                        Text(tl, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain(if (hideMode == "cover") "Cover hidden for" else "Clock hidden for"))
+                        Text("$hideSecV s", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(when (hideMode) { "clock" -> s.copy(clockHideSec = 10); "cover" -> s.copy(coverHideSec = 10); else -> s.copy(clockHideSec = 10, coverHideSec = 10) }) }) { Text("Reset") }
                     }
-                    // Upright player: how long the clock stays hidden after the last action.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Clock hidden for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Clock hidden for"))
-                        Text("${s.clockHideSec} s", color = accent(), fontWeight = FontWeight.SemiBold)
-                        STextButton({ set(s.copy(clockHideSec = 10)) }) { Text("Reset") }
-                    }
-                    ThinSlider(s.clockHideSec.toFloat(), { v -> set(s.copy(clockHideSec = Math.round(v).coerceIn(3, 60))) }, valueRange = 3f..60f,
-                        onHoldStill = { if (helpersOn) lookHelp = "Clock hidden for" })
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Cover hidden for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Cover hidden for"))
-                        Text("${s.coverHideSec} s", color = accent(), fontWeight = FontWeight.SemiBold)
-                        STextButton({ set(s.copy(coverHideSec = 10)) }) { Text("Reset") }
-                    }
-                    ThinSlider(s.coverHideSec.toFloat(), { v -> set(s.copy(coverHideSec = Math.round(v).coerceIn(3, 60))) }, valueRange = 3f..60f,
-                        onHoldStill = { if (helpersOn) lookHelp = "Cover hidden for" })
+                    ThinSlider(hideSecV.toFloat(), { v -> val n = Math.round(v).coerceIn(3, 60)
+                        set(when (hideMode) { "clock" -> s.copy(clockHideSec = n); "cover" -> s.copy(coverHideSec = n); else -> s.copy(clockHideSec = n, coverHideSec = n) }) },
+                        valueRange = 3f..60f, onHoldStill = { if (helpersOn) lookHelp = if (hideMode == "cover") "Cover hidden for" else "Clock hidden for" })
                     // Short, self-closing pop-ups: how long they stay.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Short pop-ups stay for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Short pop-ups stay for"))
@@ -440,15 +469,17 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     // Switch colours: only the current colour and a colour creation button for each.
                     var swEdit by remember { mutableStateOf("") }
                     val accArgb = accent().toArgb().toLong() and 0xFFFFFFFFL
-                    listOf("on" to "Switch colour · on", "off" to "Switch colour · off").forEach { (which, label) ->
-                        val cur = if (which == "on") (if (s.switchOn != 0L) s.switchOn else accArgb) else s.switchOff
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
-                            Text(label, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain(label))
-                            Box(Modifier.size(22.dp).clip(CircleShape).background(Color(cur)))
-                            Text("+ Create", color = WIZ_GREEN, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.padding(start = 10.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, WIZ_GREEN, RoundedCornerShape(10.dp))
-                                    .clickable { swEdit = which }.padding(horizontal = 10.dp, vertical = 4.dp))
-                        }
+                    // On / Off / Both ("Both": the same colour for the two positions).
+                    var swMode by remember { mutableStateOf("on") }
+                    Text("Switch colour", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp).explain("Switch colour"))
+                    Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
+                        listOf("on" to "On", "off" to "Off", "both" to "Both").forEach { (m, l) -> Pill(l, selected = swMode == m, filled = swMode == m) { swMode = m } }
+                        Box(Modifier.weight(1f))
+                        val cur = if (swMode == "off") s.switchOff else (if (s.switchOn != 0L) s.switchOn else accArgb)
+                        Box(Modifier.size(22.dp).clip(CircleShape).background(Color(cur)))
+                        Text("+ Create", color = WIZ_GREEN, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 10.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, WIZ_GREEN, RoundedCornerShape(10.dp))
+                                .clickable { swEdit = swMode }.padding(horizontal = 10.dp, vertical = (4 * sg()).dp))
                     }
                     // Floating play / pause: its own colour.
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 6.dp)) {
@@ -456,13 +487,13 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         Box(Modifier.size(22.dp).clip(CircleShape).background(Color(if (s.floatBtnColor != 0L) s.floatBtnColor else accArgb)))
                         Text("+ Create", color = WIZ_GREEN, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                             modifier = Modifier.padding(start = 10.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, WIZ_GREEN, RoundedCornerShape(10.dp))
-                                .clickable { swEdit = "float" }.padding(horizontal = 10.dp, vertical = 4.dp))
+                                .clickable { swEdit = "float" }.padding(horizontal = 10.dp, vertical = (4 * sg()).dp))
                     }
                     if (swEdit.isNotEmpty()) ColorPickDialog(when (swEdit) { "on" -> if (s.switchOn != 0L) s.switchOn else accArgb
                         "float" -> if (s.floatBtnColor != 0L) s.floatBtnColor else accArgb; else -> s.switchOff },
                         onDismiss = { swEdit = "" }) { c ->
-                        set(when (swEdit) { "on" -> s.copy(switchOn = c); "float" -> s.copy(floatBtnColor = c); else -> s.copy(switchOff = c) })
-                        val l = when (swEdit) { "on" -> "Switch colour · on"; "float" -> "Floating button colour"; else -> "Switch colour · off" }
+                        set(when (swEdit) { "on" -> s.copy(switchOn = c); "float" -> s.copy(floatBtnColor = c); "both" -> s.copy(switchOn = c, switchOff = c); else -> s.copy(switchOff = c) })
+                        val l = when (swEdit) { "float" -> "Floating button colour"; else -> "Switch colour" }
                         swEdit = ""; if (helpersOn) lookHelp = l
                     }
                     if (lookHelp.isNotEmpty()) HelperDialog(lookHelp, SettingHelp.text(lookHelp, ""), extra = {
@@ -483,7 +514,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                 .background(Color(0xFF16181C)).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(s.playerGap.dp)) {
                                 Text("Song title", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                                Box(Modifier.clip(RoundedCornerShape(10.dp)).background(accent()).padding(horizontal = 10.dp, vertical = 2.dp)) {
+                                Box(Modifier.clip(RoundedCornerShape(10.dp)).background(accent()).padding(horizontal = 10.dp, vertical = (2 * sg()).dp)) {
                                     Text("NAS active", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                                 Text("Track 7 · RG track −10.79 dB", color = accent(), fontSize = 11.sp)
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -492,10 +523,10 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                 Row(Modifier.fillMaxWidth()) { Text("1:50", color = C.muted, fontSize = 10.sp); Box(Modifier.weight(1f)); Text("-1:29", color = C.muted, fontSize = 10.sp) }
                                 Text("⏮   ▶   ⏭", color = C.text, fontSize = 16.sp)
                             }
-                            lookHelp.startsWith("Order of the player rows") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            lookHelp.startsWith("Order of the player rows") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy((12 * sg()).dp)) {
                                 listOf(false to "Songs", true to "Radio").forEach { (r, t) ->
                                     Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF16181C)).padding(6.dp),
-                                        verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                        verticalArrangement = Arrangement.spacedBy((3 * sg()).dp)) {
                                         Text(t, color = C.muted, fontSize = 11.sp)
                                         playerRowOrder(s, r).forEach { id ->
                                             val h = when (id) { "picture" -> 34; "upnext" -> 22; "title" -> 16; else -> 10 }
@@ -507,11 +538,11 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                     }
                                 }
                             }
-                            lookHelp.startsWith("Floating button colour") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp),
+                            lookHelp.startsWith("Floating button colour") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy((18 * sg()).dp),
                                 verticalAlignment = Alignment.CenterVertically) {
                                 FloatingButtonSample(s.floatBtnColor, playing = true); FloatingButtonSample(s.floatBtnColor, playing = false)
                             }
-                            lookHelp.startsWith("Switch colour") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(18.dp),
+                            lookHelp.startsWith("Switch colour") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy((18 * sg()).dp),
                                 verticalAlignment = Alignment.CenterVertically) {
                                 AppSwitch(true, {}); AppSwitch(false, {})
                                 WideSwitch(true) {}; WideSwitch(false) {}
@@ -541,7 +572,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         Text("${s.menuGap} dp", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(menuGap = 6)) }) { Text("Reset") }
                     }
-                    Column(Modifier.padding(vertical = 4.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF14171C).copy(alpha = s.menuOpacity / 100f))) {
+                    Column(Modifier.padding(vertical = (4 * sg()).dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF14171C).copy(alpha = s.menuOpacity / 100f))) {
                         listOf("Play now", "Add to queue", "Go to folder").forEach { t ->
                             Text(t, color = C.text, fontSize = UiPrefs.spOf(s.menuFont).sp, lineHeight = (UiPrefs.spOf(s.menuFont) + 4).sp,
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = s.menuGap.dp))
@@ -549,7 +580,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     ThinSlider(s.menuGap.toFloat(), { v -> set(s.copy(menuGap = Math.round(v).coerceIn(0, 16))) }, valueRange = 0f..16f, steps = 15)
                     Text("Menu text", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Menu text"))
-                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
                         listOf("small" to "Small", "medium" to "Medium", "large" to "Large", "xlarge" to "Extra large").forEach { (k, l) ->
                             Pill(l, selected = s.menuFont == k, filled = s.menuFont == k) { set(s.copy(menuFont = k)) }
                         }
@@ -557,17 +588,18 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
             }
             // Separate colours for local / LAN files and for radio: choose which one the circles below set.
-            var forRadio by remember { mutableStateOf(false) }
+            // Files / Radio / Both ("Both": the same colour for files and radio).
+            var accMode by remember { mutableStateOf("files") }
+            val forRadio = accMode == "radio"
             val cur = if (forRadio) (s.radioAccent.takeIf { it != 0L } ?: s.accent) else s.accent
-            fun pick(c: Long) = set(if (forRadio) s.copy(radioAccent = c) else s.copy(accent = c))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            fun pick(c: Long) = set(when (accMode) { "radio" -> s.copy(radioAccent = c); "both" -> s.copy(accent = c, radioAccent = c); else -> s.copy(accent = c) })
+            Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Colour for", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Colour for"))
-                Pill("Files", selected = !forRadio, filled = !forRadio) { forRadio = false }
-                Pill("Radio", selected = forRadio, filled = forRadio) { forRadio = true }
+                listOf("files" to "Files", "radio" to "Radio", "both" to "Both").forEach { (m, l) -> Pill(l, selected = accMode == m, filled = accMode == m) { accMode = m } }
             }
             // Custom colours: up to 5 slots; tap uses one, long-press edits it. "+" adds while a slot is free.
             var editSlot by remember { mutableStateOf(-1) }      // -1 closed, 0..2 edit that slot, 3 new
-            Row(Modifier.padding(vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(vertical = (6 * sg()).dp), horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                 listOf(0xFFFF8A3D).forEach { c ->
                     Box(Modifier.size(34.dp).clip(CircleShape).background(Color(c))
                         .border(if (cur == c) 3.dp else 0.dp, Color.White, CircleShape).clickable { pick(c) })
@@ -595,8 +627,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     editSlot = -1
                     val list = s.customAccents.toMutableList()
                     when {
-                        existing -> { list[slot] = c; set(s.copy(customAccents = list, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio) c else s.radioAccent)) }
-                        list.size < 5 -> { list += c; set(s.copy(customAccents = list, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio) c else s.radioAccent)) }
+                        existing -> { list[slot] = c; set(s.copy(customAccents = list, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio || accMode == "both") c else s.radioAccent)) }
+                        list.size < 5 -> { list += c; set(s.copy(customAccents = list, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio || accMode == "both") c else s.radioAccent)) }
                         else -> replacing = c
                     }
                 }
@@ -606,17 +638,17 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 AlertDialog(onDismissRequest = { replacing = null }, containerColor = C.panel,
                     title = { Text("Overwrite which?", color = C.text) },
                     text = {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy((12 * sg()).dp)) {
                         Box(Modifier.size(40.dp).clip(CircleShape).background(Color(c)))
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Row(horizontalArrangement = Arrangement.spacedBy((10 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                             s.customAccents.forEachIndexed { i, old ->
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
                                     Box(Modifier.size(34.dp).clip(CircleShape).background(Color(old)).border(2.dp, Color.White, CircleShape).clickable {
                                         replacing = null
-                                        set(s.copy(customAccents = s.customAccents.toMutableList().also { it[i] = c }, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio) c else s.radioAccent))
+                                        set(s.copy(customAccents = s.customAccents.toMutableList().also { it[i] = c }, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio || accMode == "both") c else s.radioAccent))
                                     })
                                     Text("Drop", color = C.bad, fontSize = 12.sp, modifier = Modifier.clickable {
-                                        set(s.copy(customAccents = s.customAccents.filterIndexed { k, _ -> k != i } + c, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio) c else s.radioAccent)); replacing = null
+                                        set(s.copy(customAccents = s.customAccents.filterIndexed { k, _ -> k != i } + c, accent = if (forRadio) s.accent else c, radioAccent = if (forRadio || accMode == "both") c else s.radioAccent)); replacing = null
                                     })
                                 }
                             }
@@ -631,10 +663,10 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 val order = orderedGroups(s.settingsOrder).map { it.first }
                 order.forEachIndexed { i, gid ->
                     if (i > 0) Divider()
-                    Row(Modifier.fillMaxWidth().explain("Order of the Settings links").padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().explain("Order of the Settings links").padding(horizontal = 16.dp, vertical = (4 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(SETTINGS_GROUPS.toMap()[gid] ?: gid, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                        STextButton({ if (i > 0) set(s.copy(settingsOrder = order.toMutableList().also { java.util.Collections.swap(it, i, i - 1) })) }, enabled = i > 0) { Text("▲", fontSize = 16.sp) }
-                        STextButton({ if (i < order.lastIndex) set(s.copy(settingsOrder = order.toMutableList().also { java.util.Collections.swap(it, i, i + 1) })) }, enabled = i < order.lastIndex) { Text("▼", fontSize = 16.sp) }
+                        STextButton({ if (i > 0) set(s.copy(settingsOrder = order.toMutableList().also { java.util.Collections.swap(it, i, i - 1) })) }, enabled = i > 0) { Text("▲", fontSize = SYM, color = if (i > 0) WIZ_GREEN else SYM_OFF) }
+                        STextButton({ if (i < order.lastIndex) set(s.copy(settingsOrder = order.toMutableList().also { java.util.Collections.swap(it, i, i + 1) })) }, enabled = i < order.lastIndex) { Text("▼", fontSize = SYM, color = if (i < order.lastIndex) WIZ_GREEN else SYM_OFF) }
                     }
                 }
                 Divider()
@@ -664,7 +696,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             }
             // Deleting a file for good: only here (not in the lists' menus), with a search like the Songs list / player.
             CardBox {
-                Row(Modifier.fillMaxWidth().clickable { deleteFile = true }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clickable { deleteFile = true }.padding(horizontal = 16.dp, vertical = (14 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("Delete a file or folder…", color = C.bad, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                         Text("Search for a song or a folder and delete it from the phone or the NAS for good (folders: full content shown first)", color = C.bad.copy(alpha = 0.8f), fontSize = 13.sp)
@@ -684,7 +716,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 Divider()
                 // Song links: Spotify's own search with a free developer app (no Spotify login). Without it the
                 // links are found through MusicBrainz and a web search.
-                Column(Modifier.explain("Spotify links").padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.explain("Spotify links").padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                     Text("Spotify links", color = C.text, fontSize = 15.sp)
                     val on = s.spotifyId.isNotBlank() && s.spotifySecret.isNotBlank()
                     Text(if (on) "On: song links include Spotify" else "Off: no Spotify anywhere until both keys are set", color = if (on) accent() else C.muted, fontSize = 12.sp)
@@ -703,7 +735,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     if (help) AlertDialog(onDismissRequest = { help = false }, containerColor = C.panel,
                         title = { Text("Spotify keys", color = C.text) },
                         text = {
-                            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
                                 Text("Free, a few minutes, any Spotify account (free accounts too). Best done on a computer.", color = C.text, fontSize = 14.sp)
                                 listOf(
                                     "Open developer.spotify.com and log in with your Spotify account.",
@@ -742,7 +774,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 Divider()
                 ToggleRow("Ask to start the VPN", "Away from home with the VPN off, when the phone isn't on the subnet of any address stored for a home server", s.vpnAskStart) { set(s.copy(vpnAskStart = it)) }
                 if (s.vpnAskStart) {
-                    Column(Modifier.explain("Ask to start the VPN").padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    Column(Modifier.explain("Ask to start the VPN").padding(horizontal = 16.dp, vertical = (6 * sg()).dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("“Retry in” delay (time to start the VPN)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
                             Text("${s.vpnRetrySec} s", color = accent(), fontWeight = FontWeight.SemiBold)
@@ -757,7 +789,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     val o = listOf("auto", "zerotier", "tailscale", "settings"); set(s.copy(vpnApp = o[(o.indexOf(s.vpnApp) + 1).mod(o.size)]))
                 }
                 Divider()
-                Column(Modifier.explain("Home servers on the VPN").padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.explain("Home servers on the VPN").padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                     Text("Home servers on the VPN", color = C.text, fontSize = 15.sp)
                     if (busy.isNotEmpty()) Text(busy, color = accent(), fontSize = 12.sp)
                     else {
@@ -844,7 +876,7 @@ private fun CatRow(label: String, count: String, checked: Boolean, enabled: Bool
     val col = if (enabled) C.text else C.muted.copy(alpha = 0.55f)
     Row(Modifier.fillMaxWidth().combinedClickable(enabled = enabled, onClick = { onChange(!checked) }, onLongClick = { ex(label, "") })
         .padding(start = if (bold) 12.dp else 26.dp, end = 12.dp, top = 9.dp, bottom = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(if (checked) "☑" else "☐", color = if (!enabled) col else if (checked) a else C.muted, fontSize = 18.sp)
+        Text(if (checked) "☑" else "☐", color = if (!enabled) SYM_OFF else if (checked) a else C.text, fontSize = SYM)
         Text(label, color = col, fontSize = 14.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
             modifier = Modifier.weight(1f).padding(start = 10.dp))
         if (count.isNotEmpty()) Text(count, color = C.muted, fontSize = 13.sp)
@@ -894,7 +926,7 @@ fun BackupScreen(nav: Navigator) {
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
         BackHeader("Export & import", nav)
-        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((12 * sg()).dp)) {
             SButton({
                 val name = "vlc-interface-setup_" + SimpleDateFormat("yyyyMMdd-HHmm", Locale.US).format(Date()) + ".json"
                 exporter.launch(name)
@@ -916,7 +948,7 @@ fun BackupScreen(nav: Navigator) {
             }
             SOutlinedButton({ importer.launch(arrayOf("application/json", "*/*")) }, Modifier.fillMaxWidth().height(56.dp)) { Text("Import setup…", fontSize = 16.sp) }
             SectionTitle("On import")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
                 Pill("Merge · add new, keep mine", selected = !replace) { replace = false }
                 Pill("Replace chosen parts", selected = replace) { replace = true }
             }
@@ -933,7 +965,7 @@ fun BackupScreen(nav: Navigator) {
         title = { Text("Import setup?") },
         text = {
             val sc = rememberScrollState()
-            Column(Modifier.verticalScroll(sc), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(Modifier.verticalScroll(sc), verticalArrangement = Arrangement.spacedBy((2 * sg()).dp)) {
                 Text("Mode: ${if (replace) "replace the chosen parts" else "merge (keep mine, add new)"}. In the file:", fontSize = 13.sp)
                 ExportCat.LIST.filter { it.first in pv.cats }.forEach { (id, label) ->
                     CatRow(label, "", id in importCats, true) { on -> importCats = if (on) importCats + id else importCats - id }
@@ -960,11 +992,11 @@ fun DeviceSoundList() {
     val st by store.state.collectAsState()
     val devices by App.instance.output.devices.collectAsState()
     val names = (devices.filter { it.connected }.map { it.name } + st.devicePreamp.keys + st.deviceBalance.keys).distinct()
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
         Text("Per output device", color = C.text, fontSize = 15.sp)
         val na = app.vlcinterface.player.NativeAudio
         Text("Sound engine", color = C.text, fontSize = 15.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
             listOf("app" to "App output", "libvlc" to "libVLC output").forEach { (k, l) ->
                 val inUse = if (k == "app") na.active else !na.active
                 Pill(l, selected = st.settings.soundEngine == k && inUse) {
@@ -1005,7 +1037,7 @@ fun DeviceSoundControls(name: String) {
     val st by store.state.collectAsState()
     val pre = st.devicePreamp[name] ?: 0f
     val bal = st.deviceBalance[name] ?: 0
-    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+    Column(Modifier.fillMaxWidth().padding(vertical = (4 * sg()).dp)) {
         Text(name, color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Preamp", color = C.muted, fontSize = 13.sp, modifier = Modifier.width(64.dp))
@@ -1046,7 +1078,7 @@ fun DeviceSoundControls(name: String) {
 fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
     SectionTitle("Sound")
     CardBox {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Start volume", color = C.text, fontSize = 15.sp)
@@ -1065,18 +1097,19 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
                 STextButton({ set(s.copy(preampDb = 0f)); App.instance.player.applySoundChain() }) { Text("Reset") }
             }
             ThinSlider(s.preampDb, { v -> set(s.copy(preampDb = Math.round(v * 2) / 2f)); App.instance.player.applySoundChain() }, valueRange = -12f..12f)
-            Divider()
-            // All three player sliders on / off: off takes them off the players and stops their processing.
-            ToggleRow("Loudness, Treble and Preamp sliders", "On the audio and radio players", s.toneSliders) { on ->
-                set(s.copy(toneSliders = on)); App.instance.player.applySoundChain()
-            }
+        }
+        Divider()
+        // All three player sliders on / off: off takes them off the players and stops their processing.
+        // (Outside the padded block: same left margin as every other row.)
+        ToggleRow("Loudness, Treble and Preamp sliders", "On the audio and radio players", s.toneSliders) { on ->
+            set(s.copy(toneSliders = on)); App.instance.player.applySoundChain()
         }
         Divider()
         DeviceSoundList()
         Divider()
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             Text("ReplayGain (tagged music only)", color = C.text, fontSize = 15.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                 listOf("off" to "Off", "track" to "Track", "album" to "Album", "auto" to "Auto").forEach { (k, l) ->
                     Pill(l, selected = s.rgMode == k) { set(s.copy(rgMode = k)) }
                 }
@@ -1100,7 +1133,7 @@ fun SoundSettingsScreen(nav: Navigator) {
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
         BackHeader("Sound settings", nav)
-        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             SoundSettings(st.settings) { n -> store.update { it.copy(settings = n) } }
             Box(Modifier.height(16.dp))
         }
@@ -1119,7 +1152,7 @@ fun ColorPickDialog(start: Long, onDismiss: () -> Unit, onRemove: (() -> Unit)? 
     AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
         title = { Text("Custom colour", color = C.text) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
                 Box(Modifier.fillMaxWidth().height(48.dp).clip(RoundedCornerShape(12.dp)).background(Color(argb)))
                 Text("Hue", color = C.muted, fontSize = 13.sp)
                 ThinSlider(h, { h = it }, valueRange = 0f..360f)
@@ -1167,7 +1200,7 @@ fun OpacityPreview(alpha: Float, label: String, fontSp: Int) {
             .background(Color(0xFF14171C).copy(alpha = alpha)).padding(if (menu) 6.dp else 16.dp),
             verticalArrangement = Arrangement.spacedBy(if (menu) 2.dp else 6.dp)) {
             if (menu) listOf("▶  Play", "Play next", "Add to playlist…").forEach {
-                Text(it, color = C.text, fontSize = fontSp.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp))
+                Text(it, color = C.text, fontSize = fontSp.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = (8 * sg()).dp))
             } else {
                 Text(label, color = C.text, fontSize = 20.sp)
                 Text("Text inside a window", color = C.muted, fontSize = 14.sp)

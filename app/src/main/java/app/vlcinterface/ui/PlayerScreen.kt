@@ -432,6 +432,8 @@ private fun BoxScope.ControlsOverlayBody(
         SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
         // Video player → Video settings.
         SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
+        // The other two players (each resumes what it last played).
+        PlayerSwitchButtons(nav, "video", Color.White)
         ShazamButton(Color.White)
         BackgroundWorkButton()
         ScreenOnSign(Color.White)

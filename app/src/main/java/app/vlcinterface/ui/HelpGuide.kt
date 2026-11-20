@@ -168,7 +168,7 @@ fun HelpScreen(nav: Navigator, start: String) {
                     Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).clickable { g.open(c.id) }.padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically) {
                         Text("${i + 1}. ${c.title}", color = C.text, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                        Text("▶", color = accent(), fontSize = 18.sp)
+                        Text("▶", color = accent(), fontSize = SYM)
                     }
                 }
             } else {

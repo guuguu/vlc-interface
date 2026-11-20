@@ -226,6 +226,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             SymButton({ nav.go(Screen.SettingsGroup(if (item.isRadio) "radio" else "audio")) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.text) }
             // Jump to a song: search the queue and the Library; plays it (added after the current song if new).
             SymButton({ jump = true }) { SymIcon(Icons.Filled.Search, "Jump to song", tint = C.text) }
+            // The other two players (each resumes what it last played).
+            PlayerSwitchButtons(nav, if (item.isRadio) "radio" else "songs")
         }) { ShazamButton(); BackgroundWorkButton(); ScreenOnSign(C.text); OutputPill(openOutput); ExitButton() }
         SaveSongBar()
         if (jump) JumpDialog(nav = nav) { jump = false }
@@ -2079,9 +2081,9 @@ fun Modifier.keepWhenHidden(hidden: Boolean): Modifier = this.layout { m, c ->
 val PLAYER_SONG_ROWS = listOf("picture", "title", "position", "buttons", "tone", "from", "playnext", "extra", "upnext")
 val PLAYER_RADIO_ROWS = listOf("picture", "title", "buttons", "tone", "from", "extra", "upnext")
 val PLAYER_LEFT_ROWS = setOf("picture", "title")
-val PLAYER_ROW_NAMES = mapOf("picture" to "Picture / clock with alarms", "title" to "Title block", "position" to "Position bar",
-    "buttons" to "Player buttons", "tone" to "Tone sliders", "from" to "Playing from", "playnext" to "Play next…",
-    "extra" to "Extra buttons (random, repeat, RGain, sleep)", "upnext" to "Up next / favourites and search")
+val PLAYER_ROW_NAMES = mapOf("picture" to "Picture / clock", "title" to "Title", "position" to "Position bar",
+    "buttons" to "Buttons", "tone" to "Tone sliders", "from" to "Playing from", "playnext" to "Play next…",
+    "extra" to "Extra buttons", "upnext" to "Up next / stations")
 
 fun playerRowOrder(s: app.vlcinterface.data.Settings, radio: Boolean): List<String> {
     val def = if (radio) PLAYER_RADIO_ROWS else PLAYER_SONG_ROWS

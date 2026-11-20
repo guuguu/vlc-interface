@@ -262,7 +262,7 @@ fun SearchSteps(count: Int, at: Int, prev: () -> Unit, next: () -> Unit, clear: 
 
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(text.uppercase(), modifier = modifier.padding(top = 6.dp, bottom = 4.dp), color = C.muted,
+    Text(text.uppercase(), modifier = modifier.padding(top = (6 * sg()).dp, bottom = (4 * sg()).dp), color = C.muted,
         fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
 }
 
@@ -325,8 +325,8 @@ private fun PillBody(text: String, selected: Boolean, modifier: Modifier, filled
 fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boolean) -> Unit) {
     val ex = LocalExplain.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).combinedClickable(onClick = { onChange(!checked) }, onLongClick = { ex(label, hint) })
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().heightIn(min = (48 * sg()).dp).combinedClickable(onClick = { onChange(!checked) }, onLongClick = { ex(label, hint) })
+            .padding(horizontal = 16.dp, vertical = (5 * sg()).dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -341,8 +341,8 @@ fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boo
 fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) {
     val ex = LocalExplain.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).combinedClickable(onClick = onClick, onLongClick = { ex(label, hint) })
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+        Modifier.fillMaxWidth().heightIn(min = (48 * sg()).dp).combinedClickable(onClick = onClick, onLongClick = { ex(label, hint) })
+            .padding(horizontal = 16.dp, vertical = (5 * sg()).dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
@@ -384,6 +384,15 @@ fun SettingsText(content: @Composable () -> Unit) {
     androidx.compose.runtime.CompositionLocalProvider(
         androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, d.fontScale * pct / 100f)) { content() }
 }
+
+// ---------------------------------------------------------------- symbols on the settings pages
+
+/** Settings pages' vertical spacing (main Settings page → "Vertical spacing"), 1 = 100 %. */
+fun sg(): Float = app.vlcinterface.App.instance.store.current.settings.settingsGapPct.coerceIn(40, 160) / 100f
+
+/** One size for every symbol / arrow on the settings pages; usable = bright, not usable = dimmer but still clear. */
+val SYM = 18.sp
+val SYM_OFF = Color(0xFF8A8F98)
 
 // ---------------------------------------------------------------- switches
 
@@ -538,7 +547,8 @@ fun ThinSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier 
             if (still == null) hold?.invoke()   // held 650 ms, no movement
         }
     }
-    androidx.compose.material3.Slider(value, onValueChange, modifier.then(holdMod), enabled = enabled, onValueChangeFinished = onValueChangeFinished, colors = colors, steps = steps,
+    // Less empty space around it (the touch row follows "Vertical spacing").
+    androidx.compose.material3.Slider(value, onValueChange, modifier.height((30 * sg()).dp).then(holdMod), enabled = enabled, onValueChangeFinished = onValueChangeFinished, colors = colors, steps = steps,
         thumb = { KnobThumb(a) },
         track = { st -> SliderDefaults.Track(sliderState = st, modifier = Modifier.height(3.dp), colors = colors, enabled = enabled,
             drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) },

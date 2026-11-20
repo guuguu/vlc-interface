@@ -39,7 +39,7 @@ fun MediaFoldersScreen(nav: Navigator) {
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
         BackHeader("Find media folders", nav)
-        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
             Text("Searches internal storage, the SD card, USB storage and Downloads for songs and videos. Only ticked folders are added; folders already in the Library stay as they are.",
                 color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
             MediaFoldersCard()
@@ -79,8 +79,8 @@ fun MediaFoldersCard() {
         if (added.isEmpty()) Text("None yet", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(14.dp))
         added.forEachIndexed { i, m ->
             if (i > 0) Divider()
-            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("✓", color = WIZ_GREEN, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = (9 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("✓", color = WIZ_GREEN, fontSize = SYM, fontWeight = FontWeight.Bold)
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     Text(m.label, color = C.text, fontSize = 14.sp)
                     Text(count(m), color = C.muted, fontSize = 12.sp)
@@ -94,9 +94,9 @@ fun MediaFoldersCard() {
             offered.forEachIndexed { i, m ->
                 if (i > 0) Divider()
                 val on = m.key in ticked
-                Row(Modifier.fillMaxWidth().clickable { ticked = if (on) ticked - m.key else ticked + m.key }.padding(horizontal = 14.dp, vertical = 9.dp),
+                Row(Modifier.fillMaxWidth().clickable { ticked = if (on) ticked - m.key else ticked + m.key }.padding(horizontal = 14.dp, vertical = (9 * sg()).dp),
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (on) "☑" else "☐", color = if (on) WIZ_GREEN else C.muted, fontSize = 20.sp)
+                    Text(if (on) "☑" else "☐", color = if (on) WIZ_GREEN else C.text, fontSize = SYM)
                     Column(Modifier.weight(1f).padding(start = 10.dp)) {
                         Text(m.label, color = C.text, fontSize = 14.sp)
                         Text(count(m), color = C.muted, fontSize = 12.sp)
@@ -104,14 +104,14 @@ fun MediaFoldersCard() {
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
             Box(Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(if (ticked.isEmpty()) C.line else accent())
                 .clickable(enabled = ticked.isNotEmpty()) {
                     val add = ticked
                     store.update { it.copy(settings = it.settings.copy(phoneFoldersSet = true, phoneFolders = (it.settings.phoneFolders + add).distinct())) }
                     note = "${add.size} folder${if (add.size == 1) "" else "s"} added to the Library."
                     reload++
-                }.padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                }.padding(vertical = (12 * sg()).dp), contentAlignment = Alignment.Center) {
                 Text("Add ticked", color = if (ticked.isEmpty()) C.muted else Color(0xFF1A0E05), fontSize = 15.sp, fontWeight = FontWeight.Bold)
             }
         }
