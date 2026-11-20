@@ -347,6 +347,9 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
     // (finer while frames are cheap, coarser if they get slow), up to 3× (≈ 216 × 384 cells).
     // scale, summed ms, frames, last draw (ms), locked (1 = settled: never grows again after having to shrink)
     val res = remember(v.effect) { floatArrayOf(1.6f, 0f, 0f, 0f, 0f) }
+    // Gone from the screen for good (cover found, clock switched on, another page): its picture memory is freed at once.
+    // (Its frame loop and the spectrum measuring stop with it.)
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { try { field[0]?.bmp?.recycle(); field[0] = null; plasma.recycle() } catch (_: Exception) {} } }
     // The analyser is measured only while a live spectrum picture is shown (saves battery otherwise).
     // Measured only while the screen is on and the app is in the foreground.
     if (live && v.effect in SPEC_FX) {

@@ -245,3 +245,6 @@
   picture, tempo, levels; nothing rebuilt); only the sound measured meanwhile is dropped so there's no jump to an old
   level. The slow first frames after waking up don't count toward the grid adjustment, and once the grid had to go
   coarser it stays settled — so patterns aren't restarted by resizing.
+- When the player shows a cover or the clock (22:59), the visualisation isn't running at all: it's removed — its
+  frame loop and the spectrum measuring stop and its picture memory is freed at once; it's started fresh only when
+  the visualisation is shown again in that place.
