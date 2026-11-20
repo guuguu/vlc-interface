@@ -2,6 +2,7 @@
 
 package app.vlcinterface.ui
 
+import kotlinx.coroutines.flow.first
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.offset
@@ -183,8 +184,20 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     LaunchedEffect(scroll, landscape, topAuto) {
         androidx.compose.runtime.snapshotFlow { scroll.value }.collect { v ->
             if (landscape || !topAuto || System.currentTimeMillis() < ignoreScrollUntil) return@collect
-            if (topHidden) { lastAct = System.currentTimeMillis(); return@collect }
-            if (topHpx > 0 && v >= topHpx + gapPx) {
+            if (topHidden) {
+                lastAct = System.currentTimeMillis()
+                if (v <= 0 && topHpx > 0) {
+                    // Scrolled back up to the top: put it back above, with the page kept where it is (pull down to see it).
+                    ignoreScrollUntil = Long.MAX_VALUE
+                    topHidden = false
+                    val want = topHpx + gapPx
+                    kotlinx.coroutines.withTimeoutOrNull(500) { androidx.compose.runtime.snapshotFlow { scroll.maxValue }.first { it >= want } }
+                    scroll.scrollTo(want)
+                    ignoreScrollUntil = System.currentTimeMillis() + 300
+                }
+                return@collect
+            }
+            if (topHpx > 0 && v > topHpx + gapPx) {
                 // Fully scrolled out: take it away and move the page by the same amount, so nothing on screen moves.
                 ignoreScrollUntil = Long.MAX_VALUE
                 topHidden = true
@@ -198,9 +211,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         topOverlay = false                                     // any action takes the layer away again
         if (!topHidden || !winFocused) return@LaunchedEffect   // a window is open: stays away; counts again once it's closed
         kotlinx.coroutines.delay((lastAct + topSec * 1000L - System.currentTimeMillis()).coerceAtLeast(0L))
-        // Back into view whatever the scroll position: at the top of the page → put back in place; scrolled down → as a layer
-        // over the top of the page, until your next action.
-        if (scroll.value <= 0) { ignoreScrollUntil = System.currentTimeMillis() + 300; topHidden = false } else topOverlay = true
+        // Back into view whatever the scroll position, without moving the page: as a layer over the top of the page,
+        // until your next action. (It's put back in the page itself once you scroll up to the top.)
+        topOverlay = true
     }
     LaunchedEffect(winFocused) { if (winFocused && topHidden) lastAct = System.currentTimeMillis() }
     Box(Modifier.fillMaxSize().background(PLAYER_BG).onGloballyPositioned { boxTop = it.boundsInRoot().top }.pointerInput(Unit) {
