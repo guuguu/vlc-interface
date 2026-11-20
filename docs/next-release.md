@@ -19,3 +19,5 @@
   - Where: the station directory's own coordinates when it has them; otherwise the server's address (its IP) looked up
     once with a free geolocation service (ipwho.is), kept so each server is asked only once.
   - 🌍 (Europe) by default: while it's being looked up and when nothing can be found — no plain 🌐 (requested 2026-11-20 18:14).
+- Globes drawn from real coastlines (shaded, light from the upper left), not emoji: Europe-centred (Africa pushed to
+  the bottom edge), Americas, Asia / Australia; shipped as small pictures in the app (shown 2026-11-20 18:15).
