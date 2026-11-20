@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.ui.unit.dp
@@ -164,7 +165,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     .nestedScroll(pullBack)
                     .pointerInput(top) {
                         var dx = 0f
-                        androidx.compose.foundation.gestures.detectHorizontalDragGestures(
+                        detectHorizontalDragGestures(
                             onDragStart = { dx = 0f },
                             onDragEnd = { if (dx > 120.dp.toPx()) SettingsNav.toParent(nav) },
                         ) { ch, d -> dx += d; ch.consume() }
