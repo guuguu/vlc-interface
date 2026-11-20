@@ -228,3 +228,6 @@
   the left half mirroring the right.
 - Radial: the centre is the bass colour (same as the bass bars at the top), solid and glowing brighter with the bass
   and the beat (22:53).
+- LED bars and light bars turned 90° (22:54): the origin is a vertical line in the middle; each band is a row growing
+  left and right from it, bass at the top and treble at the bottom; bar thickness sets the row height (thicker →
+  fewer rows).
