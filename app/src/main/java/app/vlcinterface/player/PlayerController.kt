@@ -300,6 +300,9 @@ class PlayerController(private val context: Context, private val store: Store) {
             // - pictures shown in full 32-bit colour (no 16-bit colour banding on skies / dark scenes) when frames
             //   go through the app's display path (software decoding, colour filters).
             "--android-display-chroma=RV32",
+            // - quality first: never skip decoding steps (frames, inverse transform) to save time.
+            "--avcodec-skip-frame=0",
+            "--avcodec-skip-idct=0",
             // A fixed Android audio session, so preamp + balance effects can be attached to it.
             "--audiotrack-session-id=$sessionId",
             // Fallback output (when our own output cannot attach): AudioTrack, so the session id above is used.
@@ -1632,7 +1635,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         // The filter treats only fields marked interlaced and needs frames it can touch (no direct rendering).
         deintOn = isVideo && (ps.videoDeinterlace == "on" || (ps.videoDeinterlace == "auto" && VideoAuto.deinterlace(item.uri)))
         if (deintOn) {
-            media.addOption(":deinterlace=-1"); media.addOption(":deinterlace-mode=yadif")
+            media.addOption(":deinterlace=-1"); media.addOption(":deinterlace-mode=yadif2x")   // full motion (every field), best quality
             media.addOption(":no-mediacodec-dr")
         } else if (isVideo) media.addOption(":deinterlace=0")
         // Hue/saturation need decoded frames the filter can touch: hardware decoding without direct rendering.

@@ -136,7 +136,7 @@ object SettingHelp {
         "Deinterlacing" to "Old TV recordings, DVDs and some camcorder videos are 'interlaced': moving things show thin comb-like lines.\n\n" +
             "Automatic: chosen for each video from its encoding — on for TV-style encodings (MPEG-2, DV, TV recordings .ts / .m2ts / .vob / .mpg " +
             "at TV sizes), off for the rest so they keep the fastest hardware path; learnt per file. On: every video (only fields marked interlaced " +
-            "are smoothed, yadif). Off: shown as they are.\n\n" +
+            "are smoothed, yadif 2×: full motion kept). Off: shown as they are.\n\n" +
             "It uses more battery while such a video plays. Changing it reopens the playing video at the same spot. Default: Automatic.",
         "Visualisation instead of album pictures" to "The song and / or radio player show the visualisation, always, in the place of the album picture or station logo — " +
             "with the patterns, colours and frequencies chosen on this page.\n\n" +

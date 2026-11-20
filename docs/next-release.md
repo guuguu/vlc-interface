@@ -125,3 +125,6 @@
   - What Automatic learns about a file is kept, so it opens the right way at once next time; a file is re-opened
     at most once per run (no loops).
   - Changing either reopens the playing video at the same spot.
+- Image quality first (requested 2026-11-20 21:34): the decoder never skips frames or decoding steps to save time;
+  the fast direct hardware path is kept whenever nothing needs the frames (no colour filter, no deinterlacing);
+  deinterlacing uses yadif 2× (every field shown: full, smooth motion instead of half).
