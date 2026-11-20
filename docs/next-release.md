@@ -237,3 +237,7 @@
   Mandelbrot, epicycles) are computed on a finer grid — starting at 1.6× the old one and adjusting itself to the
   phone (finer while frames are cheap, up to 3×; coarser only if drawing gets slow) — and enlarged with high-quality
   smoothing instead of the plain one. Spectrum / analyser pictures are drawn at the screen's full resolution.
+- Visualisations work only when they can be seen (22:57): nothing is computed while the screen is off or the app
+  isn't in the foreground (also another app / window on top), nor while the player's picture place is hidden or
+  scrolled out of view; the spectrum measuring in the sound engine is switched off at the same times. It all
+  resumes at once when the visualisation is visible again.

@@ -60,6 +60,9 @@ import app.vlcinterface.alarm.Alarms
 import app.vlcinterface.alarm.VisSettings
 import app.vlcinterface.player.NativeAudio
 import kotlin.math.abs
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.hypot
@@ -232,14 +235,21 @@ private fun beatStep(m: VisMotion, x: Float, clock: Float): Boolean {
  * Levels are normalised to the music (slow automatic gain) and smoothed with limited speed: no flashing.
  */
 @Composable
-private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
+private fun rememberVisMotion(v: VisSettings, live: Boolean, shown: () -> Boolean = { true }): VisMotion {
     val m = remember { VisMotion() }
     val vs by rememberUpdatedState(v)
+    val shownNow by rememberUpdatedState(shown)
+    val life = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(live) {
         val buf = FloatArray(2)
         var last = 0L
         var clock = 0f
+        // Works only while the screen is on and the app is in the foreground (resumed); stopped otherwise.
+        life.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
+        last = 0L
         while (true) {
+            // Not on screen (cover place hidden or scrolled away, zero size): nothing is computed, checked 4× a second.
+            if (!shownNow()) { kotlinx.coroutines.delay(250); last = 0L; continue }
             withFrameNanos { n ->
                 val dt = if (last == 0L) 0.016f else ((n - last) / 1e9f).coerceIn(0f, 0.1f)
                 last = n; clock += dt
@@ -304,6 +314,7 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
                 m.t = clock
             }
         }
+        }
     }
     return m
 }
@@ -318,7 +329,9 @@ fun VisArea(modifier: Modifier) {
 /** The visualisation itself (full screen or a preview). */
 @Composable
 private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
-    val m = rememberVisMotion(v, live)
+    // On screen with a real size? (the player's cover place can be hidden or scrolled out of view)
+    val shown = remember { booleanArrayOf(true) }
+    val m = rememberVisMotion(v, live) { shown[0] }
     val spots = visColours(v)
     val bg = visBackground(v)
     val plasma = remember { android.graphics.Bitmap.createBitmap(18, 32, android.graphics.Bitmap.Config.ARGB_8888) }
@@ -328,10 +341,20 @@ private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
     // (finer while frames are cheap, coarser if they get slow), up to 3× (≈ 216 × 384 cells).
     val res = remember(v.effect) { floatArrayOf(1.6f, 0f, 0f) }   // scale, summed ms, frames
     // The analyser is measured only while a live spectrum picture is shown (saves battery otherwise).
-    if (live && v.effect in SPEC_FX) androidx.compose.runtime.DisposableEffect(Unit) {
-        NativeAudio.spectrumOn(true); onDispose { NativeAudio.spectrumOn(false) }
+    // Measured only while the screen is on and the app is in the foreground.
+    if (live && v.effect in SPEC_FX) {
+        val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        androidx.compose.runtime.DisposableEffect(owner) {
+            var on = false
+            fun set(want: Boolean) { if (want != on) { on = want; NativeAudio.spectrumOn(want) } }
+            val obs = androidx.lifecycle.LifecycleEventObserver { _, _ -> set(owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
+            owner.lifecycle.addObserver(obs)
+            onDispose { owner.lifecycle.removeObserver(obs); set(false) }
+        }
     }
-    Canvas(modifier) {
+    Canvas(modifier.onGloballyPositioned { c ->
+        val b = c.boundsInWindow(); shown[0] = b.width > 1f && b.height > 1f
+    }) {
         val t = m.t
         val a = v.brightness.coerceIn(0.2f, 1f)
         if (v.effect in SPEC_FX) {
