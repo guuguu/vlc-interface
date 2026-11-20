@@ -38,3 +38,8 @@
   goes straight back to the player that was open (songs / radio or video); when no player was open, to the app's
   main page.
 - The home symbol stays as it is: it goes to the app's main page.
+
+## Weather symbol missing on the clock (reported 2026-11-20 20:49)
+- Since 1.48 (Now / At noon) the weather was fetched and kept, but the clock looked it up under the old name, so the
+  icon never appeared (city and time zone still showed). The clock now finds it again; changing Now / At noon
+  refreshes it at once.

@@ -89,10 +89,10 @@ fun ClockFace(a: ClockAspect, modifier: Modifier, now: Long = 0L) {
     val g = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global
     val w by app.vlcinterface.alarm.Weather.now.collectAsState()
     // Weather for the chosen city: checked every 10 min while the clock is shown (refreshed at most every 30 min).
-    LaunchedEffect(g.cityLat, g.cityLon, g.showWeather) { while (true) { app.vlcinterface.alarm.Weather.refresh(); delay(10 * 60_000L) } }
+    LaunchedEffect(g.cityLat, g.cityLon, g.showWeather, g.weatherNoon) { while (true) { app.vlcinterface.alarm.Weather.refresh(); delay(10 * 60_000L) } }
     val zone = app.vlcinterface.alarm.Alarms.zone()
     val wx = if (g.cityName.isEmpty() || !g.showWeather) null
-        else WxInfo(if (w.key == "${g.cityLat},${g.cityLon}") w.stage else -1, g.cityShort, tzLabel(zone, if (now != 0L) now else t))
+        else WxInfo(if (w.key == "${g.cityLat},${g.cityLon},${if (g.weatherNoon) "noon" else "now"}") w.stage else -1, g.cityShort, tzLabel(zone, if (now != 0L) now else t))
     Canvas(modifier) { drawClock(aspect, if (now != 0L) now else t, tm, zone, wx) }
 }
 
