@@ -92,3 +92,8 @@
 - Clock button has priority (confirmed 2026-11-20 21:24): clock on → the clock takes the place (instead of the
   visualisation or the picture); clock off with its button → what was there before comes back at once: the
   visualisation (setting on, or no picture found) or the album picture / station logo, shown from the top.
+
+## Switches sized with the text (reported 2026-11-20 21:25)
+- Every on/off switch (settings pages, wizard, alarm pages, the wide alarm switches) now grows and shrinks with the
+  text next to it: settings "Text size" × the phone's font size (limited to 70 %–180 %), taking matching room on
+  its row, so a switch is never tiny beside big text or oversized beside small text.

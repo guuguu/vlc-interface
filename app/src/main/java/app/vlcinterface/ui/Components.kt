@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
@@ -408,17 +410,28 @@ val SYM_OFF = Color(0xFF8A8F98)
 fun AppSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)?, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val s = app.vlcinterface.App.instance.store.state.collectAsState().value.settings
     val on = if (s.switchOn != 0L) Color(s.switchOn) else accent(); val off = Color(s.switchOff)
-    androidx.compose.material3.Switch(checked, onChange, modifier, enabled = enabled,
+    // Sized with the text next to it: follows the settings Text size (and the phone's font size), so a switch is never
+    // tiny beside big text or huge beside small text. Its room on the row grows / shrinks with it.
+    val k = switchK()
+    Box(modifier.size((52 * k).dp, (32 * k).dp), contentAlignment = Alignment.Center) {
+    androidx.compose.material3.Switch(checked, onChange, Modifier.wrapContentSize(unbounded = true).graphicsLayer { scaleX = k; scaleY = k }, enabled = enabled,
         colors = SwitchDefaults.colors(
             checkedTrackColor = on, uncheckedTrackColor = off, checkedBorderColor = on, uncheckedBorderColor = off,
             checkedThumbColor = Color(0xFF1A0E05), uncheckedThumbColor = Color(0xFFE8E8E8),
             disabledCheckedTrackColor = C.line, disabledUncheckedTrackColor = C.line, disabledCheckedBorderColor = C.line,
             disabledUncheckedBorderColor = C.line, disabledCheckedThumbColor = C.muted.copy(alpha = 0.6f), disabledUncheckedThumbColor = C.muted.copy(alpha = 0.6f)))
 }
+}
+
+/** How big the switches are drawn: the text's size factor (settings Text size × phone font size), within limits. */
+@Composable
+fun switchK(): Float = androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceIn(0.7f, 1.8f)
 
 /** Wide, horizontally elongated switch (alarm rows): easier to hit; same colours as the other switches. */
 @Composable
-fun WideSwitch(checked: Boolean, height: androidx.compose.ui.unit.Dp = 26.dp, holdMs: Long = 0L, tapNote: String = "", onChange: (Boolean) -> Unit) {
+fun WideSwitch(checked: Boolean, height0: androidx.compose.ui.unit.Dp = 26.dp, holdMs: Long = 0L, tapNote: String = "", onChange: (Boolean) -> Unit) {
+    // Follows the text size too (see AppSwitch).
+    val height = height0 * switchK()
     val s = app.vlcinterface.App.instance.store.state.collectAsState().value.settings
     val on = if (s.switchOn != 0L) Color(s.switchOn) else accent(); val off = Color(s.switchOff)
     val knob = height - 6.dp

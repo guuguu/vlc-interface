@@ -506,7 +506,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                         .padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Text(t, color = if (on) C.text else C.muted, fontSize = (12 + 8 * (k - 0.5f) * 2).sp, fontWeight = FontWeight.SemiBold)
                                         Text(w, color = C.muted, fontSize = 11.sp, modifier = Modifier.weight(1f).padding(start = 10.dp), maxLines = 1)
-                                        WideSwitch(on, height = (14 + 12 * (k - 0.5f) * 2).dp) {}
+                                        WideSwitch(on, height0 = (14 + 12 * (k - 0.5f) * 2).dp) {}
                                     }
                                 }
                             }
