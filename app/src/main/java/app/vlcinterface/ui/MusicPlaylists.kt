@@ -278,13 +278,14 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             val clockOn = alarmData.showClock
             val pic: @Composable (Int) -> Unit = { sz ->
                 if (clockOn) Box(Modifier.padding(top = 8.dp)) { ClockWithGear(nav) { ClockFace(alarmData.aspect, Modifier.size(sz.dp)) } } else
-                // No picture found (song or station): the visualisation with its current settings fills that place.
-                if (item.isRadio) Cover(p.artworkUrl.ifEmpty { item.artwork }, sz, Modifier.padding(top = 8.dp), noCover = { VisArea(Modifier.fillMaxSize()) }) else
+                // No picture found (song or station): the visualisation with its current settings fills that place;
+                // a long press on it opens the Visualisation settings.
+                if (item.isRadio) Cover(p.artworkUrl.ifEmpty { item.artwork }, sz, Modifier.padding(top = 8.dp), noCover = { VisArea(Modifier.fillMaxSize().combinedClickable(onClick = {}, onLongClick = { nav.go(Screen.SettingsGroup("vis")) })) }) else
                 // The picture goes as soon as the song ends (the next song brings its own).
                 Cover(if (p.songOver) "" else item.artwork, sz, Modifier.padding(top = 8.dp).combinedClickable(onClick = {}, onLongClick = { coverNote = ""; coverPick = true }), retry = coverRetry,
                     item = if (p.songOver) null else coverItem, download = !p.songOver, refresh = coverRefresh,
                     onNote = { coverNote = it }, onFound = { player.useDownloadedArtwork(item, "mem:" + item.uri) },
-                    noCover = if (p.songOver) null else ({ VisArea(Modifier.fillMaxSize()) }))
+                    noCover = if (p.songOver) null else ({ VisArea(Modifier.fillMaxSize().combinedClickable(onClick = {}, onLongClick = { nav.go(Screen.SettingsGroup("vis")) })) }))
             }
             val rowPicture: @Composable () -> Unit = {
             // Sideways: the picture / clock takes the height left by the rest of the left half (no scrolling).
