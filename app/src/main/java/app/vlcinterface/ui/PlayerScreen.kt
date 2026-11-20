@@ -527,6 +527,8 @@ private fun BoxScope.ControlsOverlayBody(
     val symSize = maxOf(20 * ks, 22f).sp
     val bottomItems: @Composable () -> Unit = {
         FormatControl(scaleLabel, onScale)
+        // Rotate: turns only the film's picture (90° steps) when it was filmed / recorded the wrong way; kept for this file.
+        OverlayChip(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo(); onTouch() }
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
         Text("🔄", color = Color.White, fontSize = symSize, modifier = Modifier.clickable(onClick = onRotate).padding(8.dp))
@@ -541,6 +543,8 @@ private fun BoxScope.ControlsOverlayBody(
             verticalArrangement = Arrangement.spacedBy(4.dp)) { bottomItems() }
     } else androidx.compose.foundation.layout.FlowRow(Modifier.align(Alignment.End).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FormatControl(scaleLabel, onScale)
+        // Rotate: turns only the film's picture (90° steps) when it was filmed / recorded the wrong way; kept for this file.
+        OverlayChip(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo(); onTouch() }
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
         Text("🔄", color = Color.White, fontSize = symSize, modifier = Modifier.clickable(onClick = onRotate).padding(6.dp))

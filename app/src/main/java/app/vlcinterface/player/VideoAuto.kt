@@ -35,6 +35,7 @@ object VideoAuto {
     }
     fun str(uri: String, k: String): String = rec(uri).optString(k, "")
     fun setStr(uri: String, k: String, v: String) = edit(uri) { if (v.isEmpty()) it.remove(k) else it.put(k, v) }
+    fun edit0(uri: String, k: String) = edit(uri) { it.remove(k) }
     fun int(uri: String, k: String): Int? = rec(uri).let { if (it.has(k)) it.optInt(k) else null }
     fun setInt(uri: String, k: String, v: Int) = edit(uri) { it.put(k, v) }
     /** Every video file that has something saved. */

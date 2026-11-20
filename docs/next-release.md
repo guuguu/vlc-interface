@@ -267,3 +267,11 @@
 - Still to do: native bridge (projectM fed with the app's own sound — a sample buffer added to the sound engine),
   a drawing surface in the cover place and full screen, four bundled presets, the same visibility / lifecycle rules
   (stops when not visible, freed when a cover / clock replaces it), and the four as choices on the Visualisation page.
+
+## Video "Rotate" button (requested 2026-11-20 23:14)
+- New "Rotate" button in the video player's bottom row (next to the format button): turns only the film's picture
+  90° clockwise per press (90° → 180° → 270° → back to normal) for a video filmed or recorded the wrong way, so it
+  looks humanly normal. The phone's own orientation isn't touched (the 🔄 button still does that).
+- The label shows the turn ("Rotate · 90°"); the picture format is worked out for the turned picture (a sideways
+  film turned upright is sized as an upright one). Kept with the video file (and forgotten with it); reopens the
+  video at the same spot to apply. Video details show "Turned with Rotate".

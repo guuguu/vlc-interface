@@ -1224,6 +1224,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                             7 -> "stored turned 270° and mirrored"; else -> "rotation flag ${vt.orientation}"
                         }
                         add("Original orientation" to "$shape · $rot")
+                        if (videoRot != 0) add("Turned with Rotate" to "$videoRot° (kept for this video)")
                     }
                     add("Language" to vt.language.orEmpty())
                 }
@@ -1813,10 +1814,16 @@ class PlayerController(private val context: Context, private val store: Store) {
         } else if (isVideo) media.addOption(":deinterlace=0")
         // Hue/saturation need decoded frames the filter can touch: hardware decoding without direct rendering.
         pictureFilterOn = !item.isMusic && !item.isRadio && (!pictureNeutral(ps.pictureHue, ps.pictureSat) || ps.pictureHighlights > 0.01f)
+        // Rotate button: the picture itself turned (90° steps) for a video filmed / stored the wrong way, kept per file.
+        videoRot = if (isVideo) (VideoAuto.int(item.uri, "rot") ?: 0).let { ((it % 360) + 360) % 360 } else 0
+        val filters = buildList { if (pictureFilterOn) add("adjust"); if (videoRot != 0) add("transform") }
+        if (filters.isNotEmpty()) {
+            media.addOption(":no-mediacodec-dr")
+            media.addOption(":video-filter=" + filters.joinToString(":"))
+        }
+        if (videoRot != 0) media.addOption(":transform-type=$videoRot")
         if (pictureFilterOn) {
             val (c, b, g) = highlightTone(ps.pictureHighlights)
-            media.addOption(":no-mediacodec-dr")
-            media.addOption(":video-filter=adjust")
             media.addOption(":hue=${ps.pictureHue}")
             media.addOption(":saturation=${ps.pictureSat}")
             media.addOption(":contrast=$c")
@@ -2275,6 +2282,19 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
+    /** Rotate button: how far the playing video's picture is turned (0, 90, 180, 270), kept per file. */
+    var videoRot = 0
+        private set
+
+    /** Rotate button: turns the picture 90° clockwise (a video filmed the wrong way); reopens at the same spot. */
+    fun rotateVideo() {
+        val item = _state.value.item ?: return
+        if (item.isMusic || item.isRadio) return
+        val next = (videoRot + 90) % 360
+        if (next == 0) VideoAuto.edit0(item.uri, "rot") else VideoAuto.setInt(item.uri, "rot", next)
+        reloadVideo()
+    }
+
     /** Deinterlacing applied to the playing video. */
     private var deintOn = false
     /** Decoder used for the playing video: "hw" (hardware, software only if libVLC must) or "sw". */
@@ -2302,6 +2322,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             dw = if (vt.sarNum > 0 && vt.sarDen > 0) (vt.width.toLong() * vt.sarNum / vt.sarDen).toInt() else vt.width
             dh = vt.height
             if (vt.orientation >= 4) { val t = dw; dw = dh; dh = t }   // LeftTop…RightBottom = turned 90°/270°
+            if (videoRot == 90 || videoRot == 270) { val t = dw; dw = dh; dh = t }   // turned with the Rotate button
         }
         val sizeChanged = dw != _state.value.videoW || dh != _state.value.videoH
         _state.value = _state.value.copy(
