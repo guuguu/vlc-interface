@@ -129,7 +129,7 @@ fun AlarmRow(nav: Navigator, al: Alarm, k: Float) {
             } else Text(listOf(al.name, Alarm.whenText(al)).filter { it.isNotEmpty() }.joinToString(" · "), color = C.muted,
                 fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        WideSwitch(al.on, height = (14 + 12 * (k - 0.5f) * 2).dp) { on ->
+        WideSwitch(al.on, height = (14 + 12 * (k - 0.5f) * 2).dp, holdMs = 1000L, tapNote = "Hold 1 s to switch this alarm") { on ->
             Alarms.put(al.copy(on = on))
             val what = listOf(al.timeText, Alarm.daysText(al.days).takeIf { al.mode == "weekly" && al.days != 0 } ?: "", al.name).filter { it.isNotEmpty() }.joinToString(" ")
             ShortNote.show(if (on) "$what will ring" else "$what won't ring")

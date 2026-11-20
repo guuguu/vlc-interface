@@ -56,6 +56,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -160,7 +161,31 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val vuK = if (landscape) (conf.screenHeightDp.toFloat() / conf.screenWidthDp).coerceIn(0.35f, 1f) else 1f
     androidx.compose.runtime.CompositionLocalProvider(LocalInPlayer provides true) {
-    Box(Modifier.fillMaxSize().background(PLAYER_BG)) {   // players: 90 % black
+    // Upright with the clock: scrolling hides the clock; any action (scroll, touch) keeps it hidden for Look → "Clock hidden for"
+    // more seconds; it never comes back while a menu, pop-up or settings window is open.
+    val hideSec = App.instance.store.state.collectAsState().value.settings.clockHideSec
+    var lastAct by remember { mutableLongStateOf(0L) }
+    var clockHidden by remember { mutableStateOf(false) }
+    val winFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(scroll) {
+        androidx.compose.runtime.snapshotFlow { scroll.value }.collect { v -> if (v > 0 || clockHidden) lastAct = System.currentTimeMillis() }
+    }
+    LaunchedEffect(lastAct, winFocused, hideSec) {
+        if (lastAct == 0L || landscape) return@LaunchedEffect
+        clockHidden = true
+        if (!winFocused) return@LaunchedEffect          // a window is open: stays hidden; counts again once it's closed
+        kotlinx.coroutines.delay((lastAct + hideSec * 1000L - System.currentTimeMillis()).coerceAtLeast(0L))
+        clockHidden = false
+    }
+    LaunchedEffect(winFocused) { if (winFocused && clockHidden) lastAct = System.currentTimeMillis() }
+    Box(Modifier.fillMaxSize().background(PLAYER_BG).pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                if (clockHidden && e.type == androidx.compose.ui.input.pointer.PointerEventType.Press) lastAct = System.currentTimeMillis()
+            }
+        }
+    }) {   // players: 90 % black
     Column(Modifier.fillMaxSize().padding(end = if (meters) (21 * vuK).dp else 0.dp)) {
         // No page title: the song name is already shown in the middle of the player.
         BackHeader("", nav, gear = false, afterHome = {
@@ -448,7 +473,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
         } else {
             // Upright: the clock stays at the top; the rest of the page scrolls underneath it.
-            if (clockShown) pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(horizontal = 16.dp, vertical = 4.dp))
+            if (clockShown && !clockHidden) pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(horizontal = 16.dp, vertical = 4.dp))
             Column(Modifier.weight(1f).onGloballyPositioned { viewTop = it.boundsInRoot().top }.verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(if (item.isRadio) 10.dp else 14.dp)) {
                 partA(); partB()

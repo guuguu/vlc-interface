@@ -346,6 +346,14 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     ThinSlider(s.alarmRowPct.toFloat(), { v -> set(s.copy(alarmRowPct = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f,
                         onValueChangeFinished = { if (helpersOn) lookHelp = "Alarm rows under the clock" })
+                    // Upright player: how long the clock stays hidden after the last action.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Clock hidden for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Clock hidden for"))
+                        Text("${s.clockHideSec} s", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(clockHideSec = 10)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.clockHideSec.toFloat(), { v -> set(s.copy(clockHideSec = Math.round(v).coerceIn(3, 60))) }, valueRange = 3f..60f,
+                        onValueChangeFinished = { if (helpersOn) lookHelp = "Clock hidden for" })
                     // Short, self-closing pop-ups: how long they stay.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Short pop-ups stay for", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Short pop-ups stay for"))

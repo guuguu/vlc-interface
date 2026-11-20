@@ -132,6 +132,8 @@ object SettingHelp {
         "Alarm rows under the clock" to "Height of each alarm row in the list under the clock on the player (and the alarms list), as a share of the original rows.\n\n" +
             "50 % fits twice as many alarms in the same space; the list shows every alarm and scrolls on its own when they don't all fit. Low rows show the name and repetition on one line; from 75 % on two.\n\n" +
             "The wide switch of each row shrinks with it but stays easy to hit. Default: 50 %.",
+        "Clock hidden for" to "With the phone upright and the clock shown on the player, scrolling the player hides the clock completely, so the list and buttons get its room.\n\n" +
+            "The clock comes back this many seconds after your last action; every scroll, touch or button press starts the count again, and it never comes back while a menu, pop-up or settings window is open. Sideways the clock stays on the left.\n\nDefault: 10 s.",
         "Short pop-ups stay for" to "How long short notes that close by themselves stay on screen: an alarm switched on or off, the explanation pop-ups of the alarm pages, and similar confirmations.\n\n" +
             "Longer gives time to read; shorter gets them out of the way sooner. A pop-up you touch stays open until you close it. Default: 3 s.",
         "Switch colour" to "The colour of every switch in the app, one for the on position and one for the off position, so the state shows at a glance as well as by the knob's place.\n\n" +

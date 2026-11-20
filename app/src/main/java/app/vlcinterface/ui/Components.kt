@@ -21,6 +21,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.Arrangement
@@ -369,14 +372,37 @@ fun AppSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)?, modifier: Modifi
 
 /** Wide, horizontally elongated switch (alarm rows): easier to hit; same colours as the other switches. */
 @Composable
-fun WideSwitch(checked: Boolean, height: androidx.compose.ui.unit.Dp = 26.dp, onChange: (Boolean) -> Unit) {
+fun WideSwitch(checked: Boolean, height: androidx.compose.ui.unit.Dp = 26.dp, holdMs: Long = 0L, tapNote: String = "", onChange: (Boolean) -> Unit) {
     val s = app.vlcinterface.App.instance.store.state.collectAsState().value.settings
     val on = if (s.switchOn != 0L) Color(s.switchOn) else accent(); val off = Color(s.switchOff)
     val knob = height - 6.dp
+    // With [holdMs]: switches only after the finger stays that long (it fills up meanwhile); a short tap shows [tapNote].
+    val fill = androidx.compose.runtime.remember { androidx.compose.animation.core.Animatable(0f) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val cur by androidx.compose.runtime.rememberUpdatedState(checked)
+    val change by androidx.compose.runtime.rememberUpdatedState(onChange)
+    val gesture = if (holdMs <= 0L) Modifier.clickable { onChange(!checked) } else Modifier.pointerInput(holdMs) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            val job = scope.launch {
+                fill.snapTo(0f)
+                fill.animateTo(1f, androidx.compose.animation.core.tween(holdMs.toInt(), easing = androidx.compose.animation.core.LinearEasing))
+                change(!cur)
+            }
+            val up = waitForUpOrCancellation()
+            if (job.isActive) {
+                job.cancel()
+                if (up != null && tapNote.isNotEmpty()) ShortNote.show(tapNote)
+            }
+            scope.launch { fill.snapTo(0f) }
+        }
+    }
     Box(Modifier.width(height * 2.8f).height(height).clip(androidx.compose.foundation.shape.RoundedCornerShape(height / 2))
-        .background(if (checked) on else off).clickable { onChange(!checked) }.padding(3.dp),
-        contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart) {
-        Box(Modifier.size(knob).clip(androidx.compose.foundation.shape.CircleShape).background(if (checked) Color(0xFF1A0E05) else Color(0xFFE8E8E8)))
+        .background(if (checked) on else off).then(gesture)) {
+        if (fill.value > 0f) Box(Modifier.fillMaxHeight().fillMaxWidth(fill.value).background((if (checked) off else on).copy(alpha = 0.75f)))
+        Box(Modifier.fillMaxSize().padding(3.dp), contentAlignment = if (checked) Alignment.CenterEnd else Alignment.CenterStart) {
+            Box(Modifier.size(knob).clip(androidx.compose.foundation.shape.CircleShape).background(if (checked) Color(0xFF1A0E05) else Color(0xFFE8E8E8)))
+        }
     }
 }
 
