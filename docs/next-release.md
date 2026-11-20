@@ -89,3 +89,6 @@
 - Same place, size and rules as the picture (scrolling, hiding, row order, sideways); long press opens the
   Visualisation settings; the clock, when on, still takes that place.
 - Text helper (hold the setting; also pops up on a change when Helpers are on).
+- Clock button has priority (confirmed 2026-11-20 21:24): clock on → the clock takes the place (instead of the
+  visualisation or the picture); clock off with its button → what was there before comes back at once: the
+  visualisation (setting on, or no picture found) or the album picture / station logo, shown from the top.
