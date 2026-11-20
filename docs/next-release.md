@@ -45,3 +45,10 @@
 - The item can be moved like the other links (order chosen on the Look page).
 - With a helper pop-up (long-press, and the help pop-up when Helpers are on) explaining what it searches, that only
   ticked folders are added and that existing ones stay as they are (requested 2026-11-20 11:30).
+
+## Helper pop-ups go deeper (requested 2026-11-20 11:32)
+- Every helper pop-up (long-press, Helpers) explains more than the line under the setting: what it does, when to
+  use it, what changes on and off (or with each value), what it costs (battery, data, space), and the default.
+- No pop-up just repeats the line under the setting: settings that today fall back to that line get their own
+  longer text.
+- New settings: asked each time whether a helper pop-up is wanted.
