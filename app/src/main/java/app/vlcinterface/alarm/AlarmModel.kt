@@ -334,7 +334,22 @@ object Alarms {
     fun setGlobal(g: AlarmGlobal) { save(current.copy(global = g)); AlarmScheduler.reschedule(ctx) }
     fun setAspect(a: ClockAspect) = save(current.copy(aspect = a))
     fun toggleClock() = save(current.copy(showClock = !current.showClock))
-    fun setVis(v: VisSettings) = save(current.copy(vis = v))
+    /**
+     * Visualisation settings are kept per pattern: changing a setting saves it for the pattern on screen; choosing
+     * another pattern brings back that pattern's own settings (the first time: the ones in use). Full-screen
+     * brightness stays one setting for all.
+     */
+    fun setVis(v: VisSettings) {
+        val cur = current.vis
+        val all = try { org.json.JSONObject(prefs.getString("visByEffect", "{}") ?: "{}") } catch (_: Exception) { org.json.JSONObject() }
+        val next = if (v.effect != cur.effect) {
+            all.put(cur.effect, cur.toJson())
+            all.optJSONObject(v.effect)?.let { VisSettings.fromJson(it).copy(effect = v.effect, fsBright = v.fsBright) } ?: v
+        } else v
+        all.put(next.effect, next.toJson())
+        prefs.edit().putString("visByEffect", all.toString()).apply()
+        save(current.copy(vis = next))
+    }
 
     /** Alarms, alarm settings, clock aspect and visualisation for the setup file. */
     fun exportJson(): JSONObject {

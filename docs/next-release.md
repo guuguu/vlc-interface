@@ -310,3 +310,7 @@
   steadier, larger reaching the edges) and how much they swell with the bass — one slider for bars and lava.
 - Separate sliders (23:39): "Lava amplitude" (Lava flow only: blob wander and swell, ×0.4 … ×2.5, default ×1) and
   "Bars amplitude" (the bars, = Amplitude on the other pictures). Helper with live preview, like Amplitude.
+- Settings kept per visualisation pattern (23:40): colours, brightness, movement, mixing, colour speed, definition,
+  frequencies, bar thickness, sensitivity and the amplitudes are remembered for each pattern; choosing a pattern
+  brings back its own settings (the first time it starts from the ones in use). Full-screen brightness stays one
+  setting for all.
