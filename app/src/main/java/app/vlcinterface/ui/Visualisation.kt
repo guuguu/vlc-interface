@@ -161,6 +161,9 @@ private class VisMotion {
     var refHi = 0.02f
     /** Colour time: runs with the colour speed (a little faster on the beat). */
     var tc = 0f
+    // Beat following: fast envelope, short average, and a pulse fired on each detected beat (per band).
+    var envLo = 0f; var avgLo = 0.001f; var kickLo = 0f; var lastLo = -1f
+    var envHi = 0f; var avgHi = 0.001f; var kickHi = 0f; var lastHi = -1f
 }
 
 /**
@@ -185,11 +188,30 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
                 if (live && NativeAudio.active) {
                     NativeAudio.bandRange(vs.fLo, vs.fHi)
                     NativeAudio.bands(buf)
-                    // Automatic gain: follows the loudest recent level, slowly letting go.
-                    m.refLo = max(m.refLo * (1f - dt * 0.15f), max(buf[0], 0.004f))
-                    m.refHi = max(m.refHi * (1f - dt * 0.15f), max(buf[1], 0.004f))
-                    a = (buf[0] / m.refLo).coerceIn(0f, 1f).pow(1.6f)
-                    b = (buf[1] / m.refHi).coerceIn(0f, 1f).pow(1.6f)
+                    // Automatic gain: follows the loudest recent level, letting go within a few seconds.
+                    m.refLo = max(m.refLo * (1f - dt * 0.5f), max(buf[0], 0.004f))
+                    m.refHi = max(m.refHi * (1f - dt * 0.5f), max(buf[1], 0.004f))
+                    // Rhythm: a beat is a jump of the band's level above its own short average (≈ 0.4 s). Each beat
+                    // fires a pulse that drives the movement, so the picture moves with the music's rhythm, not just
+                    // with how loud it is. Low band: kick / bass (at most ~5 beats a second); high band: hats, snares.
+                    fun beat(x: Float, env: Float, avg: Float, last: Float, minGap: Float): Triple<Float, Float, Boolean> {
+                        val e = max(x, env * exp(-dt * 14f))
+                        val av = avg + (x - avg) * (dt * 2.5f).coerceAtMost(1f)
+                        val hit = x > av * 1.35f + 0.0005f && x > env * 0.9f && clock - last > minGap
+                        return Triple(e, av, hit)
+                    }
+                    beat(buf[0], m.envLo, m.avgLo, m.lastLo, 0.2f).let { (e, av, hit) ->
+                        m.envLo = e; m.avgLo = av
+                        if (hit) { m.kickLo = 1f; m.lastLo = clock; m.pb += 0.35f }   // a step forward on every beat
+                    }
+                    beat(buf[1], m.envHi, m.avgHi, m.lastHi, 0.1f).let { (e, av, hit) ->
+                        m.envHi = e; m.avgHi = av
+                        if (hit) { m.kickHi = 1f; m.lastHi = clock; m.ps += 0.25f }
+                    }
+                    m.kickLo *= exp(-dt / 0.16f); m.kickHi *= exp(-dt / 0.09f)
+                    val lvLo = (buf[0] / m.refLo).coerceIn(0f, 1f); val lvHi = (buf[1] / m.refHi).coerceIn(0f, 1f)
+                    a = (0.35f * lvLo + 0.85f * m.kickLo).coerceIn(0f, 1f)
+                    b = (0.35f * lvHi + 0.85f * m.kickHi).coerceIn(0f, 1f)
                 } else if (!live || playing) {
                     // Simulated: kick on the beat (120 BPM) for the low part, off-beat hats for the high part.
                     a = exp(-(clock % 0.5f) / 0.13f) + 0.25f * exp(-((clock + 0.25f) % 2f) / 0.3f)
@@ -198,8 +220,8 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
                 } else { a = 0f; b = 0f }
                 val k = vs.move.coerceIn(0.2f, 2f)
                 a = (a * k).coerceIn(0f, 1f); b = (b * k).coerceIn(0f, 1f)
-                // Gentle: rises quickly but limited, falls slowly (no flashing).
-                fun follow(cur: Float, target: Float) = cur + (target - cur) * ((if (target > cur) 7f else 2.2f) * dt).coerceAtMost(1f)
+                // Rises at once on a beat, falls back within a fraction of a second (follows the rhythm, still no flashing).
+                fun follow(cur: Float, target: Float) = cur + (target - cur) * ((if (target > cur) 30f else 6f) * dt).coerceAtMost(1f)
                 m.lo = follow(m.lo, a); m.hi = follow(m.hi, b)
                 m.pb += dt * (0.25f + 1.5f * m.lo * k)
                 m.ps += dt * (0.45f + 2.4f * m.hi * k)

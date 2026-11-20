@@ -194,3 +194,11 @@
 - It used remembered screen positions, which could be old. Now it measures the sliders' place inside the page at the
   moment of the tap and scrolls there; if the sliders aren't on the page at all it says so (pointing to Look →
   player rows) instead of "in view".
+
+## Visualisation follows the music's rhythm (reported 2026-11-20 22:27)
+- It followed only how loud the music was, heavily smoothed (slow rise, slower fall, a reference that took ~7 s to
+  adapt), so the movement hardly changed with the beat.
+- Now each band detects beats: a jump of its level above its own short average (≈ 0.4 s). Every beat fires a
+  pulse — the low band (kick / bass, up to ~5 per second) and the high band (hats, snares) — that drives the
+  movement and gives it a step forward; the pulse rises at once and fades in a fraction of a second. Loudness
+  still adds a little. The automatic level adapts within a few seconds. Still no flashing.
