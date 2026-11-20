@@ -174,6 +174,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     var topHidden by remember { mutableStateOf(false) }
     var topHpx by remember { mutableIntStateOf(0) }
     var ignoreScrollUntil by remember { mutableLongStateOf(0L) }
+    // Back after the inactive time while you're scrolled down: shown as a layer over the top of the page (you stay where you are).
+    var topOverlay by remember { mutableStateOf(false) }
+    var boxTop by remember { mutableFloatStateOf(0f) }
     val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { (if (item.isRadio) 10.dp else 14.dp).toPx() }.toInt()
     val winFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(clockTop, landscape, topAuto) { topHidden = false }
@@ -192,16 +195,15 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         }
     }
     LaunchedEffect(lastAct, winFocused, topSec, topHidden) {
+        topOverlay = false                                     // any action takes the layer away again
         if (!topHidden || !winFocused) return@LaunchedEffect   // a window is open: stays away; counts again once it's closed
         kotlinx.coroutines.delay((lastAct + topSec * 1000L - System.currentTimeMillis()).coerceAtLeast(0L))
-        // Back into view whatever the scroll position: put back at the top and glide the page up to it.
-        ignoreScrollUntil = Long.MAX_VALUE
-        topHidden = false
-        kotlinx.coroutines.yield()
-        try { scroll.animateScrollTo(0) } finally { ignoreScrollUntil = System.currentTimeMillis() + 300 }
+        // Back into view whatever the scroll position: at the top of the page → put back in place; scrolled down → as a layer
+        // over the top of the page, until your next action.
+        if (scroll.value <= 0) { ignoreScrollUntil = System.currentTimeMillis() + 300; topHidden = false } else topOverlay = true
     }
     LaunchedEffect(winFocused) { if (winFocused && topHidden) lastAct = System.currentTimeMillis() }
-    Box(Modifier.fillMaxSize().background(PLAYER_BG).pointerInput(Unit) {
+    Box(Modifier.fillMaxSize().background(PLAYER_BG).onGloballyPositioned { boxTop = it.boundsInRoot().top }.pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) {
                 val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
@@ -511,6 +513,15 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     if (meters) StereoVu(Modifier.align(Alignment.CenterEnd).padding(end = (4 * vuK).dp).fillMaxHeight().width((15 * vuK).dp))
     // Floating play / pause: only while the player's buttons are scrolled out of view (under the title block / off the top).
     val ctlHidden = scroll.value > 0 && ctlBottom < viewTop + (if (landscape) 0 else titleHpx) + 2f
+    if (topOverlay && !landscape) Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(0, (viewTop - boxTop).toInt()) }.fillMaxWidth()
+        .zIndex(3f).background(PLAYER_BG).padding(horizontal = 16.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+        if (clockTop) {
+            val asp = app.vlcinterface.alarm.Alarms.state.collectAsState().value.aspect
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp), contentAlignment = Alignment.Center) {
+                ClockWithGear(nav) { ClockFace(asp, Modifier.size(minOf(maxWidth, maxHeight))) }
+            }
+        } else Cover(if (item.isRadio) p.artworkUrl.ifEmpty { item.artwork } else if (p.songOver) "" else item.artwork, 280, Modifier.padding(top = 8.dp))
+    }
     // Look → "Floating play / pause button": always (default), only when the buttons scroll away, or off.
     val fMode = setsP.floatBtnMode
     if (fMode == "always" || (fMode == "scroll" && ctlHidden)) FloatingPlayButton(p.isPlaying) { player.togglePause() }
