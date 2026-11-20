@@ -125,9 +125,12 @@ object SettingHelp {
         "Pop-up opacity" to "How see-through pop-up windows are. More see-through shows what's behind; fully opaque is easier to read.",
         "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
+        "Lava amplitude" to "Lava flow only: how far the lava blobs wander and how much they swell with the bass, separate from the bars' " +
+            "amplitude. Small: the blobs stay near the middle and calm; big: they roam to the edges and swell strongly on the bass. " +
+            "From ×0.4 to ×2.5; default ×1. The preview shows it live while you hold the slider still.",
         "Amplitude" to "How much the spectrum and analyser bars jump between the quiet and the loud parts of the music. " +
             "Small: the bars stay near a steady height and only ripple with the music; big: they swing from almost nothing up to the " +
-            "full frame on every beat. In Lava flow it also sets how far the lava blobs wander and how much they swell with the bass. Sensitivity then lifts the whole movement higher or lower. From ×0.4 to ×2.5; default ×1. " +
+            "full frame on every beat. In Lava flow it's the bars' amplitude (the lava has its own slider). Sensitivity then lifts the whole movement higher or lower. From ×0.4 to ×2.5; default ×1. " +
             "The preview shows it live while you hold the slider still.",
         "Full-screen brightness" to "How bright the screen is while the visualisation fills the screen. " +
             "Phone's own: the phone's usual brightness. Otherwise the level set here, from 1 % (a dim night light) to 100 %. " +

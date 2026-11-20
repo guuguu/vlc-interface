@@ -432,7 +432,7 @@ private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
             val lb = lavaBmp[0]?.takeIf { it.width == lw && it.height == lh && !it.isRecycled }
                 ?: android.graphics.Bitmap.createBitmap(lw, lh, android.graphics.Bitmap.Config.ARGB_8888).also { old -> lavaBmp[0]?.recycle(); lavaBmp[0] = old; lavaPxBox[0] = IntArray(lw * lh) }
             val t0 = System.nanoTime()
-            drawLava(m, a, cols, lb, lavaPxBox[0]!!, v.specAmp)
+            drawLava(m, a, cols, lb, lavaPxBox[0]!!, v.lavaAmp)
             val nowMs = (t0 / 1_000_000L % 10_000_000L).toFloat()
             if (nowMs - lavaRes[3] > 500f || nowMs < lavaRes[3]) { lavaRes[1] = 0f; lavaRes[2] = -30f }   // waking up: not counted
             lavaRes[3] = nowMs
@@ -680,7 +680,7 @@ private fun DrawScope.drawSpectrumV(m: VisMotion, a: Float, cols: List<Color>, b
  */
 private fun DrawScope.drawLava(m: VisMotion, a: Float, cols: List<Color>, bmp: android.graphics.Bitmap, px: IntArray, amp0: Float = 1f) {
     val gw = bmp.width; val gh = bmp.height
-    // Amplitude (the same slider as the bars): how far the blobs wander and how much they swell with the bass.
+    // Lava amplitude (its own slider, separate from the bars): how far the blobs wander and how much they swell.
     val amp = amp0.coerceIn(0.4f, 2.5f)
     val wander = (0.6f + 0.4f * amp).coerceAtMost(1.25f)
     val n = 7
@@ -964,10 +964,22 @@ fun VisualisationSettings() {
                 VisCanvas(v, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)), live = true)
             }) { ampHelp = false }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Amplitude", color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain("Amplitude"))
+                Text(if (v.effect == "lava_spec") "Bars amplitude" else "Amplitude", color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain("Amplitude"))
                 ThinSlider(v.specAmp, { set(v.copy(specAmp = (Math.round(it * 10f) / 10f))) }, Modifier.weight(1f), valueRange = 0.4f..2.5f,
                     onHoldStill = { if (Alarms.current.global.helpers) ampHelp = true })
                 Text("×%.1f".format(v.specAmp), color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
+            }
+        }
+        if (v.effect == "lava_spec") {
+            var lavaHelp by remember { mutableStateOf(false) }
+            if (lavaHelp) HelperDialog("Lava amplitude", SettingHelp.text("Lava amplitude", ""), extra = {
+                VisCanvas(v, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)), live = true)
+            }) { lavaHelp = false }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Lava amplitude", color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain("Lava amplitude"))
+                ThinSlider(v.lavaAmp, { set(v.copy(lavaAmp = (Math.round(it * 10f) / 10f))) }, Modifier.weight(1f), valueRange = 0.4f..2.5f,
+                    onHoldStill = { if (Alarms.current.global.helpers) lavaHelp = true })
+                Text("×%.1f".format(v.lavaAmp), color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
             }
         }
         if (v.effect in SPEC_FX) {

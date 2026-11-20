@@ -308,3 +308,5 @@
   (gold).
 - Lava flow + spectrum (23:38): the Amplitude slider also drives the lava — how far the blobs wander (smaller
   steadier, larger reaching the edges) and how much they swell with the bass — one slider for bars and lava.
+- Separate sliders (23:39): "Lava amplitude" (Lava flow only: blob wander and swell, ×0.4 … ×2.5, default ×1) and
+  "Bars amplitude" (the bars, = Amplitude on the other pictures). Helper with live preview, like Amplitude.
