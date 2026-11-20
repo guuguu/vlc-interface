@@ -7,3 +7,9 @@
 - It is a condition, not a question: nothing asks to confirm. A short tap changes nothing and shows the short note
   "Hold 1 s to switch this alarm" (kept: requested 2026-11-20 12:44).
 - After the hold, the usual confirmation ("07:30 Mon–Fri will ring / won't ring").
+
+## Clock hides while you use the player (requested 2026-11-20 13:28)
+- With the clock shown on the player, scrolling the player hides the clock completely (the page takes its room).
+- It stays hidden until 10 s after the last action; any further action (scroll, tap, button) keeps it hidden for
+  another 10 s. Then it comes back by itself.
+- Look setting "Clock hidden for" (seconds after the last action; default 10).
