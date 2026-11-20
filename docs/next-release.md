@@ -35,3 +35,5 @@
   moderate / heavy (rain, snow, heavy showers, freezing rain) → the symbol with its cloud.
 - The weather icon shows the forecast for 12:00 noon today at the chosen city (its local time), instead of the
   weather right now; it changes to the next day's noon after midnight (requested 2026-11-20 16:58).
+- Next to the weather city setting (Alarm clock → city / weather): a choice "Now / At noon" for what the clock's weather
+  icon shows — the weather right now, or today's noon forecast (default: At noon) (requested 2026-11-20 17:00).
