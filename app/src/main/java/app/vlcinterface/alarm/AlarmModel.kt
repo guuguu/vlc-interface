@@ -298,14 +298,14 @@ object Alarms {
 
     /**
      * A new alarm: starts with the options of the last alarm saved (repetition, days, time, sound, stations, volumes,
-     * fade-in, snoozes, ringing time, output) — not its name, dates or start date. Defaults the first time.
+     * fade-in, snoozes, ringing time, output, name) — all but the calendar choices (start date, specific dates). Defaults the first time.
      */
     fun newFromLast(id: String): Alarm {
         val nid = id.ifEmpty { UUID.randomUUID().toString() }
         val o = prefs.getString("lastAlarm", null) ?: return Alarm(id = nid)
         return try {
             val l = Alarm.fromJson(org.json.JSONObject(o))
-            l.copy(id = nid, on = true, name = "", date = "", dates = emptyList(), mode = if (l.mode == "dates") "once" else l.mode)
+            l.copy(id = nid, on = true, date = "", dates = emptyList(), mode = if (l.mode == "dates") "once" else l.mode)
         } catch (_: Exception) { Alarm(id = nid) }
     }
 

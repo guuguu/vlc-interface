@@ -104,6 +104,7 @@
 - Settings pages: the choice buttons of a page (Look: player rows Songs / Radio / Both, hiding Clock / Picture /
   Both, switch colour On / Off / Both, accent colour Files / Radio / Both; Export & import: the chosen categories)
   show the last choice when the page is opened again — also after restarting the app.
-- Alarms: a new alarm starts with the options of the last alarm saved (repetition and days, time, sound source,
-  stations, volumes, fade-in, snoozes, ringing time, output); not its name, start date or specific dates (those
-  start empty). The very first alarm uses the defaults.
+- Alarms: the last alarm set is the template for the next new one — everything (name, time, repetition and day
+  disks, sound source, stations, volumes, fade-in, snoozes, ringing time, output) except the calendar choices: the
+  start date and the specific dates start empty (a "specific dates" alarm gives a one-time template). The very
+  first alarm uses the defaults (confirmed 2026-11-20 21:29).
