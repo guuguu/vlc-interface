@@ -27,3 +27,5 @@
   position, so the two states differ by colour as well as by the knob's place (replaces "off looks like on" from 1.37).
 - Look settings: "Switch colour · on" and "Switch colour · off", chosen like the accent colours (default: on = accent,
   off = a muted grey-blue). Greyed only when a switch can't be used, as before; still no on / off words.
+- With a helper pop-up while Helpers are on, previewing a sample switch in both positions with the chosen colours
+  (requested 2026-11-20 12:20).
