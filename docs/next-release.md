@@ -6,3 +6,6 @@
   settings sliders), times right under the bar.
 - The empty space above this block (between the title / artist lines and the VPN-NAS button) and below it (between the
   times and the player buttons) shrinks too (requested 2026-11-20 16:45).
+- Look slider "Player rows spacing" for these gaps (between and around the VPN-NAS button, Track / RG line, position
+  bar and times): from tight to today's spacing, default the new tight one; helper pop-up with a preview sketch of the
+  rows at the chosen spacing while Helpers are on (requested 2026-11-20 16:46).
