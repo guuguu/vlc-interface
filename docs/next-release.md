@@ -251,3 +251,7 @@
 - Full-screen visualisation (23:00): the same rules (it's the same drawing) — stops when the screen is locked / off
   or the app leaves the foreground, carries on without restarting when shown again, and is removed with its memory
   freed when the full-screen page is closed.
+- Full-screen brightness (23:01): Settings → Visualisation → "Full-screen brightness": Phone's own (default) or a
+  level 1–100 % used while the visualisation is full screen. The brightness swipe on the full screen (left / right
+  upright, up / down sideways) changes it and is kept as the setting. Leaving full screen gives the phone its own
+  brightness back. Text helper.

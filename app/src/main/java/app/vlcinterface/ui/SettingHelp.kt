@@ -125,6 +125,10 @@ object SettingHelp {
         "Pop-up opacity" to "How see-through pop-up windows are. More see-through shows what's behind; fully opaque is easier to read.",
         "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
+        "Full-screen brightness" to "How bright the screen is while the visualisation fills the screen. " +
+            "Phone's own: the phone's usual brightness. Otherwise the level set here, from 1 % (a dim night light) to 100 %. " +
+            "Swiping left or right on the full-screen visualisation (up or down when the phone is sideways) changes it too, and that level is kept for next time. " +
+            "Leaving full screen always gives the phone its own brightness back. Default: Phone's own.",
         "Sensitivity" to "How strongly the spectrum and analyser pictures react. Higher: the bars, rows, rays and wave reach the edges of " +
             "the frame (fill it) on the loud parts; lower: they stay calmer and rarely touch the edges. Quiet passages are lifted too. " +
             "From ×0.5 to ×3; default ×1.3. The preview shows it live while you hold the slider still.",

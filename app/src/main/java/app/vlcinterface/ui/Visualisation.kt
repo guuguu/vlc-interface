@@ -635,7 +635,8 @@ private fun DrawScope.drawBackground(effect: String, bg0: List<Color>, t: Float,
 fun VisualisationScreen(nav: Navigator) {
     val v = Alarms.state.collectAsState().value.vis
     val act = LocalContext.current.findActivity()
-    var bright by remember { mutableFloatStateOf(act?.window?.attributes?.screenBrightness?.takeIf { it >= 0f } ?: 0.5f) }
+    // Settings → Visualisation → Full-screen brightness (or the phone's own); a swipe changes it and is kept.
+    var bright by remember { mutableFloatStateOf(v.fsBright.takeIf { it > 0f } ?: act?.window?.attributes?.screenBrightness?.takeIf { it >= 0f } ?: 0.5f) }
     var shownAt by remember { mutableLongStateOf(0L) }
     var showB by remember { mutableStateOf(false) }
     var note by remember { mutableStateOf("") }
@@ -643,6 +644,7 @@ fun VisualisationScreen(nav: Navigator) {
     DisposableEffect(Unit) {
         val w = act?.window
         w?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (v.fsBright > 0f) w?.let { it.attributes = it.attributes.apply { screenBrightness = v.fsBright.coerceIn(0.01f, 1f) } }
         // Bars hidden like a full-screen app; Android's usual swipe from the edge brings them back for a moment.
         try { w?.insetsController?.let { it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; it.hide(WindowInsets.Type.systemBars()) } } catch (_: Exception) {}
         onDispose {
@@ -654,6 +656,8 @@ fun VisualisationScreen(nav: Navigator) {
         bright = b.coerceIn(0.01f, 1f); shownAt = System.currentTimeMillis(); showB = true
         act?.window?.let { w -> w.attributes = w.attributes.apply { screenBrightness = bright } }
     }
+    // A swipe's brightness is kept as the setting (saved once the finger has rested a moment).
+    LaunchedEffect(shownAt) { if (shownAt > 0) { kotlinx.coroutines.delay(700); Alarms.setVis(Alarms.current.vis.copy(fsBright = bright)) } }
     Box(Modifier.fillMaxSize().background(Color.Black)
         .pointerInput(Unit) { detectTapGestures(onDoubleTap = { nav.back() }) }
         .pointerInput(Unit) {
@@ -773,6 +777,22 @@ fun VisualisationSettings() {
         VisSlider("Colour speed", v.colourSpeed, 0.2f..3f, "×%.1f".format(v.colourSpeed)) { set(v.copy(colourSpeed = it)) }
         VisSlider("Definition", v.sharp, 0f..1f, if (v.sharp < 0.15f) "soft" else if (v.sharp > 0.85f) "sharp" else "${(v.sharp * 100).toInt()} %") { set(v.copy(sharp = it)) }
         VisSlider("Brightness", v.brightness, 0.2f..1f, "${(v.brightness * 100).toInt()} %") { set(v.copy(brightness = it)) }
+        // Full-screen brightness: the phone's own, or a level of its own (also set by swiping on the full screen).
+        run {
+            var fbHelp by remember { mutableStateOf(false) }
+            if (fbHelp) HelperDialog("Full-screen brightness", SettingHelp.text("Full-screen brightness", "")) { fbHelp = false }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Full-screen brightness", color = C.text, fontSize = 14.sp, modifier = Modifier.weight(1f).explain("Full-screen brightness"))
+                Pill("Phone's own", selected = v.fsBright <= 0f, filled = v.fsBright <= 0f) {
+                    set(v.copy(fsBright = if (v.fsBright <= 0f) 0.6f else -1f)); if (Alarms.current.global.helpers) fbHelp = true }
+            }
+            if (v.fsBright > 0f) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.width(110.dp))
+                ThinSlider(v.fsBright, { set(v.copy(fsBright = (Math.round(it * 100f) / 100f).coerceIn(0.01f, 1f))) }, Modifier.weight(1f), valueRange = 0.01f..1f,
+                    onHoldStill = { if (Alarms.current.global.helpers) fbHelp = true })
+                Text("${(v.fsBright * 100).toInt()} %", color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
+            }
+        }
         // Centred spectrum: bar thickness (thicker → fewer bars). Helper with a live preview on a still hold.
         if (v.effect in SPEC_FX) {
             var gainHelp by remember { mutableStateOf(false) }
