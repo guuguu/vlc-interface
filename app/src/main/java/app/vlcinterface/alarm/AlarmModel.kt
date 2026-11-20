@@ -256,7 +256,7 @@ data class VisSettings(
         .put("mix", mix.toDouble()).put("fLo", fLo.toDouble()).put("fHi", fHi.toDouble()).put("sharp", sharp.toDouble()).put("colourSpeed", colourSpeed.toDouble()).put("specBar", specBar.toDouble()).put("specGain", specGain.toDouble()).put("fsBright", fsBright.toDouble()).put("specAmp", specAmp.toDouble())
     companion object {
         /** Offered visualisations; an older saved one (clouds, plasma, …) becomes the centred spectrum. */
-        val EFFECTS = listOf("mirror", "am_led", "am_lumi", "am_area", "am_radial")
+        val EFFECTS = listOf("mirror", "am_led", "am_lumi", "am_area", "am_radial", "pm1", "pm2", "pm3", "pm4")
         fun fromJson(o: JSONObject?) = if (o == null) VisSettings() else VisSettings(o.optString("palette", "pattern"),
             o.optDouble("hue1", 20.0).toFloat(), o.optDouble("hue2", 200.0).toFloat(), o.optDouble("hue3", 300.0).toFloat(),
             o.optDouble("brightness", 0.85).toFloat(), o.optString("effect", "mirror").let { if (it in EFFECTS) it else "mirror" },

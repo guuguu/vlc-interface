@@ -76,7 +76,11 @@ private val PALETTES: List<Pair<String, String>> = listOf("pattern" to "Pattern 
 
 /** The visualisations offered (23:06: only the chosen ones — centred spectrum and the four analysers; projectM follows). */
 private val EFFECT_NAMES = listOf("mirror" to "Spectrum (centred)",
-    "am_led" to "Analyser: LED bars", "am_lumi" to "Analyser: light bars", "am_area" to "Analyser: wave area", "am_radial" to "Analyser: radial")
+    "am_led" to "Analyser: LED bars", "am_lumi" to "Analyser: light bars", "am_area" to "Analyser: wave area", "am_radial" to "Analyser: radial",
+    "pm1" to "MilkDrop: Tunnel", "pm2" to "MilkDrop: Kaleidoscope", "pm3" to "MilkDrop: Rings", "pm4" to "MilkDrop: Starburst")
+
+/** projectM (MilkDrop) presets: drawn by projectM on its own OpenGL surface. */
+val PM_FX = setOf("pm1", "pm2", "pm3", "pm4")
 
 /** Mathematical patterns: drawn as a colour field (cosine palettes, or the chosen colour combination). */
 private val FIELD_FX = setOf("ink", "reaction", "phase", "chladni", "mandel", "epicycles")
@@ -335,6 +339,50 @@ fun VisArea(modifier: Modifier) {
 /** The visualisation itself (full screen or a preview). */
 @Composable
 private fun VisCanvas(v: VisSettings, modifier: Modifier, live: Boolean) {
+    if (v.effect in PM_FX) { ProjectMArea(v, modifier, live); return }
+    VisCanvas2D(v, modifier, live)
+}
+
+/**
+ * A projectM preset. Live: its own OpenGL surface fed with the music heard now; it draws only while visible with the
+ * screen on and the app in the foreground (picture kept meanwhile, carries on when shown again) and is freed when it
+ * leaves the screen for good. Previews (pattern list): a still label tile instead of a surface.
+ */
+@Composable
+private fun ProjectMArea(v: VisSettings, modifier: Modifier, live: Boolean) {
+    if (!live || !app.vlcinterface.player.ProjectM.loaded) {
+        Box(modifier.background(Color(0xFF0B0B14)), contentAlignment = Alignment.Center) {
+            Text(EFFECT_NAMES.firstOrNull { it.first == v.effect }?.second?.removePrefix("MilkDrop: ") ?: "MilkDrop",
+                color = Color(0xFFAFA9EC), fontSize = 12.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+        return
+    }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    val view = remember { arrayOfNulls<app.vlcinterface.player.ProjectM.View>(1) }
+    val shown = remember { booleanArrayOf(true) }
+    var resumed by remember { mutableStateOf(owner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED)) }
+    androidx.compose.runtime.DisposableEffect(owner) {
+        val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
+            when (e) {
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> { resumed = true; view[0]?.appResumed(); view[0]?.drawing(shown[0]) }
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> { resumed = false; view[0]?.appPaused() }
+                else -> {}
+            }
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs); view[0]?.release(); view[0] = null }
+    }
+    androidx.compose.ui.viewinterop.AndroidView(
+        factory = { c -> app.vlcinterface.player.ProjectM.View(c, v.effect).also { view[0] = it; it.drawing(resumed) } },
+        update = { it.setPreset(v.effect) },
+        modifier = modifier.background(Color.Black).onGloballyPositioned { c ->
+            val b = c.boundsInWindow(); val now = b.width > 1f && b.height > 1f
+            if (now != shown[0]) { shown[0] = now; view[0]?.drawing(now && resumed) }
+        })
+}
+
+@Composable
+private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
     // On screen with a real size? (the player's cover place can be hidden or scrolled out of view)
     val shown = remember { booleanArrayOf(true) }
     val m = rememberVisMotion(v, live) { shown[0] }

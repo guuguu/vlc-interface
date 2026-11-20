@@ -77,8 +77,15 @@ android {
                 "META-INF/versions/9/OSGI-INF/MANIFEST.MF", "META-INF/INDEX.LIST", "META-INF/versions/*/module-info.class", "module-info.class", "META-INF/versions/*/OSGI-INF/MANIFEST.MF"
             )
         }
-        jniLibs { useLegacyPackaging = false }
+        jniLibs {
+            useLegacyPackaging = false
+            // libprojectM (prebuilt): packaged once even if both CMake and the jniLibs folder bring it.
+            pickFirsts += "**/libprojectM-4.so"
+        }
     }
+
+    // Prebuilt libprojectM (built by the "Build libprojectM" workflow) is packaged into the APK from here.
+    sourceSets { getByName("main") { jniLibs.srcDirs("src/main/cpp/projectm/lib") } }
 }
 
 dependencies {

@@ -117,6 +117,46 @@ static inline float sbp_run(sbp_t *q, float x) {
     return y;
 }
 
+/* projectM: the song's samples (stereo, before the volume) kept with their play time, read by the projectM bridge
+   (projectmjni.c) for the part being heard now. Filled only while a projectM picture is shown. */
+static int64_t now_us(void);
+#define PCM_N 65536                                  /* frames (stereo pairs), power of two */
+#define PCM_BLK 128
+static float g_pcm[PCM_N * 2];
+static atomic_uint g_pcmW;                           /* frames written (wraps) */
+typedef struct { int64_t pts; unsigned start, count; int rate; } pcmblk_t;
+static pcmblk_t g_pcmBlk[PCM_BLK];
+static atomic_uint g_pcmBlkW;
+static atomic_bool g_pcmOn;
+
+__attribute__((visibility("default"))) void vlci_pcm_enable(int on) { atomic_store(&g_pcmOn, on ? true : false); }
+
+/* Copies the frames heard since [*cursor] (up to max, the newest ones) into out (interleaved stereo); returns frames. */
+__attribute__((visibility("default"))) int vlci_pcm_read(float *out, int max, unsigned *cursor) {
+    int64_t now = now_us();
+    unsigned bw = atomic_load(&g_pcmBlkW);
+    unsigned end = *cursor;
+    bool found = false;
+    for (unsigned k = 0; k < PCM_BLK && k < bw; k++) {           /* newest block already playing */
+        pcmblk_t b = g_pcmBlk[(bw - 1 - k) % PCM_BLK];
+        if (b.pts > now) continue;
+        int64_t el = (now - b.pts) * (int64_t)b.rate / 1000000;
+        if (el > (int64_t)b.count) el = b.count;
+        end = b.start + (unsigned)el; found = true; break;
+    }
+    if (!found) return 0;
+    unsigned w = atomic_load(&g_pcmW);
+    if (w - end > PCM_N) end = w;
+    unsigned from = *cursor;
+    if (end - from > (unsigned)max || end < from) from = end - (unsigned)max;   /* only the newest */
+    int n = 0;
+    for (unsigned i = from; i != end && n < max; i++, n++) {
+        out[n * 2] = g_pcm[(i % PCM_N) * 2]; out[n * 2 + 1] = g_pcm[(i % PCM_N) * 2 + 1];
+    }
+    *cursor = end;
+    return n;
+}
+
 static void vbq_design(vbq_t *q, bool high, float f, float fs) {
     if (f > fs * 0.45f) f = fs * 0.45f;
     if (f < 10.f) f = 10.f;
@@ -423,6 +463,8 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     double ea = 0.0, eb = 0.0;
     double es[SPEC_N] = { 0 };
     const bool specOn = atomic_load(&g_specOn);
+    const bool pcmOn = atomic_load(&g_pcmOn);
+    unsigned pcmStart = atomic_load(&g_pcmW);
     if (specOn) spec_update((float)(g_src ? g_src : g_rate));
     bands_update();
     while (done < count) {
@@ -433,6 +475,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
             float va = vbq_run(&g_vb[1], vbq_run(&g_vb[0], m)), vb = vbq_run(&g_vb[3], vbq_run(&g_vb[2], m));
             ea += va * va; eb += vb * vb;
             if (specOn) for (int b = 0; b < SPEC_N; b++) { float s = sbp_run(&g_sb[b], m); es[b] += s * s; }
+            if (pcmOn) { unsigned pi = (pcmStart + done + i) % PCM_N; g_pcm[pi * 2] = x; g_pcm[pi * 2 + 1] = y; }
             if (g_eqActive) { x = eq_run(x, 0); y = eq_run(y, 1); }
             float k = (float)(done + i);
             float l = x * (sl + dl * k), r = y * (sr + dr * k);
@@ -456,6 +499,12 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     float ra = count ? sqrtf((float)(ea / count)) : 0.f, rb = count ? sqrtf((float)(eb / count)) : 0.f;
     g_ring[wi % RING] = (peak_t){ when, pl > 1.f ? 1.f : pl, pr > 1.f ? 1.f : pr, ra, rb };
     for (int b = 0; b < SPEC_N; b++) g_spec[(wi % RING) * SPEC_N + b] = (specOn && count) ? sqrtf((float)(es[b] / count)) : 0.f;
+    if (pcmOn && count) {
+        unsigned bw = atomic_load(&g_pcmBlkW);
+        g_pcmBlk[bw % PCM_BLK] = (pcmblk_t){ when, pcmStart, count, (int)(g_src ? g_src : g_rate) };
+        atomic_store(&g_pcmW, pcmStart + count);
+        atomic_store(&g_pcmBlkW, bw + 1);
+    }
     atomic_store(&g_w, wi + 1);
     pthread_mutex_unlock(&g_lock);
 }

@@ -264,9 +264,19 @@
 ## projectM (requested 2026-11-20 23:06)
 - libprojectM v4.1.8 compiled for Android arm64 (OpenGL ES 3, shared, LGPL 2.1) by the "Build libprojectM" workflow
   and committed into app/src/main/cpp/projectm (library + headers + licence). Done 23:11.
-- Still to do: native bridge (projectM fed with the app's own sound — a sample buffer added to the sound engine),
-  a drawing surface in the cover place and full screen, four bundled presets, the same visibility / lifecycle rules
-  (stops when not visible, freed when a cover / clock replaces it), and the four as choices on the Visualisation page.
+- Integrated (23:26 "start"):
+  - Four bundled presets from projectM's "Cream of the Crop" pack (credits in assets/projectm/CREDITS.txt), as
+    choices on the Visualisation page: "MilkDrop: Tunnel", "MilkDrop: Kaleidoscope", "MilkDrop: Rings",
+    "MilkDrop: Starburst" (chosen for needing no extra texture files).
+  - Fed with the music heard now: the sound engine keeps the song's samples (before the volume) with their play
+    time; projectM gets exactly the part being heard (Bluetooth delay included). The tap runs only while a
+    MilkDrop picture is drawing.
+  - Drawn on its own OpenGL ES 3 surface in the cover place and full screen; draws only while visible with the
+    screen on and the app in the foreground (picture and context kept meanwhile, carries on without restarting);
+    freed when a cover / the clock replaces it or the page closes. Long press still opens the Visualisation page.
+  - Presets keep their own colours (colour combinations, Sensitivity, Amplitude and Bar thickness are for the
+    spectrum / analyser pictures). In the pattern list, MilkDrop choices show a name tile instead of a live preview.
+  - APK: libprojectM (~15 MB before packaging) is added.
 
 ## Video "Rotate" button (requested 2026-11-20 23:14)
 - New "Rotate" button in the video player's bottom row (next to the format button): turns only the film's picture

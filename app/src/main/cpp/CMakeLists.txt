@@ -17,3 +17,11 @@ target_link_libraries(mp3lame m)
 add_library(lamejni SHARED lamejni.c)
 target_include_directories(lamejni PRIVATE lame)
 target_link_libraries(lamejni mp3lame log)
+
+# projectM 4 (LGPL 2.1, prebuilt shared library from the "Build libprojectM" workflow: projectm/lib, headers in
+# projectm/include, licence in projectm/) and the app's small bridge to it (projectmjni.c).
+add_library(projectM-4 SHARED IMPORTED)
+set_target_properties(projectM-4 PROPERTIES IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/projectm/lib/${ANDROID_ABI}/libprojectM-4.so)
+add_library(projectmjni SHARED projectmjni.c)
+target_include_directories(projectmjni PRIVATE projectm/include)
+target_link_libraries(projectmjni projectM-4 vlciaudio GLESv3 log)
