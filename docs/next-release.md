@@ -202,3 +202,5 @@
   pulse — the low band (kick / bass, up to ~5 per second) and the high band (hats, snares) — that drives the
   movement and gives it a step forward; the pulse rises at once and fades in a fraction of a second. Loudness
   still adds a little. The automatic level adapts within a few seconds. Still no flashing.
+- Movement speed mostly from the music (22:28, dance music felt slow): a calm drift between beats, about 3× faster
+  moves on the beats than before.

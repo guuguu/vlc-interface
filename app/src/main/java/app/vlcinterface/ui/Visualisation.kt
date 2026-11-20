@@ -223,8 +223,9 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean): VisMotion {
                 // Rises at once on a beat, falls back within a fraction of a second (follows the rhythm, still no flashing).
                 fun follow(cur: Float, target: Float) = cur + (target - cur) * ((if (target > cur) 30f else 6f) * dt).coerceAtMost(1f)
                 m.lo = follow(m.lo, a); m.hi = follow(m.hi, b)
-                m.pb += dt * (0.25f + 1.5f * m.lo * k)
-                m.ps += dt * (0.45f + 2.4f * m.hi * k)
+                // Movement speed comes mostly from the music: a calm drift between beats, quick moves on them.
+                m.pb += dt * (0.15f + 4.0f * m.lo * k)
+                m.ps += dt * (0.25f + 5.0f * m.hi * k)
                 m.tc += dt * vs.colourSpeed.coerceIn(0.2f, 3f) * (0.6f + 0.8f * m.hi)
                 m.t = clock
             }
