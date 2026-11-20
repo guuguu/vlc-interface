@@ -24,6 +24,8 @@
 ## Fix: video player's top buttons (reported 2026-11-20 17:48)
 - The top bar was squeezed into one row: chips shrank to tiny text, symbols near-invisible, and "Songs" / "Radio"
   overflowed off screen.
-- Now two rows, never squeezed: row 1 — back, home, title, lock, settings and the status symbols; row 2 (wraps if
+- Upright: two rows, never squeezed: row 1 — back, home, title, lock, settings and the status symbols; row 2 (wraps if
   needed) — output, Audio & subs, Hue & sat, speed, Songs, Radio. Symbols at the button size (at least 75 %), chip
   text at least 13 sp, chips at least 34 dp high.
+- Sideways (landscape): everything on one clean row at the same readable sizes (scrolls sideways only if a narrow
+  screen needs it) (requested 2026-11-20 17:50).

@@ -23,6 +23,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -414,11 +415,40 @@ private fun BoxScope.ControlsOverlayBody(
         SymButton(onLock, Modifier.align(Alignment.TopEnd).padding(12.dp)) { SymIcon(Icons.Filled.Lock, "Unlock controls", tint = Color.White) }
         return
     }
-    // Top bar on two rows, never squeezed: symbols and text keep a readable size (the user's button size, at least 75 %).
+    // Upright: top bar on two rows, never squeezed: symbols and text keep a readable size (the user's button size, at least 75 %).
     // Row 1: back, home, title, lock, settings and the status symbols. Row 2 (wraps if needed): output, panels, speed,
     // and the other two players.
     val topK = (App.instance.store.current.settings.buttonScale / 100f).coerceAtLeast(0.75f)
-    CompositionLocalProvider(LocalBtnScale provides topK) {
+    val landTop = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
+    val speedChip: @Composable () -> Unit = {
+        OverlayChip("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
+            val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
+            val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
+            player.setRate(rates[(i + 1) % rates.size]); onTouch()
+        }
+    }
+    // Sideways: everything on one clean row (same readable sizes; it scrolls sideways only if a narrow screen needs it).
+    if (landTop) CompositionLocalProvider(LocalBtnScale provides topK) {
+        Row(Modifier.align(Alignment.TopStart).fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
+            HomeButton(nav, Color.White)
+            Text(p.item?.title ?: "", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 220.dp))
+            OutputPill(openOutput)
+            OverlayChip("Audio & subs") { onTouch(); onPanel() }
+            OverlayChip("Hue & sat") { onTouch(); onPicture() }
+            speedChip()
+            OverlayChip("Songs") { PlayerSwitch.go(nav, "songs") }
+            OverlayChip("Radio") { PlayerSwitch.go(nav, "radio") }
+            SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
+            SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
+            ShazamButton(Color.White)
+            BackgroundWorkButton()
+            ScreenOnSign(Color.White)
+            ExitButton(Color.White)
+        }
+    } else CompositionLocalProvider(LocalBtnScale provides topK) {
     Column(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
@@ -437,11 +467,7 @@ private fun BoxScope.ControlsOverlayBody(
             OverlayChip("Audio & subs") { onTouch(); onPanel() }
             // Dedicated button: hue & saturation, straight to the sliders.
             OverlayChip("Hue & sat") { onTouch(); onPicture() }
-            OverlayChip("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
-                val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
-                val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
-                player.setRate(rates[(i + 1) % rates.size]); onTouch()
-            }
+            speedChip()
             // The other two players (each resumes what it last played).
             OverlayChip("Songs") { PlayerSwitch.go(nav, "songs") }
             OverlayChip("Radio") { PlayerSwitch.go(nav, "radio") }
