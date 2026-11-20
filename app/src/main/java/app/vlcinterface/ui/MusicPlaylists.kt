@@ -194,8 +194,11 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     LaunchedEffect(lastAct, winFocused, topSec, topHidden) {
         if (!topHidden || !winFocused) return@LaunchedEffect   // a window is open: stays away; counts again once it's closed
         kotlinx.coroutines.delay((lastAct + topSec * 1000L - System.currentTimeMillis()).coerceAtLeast(0L))
-        ignoreScrollUntil = System.currentTimeMillis() + 300
+        // Back into view whatever the scroll position: put back at the top and glide the page up to it.
+        ignoreScrollUntil = Long.MAX_VALUE
         topHidden = false
+        kotlinx.coroutines.yield()
+        try { scroll.animateScrollTo(0) } finally { ignoreScrollUntil = System.currentTimeMillis() + 300 }
     }
     LaunchedEffect(winFocused) { if (winFocused && topHidden) lastAct = System.currentTimeMillis() }
     Box(Modifier.fillMaxSize().background(PLAYER_BG).pointerInput(Unit) {
