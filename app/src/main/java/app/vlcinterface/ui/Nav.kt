@@ -147,22 +147,22 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.SmbDetect -> SmbDetectScreen(nav, top)
                     is Screen.ServerCheck -> ServerCheckScreen(nav, top)
                     is Screen.Player -> PlayerScreen(nav, openOutput)
-                    is Screen.Settings -> SettingsScreen(nav)
-                    is Screen.SoundSettings -> SoundSettingsScreen(nav)
-                    is Screen.SettingsGroup -> SettingsGroupScreen(nav, top.id)
-                    is Screen.Wizard -> WizardScreen(nav, top.page)
-                    is Screen.Help -> HelpScreen(nav, top.chapter)
-                    is Screen.MediaFolders -> MediaFoldersScreen(nav)
+                    is Screen.Settings -> SettingsText { SettingsScreen(nav) }
+                    is Screen.SoundSettings -> SettingsText { SoundSettingsScreen(nav) }
+                    is Screen.SettingsGroup -> SettingsText { SettingsGroupScreen(nav, top.id) }
+                    is Screen.Wizard -> SettingsText { WizardScreen(nav, top.page) }
+                    is Screen.Help -> SettingsText { HelpScreen(nav, top.chapter) }
+                    is Screen.MediaFolders -> SettingsText { MediaFoldersScreen(nav) }
                     is Screen.RgScan -> RgScanScreen(nav)
-                    is Screen.Backup -> BackupScreen(nav)
+                    is Screen.Backup -> SettingsText { BackupScreen(nav) }
                     is Screen.Playlists -> PlaylistsScreen(nav, openOutput)
                     is Screen.PlaylistDetail -> PlaylistDetailScreen(nav, top)
                     is Screen.Queue -> QueueScreen(nav)
                     is Screen.Music -> MusicScreen(nav, openOutput)
-                    is Screen.AlarmEdit -> AlarmEditScreen(nav, top.id)
-                    is Screen.AlarmSettings -> AlarmSettingsScreen(nav)
-                    is Screen.ClockAspect -> ClockAspectScreen(nav)
-                    is Screen.Visualisation -> VisualisationScreen(nav)
+                    is Screen.AlarmEdit -> SettingsText { AlarmEditScreen(nav, top.id) }
+                    is Screen.AlarmSettings -> SettingsText { AlarmSettingsScreen(nav) }
+                    is Screen.ClockAspect -> SettingsText { ClockAspectScreen(nav) }
+                    is Screen.Visualisation -> SettingsText { VisualisationScreen(nav) }
                     is Screen.Logs -> LogsScreen(nav)
                     is Screen.LogPage -> LogPageScreen(nav, top.key)
                     is Screen.LogView -> LogViewScreen(nav, top.kind)

@@ -115,8 +115,10 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer, zone
     fun px(v: Float) = v * u
     fun spOf(pxv: Float) = (pxv / density / fontScale).sp
     fun pt(angDeg: Float, r: Float) = Offset(c.x + px(r) * sin(angDeg * PI.toFloat() / 180f), c.y - px(r) * cos(angDeg * PI.toFloat() / 180f))
-    fun text(str: String, center: Offset, sizeU: Float, color: Color, bold: Boolean = false) {
-        val l = tm.measure(str, TextStyle(color = color, fontSize = spOf(px(sizeU)), fontWeight = if (bold) FontWeight((700 * thk).toInt().coerceIn(100, 900)) else weightK))
+    // Readable floor for the date and weather: about 14 sp (never more than a share of a small clock's face).
+    val floorPx = minOf(14f * density * fontScale, minOf(size.width, size.height) * 0.1f)
+    fun text(str: String, center: Offset, sizeU: Float, color: Color, bold: Boolean = false, floor: Float = 0f) {
+        val l = tm.measure(str, TextStyle(color = color, fontSize = spOf(maxOf(px(sizeU), floor)), fontWeight = if (bold) FontWeight((700 * thk).toInt().coerceIn(100, 900)) else weightK))
         drawText(l, topLeft = Offset(center.x - l.size.width / 2f, center.y - l.size.height / 2f))
     }
 
@@ -177,13 +179,17 @@ private fun DrawScope.drawClock(a: ClockAspect, ms: Long, tm: TextMeasurer, zone
             val tl = Offset(bc.x - px(ww) / 2, cy - px(wh) / 2)
             drawRoundRect(Color(0xFF111111).d(), tl, androidx.compose.ui.geometry.Size(px(ww), px(wh)), androidx.compose.ui.geometry.CornerRadius(px(1.5f)))
             drawRoundRect(main.copy(alpha = main.alpha * 0.7f), tl, androidx.compose.ui.geometry.Size(px(ww), px(wh)), androidx.compose.ui.geometry.CornerRadius(px(1.5f)), style = Stroke(px(0.6f)))
-            text(str, Offset(bc.x, cy), if (i == 0) fs else fs * 0.86f, dateC)
+            text(str, Offset(bc.x, cy), if (i == 0) fs else fs * 0.86f, dateC, floor = floorPx)
         }
-    } else text(dateStr, bc, 6.5f * ds * placedDate.k, dateC)
+    } else {
+        // At the readable floor a long weekday is shortened rather than made smaller.
+        val atFloor = px(6.5f * ds * placedDate.k) < floorPx
+        text(if (atFloor && a.design == 1) DAY_LONG[dow].take(3) + " " + dayNo else dateStr, bc, 6.5f * ds * placedDate.k, dateC, floor = floorPx)
+    }
     if (wx != null) {
-        fun wxBox(k: Float): Pair<Float, Float> = wxSize(wx, k, tm, u, ::spOf)
+        fun wxBox(k: Float): Pair<Float, Float> = wxSize(wx, k, tm, u, ::spOf, floorPx)
         val pw = placeBox(::wxBox, limit, hourAng, minAng, listOf(placedDate.rect))
-        drawWeather(wx, Offset(c.x + px(pw.cx), c.y + px(pw.cy)), pw.k, main, tm, u, ::spOf)
+        drawWeather(wx, Offset(c.x + px(pw.cx), c.y + px(pw.cy)), pw.k, main, tm, u, ::spOf, floorPx)
     }
     // Hands.
     val hw = (a.handW * thk).coerceIn(0.3f, 6f)
@@ -279,22 +285,22 @@ fun tzLabel(z: TimeZone, ms: Long): String {
 }
 
 /** Width / height in clock units: icon on the left, city over the time zone on the right. */
-private fun wxSize(w: WxInfo, k: Float, tm: TextMeasurer, u: Float, spOf: (Float) -> TextUnit): Pair<Float, Float> {
-    val icon = if (w.stage >= 0) 11f * k else 0f
-    val l1 = tm.measure(w.city, TextStyle(fontSize = spOf(6f * k * u), fontWeight = FontWeight.Bold))
-    val l2 = tm.measure(w.tz, TextStyle(fontSize = spOf(4.5f * k * u)))
+private fun wxSize(w: WxInfo, k: Float, tm: TextMeasurer, u: Float, spOf: (Float) -> TextUnit, floor: Float = 0f): Pair<Float, Float> {
+    val icon = if (w.stage >= 0) maxOf(11f * k, floor * 1.3f / u) else 0f
+    val l1 = tm.measure(w.city, TextStyle(fontSize = spOf(maxOf(6f * k * u, floor)), fontWeight = FontWeight.Bold))
+    val l2 = tm.measure(w.tz, TextStyle(fontSize = spOf(maxOf(4.5f * k * u, floor * 0.86f))))
     val tw = max(l1.size.width, l2.size.width) / u
     val th = (l1.size.height + l2.size.height) / u
     return (icon + (if (icon > 0) 2f * k else 0f) + tw) to max(icon, th)
 }
 
-private fun DrawScope.drawWeather(w: WxInfo, center: Offset, k: Float, color: Color, tm: TextMeasurer, u: Float, spOf: (Float) -> TextUnit) {
-    val (bw, _) = wxSize(w, k, tm, u, spOf)
+private fun DrawScope.drawWeather(w: WxInfo, center: Offset, k: Float, color: Color, tm: TextMeasurer, u: Float, spOf: (Float) -> TextUnit, floor: Float = 0f) {
+    val (bw, _) = wxSize(w, k, tm, u, spOf, floor)
     val left = center.x - bw * u / 2
-    val icon = if (w.stage >= 0) 11f * k * u else 0f
+    val icon = if (w.stage >= 0) maxOf(11f * k * u, floor * 1.3f) else 0f
     if (icon > 0) drawWxIcon(w.stage, Offset(left + icon / 2, center.y), icon, color)
-    val l1 = tm.measure(w.city, TextStyle(color = color, fontSize = spOf(6f * k * u), fontWeight = FontWeight.Bold))
-    val l2 = tm.measure(w.tz, TextStyle(color = color.copy(alpha = color.alpha * 0.75f), fontSize = spOf(4.5f * k * u)))
+    val l1 = tm.measure(w.city, TextStyle(color = color, fontSize = spOf(maxOf(6f * k * u, floor)), fontWeight = FontWeight.Bold))
+    val l2 = tm.measure(w.tz, TextStyle(color = color.copy(alpha = color.alpha * 0.75f), fontSize = spOf(maxOf(4.5f * k * u, floor * 0.86f))))
     val tx = left + icon + (if (icon > 0) 2f * k * u else 0f)
     val top = center.y - (l1.size.height + l2.size.height) / 2f
     drawText(l1, topLeft = Offset(tx, top))
@@ -313,6 +319,27 @@ private fun DrawScope.drawWxIcon(stage: Int, c: Offset, s: Float, color: Color) 
         }
         return
     }
+    val rainC = Color(0xFF5AB0FF).copy(alpha = color.alpha)
+    val snowC = Color(0xFFEAF4FF).copy(alpha = color.alpha)
+    fun flake(p: Offset, rr: Float, w: Float) {
+        for (k in 0 until 3) {
+            val a = k * PI.toFloat() / 3
+            drawLine(snowC, Offset(p.x - cos(a) * rr, p.y - sin(a) * rr), Offset(p.x + cos(a) * rr, p.y + sin(a) * rr), w, StrokeCap.Round)
+        }
+    }
+    // Light rain: raindrops alone.
+    if (stage == 4) {
+        for ((dx, dy) in listOf(-0.5f to -0.55f, 0f to -0.3f, 0.5f to -0.55f, -0.25f to 0.25f, 0.25f to 0.25f))
+            drawLine(rainC, Offset(c.x + dx * r, c.y + dy * r), Offset(c.x + dx * r - r * 0.14f, c.y + dy * r + r * 0.42f), r * 0.14f, StrokeCap.Round)
+        return
+    }
+    // Light snow: snowflakes alone.
+    if (stage == 5) {
+        flake(Offset(c.x - r * 0.35f, c.y - r * 0.3f), r * 0.42f, r * 0.1f)
+        flake(Offset(c.x + r * 0.42f, c.y + r * 0.2f), r * 0.42f, r * 0.1f)
+        flake(Offset(c.x - r * 0.2f, c.y + r * 0.62f), r * 0.26f, r * 0.08f)
+        return
+    }
     val cloud = Color(0xFFD8DCE3).copy(alpha = color.alpha)
     val cy = if (stage == 1) c.y + r * 0.1f else c.y - r * 0.2f
     drawCircle(cloud, r * 0.32f, Offset(c.x - r * 0.38f, cy + r * 0.08f))
@@ -323,6 +350,7 @@ private fun DrawScope.drawWxIcon(stage: Int, c: Offset, s: Float, color: Color) 
         val rain = Color(0xFF5AB0FF).copy(alpha = color.alpha)
         for (i in -1..1) drawLine(rain, Offset(c.x + i * r * 0.4f, cy + r * 0.55f), Offset(c.x + i * r * 0.4f - r * 0.12f, cy + r * 0.9f), r * 0.11f, StrokeCap.Round)
     }
+    if (stage == 6) for (i in -1..1) flake(Offset(c.x + i * r * 0.42f, cy + r * (if (i == 0) 0.85f else 0.7f)), r * 0.2f, r * 0.07f)
     if (stage == 3) {
         val bolt = Path().apply {
             moveTo(c.x + r * 0.08f, cy + r * 0.35f); lineTo(c.x - r * 0.22f, cy + r * 0.72f); lineTo(c.x + r * 0.02f, cy + r * 0.72f)

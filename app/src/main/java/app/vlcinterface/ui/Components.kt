@@ -261,7 +261,7 @@ fun SearchSteps(count: Int, at: Int, prev: () -> Unit, next: () -> Unit, clear: 
 }
 
 @Composable
-fun SectionTitle(text: String, modifier: Modifier = Modifier) = Scaled {
+fun SectionTitle(text: String, modifier: Modifier = Modifier) {
     Text(text.uppercase(), modifier = modifier.padding(top = 6.dp, bottom = 4.dp), color = C.muted,
         fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
 }
@@ -322,7 +322,7 @@ private fun PillBody(text: String, selected: Boolean, modifier: Modifier, filled
 }
 
 @Composable
-fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boolean) -> Unit) = Scaled {
+fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boolean) -> Unit) {
     val ex = LocalExplain.current
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).combinedClickable(onClick = { onChange(!checked) }, onLongClick = { ex(label, hint) })
@@ -338,7 +338,7 @@ fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boo
 }
 
 @Composable
-fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) = Scaled {
+fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) {
     val ex = LocalExplain.current
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).combinedClickable(onClick = onClick, onLongClick = { ex(label, hint) })
@@ -353,6 +353,36 @@ fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Uni
         if (LocalShowNow.current && value.endsWith("▶")) Text(value, color = WIZ_GREEN, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         else Text(value, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
+}
+
+// ---------------------------------------------------------------- text that fits (players)
+
+/** Text that shrinks by itself to fit its lines (down to [minSize]) and uses its full size when there's room. */
+@Composable
+fun FitText(text: String, color: Color, fontSize: androidx.compose.ui.unit.TextUnit, modifier: Modifier = Modifier,
+            fontWeight: FontWeight? = null, textAlign: androidx.compose.ui.text.style.TextAlign? = null, maxLines: Int = 2,
+            lineHeight: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+            overflow: androidx.compose.ui.text.style.TextOverflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            letterSpacing: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+            minSize: androidx.compose.ui.unit.TextUnit = 12.sp) {
+    var k by remember(text, fontSize, maxLines) { mutableStateOf(1f) }
+    var ready by remember(text, fontSize, maxLines) { mutableStateOf(false) }
+    val minK = (minSize.value / fontSize.value).coerceIn(0.3f, 1f)
+    Text(text, color = color, fontSize = fontSize * k, lineHeight = if (lineHeight != androidx.compose.ui.unit.TextUnit.Unspecified) lineHeight * k else lineHeight,
+        fontWeight = fontWeight, textAlign = textAlign, maxLines = maxLines, overflow = overflow, letterSpacing = letterSpacing,
+        modifier = modifier.drawWithContent { if (ready) drawContent() },
+        onTextLayout = { r -> if (r.hasVisualOverflow && k > minK) k = (k * 0.9f).coerceAtLeast(minK) else ready = true })
+}
+
+// ---------------------------------------------------------------- settings text size
+
+/** Settings, wizard, help and helper pop-ups: all their text scaled together (main Settings page → "Text size"). */
+@Composable
+fun SettingsText(content: @Composable () -> Unit) {
+    val pct = app.vlcinterface.App.instance.store.state.collectAsState().value.settings.settingsTextPct.coerceIn(70, 160)
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    androidx.compose.runtime.CompositionLocalProvider(
+        androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(d.density, d.fontScale * pct / 100f)) { content() }
 }
 
 // ---------------------------------------------------------------- switches
@@ -464,7 +494,7 @@ fun ExplainHost(content: @Composable () -> Unit) {
 /** Helper pop-up: title and OK in a top bar that never scrolls; the explanation scrolls under it when long. */
 @Composable
 fun HelperDialog(title: String, text: String, extra: (@Composable () -> Unit)? = null, onClose: () -> Unit) {
-    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onClose) { SettingsText {
         androidx.compose.foundation.layout.Column(Modifier.fillMaxWidth().heightIn(max = 560.dp)
             .background(C.panel, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))) {
             Row(Modifier.fillMaxWidth().background(C.card, androidx.compose.foundation.shape.RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
@@ -481,7 +511,7 @@ fun HelperDialog(title: String, text: String, extra: (@Composable () -> Unit)? =
                 extra?.invoke()
             }
         }
-    }
+    } }
 }
 
 // ---------------------------------------------------------------- thin sliders (like the players')
@@ -931,7 +961,7 @@ fun AutoInfoDialog(
     val sec = app.vlcinterface.App.instance.store.state.collectAsState().value.settings.shortPopupSec
     androidx.compose.runtime.LaunchedEffect(pinned) { if (!pinned) { kotlinx.coroutines.delay(sec * 1000L); if (!pinned) onDismissRequest() } }
     // A touch outside it always closes it (kept open or not). Title and buttons in a top bar; the text scrolls under it.
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismissRequest) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismissRequest) { SettingsText {
         androidx.compose.foundation.layout.Column(modifier.fillMaxWidth().heightIn(max = 560.dp)
             .background(containerColor, androidx.compose.foundation.shape.RoundedCornerShape(20.dp))
             .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); pinned = true } }) {
@@ -950,5 +980,5 @@ fun AutoInfoDialog(
                     modifier = Modifier.padding(top = 8.dp))
             }
         }
-    }
+    } }
 }

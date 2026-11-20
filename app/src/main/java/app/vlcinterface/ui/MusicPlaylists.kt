@@ -177,7 +177,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     var topHidden by remember { mutableStateOf(false) }
     var topHpx by remember { mutableIntStateOf(0) }
     var ignoreScrollUntil by remember { mutableLongStateOf(0L) }
-    val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { (if (item.isRadio) 10.dp else 14.dp).toPx() }.toInt()
+    // Look → "Player rows spacing": the gap between the player's rows (and around the title block's bottom).
+    val rowGap = setsP.playerGap.coerceIn(0, 16).dp
+    val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { rowGap.toPx() }.toInt()
     val winFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(clockTop, landscape, topAuto) { topHidden = false }
     LaunchedEffect(scroll, landscape, topAuto) {
@@ -287,7 +289,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             val stickMod = if (landscape) Modifier else Modifier.fillMaxWidth()
                 .onGloballyPositioned { titleTopPx = it.positionInParent().y.toInt(); titleHpx = it.size.height }
                 .zIndex(2f).graphicsLayer { translationY = (scroll.value - titleTopPx).coerceAtLeast(0).toFloat() }
-                .background(PLAYER_BG).padding(bottom = 6.dp)
+                .background(PLAYER_BG).padding(bottom = rowGap / 2)
             Box(stickMod, contentAlignment = Alignment.TopCenter) {
             if (item.isRadio) Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 RadioHeader(item, p, tk)
@@ -299,14 +301,14 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 // Long-press: the song's menu (ReplayGain scan, YouTube / Spotify links, file path).
                 var songMenu by remember { mutableStateOf(false) }
                 Box {
-                    Text(item.title, color = C.text, fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                    FitText(item.title, color = C.text, fontSize = (22 * tk).sp, minSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.combinedClickable(onClick = { openItemFolder(nav, item) }, onLongClick = { songMenu = true }))
                     SongTitleMenu(item.copy(album = p.metaAlbum.ifEmpty { item.album }), p.metaArtist.ifEmpty { item.artist }, p.length, songMenu) { songMenu = false }
                 }
                 // Long-press the album: ReplayGain scan of the whole album (its songs in the current folder / queue).
                 var rgAlbum by remember { mutableStateOf(false) }
                 val albumName = p.metaAlbum.ifEmpty { item.album }
-                Text(listOfNotNull(p.metaArtist.ifEmpty { null }, p.metaAlbum.ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = (15 * tk).sp, textAlign = TextAlign.Center,
+                FitText(listOfNotNull(p.metaArtist.ifEmpty { null }, p.metaAlbum.ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = (15 * tk).sp, textAlign = TextAlign.Center, minSize = 12.sp,
                     modifier = Modifier.combinedClickable(onClick = {}, onLongClick = { if (albumName.isNotBlank()) rgAlbum = true }))
                 // Why a song didn't play (shown here too, not only on the video player); the queue goes on by itself.
                 if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -321,7 +323,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     else if (p.sleepSongs == 1) "Sleep after this song" else if (p.sleepSongs > 1) "Sleep after ${p.sleepSongs} songs" else null)
                 // Tap the badges (or the title area) for the song's tags and ReplayGain values.
                 var showInfo by remember { mutableStateOf(false) }
-                Text(if (badges.isNotEmpty()) badges.joinToString(" · ") + "  ℹ️" else "Tags & ReplayGain ℹ️", color = accent(), fontSize = 12.sp,
+                FitText(if (badges.isNotEmpty()) badges.joinToString(" · ") + "  ℹ️" else "Tags & ReplayGain ℹ️", color = accent(), fontSize = 12.sp, maxLines = 1, minSize = 10.sp,
                     modifier = Modifier.clickable { showInfo = true }.padding(4.dp))
                 if (showInfo) TagInfoDialog(item) { showInfo = false }
             }
@@ -539,7 +541,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (clockShown && !setsP.clockAutoHide) pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(horizontal = 16.dp, vertical = 4.dp))
             // Otherwise the clock is the top of the page and scrolls away with it (taken away once out of view).
             Column(Modifier.weight(1f).onGloballyPositioned { viewTop = it.boundsInRoot().top }.verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(if (item.isRadio) 10.dp else 14.dp)) {
+                verticalArrangement = Arrangement.spacedBy(rowGap)) {
                 if (clockShown && setsP.clockAutoHide) Box(Modifier.fillMaxWidth().keepWhenHidden(topHidden).onSizeChanged { topHpx = it.height }) {
                     pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(vertical = 4.dp))
                 }
@@ -594,13 +596,18 @@ private fun SeekBlock(item: PlayItem) {
             }
         }) {
             val bw = maxWidth
+            // Slim: thin track and small knob (like the settings sliders); still dragged anywhere on its row.
+            val sCols = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line)
             Slider(drag ?: if (len > 0) (pos.toFloat() / len).coerceIn(0f, 1f) else 0f, { drag = it },
+                modifier = Modifier.height(26.dp),
                 onValueChangeFinished = {
                     if (tapped) { if (len > 0) askTime = true } else drag?.let { player.seekFraction(it) }
                     drag = null
                 }, enabled = len > 0 || p.item != null,
-                colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line),
-                thumb = { KnobThumb(Color.White) })
+                colors = sCols,
+                thumb = { KnobThumb(Color.White) },
+                track = { st -> SliderDefaults.Track(sliderState = st, modifier = Modifier.height(4.dp), colors = sCols, enabled = len > 0 || p.item != null,
+                    drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) })
             // The bubble shows once the finger slides or stays down (not for a short tap).
             drag?.takeIf { moved || held }?.let { f ->
                 val target = (f * len).toLong()
@@ -618,7 +625,7 @@ private fun SeekBlock(item: PlayItem) {
                 }
             }
         }
-        Row { Text(fmtTime(pos), color = C.muted, fontSize = 13.sp); Grow(); Text("-" + fmtTime((len - pos).coerceAtLeast(0)), color = C.muted, fontSize = 13.sp) }
+        Row(Modifier.offset(y = (-3).dp)) { Text(fmtTime(pos), color = C.muted, fontSize = 12.sp, lineHeight = 13.sp); Grow(); Text("-" + fmtTime((len - pos).coerceAtLeast(0)), color = C.muted, fontSize = 12.sp, lineHeight = 13.sp) }
         if (askTime) JumpToTimeDialog(len, onDismiss = { askTime = false }) { ms -> askTime = false; player.seekFraction(ms.toFloat() / len) }
     }
 }
@@ -1499,21 +1506,21 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
         val song = Modifier.combinedClickable(onClick = { songMenu = true }, onLongClick = { songMenu = true })
         Text("RADIO STATION", color = accent(), fontSize = 12.sp, lineHeight = 14.sp, letterSpacing = 1.sp, modifier = station)
         Box {
-            Text(name + if (p.stationName.isNotBlank() && !p.stationName.equals(name, true)) " · ${p.stationName}" else "",
-                color = C.text, fontSize = (16 * tk).sp, lineHeight = (19 * tk).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            FitText(name + if (p.stationName.isNotBlank() && !p.stationName.equals(name, true)) " · ${p.stationName}" else "",
+                color = C.text, fontSize = (16 * tk).sp, minSize = 12.sp, lineHeight = (19 * tk).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = station)
             StationMenu(item, stMenu, "station") { stMenu = false }
         }
         Text(item.uri.substringAfter("://").take(60), color = C.muted, fontSize = 11.sp, lineHeight = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = station)
         Box {
-            Text(title.ifEmpty { "Live" }, color = C.text, fontSize = (22 * tk).sp, lineHeight = (25 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+            FitText(title.ifEmpty { "Live" }, color = C.text, fontSize = (22 * tk).sp, minSize = 15.sp, lineHeight = (25 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                 maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp).then(song))
             StationMenu(item, songMenu, "song") { songMenu = false }
         }
-        if (artist.isNotEmpty()) Text(artist, color = C.muted, fontSize = (15 * tk).sp, lineHeight = (18 * tk).sp, textAlign = TextAlign.Center, modifier = song)
+        if (artist.isNotEmpty()) FitText(artist, color = C.muted, fontSize = (15 * tk).sp, minSize = 12.sp, lineHeight = (18 * tk).sp, textAlign = TextAlign.Center, modifier = song)
         val details = listOfNotNull((fav?.meta ?: LastStationMeta.of(item.uri)).ifEmpty { null }, p.rgInfo.ifEmpty { null },
             if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else null)
-        if (details.isNotEmpty()) Text(details.joinToString(" · "), color = accent(), fontSize = 12.sp, lineHeight = 14.sp, textAlign = TextAlign.Center, modifier = station.padding(horizontal = 4.dp, vertical = 3.dp))
+        if (details.isNotEmpty()) FitText(details.joinToString(" · "), color = accent(), fontSize = 12.sp, minSize = 10.sp, lineHeight = 14.sp, textAlign = TextAlign.Center, modifier = station.padding(horizontal = 4.dp, vertical = 3.dp))
         if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
         // No VPN-NAS button on the radio player: radio doesn't use the NAS.
         // Mobile data only: what this station has used so far, live.

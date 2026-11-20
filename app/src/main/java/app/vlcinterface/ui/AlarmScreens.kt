@@ -125,7 +125,7 @@ fun AlarmRow(nav: Navigator, al: Alarm, k: Float) {
         Column(Modifier.weight(1f).padding(start = 10.dp)) {
             if (k >= 0.75f) {
                 if (al.name.isNotEmpty()) Text(al.name, color = C.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(Alarm.whenText(al), color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(Alarm.whenText(al), color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             } else Text(listOf(al.name, Alarm.whenText(al)).filter { it.isNotEmpty() }.joinToString(" · "), color = C.muted,
                 fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -150,7 +150,7 @@ private fun <T> Choices(options: List<Pair<String, T>>, selected: T, onPick: (T)
 private fun Label(text: String, hint: String = "") {
     Column(Modifier.fillMaxWidth().helpOn(text).padding(start = 16.dp, end = 16.dp, top = 10.dp)) {
         Text(text, color = C.text, fontSize = 15.sp)
-        if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 12.sp)
+        if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
     }
 }
 
@@ -258,7 +258,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                             modifier = Modifier.padding(start = 16.dp, bottom = 10.dp).clickable { a = a.copy(date = "") })
                     }
                 }
-                Text(Alarm.whenText(a), color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
+                Text(Alarm.whenText(a), color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
             }
             SectionTitle("What plays")
             CardBox {
@@ -299,7 +299,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                 SliderRow("Start", a.volStart.toFloat(), 0f..100f, "${a.volStart} %") { a = a.copy(volStart = it.toInt()) }
                 SliderRow("Target", a.volTarget.toFloat(), 0f..100f, "${a.volTarget} %") { a = a.copy(volTarget = it.toInt()) }
                 val maxL = Alarms.current.global.maxLevel
-                if (a.volTarget > maxL || a.volStart > maxL) Text("Capped at $maxL % (maximum level in the alarm clock settings)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp))
+                if (a.volTarget > maxL || a.volStart > maxL) Text("Capped at $maxL % (maximum level in the alarm clock settings)", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp))
                 Label("Fade-in time")
                 Choices(listOf(0, 30, 60, 120, 300, 600).map { minText(it) to it }, a.fadeSec) { a = a.copy(fadeSec = it) }
             }
@@ -385,7 +385,7 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
     if (rootAsk) RootFolderDialog { rootAsk = false }
             SectionTitle("Alarm health")
             HealthCard()
-            Text("Tip: double tap or long-press any setting for an explanation", color = C.muted, fontSize = 12.sp)
+            Text("Tip: double tap or long-press any setting for an explanation", color = C.muted, fontSize = 13.sp)
             SectionTitle("Display")
             CardBox {
                 HValueRow("Clock aspect", "Designs, colours, thickness, size, date, digital", "›") { nav.go(Screen.ClockAspect) }
@@ -397,13 +397,22 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
                 HValueRow("City", if (g.cityName.isEmpty()) "Not chosen: the phone's time zone" else "Clock time, alarms and weather follow it, also when the phone's time zone isn't automatic",
                     if (g.cityName.isEmpty()) "Choose" else g.cityName) { cityAsk = true }
                 Divider()
-                HToggleRow("Weather on the clock", "Sunny, cloudy, rainy or storm, with the city's short name and time zone", g.showWeather) {
+                HToggleRow("Weather on the clock", "Sun, clouds, rain, snow or storm, with the city's short name and time zone", g.showWeather) {
                     set(g.copy(showWeather = it)); if (it) app.vlcinterface.alarm.Weather.refresh(force = true) }
+                if (g.showWeather) {
+                    var wHelp by remember { mutableStateOf(false) }
+                    Label("Weather shows", "Now: the weather right now · At noon: today's forecast for 12:00 at the city")
+                    Choices(listOf("Now" to false, "At noon" to true), g.weatherNoon) { v ->
+                        set(g.copy(weatherNoon = v)); app.vlcinterface.alarm.Weather.refresh(force = true)
+                        if (g.helpers) wHelp = true
+                    }
+                    if (wHelp) HelperDialog("Weather shows", HELP["Weather shows"] ?: "") { wHelp = false }
+                }
             }
             SectionTitle("Ringing")
             CardBox {
                 SliderRow("Maximum level", g.maxLevel.toFloat(), 10f..100f, "${g.maxLevel} %") { set(g.copy(maxLevel = it.toInt())) }
-                Text("No alarm goes above it", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
+                Text("No alarm goes above it", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
                 Divider()
                 HValueRow("Alarm sound", "When nothing else can play, or music was already playing", g.toneName.ifEmpty { "Phone's alarm" }) { soundAsk = true }
                 Divider()
@@ -518,7 +527,7 @@ fun ClockAspectScreen(nav: Navigator) {
                     HueSatBars("Disk (inside the circle)", a.diskHue, a.diskSat, ::clockDisk, round = true) { h, s -> set(a.copy(diskHue = h, diskSat = s)) }
                     HueSatBars("Ring, ticks, numbers, hands", a.mainHue, a.mainSat, ::clockMain) { h, s -> set(a.copy(mainHue = h, mainSat = s)) }
                     HueSatBars("Date", a.dateHue, a.dateSat, ::clockMain) { h, s -> set(a.copy(dateHue = h, dateSat = s)) }
-                    Text("Second hand", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                    Text("Second hand", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Hue", color = C.text, fontSize = 13.sp, modifier = Modifier.width(78.dp))
                         GradientBar(a.secHue / 360f, androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(0f, 60f, 120f, 180f, 240f, 300f, 359f).map { Color.hsl(it, 0.9f, 0.62f) }),
@@ -531,11 +540,11 @@ fun ClockAspectScreen(nav: Navigator) {
             CardBox {
                 SliderRow("Charging dimming", a.dim.toFloat(), 0f..85f, "${a.dim} %") { set(a.copy(dim = it.toInt())); dimPreviewAt = System.currentTimeMillis() }
                 Text("Only the clock shown while charging (screen saver); the preview above shows it while you move the slider",
-                    color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
+                    color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, bottom = 6.dp))
                 val key = if (a.analog) "${a.design}" else "d"
                 val tk = a.thickFor()
                 SliderRow("Thickness", tk, 0.5f..2.5f, "×%.1f".format(tk)) { set(a.copy(thick = a.thick + (key to it))) }
-                Text(if (a.analog) "Lines and numbers of design ${a.design} only" else "Digits of the digital clock only", color = C.muted, fontSize = 12.sp,
+                Text(if (a.analog) "Lines and numbers of design ${a.design} only" else "Digits of the digital clock only", color = C.muted, fontSize = 13.sp,
                     modifier = Modifier.padding(start = 16.dp, bottom = 8.dp))
             }
             SectionTitle("Sizes and thickness")
@@ -555,7 +564,7 @@ fun ClockAspectScreen(nav: Navigator) {
             SectionTitle("Night")
             CardBox {
                 SliderRow("Dimming", a.nightDim.toFloat(), 0f..80f, "${a.nightDim} %") { set(a.copy(nightDim = it.toInt())) }
-                Text("From 22:00 to 07:00", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
+                Text("From 22:00 to 07:00", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
             }
             Box(Modifier.height(24.dp))
         }
@@ -583,7 +592,7 @@ private fun CityDialog(onDone: () -> Unit) {
                         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search))
                     STextButton({ search() }, enabled = !busy) { Text(if (busy) "…" else "Search", color = accent()) }
                 }
-                if (note.isNotEmpty()) Text(note, color = C.muted, fontSize = 12.sp)
+                if (note.isNotEmpty()) Text(note, color = C.muted, fontSize = 13.sp)
                 Column(Modifier.heightIn(max = 300.dp).verticalScroll(rememberScrollState())) {
                     res.forEach { c ->
                         Column(Modifier.fillMaxWidth().clickable {
@@ -592,7 +601,7 @@ private fun CityDialog(onDone: () -> Unit) {
                             onDone()
                         }.padding(vertical = 8.dp)) {
                             Text(c.name + "  ·  " + c.short, color = C.text, fontSize = 15.sp)
-                            Text(listOf(c.detail, c.tz).filter { it.isNotEmpty() }.joinToString(" · "), color = C.muted, fontSize = 12.sp)
+                            Text(listOf(c.detail, c.tz).filter { it.isNotEmpty() }.joinToString(" · "), color = C.muted, fontSize = 13.sp)
                         }
                     }
                 }
@@ -609,6 +618,8 @@ private fun CityDialog(onDone: () -> Unit) {
 private val LocalHelp = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Unit> { {} }
 
 private val HELP: Map<String, String> = mapOf(
+    "Weather shows" to "What the weather icon on the clock shows for your city. 'At noon': today's forecast for 12:00 at the city (its own local time) — handy in the morning to see what the day will be; after midnight it moves to the new day's noon. " +
+        "'Now': the weather right now. Either way it's refreshed every 30 minutes (only with the weather on). Icons: sun, cloud, raindrops (light rain), cloud with rain, snowflakes (light snow), cloud with snow, storm. Default: At noon.",
     "Alarm on" to "Switches this alarm on or off without deleting it. A one-time alarm switches itself off after ringing.",
     "Time" to "When the alarm rings, in the time zone of the city chosen in the alarm clock settings (or the phone's).",
     "Days" to "The days it repeats. No day selected: it rings once, at the next time shown.",
@@ -704,7 +715,7 @@ private fun HValueRow(label: String, hint: String = "", value: String, onClick: 
 }
 
 @Composable
-private fun Explain(text: String) = Text(text, color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
+private fun Explain(text: String) = Text(text, color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
 
 // ---------------------------------------------------------------- music folder, alarm sound
 
@@ -745,7 +756,7 @@ private fun RootFolderDialog(onDone: () -> Unit) {
                             Alarms.setGlobal(Alarms.current.global.copy(localRoot = rel, localVolume = vol)); onDone()
                         }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(rel, color = if (on) accent() else C.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
-                            Text("$n songs", color = C.muted, fontSize = 12.sp)
+                            Text("$n songs", color = C.muted, fontSize = 13.sp)
                         }
                     }
                 }
@@ -869,7 +880,7 @@ private fun HealthCard() {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("⚠  " + i.title, color = C.bad, fontSize = 15.sp)
-                    Text(i.text, color = C.muted, fontSize = 12.sp)
+                    Text(i.text, color = C.muted, fontSize = 13.sp)
                 }
                 Pill("Fix") { i.fix(ctx) }
             }
@@ -885,7 +896,7 @@ private fun HealthCard() {
         }
         if (sleepList.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(sleepList, color = C.muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                Text(sleepList, color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 Pill("Open") { try { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName))) } catch (_: Exception) {} }
             }
             Divider()
@@ -945,7 +956,7 @@ private fun MonthDatesDialog(initial: List<String>, onDone: (List<String>?) -> U
         },
         text = {
             Column {
-                Row(Modifier.fillMaxWidth()) { listOf("M", "T", "W", "T", "F", "S", "S").forEach { Text(it, color = C.muted, fontSize = 12.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
+                Row(Modifier.fillMaxWidth()) { listOf("M", "T", "W", "T", "F", "S", "S").forEach { Text(it, color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center) } }
                 val cells = first + daysIn
                 for (r in 0 until (cells + 6) / 7) Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
                     for (c in 0 until 7) {
@@ -964,7 +975,7 @@ private fun MonthDatesDialog(initial: List<String>, onDone: (List<String>?) -> U
                         }
                     }
                 }
-                Text("${picked.size} dates chosen", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 6.dp))
+                Text("${picked.size} dates chosen", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
             }
         },
         confirmButton = { STextButton({ onDone(picked.sorted()) }) { Text("OK", color = accent()) } },
@@ -989,7 +1000,7 @@ private fun CalendarPickDialog(onDone: () -> Unit) {
                         SRadioButton(sel?.id == c.id, null)
                         Column(Modifier.padding(start = 8.dp)) {
                             Text(c.name + if (c.primary) "  (main)" else "", color = C.text, fontSize = 14.sp)
-                            if (c.account.isNotEmpty() && c.account != c.name) Text(c.account, color = C.muted, fontSize = 12.sp)
+                            if (c.account.isNotEmpty() && c.account != c.name) Text(c.account, color = C.muted, fontSize = 13.sp)
                         }
                     }
                 }

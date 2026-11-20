@@ -140,6 +140,10 @@ object SettingHelp {
             "Off: the clock is pinned above the page and always stays; only the page scrolls under it. Sideways the clock always stays on the left. Default: on.",
         "Hide the album picture while scrolling" to "Upright player with the album picture shown. On: the picture scrolls up with the page; once out of view it's taken away (no jump) and comes back after 'Cover hidden for' seconds from your last action.\n\n" +
             "Off: the picture just scrolls with the page and is never taken away. Sideways it always stays on the left. Default: on.",
+        "Player rows spacing" to "The empty space between the rows of the song and radio players: title block, VPN-NAS button and badges, position bar and its times, player buttons and the rest.\n\n" +
+            "Small gaps keep everything up to the player buttons on screen at once; bigger gaps are airier. The rows themselves stay slim. Default: 4 dp.",
+        "Text size" to "The size of all the text on the settings pages, the setup wizard, the help guide and the helper pop-ups — titles stay a step bigger than the text under them.\n\n" +
+            "The players and the clock aren't affected: their text fits itself to the room. Default: 100 %.",
         "Order of the player rows" to "The order of the rows on the song player and on the radio player, each with its own order: picture (or clock with alarms), title block, position bar, player buttons, tone sliders, 'Playing from', 'Play next…', extra buttons, and Up next (radio: favourites and search).\n\n" +
             "Move a row with ▲ ▼; 'Reset order' puts back the original order. Sideways the picture and title stay on the left side and the other rows keep their order on the right. " +
             "The album picture hides while scrolling only when it's the first row.",

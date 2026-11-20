@@ -451,7 +451,7 @@ fun VisualisationSettings() {
             Column(Modifier.weight(1f)) {
                 Text("Frequencies followed", color = C.text, fontSize = 15.sp)
                 Text(hzText(v.fLo) + " – " + hzText(v.fHi) + if (v.fHi / v.fLo >= 4f) " · big spots: lower part, small spots: upper part" else " · all spots together",
-                    color = C.muted, fontSize = 12.sp)
+                    color = C.muted, fontSize = 13.sp)
             }
             Pill("Reset") { set(v.copy(fLo = 30f, fHi = 150f)) }
         }
@@ -466,7 +466,7 @@ fun VisualisationSettings() {
             Text("10 kHz", color = C.muted, fontSize = 11.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
         }
         Text("On the visualisation: double tap to leave · slide along the long side for the colours, along the short side for the brightness. " +
-            "Movements follow only the chosen frequencies and stay gentle (no flashing).", color = C.muted, fontSize = 12.sp,
+            "Movements follow only the chosen frequencies and stay gentle (no flashing).", color = C.muted, fontSize = 13.sp,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp))
         Box(Modifier.height(2.dp))
     }

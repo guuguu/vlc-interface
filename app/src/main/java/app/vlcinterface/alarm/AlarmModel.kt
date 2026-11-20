@@ -140,6 +140,8 @@ data class AlarmGlobal(
     val lastStationName: String = "",
     val lastFallbackUrl: String = "",
     val lastFallbackName: String = "",
+    /** Weather icon: today's noon forecast (true) or the weather right now. */
+    val weatherNoon: Boolean = true,
 ) {
     fun toJson(): JSONObject = JSONObject().put("vibrate", vibrate).put("led", led).put("crescendo", crescendo)
         .put("snooze1", snooze1).put("snooze2", snooze2).put("snooze3", snooze3).put("pattern", pattern)
@@ -149,7 +151,7 @@ data class AlarmGlobal(
         .put("helpers", helpers).put("calSync", calSync).put("calId", calId).put("calName", calName)
         .put("cityName", cityName).put("cityShort", cityShort).put("cityLat", cityLat).put("cityLon", cityLon).put("cityTz", cityTz)
         .put("showWeather", showWeather).put("localRoot", localRoot).put("localVolume", localVolume)
-        .put("lastStationUrl", lastStationUrl).put("lastStationName", lastStationName).put("lastFallbackUrl", lastFallbackUrl).put("lastFallbackName", lastFallbackName)
+        .put("lastStationUrl", lastStationUrl).put("lastStationName", lastStationName).put("lastFallbackUrl", lastFallbackUrl).put("lastFallbackName", lastFallbackName).put("weatherNoon", weatherNoon)
 
     val snoozes: List<Int> get() = listOf(snooze1, snooze2, snooze3)
 
@@ -162,7 +164,7 @@ data class AlarmGlobal(
             o.optBoolean("helpers", true), o.optBoolean("calSync", false), o.optLong("calId", -1), o.optString("calName"),
             o.optString("cityName"), o.optString("cityShort"), o.optDouble("cityLat", 0.0), o.optDouble("cityLon", 0.0), o.optString("cityTz"),
             o.optBoolean("showWeather", true), o.optString("localRoot"), o.optString("localVolume"),
-            o.optString("lastStationUrl"), o.optString("lastStationName"), o.optString("lastFallbackUrl"), o.optString("lastFallbackName"))
+            o.optString("lastStationUrl"), o.optString("lastStationName"), o.optString("lastFallbackUrl"), o.optString("lastFallbackName"), o.optBoolean("weatherNoon", true))
     }
 }
 

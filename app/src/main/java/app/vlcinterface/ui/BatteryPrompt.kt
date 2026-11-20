@@ -320,9 +320,9 @@ fun UseNasButton() {
         else -> "VPN-NAS off"
     }
     val lit = label == "NAS active" || label == "VPN - NAS active"
-    Box(Modifier.padding(top = 4.dp).clip(RoundedCornerShape(16.dp))
+    Box(Modifier.padding(top = 2.dp).clip(RoundedCornerShape(12.dp))
         .background(if (lit) accent() else C.tile)
-        .border(1.dp, if (lit) accent() else if (vpn) accent().copy(alpha = 0.6f) else C.muted.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+        .border(1.dp, if (lit) accent() else if (vpn) accent().copy(alpha = 0.6f) else C.muted.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
         .combinedClickable(onClick = {
             when {
                 !vpn -> needVpn = true
@@ -330,11 +330,11 @@ fun UseNasButton() {
                 v.lanServers().size == 1 -> app.vlcinterface.player.NetGuard.useNas(ctx, v.lanServers().map { it.id }.toSet())
                 else -> pick = true
             }
-        }, onLongClick = { if (vpn) pick = true else needVpn = true }).padding(horizontal = 14.dp, vertical = 6.dp)) {
+        }, onLongClick = { if (vpn) pick = true else needVpn = true }).padding(horizontal = 12.dp, vertical = 2.dp)) {
         val col = if (lit) Color.Black else if (label == "NAS unreach") Color(0xFFE57373) else if (vpn) accent() else C.muted
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (link.isNotEmpty()) { NetSymbol(link, col); Box(Modifier.width(6.dp)) }
-            Text(label, color = col, fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            Text(label, color = col, fontSize = 12.sp, lineHeight = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
         }
     }
     if (needVpn) {

@@ -80,7 +80,7 @@ fun SettingsLink(name: String, hint: String, onClick: () -> Unit) {
         .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(name, color = C.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 12.sp)
+            if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
         }
         Text("▶", color = accent(), fontSize = 20.sp)
     }
@@ -119,8 +119,27 @@ fun SettingsScreen(nav: Navigator) {
             CardBox {
                 SettingsLink("Launch the setup wizard", "Permissions and the important settings, page by page") { nav.go(Screen.Wizard()) }
             }
-            Text("Long-press any setting for an explanation", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-            Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 16.dp))
+            // Text size of the settings pages, the wizard, the help guide and the helper pop-ups (only a slider).
+            val helpersOnM = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.helpers
+            var sizeHelp by remember { mutableStateOf(false) }
+            CardBox {
+                Column(Modifier.explain("Text size").padding(horizontal = 16.dp, vertical = 10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Text size", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("${s.settingsTextPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
+                    }
+                    ThinSlider(s.settingsTextPct.toFloat(), { v -> set(s.copy(settingsTextPct = (Math.round(v / 5f) * 5).coerceIn(70, 160))) }, valueRange = 70f..160f,
+                        onValueChangeFinished = { if (helpersOnM) sizeHelp = true })
+                }
+            }
+            if (sizeHelp) HelperDialog("Text size", SettingHelp.text("Text size", ""), extra = {
+                Column(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(12.dp)) {
+                    Text("Sample setting", color = C.text, fontSize = 15.sp)
+                    Text("The line under a setting looks like this, at ${s.settingsTextPct} %.", color = C.muted, fontSize = 13.sp)
+                }
+            }) { sizeHelp = false }
+            Text("Long-press any setting for an explanation", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
+            Text("vlc interface ${App.VERSION} · playback by libVLC (LGPL)", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(vertical = 16.dp))
         }
     }
 }
@@ -178,14 +197,14 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             SectionTitle("Subtitles")
             CardBox {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Preferred languages", color = C.muted, fontSize = 12.sp, modifier = Modifier.explain("Preferred languages"))
+                    Text("Preferred languages", color = C.muted, fontSize = 13.sp, modifier = Modifier.explain("Preferred languages"))
                     Field("Preferred languages (e.g. en, es)", s.subLangs.joinToString(", ")) { v ->
                         set(s.copy(subLangs = v.split(',', ' ').map { it.trim().lowercase() }.filter { it.isNotEmpty() }))
                     }
                 }
                 ToggleRow("Auto-download missing subtitles", "When a movie has none in your languages", s.autoDownloadSubs) { set(s.copy(autoDownloadSubs = it)) }
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("OpenSubtitles.com account (free). Create an API key under your profile → API consumers.", color = C.muted, fontSize = 12.sp)
+                    Text("OpenSubtitles.com account (free). Create an API key under your profile → API consumers.", color = C.muted, fontSize = 13.sp)
                     Field("API key", s.osApiKey, password = true) { set(s.copy(osApiKey = it.trim())) }
                     Field("Username", s.osUser) { set(s.copy(osUser = it.trim())) }
                     Field("Password", s.osPassword, password = true) { set(s.copy(osPassword = it)) }
@@ -234,7 +253,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 Column(Modifier.explain("Radio buffer").padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Text("Radio buffer: ${s.radioBufferMin} min", color = C.text, fontSize = 15.sp)
                     Text("The last ${s.radioBufferMin} min are kept for saving (longer while a song is being saved); a lost connection back within ${s.radioBufferMin} min keeps the recording",
-                        color = C.muted, fontSize = 12.sp)
+                        color = C.muted, fontSize = 13.sp)
                     var v by remember { mutableStateOf(s.radioBufferMin.toFloat()) }
                     ThinSlider(v, { v = it }, valueRange = 1f..20f, steps = 18,
                         onValueChangeFinished = { set(s.copy(radioBufferMin = Math.round(v).coerceIn(1, 20))) })
@@ -270,7 +289,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 // All long lists: the bar on the right; drag it (or touch the right edge) to jump anywhere fast.
                 Column(Modifier.explain("Scroll bar width").padding(horizontal = 16.dp, vertical = 10.dp)) {
                     Text("Scroll bar width", color = C.text, fontSize = 15.sp)
-                    Text("All lists: drag the bar on the right edge to scroll fast", color = C.muted, fontSize = 12.sp)
+                    Text("All lists: drag the bar on the right edge to scroll fast", color = C.muted, fontSize = 13.sp)
                     Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         (4..9).forEach { px -> Pill("$px px", selected = s.scrollbarPx == px) { set(s.copy(scrollbarPx = px)) } }
                     }
@@ -287,7 +306,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(buttonScale = 75)) }) { Text("Reset") }
                     }
                     ThinSlider(s.buttonScale.toFloat(), { v -> set(s.copy(buttonScale = (Math.round(v / 5f) * 5).coerceIn(50, 125))) }, valueRange = 50f..125f)
-                    Text("75 % = 25 % smaller than standard (default) · 100 % = standard Android size", color = C.muted, fontSize = 12.sp)
+                    Text("75 % = 25 % smaller than standard (default) · 100 % = standard Android size", color = C.muted, fontSize = 13.sp)
                 }
             }
             CardBox {
@@ -301,7 +320,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(songsScrollSpeed = 100)) }) { Text("Reset") }
                     }
                     ThinSlider(s.songsScrollSpeed.toFloat(), { v -> set(s.copy(songsScrollSpeed = (Math.round(v / 10f) * 10).coerceIn(0, 300))) }, valueRange = 0f..300f)
-                    Text("0 = rows stay still · 100 % = normal (slow) · 300 % = three times faster", color = C.muted, fontSize = 12.sp)
+                    Text("0 = rows stay still · 100 % = normal (slow) · 300 % = three times faster", color = C.muted, fontSize = 13.sp)
                 }
             }
             CardBox {
@@ -378,6 +397,14 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         }
                     }
                     STextButton({ saveRows(emptyList()) }) { Text("Reset order", color = accent()) }
+                    // Gap between the player's rows.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Player rows spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Player rows spacing"))
+                        Text("${s.playerGap} dp", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(playerGap = 4)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.playerGap.toFloat(), { v -> set(s.copy(playerGap = Math.round(v).coerceIn(0, 16))) }, valueRange = 0f..16f, steps = 15,
+                        onValueChangeFinished = { if (helpersOn) lookHelp = "Player rows spacing" })
                     // Upright player: the clock / album picture hide while scrolling (on), or not (off: clock pinned).
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                         Text("Hide the clock while scrolling", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Hide the clock while scrolling"))
@@ -441,7 +468,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     if (lookHelp.isNotEmpty()) HelperDialog(lookHelp, SettingHelp.text(lookHelp, ""), extra = {
                         when {
                             lookHelp.startsWith("Alarm rows") -> Column(Modifier.padding(top = 12.dp)) {
-                                Text("Preview · ${s.alarmRowPct} %", color = C.muted, fontSize = 12.sp)
+                                Text("Preview · ${s.alarmRowPct} %", color = C.muted, fontSize = 13.sp)
                                 val k = s.alarmRowPct / 100f
                                 listOf(Triple("07:30", "Work · Mon–Fri", true), Triple("09:00", "Sat", false)).forEach { (t, w, on) ->
                                     Row(Modifier.padding(top = 4.dp).fillMaxWidth().height((56 * k).dp).clip(RoundedCornerShape(8.dp)).background(Color(0x14FFFFFF))
@@ -451,6 +478,19 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                         WideSwitch(on, height = (14 + 12 * (k - 0.5f) * 2).dp) {}
                                     }
                                 }
+                            }
+                            lookHelp.startsWith("Player rows spacing") -> Column(Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF16181C)).padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(s.playerGap.dp)) {
+                                Text("Song title", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                                Box(Modifier.clip(RoundedCornerShape(10.dp)).background(accent()).padding(horizontal = 10.dp, vertical = 2.dp)) {
+                                    Text("NAS active", color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                                Text("Track 7 · RG track −10.79 dB", color = accent(), fontSize = 11.sp)
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.weight(0.5f).height(3.dp).background(accent())); Box(Modifier.size(10.dp).clip(CircleShape).background(Color.White))
+                                    Box(Modifier.weight(0.5f).height(3.dp).background(C.line)) }
+                                Row(Modifier.fillMaxWidth()) { Text("1:50", color = C.muted, fontSize = 10.sp); Box(Modifier.weight(1f)); Text("-1:29", color = C.muted, fontSize = 10.sp) }
+                                Text("⏮   ▶   ⏭", color = C.text, fontSize = 16.sp)
                             }
                             lookHelp.startsWith("Order of the player rows") -> Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 listOf(false to "Songs", true to "Radio").forEach { (r, t) ->
@@ -484,7 +524,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         onLongClick = { explainNow("Shadow on player buttons", "") })) {
                         Column(Modifier.weight(1f)) {
                             Text("Shadow on player buttons", color = C.text, fontSize = 15.sp)
-                            Text("Audio and radio players: faint grey shadow on buttons and slider knobs, knobs ringed in grey", color = C.muted, fontSize = 12.sp)
+                            Text("Audio and radio players: faint grey shadow on buttons and slider knobs, knobs ringed in grey", color = C.muted, fontSize = 13.sp)
                         }
                         AppSwitch(s.controlShadow, { set(s.copy(controlShadow = it)) })
                     }
@@ -677,7 +717,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                     "Paste both here. Spotify links work at once.",
                                 ).forEachIndexed { i, t -> Text("${i + 1}. $t", color = C.text, fontSize = 13.sp) }
                                 Text("The keys stay on this phone and are only used to search Spotify's catalogue for song links — no access to your account.",
-                                    color = C.muted, fontSize = 12.sp)
+                                    color = C.muted, fontSize = 13.sp)
                             }
                         },
                         confirmButton = { STextButton({ help = false }) { Text("OK", color = accent()) } },
@@ -696,7 +736,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 val up by vl.vpnUp.collectAsState()
                 val busy by vl.searching.collectAsState()
                 ValueRow("Status", if (up) "A VPN is on" else "No VPN on", if (up) "On" else "Off") {}
-                if (up) vl.phoneVpnInfo().takeIf { it.isNotEmpty() }?.let { Text(it, color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp)) }
+                if (up) vl.phoneVpnInfo().takeIf { it.isNotEmpty() }?.let { Text(it, color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp)) }
                 Divider()
                 ToggleRow("Home NAS through the VPN", "Away from home with the VPN on, your LAN servers are reached through it — at home, directly", s.vpnNas) { set(s.copy(vpnNas = it)) }
                 Divider()
@@ -726,10 +766,10 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         Pill("Search for NAS now") {
                             if (up) vl.rescan() else android.widget.Toast.makeText(sctx, "Start the VPN first, then search", android.widget.Toast.LENGTH_SHORT).show()
                         }
-                        if (!up) Text("VPN off — start it to search", color = C.muted, fontSize = 12.sp)
+                        if (!up) Text("VPN off — start it to search", color = C.muted, fontSize = 13.sp)
                     }
                     val kept = st.sources.filter { it.vpnHost.isNotBlank() }
-                    if (kept.isEmpty()) Text("None yet — found by themselves when the VPN starts", color = C.muted, fontSize = 12.sp)
+                    if (kept.isEmpty()) Text("None yet — found by themselves when the VPN starts", color = C.muted, fontSize = 13.sp)
                     var editing by remember { mutableStateOf<app.vlcinterface.data.Source?>(null) }
                     kept.forEach { src ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -807,7 +847,7 @@ private fun CatRow(label: String, count: String, checked: Boolean, enabled: Bool
         Text(if (checked) "☑" else "☐", color = if (!enabled) col else if (checked) a else C.muted, fontSize = 18.sp)
         Text(label, color = col, fontSize = 14.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
             modifier = Modifier.weight(1f).padding(start = 10.dp))
-        if (count.isNotEmpty()) Text(count, color = C.muted, fontSize = 12.sp)
+        if (count.isNotEmpty()) Text(count, color = C.muted, fontSize = 13.sp)
     }
 }
 
@@ -871,7 +911,7 @@ fun BackupScreen(nav: Navigator) {
                 if (pwChosen) Column(Modifier.padding(12.dp)) {
                     Field("Passphrase for the passwords (min. 4 characters)", passphrase, password = true) { passphrase = it }
                     Text(if (passphrase.isEmpty()) "Without a passphrase the passwords are left out." else if (passphrase.length < 4) "At least 4 characters."
-                        else "Passwords saved encrypted with this passphrase.", color = C.muted, fontSize = 12.sp)
+                        else "Passwords saved encrypted with this passphrase.", color = C.muted, fontSize = 13.sp)
                 }
             }
             SOutlinedButton({ importer.launch(arrayOf("application/json", "*/*")) }, Modifier.fillMaxWidth().height(56.dp)) { Text("Import setup…", fontSize = 16.sp) }
@@ -881,7 +921,7 @@ fun BackupScreen(nav: Navigator) {
                 Pill("Replace chosen parts", selected = replace) { replace = true }
             }
             Text("You'll choose which parts of the file to apply; the rest of your setup stays as it is. Your current setup is backed up automatically first.",
-                color = C.muted, fontSize = 12.sp)
+                color = C.muted, fontSize = 13.sp)
             if (status.isNotEmpty()) Text(status, color = C.text, fontSize = 14.sp)
             Box(Modifier.height(16.dp))
         }
@@ -944,12 +984,12 @@ fun DeviceSoundList() {
             LaunchedEffect(Unit) { while (true) { diag = na.stats()?.toString() ?: ""; kotlinx.coroutines.delay(1000) } }
             if (diag.isNotEmpty()) Text(diag, color = C.muted, fontSize = 11.sp)
         }
-        Text("Added on top of the general preamp (total max +12 dB). Applied automatically when the output changes.", color = C.muted, fontSize = 12.sp)
+        Text("Added on top of the general preamp (total max +12 dB). Applied automatically when the output changes.", color = C.muted, fontSize = 13.sp)
         // Auto loudness: Loudness follows the phone's volume; each device below has its own start %.
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Auto loudness", color = C.text, fontSize = 15.sp)
-                Text("Full Loudness up to each device's start %, flattening step by step above it, none at full volume", color = C.muted, fontSize = 12.sp)
+                Text("Full Loudness up to each device's start %, flattening step by step above it, none at full volume", color = C.muted, fontSize = 13.sp)
             }
             AppSwitch(st.settings.autoLoud, { on ->
                 store.update { it.copy(settings = it.settings.copy(autoLoud = on)) }; App.instance.player.applySoundChain()
@@ -968,7 +1008,7 @@ fun DeviceSoundControls(name: String) {
     Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Text(name, color = C.text, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Preamp", color = C.muted, fontSize = 12.sp, modifier = Modifier.width(64.dp))
+            Text("Preamp", color = C.muted, fontSize = 13.sp, modifier = Modifier.width(64.dp))
             ThinSlider(pre, { v ->
                 store.update { it.copy(devicePreamp = it.devicePreamp + (name to Math.round(v * 2) / 2f)) }; App.instance.player.applySoundChain()
             }, valueRange = -12f..12f, modifier = Modifier.weight(1f))
@@ -977,7 +1017,7 @@ fun DeviceSoundControls(name: String) {
         if (st.settings.autoLoud) {
             val from = st.deviceLoudFrom[name] ?: 50
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Loudness\nflat from", color = C.muted, fontSize = 12.sp, lineHeight = 13.sp, modifier = Modifier.width(64.dp))
+                Text("Loudness\nflat from", color = C.muted, fontSize = 13.sp, lineHeight = 13.sp, modifier = Modifier.width(64.dp))
                 ThinSlider(from.toFloat(), { v ->
                     store.update { it.copy(deviceLoudFrom = it.deviceLoudFrom + (name to (Math.round(v / 5f) * 5).coerceIn(0, 95))) }
                     App.instance.player.applySoundChain()
@@ -986,13 +1026,13 @@ fun DeviceSoundControls(name: String) {
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Balance", color = C.muted, fontSize = 12.sp, modifier = Modifier.width(64.dp))
-            Text("L", color = C.muted, fontSize = 12.sp)
+            Text("Balance", color = C.muted, fontSize = 13.sp, modifier = Modifier.width(64.dp))
+            Text("L", color = C.muted, fontSize = 13.sp)
             ThinSlider(bal.toFloat(), { v ->
                 val snapped = if (kotlin.math.abs(v) < 6f) 0 else v.toInt()
                 store.update { it.copy(deviceBalance = it.deviceBalance + (name to snapped)) }; App.instance.player.applySoundChain()
             }, valueRange = -100f..100f, modifier = Modifier.weight(1f).padding(horizontal = 4.dp))
-            Text("R", color = C.muted, fontSize = 12.sp)
+            Text("R", color = C.muted, fontSize = 13.sp)
             Text(when { bal == 0 -> "Centre"; bal < 0 -> "L ${-bal}"; else -> "R $bal" }, color = accent(), fontSize = 12.sp,
                 modifier = Modifier.width(64.dp).padding(start = 6.dp).clickable {
                     store.update { it.copy(deviceBalance = it.deviceBalance + (name to 0)) }; App.instance.player.applySoundChain()
@@ -1041,7 +1081,7 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
                     Pill(l, selected = s.rgMode == k) { set(s.copy(rgMode = k)) }
                 }
             }
-            Text("Auto: album gain when playing an album in order, track gain for shuffle and playlists. Videos are never adjusted.", color = C.muted, fontSize = 12.sp)
+            Text("Auto: album gain when playing an album in order, track gain for shuffle and playlists. Videos are never adjusted.", color = C.muted, fontSize = 13.sp)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("ReplayGain pre-amp", color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 Text("%+.1f dB".format(s.rgPreampDb), color = accent(), fontSize = 13.sp)
