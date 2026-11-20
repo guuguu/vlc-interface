@@ -111,6 +111,7 @@ import app.vlcinterface.sources.ext
 import jcifs.smb.SmbFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.gestures.animateScrollBy
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -161,6 +162,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     // Floating play / pause: shown when the player's buttons are scrolled out of view.
     var ctlBottom by remember { mutableFloatStateOf(Float.MAX_VALUE) }
     var viewTop by remember { mutableFloatStateOf(0f) }
+    // Where the scrolling page and the tone sliders are on screen (for the sine button: scroll to the sliders).
+    val viewBox = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
+    val toneBox = remember { arrayOfNulls<androidx.compose.ui.geometry.Rect>(1) }
     var upNextYpx by remember { mutableIntStateOf(-1) }
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val vuK = if (landscape) (conf.screenHeightDp.toFloat() / conf.screenWidthDp).coerceIn(0.35f, 1f) else 1f
@@ -383,12 +387,37 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             }
             // Sleep: on the right of the player buttons (mirroring the clock / visualisation buttons); what's left under it.
-            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            // Above it, the sine button: scrolls the page to the tone sliders (centred in the free space; as far as
+            // the page goes when they're near its end). Shown only when the tone sliders are on.
+            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (st.settings.toneSliders && "tone" in playerRowOrder(setsP, radio)) Box(Modifier.size(30.dp).liteShadow(CircleShape).clip(CircleShape)
+                    .background(Color(0x24FFFFFF)).clickable {
+                        val v = viewBox[0]; val t = toneBox[0]
+                        if (v != null && t != null) {
+                            // Free space: the page's area below the frozen title block (upright).
+                            val top = v.top + (if (landscape) 0f else titleHpx.toFloat())
+                            val delta = t.center.y - (top + v.bottom) / 2f
+                            sleepScope.launch { scroll.animateScrollBy(delta) }
+                        }
+                    }, contentAlignment = Alignment.Center) {
+                    val wave = accent()
+                    androidx.compose.foundation.Canvas(Modifier.size(20.dp)) {
+                        val path = androidx.compose.ui.graphics.Path()
+                        val w = size.width; val h = size.height
+                        for (i in 0..40) {
+                            val x = w * i / 40f
+                            val y = h / 2f - kotlin.math.sin(i / 40f * 2f * Math.PI.toFloat()) * h * 0.32f
+                            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                        }
+                        drawPath(path, wave, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                    }
+                }
                 Box {
                     val on = p.sleepUntil > 0 || p.sleepSongs > 0
-                    Text("Sleep", color = if (on) Color(0xFF1A0E05) else C.text, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                        modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(if (on) accent() else Color(0x1FFFFFFF))
-                            .clickable { sleepMenu = true }.padding(horizontal = 5.dp, vertical = 4.dp))
+                    // Slim: about half the height it had.
+                    Text("Sleep", color = if (on) Color(0xFF1A0E05) else C.text, fontSize = 11.sp, lineHeight = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                        modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(if (on) accent() else Color(0x1FFFFFFF))
+                            .clickable { sleepMenu = true }.padding(horizontal = 5.dp, vertical = 1.dp))
                     SDropdownMenu(sleepMenu, { sleepMenu = false }) {
                         // Radio: time only (a station has no songs to count).
                         if (!radio) {
@@ -409,7 +438,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             val rowTone: @Composable () -> Unit = {
             // Loudness, treble and preamp, right under the player buttons (unless switched off in Settings).
-            if (st.settings.toneSliders) ToneSliders()
+            if (st.settings.toneSliders) Box(Modifier.fillMaxWidth().onGloballyPositioned { toneBox[0] = it.boundsInRoot() }) { ToneSliders() }
             }
             val rowFrom: @Composable () -> Unit = {
             // Prominent shortcut: where the music is playing from (playlist or Library folder).
@@ -551,14 +580,14 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (clockShown) {
                 // Clock alone on the left, as big as possible; titles, alarms and buttons on the right.
                 pinnedClock(Modifier.weight(1f).fillMaxHeight().padding(8.dp))
-                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top }
+                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top; viewBox[0] = it.boundsInRoot() }
                     .verticalScroll(scroll).padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { allRows() }
             } else {
                 // Left half: everything fits without scrolling — the picture shrinks to the room left.
                 Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { leftHpx = it.height }.padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) { partA() }
-                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top }
+                Column(Modifier.weight(1f).fillMaxHeight().onSizeChanged { rightHpx = it.height }.onGloballyPositioned { viewTop = it.boundsInRoot().top; viewBox[0] = it.boundsInRoot() }
                     .verticalScroll(scroll).padding(horizontal = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partB() }
             }
@@ -566,7 +595,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Upright, clock pinned (Look switch off): it stays above the page; only the page scrolls.
             if (clockShown && !setsP.clockAutoHide) pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(horizontal = 16.dp, vertical = 4.dp))
             // Otherwise the clock is the top of the page and scrolls away with it (taken away once out of view).
-            Column(Modifier.weight(1f).onGloballyPositioned { viewTop = it.boundsInRoot().top }.verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
+            Column(Modifier.weight(1f).onGloballyPositioned { viewTop = it.boundsInRoot().top; viewBox[0] = it.boundsInRoot() }.verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(rowGap)) {
                 if (clockShown && setsP.clockAutoHide) Box(Modifier.fillMaxWidth().keepWhenHidden(topHidden).onSizeChanged { topHpx = it.height }) {
                     pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(vertical = 4.dp))
