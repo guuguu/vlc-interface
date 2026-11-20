@@ -300,7 +300,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                                     }
                                     PanelContent(panel, p, onPanel = { panel = it })
                                 }
-                                else -> PortraitIdle(p, nav, showList = !videoPortrait, onPanel = { panel = Panel.TRACKS }, onOutput = openOutput)
+                                else -> PortraitIdle(p, nav, showList = !videoPortrait, onPanel = { panel = Panel.TRACKS }, onOutput = openOutput, onPicture = { panel = Panel.PICTURE })
                             }
                         }
                     }
@@ -440,6 +440,8 @@ private fun BoxScope.ControlsOverlayBody(
         SymButton(onLock, Modifier.align(Alignment.TopEnd).padding(12.dp)) { SymIcon(Icons.Filled.Lock, "Unlock controls", tint = Color.White) }
         return
     }
+    // Top bar, centre buttons and bottom row stacked in one column: they can never overlap each other.
+    Column(Modifier.matchParentSize()) {
     // Upright: top bar on two rows, never squeezed: symbols and text keep a readable size (the user's button size, at least 75 %).
     // Row 1: back, home, title, lock, settings and the status symbols. Row 2 (wraps if needed): output, panels, speed,
     // and the other two players.
@@ -454,7 +456,7 @@ private fun BoxScope.ControlsOverlayBody(
     }
     // Sideways: everything on one clean row (same readable sizes; it scrolls sideways only if a narrow screen needs it).
     if (landTop) CompositionLocalProvider(LocalBtnScale provides topK) {
-        Row(Modifier.align(Alignment.TopStart).fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp),
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
             HomeButton(nav, Color.White)
@@ -474,7 +476,7 @@ private fun BoxScope.ControlsOverlayBody(
             ExitButton(Color.White)
         }
     } else CompositionLocalProvider(LocalBtnScale provides topK) {
-    Column(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
             HomeButton(nav, Color.White)
@@ -487,7 +489,8 @@ private fun BoxScope.ControlsOverlayBody(
             ScreenOnSign(Color.White)
             ExitButton(Color.White)
         }
-        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Short video area upright (compact): these chips are under the video instead, so nothing overlaps.
+        if (!compact) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             OutputPill(openOutput)
             OverlayChip("Audio & subs") { onTouch(); onPanel() }
             // Dedicated button: hue & saturation, straight to the sliders.
@@ -499,13 +502,15 @@ private fun BoxScope.ControlsOverlayBody(
         }
     }
     }
-    AutoFitRow(Modifier.align(Alignment.Center).padding(horizontal = 8.dp), spacing = if (compact) 28.dp else 56.dp) {
+    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+    AutoFitRow(Modifier.padding(horizontal = 8.dp), spacing = if (compact) 28.dp else 56.dp) {
         RoundBtn("−10", 52) { player.seekBy(-10_000); onTouch() }
         val k = btnScale()
         Box(Modifier.size(maxOf((if (compact) 60 else 76) * k, 56f).dp).clip(CircleShape).background(accent()).clickable { player.togglePause(); onTouch() }, contentAlignment = Alignment.Center) {
             Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = maxOf(24 * k, 20f).sp, fontWeight = FontWeight.Bold)
         }
         RoundBtn("+10", 52) { player.seekBy(10_000); onTouch() }
+    }
     }
     // Bottom controls: never shrunk (symbols at least 22 sp, text at least 13 sp). Sideways one row; upright it wraps if needed.
     val tallVid = p.videoH > p.videoW && p.videoW > 0
@@ -520,17 +525,18 @@ private fun BoxScope.ControlsOverlayBody(
         Text("⏭", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.next() }.padding(8.dp))
         OverlayChip("PiP", onPip)
     }
-    if (!compact) Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    if (!compact) Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         SeekRow(p, Modifier)
         if (landB) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { bottomItems() }
         else androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) { bottomItems() }
-    } else androidx.compose.foundation.layout.FlowRow(Modifier.align(Alignment.BottomEnd).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    } else androidx.compose.foundation.layout.FlowRow(Modifier.align(Alignment.End).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         OverlayChip(scaleLabel, onScale)
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
         Text("🔄", color = Color.White, fontSize = symSize, modifier = Modifier.clickable(onClick = onRotate).padding(6.dp))
         OverlayChip("PiP", onPip)
+    }
     }
 }
 
@@ -571,13 +577,23 @@ private fun RoundBtn(text: String, sizeDp: Int, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPanel: () -> Unit, onOutput: () -> Unit) {
+private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPanel: () -> Unit, onOutput: () -> Unit, onPicture: () -> Unit = {}) {
     val player = App.instance.player
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         FitText(p.item?.title ?: "", color = C.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, minSize = 13.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        // Under the video (upright): play / pause, panels, speed, the other two players and the output — moved here
+        // from over the picture so the buttons on the video never overlap.
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill(if (p.isPlaying) "Pause" else "Play", filled = true) { player.togglePause() }
             Pill("Audio & subs") { onPanel() }
+            Pill("Hue & sat") { onPicture() }
+            Pill("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
+                val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
+                val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
+                player.setRate(rates[(i + 1) % rates.size])
+            }
+            Pill("Songs") { PlayerSwitch.go(nav, "songs") }
+            Pill("Radio") { PlayerSwitch.go(nav, "radio") }
             OutputPill(onOutput)
         }
         // Wide video upright: the video collection in its own scrolling box, like the song player's "Up next".

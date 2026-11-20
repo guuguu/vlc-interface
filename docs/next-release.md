@@ -52,3 +52,10 @@
   Fit and 1:1 keep the video's own shape, 16:9 and 4:3 use that shape, Fill covers the whole area (stretched),
   Crop covers the whole area and cuts off what sticks out.
 - Changing the format no longer restarts the video for a moment; it changes at once.
+
+## Video player: buttons never overlap (requested 2026-11-20 21:05)
+- The buttons over the video are stacked top bar → centre buttons (−10, play/pause, +10) → bottom row, each in its
+  own space, so they can never cover each other, in any orientation or video size.
+- Upright with the video on top (wide films, or tall videos on two thirds): only the symbols row stays over the
+  picture. Output, Audio & subs, Hue & sat, speed, Songs and Radio move under the video, next to Pause (one wrapping
+  row, no duplicates).
