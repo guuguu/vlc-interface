@@ -414,11 +414,13 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 }
                 Box {
                     val on = p.sleepUntil > 0 || p.sleepSongs > 0
-                    // Same round button as the clock / visualisation ones on the left (symmetry): 💤, ringed in the accent when set.
+                    // Same round button as the clock / visualisation ones on the left (symmetry), with the word "Sleep" inside;
+                    // the word shrinks to fit the circle so the buttons keep their order, size and spacing. Ringed in the accent when set.
                     val ac = accent()
                     Box(Modifier.size(30.dp).liteShadow(CircleShape).clip(CircleShape).background(if (on) ac.copy(alpha = 0.25f) else Color(0x24FFFFFF))
                         .border(1.dp, if (on) ac else Color.Transparent, CircleShape).clickable { sleepMenu = true }, contentAlignment = Alignment.Center) {
-                        Text("💤", fontSize = 15.sp, lineHeight = 15.sp)
+                        FitText("Sleep", color = if (on) ac else C.text, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                            textAlign = TextAlign.Center, minSize = 6.sp, modifier = Modifier.padding(horizontal = 2.dp))
                     }
                     SDropdownMenu(sleepMenu, { sleepMenu = false }) {
                         // Radio: time only (a station has no songs to count).
