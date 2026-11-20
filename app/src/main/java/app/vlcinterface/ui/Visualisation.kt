@@ -392,6 +392,9 @@ private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
     val plasma = remember { android.graphics.Bitmap.createBitmap(18, 32, android.graphics.Bitmap.Config.ARGB_8888) }
     // Lava flow grid: 90 × 160 upright, 160 × 90 when the picture is wider than tall (round blobs either way).
     val lavaBmp = remember { arrayOfNulls<android.graphics.Bitmap>(1) }
+    // Lava grid fineness: starts at 1.5× (135 × 240) and adjusts itself to the phone up to 3× (270 × 480);
+    // scale, summed ms, frames, last draw, settled (same rules as the field patterns).
+    val lavaRes = remember { floatArrayOf(1.5f, 0f, 0f, 0f, 0f) }
     val lavaPxBox = remember { arrayOfNulls<IntArray>(1) }
     val px = remember { IntArray(18 * 32) }
     val field = remember(v.effect) { arrayOfNulls<VisField>(1) }
@@ -422,11 +425,25 @@ private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
         if (v.effect == "lava_spec") {
             // Lava flow underneath, the centred spectrum over it, see-through, both in the same colours.
             val cols = visColours(v)
-            val (lw, lh) = if (size.width > size.height) 160 to 90 else 90 to 160
+            val sh = (90 * lavaRes[0]).toInt(); val lg = (160 * lavaRes[0]).toInt()
+            val (lw, lh) = if (size.width > size.height) lg to sh else sh to lg
             val lb = lavaBmp[0]?.takeIf { it.width == lw && it.height == lh && !it.isRecycled }
                 ?: android.graphics.Bitmap.createBitmap(lw, lh, android.graphics.Bitmap.Config.ARGB_8888).also { old -> lavaBmp[0]?.recycle(); lavaBmp[0] = old; lavaPxBox[0] = IntArray(lw * lh) }
+            val t0 = System.nanoTime()
             drawLava(m, a, cols, lb, lavaPxBox[0]!!)
-            drawSpectrum(m, a, cols, bg, v.specBar.dp.toPx(), alphaK = 0.55f, withBg = false)
+            val nowMs = (t0 / 1_000_000L % 10_000_000L).toFloat()
+            if (nowMs - lavaRes[3] > 500f || nowMs < lavaRes[3]) { lavaRes[1] = 0f; lavaRes[2] = -30f }   // waking up: not counted
+            lavaRes[3] = nowMs
+            if (lavaRes[2] >= 0f) lavaRes[1] += (System.nanoTime() - t0) / 1e6f
+            lavaRes[2] += 1f
+            if (lavaRes[2] >= 90f) {
+                val avg = lavaRes[1] / lavaRes[2]
+                if (avg > 9f && lavaRes[0] > 1f) { lavaRes[0] = (lavaRes[0] - 0.25f).coerceAtLeast(1f); lavaRes[4] = 1f }
+                else if (avg < 4f && lavaRes[0] < 3f && lavaRes[4] == 0f) lavaRes[0] = (lavaRes[0] + 0.25f).coerceAtMost(3f)
+                lavaRes[1] = 0f; lavaRes[2] = 0f
+            }
+            // The spectrum over it on the vertical axis: rows growing left and right from the middle line.
+            drawSpectrumV(m, a * 0.55f, cols, v.specBar.dp.toPx())
             return@Canvas
         }
         if (v.effect in SPEC_FX) {
@@ -611,6 +628,36 @@ private fun DrawScope.spot(c: Color, alpha: Float, center: Offset, r: Float, sha
     val edge = 0.35f + 0.62f * s
     drawCircle(Brush.radialGradient(0f to c.copy(alpha = alpha), edge to c.copy(alpha = alpha * (0.4f + 0.55f * s)), 1f to Color.Transparent,
         center = center, radius = rr), rr, center, blendMode = BlendMode.Plus)
+}
+
+/**
+ * Centred spectrum on the vertical axis (over the lava flow): each band a row growing left and right from a vertical
+ * middle line, bass at the top, with peak marks; row height = bar thickness (thicker → fewer rows); no background.
+ */
+private fun DrawScope.drawSpectrumV(m: VisMotion, a: Float, cols: List<Color>, barPx: Float) {
+    val gap = (barPx * 0.35f).coerceAtLeast(2f)
+    val bars = ((size.height + gap) / (barPx + gap)).toInt().coerceIn(3, m.spec.size)
+    val bh = (size.height - gap * (bars - 1)) / bars
+    fun level(arr: FloatArray, i: Int): Float {
+        val n = arr.size
+        val from = i * n / bars; val to = ((i + 1) * n / bars).coerceAtLeast(from + 1)
+        var v = 0f; for (k in from until to.coerceAtMost(n)) v = max(v, arr[k]); return v
+    }
+    fun colAt(i: Int): Color {
+        if (cols.size < 2) return (cols.firstOrNull() ?: Color.White).copy(alpha = a)
+        val f = i / (bars - 1f).coerceAtLeast(1f) * (cols.size - 1)
+        val j = f.toInt().coerceIn(0, cols.size - 2)
+        return lerpC(cols[j], cols[j + 1], f - j).copy(alpha = a)
+    }
+    val mid = size.width / 2; val full = mid * 0.92f
+    for (i in 0 until bars) {
+        val y = i * (bh + gap)
+        val w = full * level(m.spec, i).coerceAtLeast(0.01f); val pw = full * level(m.specPeak, i)
+        val c = colAt(i)
+        drawRect(c, Offset(mid - w, y), androidx.compose.ui.geometry.Size(w * 2, bh))
+        drawRect(c.copy(alpha = c.alpha * 0.9f), Offset(mid - pw - 3f, y), androidx.compose.ui.geometry.Size(3f, bh))
+        drawRect(c.copy(alpha = c.alpha * 0.9f), Offset(mid + pw, y), androidx.compose.ui.geometry.Size(3f, bh))
+    }
 }
 
 /**

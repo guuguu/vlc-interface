@@ -296,3 +296,7 @@
   they meet, swelling with the bass and moving faster on the beat, with a dark glowing background — and the
   centred spectrum drawn over it, see-through (≈ 55 %). Both use the same colour combination (pattern colours: the
   lava's reds and golds, or the chosen custom colours). Bar thickness, Sensitivity and Amplitude apply to its bars.
+- Lava flow + spectrum (23:32): the spectrum over the lava is on the vertical axis — rows growing left and right from
+  a vertical middle line, bass at the top (row height = bar thickness). Lava flow at a finer grid: starts at 1.5×
+  (135 × 240) and adjusts itself to the phone up to 3× (270 × 480), smoothly enlarged; the lava has no history, so a
+  grid change never restarts it.
