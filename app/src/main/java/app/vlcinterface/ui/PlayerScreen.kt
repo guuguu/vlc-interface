@@ -414,31 +414,39 @@ private fun BoxScope.ControlsOverlayBody(
         SymButton(onLock, Modifier.align(Alignment.TopEnd).padding(12.dp)) { SymIcon(Icons.Filled.Lock, "Unlock controls", tint = Color.White) }
         return
     }
-    Row(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
-        HomeButton(nav, Color.White)
-        Text(p.item?.title ?: "", color = Color.White, fontSize = (15 * ks).sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-        AutoFitRow {
-        if (!compact) OutputPill(openOutput)
-        OverlayChip("Audio & subs") { onTouch(); onPanel() }
-        // Dedicated button: hue & saturation, straight to the sliders.
-        OverlayChip(if (compact) "Colour" else "Hue & sat") { onTouch(); onPicture() }
-        if (!compact) OverlayChip("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
-            val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
-            val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
-            player.setRate(rates[(i + 1) % rates.size]); onTouch()
+    // Top bar on two rows, never squeezed: symbols and text keep a readable size (the user's button size, at least 75 %).
+    // Row 1: back, home, title, lock, settings and the status symbols. Row 2 (wraps if needed): output, panels, speed,
+    // and the other two players.
+    val topK = (App.instance.store.current.settings.buttonScale / 100f).coerceAtLeast(0.75f)
+    CompositionLocalProvider(LocalBtnScale provides topK) {
+    Column(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
+            HomeButton(nav, Color.White)
+            Text(p.item?.title ?: "", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
+            // Video player → Video settings.
+            SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
+            ShazamButton(Color.White)
+            BackgroundWorkButton()
+            ScreenOnSign(Color.White)
+            ExitButton(Color.White)
         }
-        SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
-        // Video player → Video settings.
-        SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
-        // The other two players (each resumes what it last played).
-        PlayerSwitchButtons(nav, "video", Color.White)
-        ShazamButton(Color.White)
-        BackgroundWorkButton()
-        ScreenOnSign(Color.White)
-        ExitButton(Color.White)
+        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutputPill(openOutput)
+            OverlayChip("Audio & subs") { onTouch(); onPanel() }
+            // Dedicated button: hue & saturation, straight to the sliders.
+            OverlayChip("Hue & sat") { onTouch(); onPicture() }
+            OverlayChip("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
+                val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
+                val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
+                player.setRate(rates[(i + 1) % rates.size]); onTouch()
+            }
+            // The other two players (each resumes what it last played).
+            OverlayChip("Songs") { PlayerSwitch.go(nav, "songs") }
+            OverlayChip("Radio") { PlayerSwitch.go(nav, "radio") }
         }
+    }
     }
     AutoFitRow(Modifier.align(Alignment.Center).padding(horizontal = 8.dp), spacing = if (compact) 28.dp else 56.dp) {
         RoundBtn("−10", 52) { player.seekBy(-10_000); onTouch() }
@@ -488,8 +496,9 @@ private fun SeekRow(p: PlayerState, modifier: Modifier) {
 @Composable
 private fun OverlayChip(text: String, onClick: () -> Unit) {
     val k = btnScale()
-    Box(Modifier.heightIn(min = (40 * k).dp).clip(RoundedCornerShape((20 * k).dp)).background(Color(0x24FFFFFF)).clickable(onClick = onClick).padding(horizontal = (14 * k).dp),
-        contentAlignment = Alignment.Center) { Text(text, color = Color.White, fontSize = (14 * k).sp, fontWeight = FontWeight.SemiBold) }
+    // Never smaller than readable: at least 34 dp high and 13 sp text.
+    Box(Modifier.heightIn(min = maxOf(40 * k, 34f).dp).clip(RoundedCornerShape(18.dp)).background(Color(0x33FFFFFF)).clickable(onClick = onClick).padding(horizontal = maxOf(14 * k, 12f).dp),
+        contentAlignment = Alignment.Center) { Text(text, color = Color.White, fontSize = maxOf(14 * k, 13f).sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
 }
 
 @Composable

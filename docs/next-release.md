@@ -20,3 +20,10 @@
 - Classification redone on all settings pages (requested 2026-11-20 17:45): headings that sit inside a box and look like
   category titles (e.g. Audio → "Per output device", "Sound engine") become their own categories — a section title
   with its own box — and every item belongs to exactly one category, styled as an item (setting title + text under it).
+
+## Fix: video player's top buttons (reported 2026-11-20 17:48)
+- The top bar was squeezed into one row: chips shrank to tiny text, symbols near-invisible, and "Songs" / "Radio"
+  overflowed off screen.
+- Now two rows, never squeezed: row 1 — back, home, title, lock, settings and the status symbols; row 2 (wraps if
+  needed) — output, Audio & subs, Hue & sat, speed, Songs, Radio. Symbols at the button size (at least 75 %), chip
+  text at least 13 sp, chips at least 34 dp high.
