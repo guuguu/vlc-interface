@@ -61,8 +61,9 @@
   row, no duplicates).
 
 ## Song / radio player: sine button to the tone sliders, slimmer Sleep (requested 2026-11-20 21:09)
-- Right of the player buttons: the Sleep button is slimmer (about half its height) and sits lower; above it a new
-  round button with a sine wave (same size and look as the clock / visualisation buttons on the left).
+- Right of the player buttons, mirroring the clock / visualisation buttons on the left (same round size, look and
+  spacing): on top a new button with a sine wave, under it Sleep as a round 💤 button (ringed in the accent colour
+  while a sleep timer is set) — symmetry requested 2026-11-20 21:11.
 - The sine button scrolls the page to the tone sliders: they end up in the middle of the free space (under the
   title block upright); when they're near the end of the page, it scrolls as far as the page goes.
 - Shown only while the tone sliders are on (Settings) and their row is in the player.
