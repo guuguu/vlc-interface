@@ -161,44 +161,45 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val vuK = if (landscape) (conf.screenHeightDp.toFloat() / conf.screenWidthDp).coerceIn(0.35f, 1f) else 1f
     androidx.compose.runtime.CompositionLocalProvider(LocalInPlayer provides true) {
-    // Upright with the clock: scrolling hides the clock; any action (scroll, touch) keeps it hidden for Look → "Clock hidden for"
-    // more seconds; it never comes back while a menu, pop-up or settings window is open.
-    // The same for the album cover (Look → "Cover hidden for"), each with its own time.
+    // Upright: the clock (or the album picture) at the top of the page scrolls away normally with it; once it's fully
+    // out of view it's taken away (the page doesn't move) and stays away while you act — any scroll or touch restarts
+    // Look → "Clock hidden for" / "Cover hidden for" — and never comes back while a menu, pop-up or settings window is open.
     val setsP = App.instance.store.state.collectAsState().value.settings
-    val hideSec = setsP.clockHideSec
-    val coverSec = setsP.coverHideSec
+    val clockTop = app.vlcinterface.alarm.Alarms.state.collectAsState().value.showClock
+    val topSec = if (clockTop) setsP.clockHideSec else setsP.coverHideSec
     var lastAct by remember { mutableLongStateOf(0L) }
-    var clockHidden by remember { mutableStateOf(false) }
-    var coverHidden by remember { mutableStateOf(false) }
-    var coverHpx by remember { mutableIntStateOf(0) }
+    var topHidden by remember { mutableStateOf(false) }
+    var topHpx by remember { mutableIntStateOf(0) }
+    var ignoreScrollUntil by remember { mutableLongStateOf(0L) }
+    val gapPx = with(androidx.compose.ui.platform.LocalDensity.current) { (if (item.isRadio) 10.dp else 14.dp).toPx() }.toInt()
     val winFocused = androidx.compose.ui.platform.LocalWindowInfo.current.isWindowFocused
-    LaunchedEffect(scroll) {
-        androidx.compose.runtime.snapshotFlow { scroll.value }.collect { v -> if (v > 0 || clockHidden || coverHidden) lastAct = System.currentTimeMillis() }
-    }
-    LaunchedEffect(lastAct, winFocused, hideSec) {
-        if (lastAct == 0L || landscape) return@LaunchedEffect
-        clockHidden = true
-        if (!winFocused) return@LaunchedEffect          // a window is open: stays hidden; counts again once it's closed
-        kotlinx.coroutines.delay((lastAct + hideSec * 1000L - System.currentTimeMillis()).coerceAtLeast(0L))
-        clockHidden = false
-    }
-    LaunchedEffect(lastAct, winFocused, coverSec) {
-        if (lastAct == 0L || landscape) return@LaunchedEffect
-        if (!coverHidden) {
-            coverHidden = true
-            // The page keeps its place: what was under the cover stays where it was.
-            if (coverHpx > 0) scroll.scrollTo((scroll.value - coverHpx).coerceAtLeast(0))
+    LaunchedEffect(clockTop, landscape) { topHidden = false }
+    LaunchedEffect(scroll, landscape) {
+        androidx.compose.runtime.snapshotFlow { scroll.value }.collect { v ->
+            if (landscape || System.currentTimeMillis() < ignoreScrollUntil) return@collect
+            if (topHidden) { lastAct = System.currentTimeMillis(); return@collect }
+            if (topHpx > 0 && v >= topHpx + gapPx) {
+                // Fully scrolled out: take it away and move the page by the same amount, so nothing on screen moves.
+                ignoreScrollUntil = Long.MAX_VALUE
+                topHidden = true
+                scroll.scrollTo(v - topHpx - gapPx)
+                ignoreScrollUntil = System.currentTimeMillis() + 300
+                lastAct = System.currentTimeMillis()
+            }
         }
-        if (!winFocused) return@LaunchedEffect
-        kotlinx.coroutines.delay((lastAct + coverSec * 1000L - System.currentTimeMillis()).coerceAtLeast(0L))
-        coverHidden = false
     }
-    LaunchedEffect(winFocused) { if (winFocused && (clockHidden || coverHidden)) lastAct = System.currentTimeMillis() }
+    LaunchedEffect(lastAct, winFocused, topSec, topHidden) {
+        if (!topHidden || !winFocused) return@LaunchedEffect   // a window is open: stays away; counts again once it's closed
+        kotlinx.coroutines.delay((lastAct + topSec * 1000L - System.currentTimeMillis()).coerceAtLeast(0L))
+        ignoreScrollUntil = System.currentTimeMillis() + 300
+        topHidden = false
+    }
+    LaunchedEffect(winFocused) { if (winFocused && topHidden) lastAct = System.currentTimeMillis() }
     Box(Modifier.fillMaxSize().background(PLAYER_BG).pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) {
                 val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-                if ((clockHidden || coverHidden) && e.type == androidx.compose.ui.input.pointer.PointerEventType.Press) lastAct = System.currentTimeMillis()
+                if (topHidden && e.type == androidx.compose.ui.input.pointer.PointerEventType.Press) lastAct = System.currentTimeMillis()
             }
         }
     }) {   // players: 90 % black
@@ -251,7 +252,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (clockOn) Unit   // the clock is pinned outside the scrolling page
             else if (landscape) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 pic((minOf(maxWidth, maxHeight).value.toInt() - 8).coerceAtLeast(48))
-            } else if (!coverHidden) Box(Modifier.onSizeChanged { coverHpx = it.height }) { pic(coverSize) }
+            } else if (!topHidden) Box(Modifier.onSizeChanged { topHpx = it.height }) { pic(coverSize) }
             if (clockOn) AlarmMiniList(nav, compact = false)
             if (coverPick) CoverPicker(coverItem,
                 onNone = { coverPick = false; coverNote = "Looking for the picture online…"; coverRetry++ },
@@ -488,10 +489,12 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) { partB() }
             }
         } else {
-            // Upright: the clock stays at the top; the rest of the page scrolls underneath it.
-            if (clockShown && !clockHidden) pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(horizontal = 16.dp, vertical = 4.dp))
+            // Upright: the clock is the top of the page and scrolls away with it (taken away once out of view).
             Column(Modifier.weight(1f).onGloballyPositioned { viewTop = it.boundsInRoot().top }.verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(if (item.isRadio) 10.dp else 14.dp)) {
+                if (clockShown && !topHidden) Box(Modifier.fillMaxWidth().onSizeChanged { topHpx = it.height }) {
+                    pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(vertical = 4.dp))
+                }
                 partA(); partB()
             }
         }
