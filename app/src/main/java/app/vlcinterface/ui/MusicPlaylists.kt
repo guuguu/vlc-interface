@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.layout
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -189,7 +190,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 // Fully scrolled out: take it away and move the page by the same amount, so nothing on screen moves.
                 ignoreScrollUntil = Long.MAX_VALUE
                 topHidden = true
-                scroll.scrollTo(v - topHpx - gapPx)
+                scroll.scrollTo(v - topHpx)            // it stays in the page with no height (its gap stays too)
                 ignoreScrollUntil = System.currentTimeMillis() + 300
                 lastAct = System.currentTimeMillis()
             }
@@ -262,7 +263,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (clockOn) Unit   // the clock is pinned outside the scrolling page
             else if (landscape) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 pic((minOf(maxWidth, maxHeight).value.toInt() - 8).coerceAtLeast(48))
-            } else if (!topHidden) Box(Modifier.onSizeChanged { topHpx = it.height }) { pic(coverSize) }
+            } else Box(Modifier.keepWhenHidden(topHidden).onSizeChanged { topHpx = it.height }) { pic(coverSize) }
             if (clockOn) AlarmMiniList(nav, compact = false)
             if (coverPick) CoverPicker(coverItem,
                 onNone = { coverPick = false; coverNote = "Looking for the picture online…"; coverRetry++ },
@@ -504,7 +505,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Otherwise the clock is the top of the page and scrolls away with it (taken away once out of view).
             Column(Modifier.weight(1f).onGloballyPositioned { viewTop = it.boundsInRoot().top }.verticalScroll(scroll).padding(horizontal = 24.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(if (item.isRadio) 10.dp else 14.dp)) {
-                if (clockShown && setsP.clockAutoHide && !topHidden) Box(Modifier.fillMaxWidth().onSizeChanged { topHpx = it.height }) {
+                if (clockShown && setsP.clockAutoHide) Box(Modifier.fillMaxWidth().keepWhenHidden(topHidden).onSizeChanged { topHpx = it.height }) {
                     pinnedClock(Modifier.fillMaxWidth().heightIn(max = (conf.screenHeightDp * 0.46f).dp).padding(vertical = 4.dp))
                 }
                 partA(); partB()
@@ -2022,4 +2023,11 @@ fun FloatingButtonSample(color: Long, playing: Boolean, size: Int = 56) {
     Box(Modifier.size(size.dp).clip(CircleShape).background(if (color != 0L) Color(color) else accent()), contentAlignment = Alignment.Center) {
         Text(if (playing) "❚❚" else "▶", color = floatSymbolColor(color), fontSize = (size * 0.36f).sp, fontWeight = FontWeight.Bold)
     }
+}
+
+
+/** Hidden but kept: no height and not drawn, while its picture / state stays loaded (no empty cover when it comes back). */
+fun Modifier.keepWhenHidden(hidden: Boolean): Modifier = this.layout { m, c ->
+    val pl = m.measure(c)
+    layout(pl.width, if (hidden) 0 else pl.height) { if (!hidden) pl.place(0, 0) }
 }
