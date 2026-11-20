@@ -99,3 +99,11 @@
   its row, so a switch is never tiny beside big text or oversized beside small text.
 - All switches one third smaller than before (2/3 of the old size), then scaled with the text as above
   (requested 2026-11-20 21:26).
+
+## Choices stay where they were left (requested 2026-11-20 21:28)
+- Settings pages: the choice buttons of a page (Look: player rows Songs / Radio / Both, hiding Clock / Picture /
+  Both, switch colour On / Off / Both, accent colour Files / Radio / Both; Export & import: the chosen categories)
+  show the last choice when the page is opened again — also after restarting the app.
+- Alarms: a new alarm starts with the options of the last alarm saved (repetition and days, time, sound source,
+  stations, volumes, fade-in, snoozes, ringing time, output); not its name, start date or specific dates (those
+  start empty). The very first alarm uses the defaults.

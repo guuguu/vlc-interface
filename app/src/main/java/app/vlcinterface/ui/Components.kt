@@ -1031,3 +1031,25 @@ fun AutoInfoDialog(
         }
     } }
 }
+
+// ---------------------------------------------------------------- choices kept between visits
+
+/**
+ * A page's own choice buttons (Songs / Radio / Both and the like) remembered where they were left: coming back to
+ * the page — later, or after restarting the app — shows the same choice again.
+ */
+object KeptChoice {
+    private val prefs get() = app.vlcinterface.App.instance.getSharedPreferences("uiChoices", android.content.Context.MODE_PRIVATE)
+    fun get(key: String, def: String): String = prefs.getString(key, def) ?: def
+    fun put(key: String, v: String) = prefs.edit().putString(key, v).apply()
+}
+
+/** A remembered choice for a page: reads the last value, saves every change. */
+@Composable
+fun rememberKept(key: String, def: String): androidx.compose.runtime.MutableState<String> {
+    val st = androidx.compose.runtime.remember(key) { androidx.compose.runtime.mutableStateOf(KeptChoice.get(key, def)) }
+    androidx.compose.runtime.LaunchedEffect(key) {
+        androidx.compose.runtime.snapshotFlow { st.value }.collect { KeptChoice.put(key, it) }
+    }
+    return st
+}

@@ -173,7 +173,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     // New alarm (or one without stations): the stations chosen last come already selected.
     val start = remember(id) {
         val g = Alarms.current.global
-        val a0 = Alarms.get(id) ?: Alarm()
+        val a0 = Alarms.get(id) ?: Alarms.newFromLast(id)
         if (a0.stationUrl.isEmpty() && g.lastStationUrl.isNotEmpty())
             a0.copy(stationUrl = g.lastStationUrl, stationName = g.lastStationName, fallbackUrl = g.lastFallbackUrl, fallbackName = g.lastFallbackName)
         else a0

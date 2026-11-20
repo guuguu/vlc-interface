@@ -296,12 +296,27 @@ object Alarms {
 
     fun get(id: String): Alarm? = current.alarms.firstOrNull { it.id == id }
 
+    /**
+     * A new alarm: starts with the options of the last alarm saved (repetition, days, time, sound, stations, volumes,
+     * fade-in, snoozes, ringing time, output) — not its name, dates or start date. Defaults the first time.
+     */
+    fun newFromLast(id: String): Alarm {
+        val nid = id.ifEmpty { UUID.randomUUID().toString() }
+        val o = prefs.getString("lastAlarm", null) ?: return Alarm(id = nid)
+        return try {
+            val l = Alarm.fromJson(org.json.JSONObject(o))
+            l.copy(id = nid, on = true, name = "", date = "", dates = emptyList(), mode = if (l.mode == "dates") "once" else l.mode)
+        } catch (_: Exception) { Alarm(id = nid) }
+    }
+
     fun put(a: Alarm) {
         val list = current.alarms
         // The stations chosen here come already selected on the next new alarm.
         val g = if (a.stationUrl.isNotEmpty()) current.global.copy(lastStationUrl = a.stationUrl, lastStationName = a.stationName,
             lastFallbackUrl = a.fallbackUrl, lastFallbackName = a.fallbackName) else current.global
         save(current.copy(alarms = if (list.any { it.id == a.id }) list.map { if (it.id == a.id) a else it } else list + a, global = g))
+        // Its options come already chosen on the next new alarm (as they were left).
+        prefs.edit().putString("lastAlarm", a.toJson().toString()).apply()
         AlarmScheduler.reschedule(ctx)
     }
 

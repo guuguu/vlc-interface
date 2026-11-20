@@ -399,7 +399,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         onHoldStill = { if (helpersOn) lookHelp = "Alarm rows under the clock" })
                     // Order of the player rows, songs and radio apart.
                     // Songs / Radio / Both ("Both": one order for the rows the two players share).
-                    var rowsMode by remember { mutableStateOf("song") }
+                    var rowsMode by rememberKept("look.rowsMode", "song")
                     Text("Order of the player rows", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp).explain("Order of the player rows"))
                     Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
                         listOf("song" to "Songs", "radio" to "Radio", "both" to "Both").forEach { (m, l) -> Pill(l, selected = rowsMode == m, filled = rowsMode == m) { rowsMode = m } }
@@ -435,7 +435,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         onHoldStill = { if (helpersOn) lookHelp = "Player rows spacing" })
                     // Upright player: the clock / album picture hide while scrolling (on) or not (off: clock pinned), and for how long.
                     // Clock / Picture / Both ("Both": one switch and one time for the two).
-                    var hideMode by remember { mutableStateOf("clock") }
+                    var hideMode by rememberKept("look.hideMode", "clock")
                     Text("Hiding while scrolling", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp).explain("Hide the clock while scrolling"))
                     Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
                         listOf("clock" to "Clock", "cover" to "Picture", "both" to "Both").forEach { (m, l) -> Pill(l, selected = hideMode == m, filled = hideMode == m) { hideMode = m } }
@@ -470,7 +470,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     var swEdit by remember { mutableStateOf("") }
                     val accArgb = accent().toArgb().toLong() and 0xFFFFFFFFL
                     // On / Off / Both ("Both": the same colour for the two positions).
-                    var swMode by remember { mutableStateOf("on") }
+                    var swMode by rememberKept("look.swMode", "on")
                     Text("Switch colour", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp).explain("Switch colour"))
                     Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                         listOf("on" to "On", "off" to "Off", "both" to "Both").forEach { (m, l) -> Pill(l, selected = swMode == m, filled = swMode == m) { swMode = m } }
@@ -589,7 +589,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             }
             // Separate colours for local / LAN files and for radio: choose which one the circles below set.
             // Files / Radio / Both ("Both": the same colour for files and radio).
-            var accMode by remember { mutableStateOf("files") }
+            var accMode by rememberKept("look.accMode", "files")
             val forRadio = accMode == "radio"
             val cur = if (forRadio) (s.radioAccent.takeIf { it != 0L } ?: s.accent) else s.accent
             fun pick(c: Long) = set(when (accMode) { "radio" -> s.copy(radioAccent = c); "both" -> s.copy(accent = c, radioAccent = c); else -> s.copy(accent = c) })
@@ -889,7 +889,10 @@ fun BackupScreen(nav: Navigator) {
     val store = App.instance.store
     val st by store.state.collectAsState()
     val alarmsN = app.vlcinterface.alarm.Alarms.state.collectAsState().value.alarms.size
-    var cats by remember { mutableStateOf(setOf(ExportCat.ALL)) }
+    // Export categories: kept as they were left.
+    var catsK by rememberKept("backup.cats", ExportCat.ALL)
+    val cats: Set<String> = catsK.split(',').filter { it.isNotEmpty() }.toSet()
+    fun setCats(v: Set<String>) { catsK = v.joinToString(",") }
     var passphrase by remember { mutableStateOf("") }
     var replace by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
@@ -935,10 +938,10 @@ fun BackupScreen(nav: Navigator) {
             Text("One file you can save to Downloads, your NAS or a cloud drive.", color = C.muted, fontSize = 13.sp)
             SectionTitle("What's in the file")
             CardBox {
-                CatRow("Everything", "", all, true, bold = true) { on -> cats = if (on) setOf(ExportCat.ALL) else ExportCat.ALL_IDS.toSet() }
+                CatRow("Everything", "", all, true, bold = true) { on -> setCats(if (on) setOf(ExportCat.ALL) else ExportCat.ALL_IDS.toSet()) }
                 Divider()
                 ExportCat.LIST.forEach { (id, label) ->
-                    CatRow(label, counts[id] ?: "", all || id in cats, !all) { on -> cats = if (on) cats + id else cats - id }
+                    CatRow(label, counts[id] ?: "", all || id in cats, !all) { on -> setCats(if (on) cats + id else cats - id) }
                 }
                 if (pwChosen) Column(Modifier.padding(12.dp)) {
                     Field("Passphrase for the passwords (min. 4 characters)", passphrase, password = true) { passphrase = it }
