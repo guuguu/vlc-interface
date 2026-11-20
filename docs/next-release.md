@@ -50,3 +50,6 @@
   kept for the buttons (position bar, −10 / play / +10, the bottom row), shown there instead of over the picture.
 - Except in full screen: a "Full screen" choice (with Fit) gives the video the whole screen with the controls over it
   as today; the choice is remembered.
+- Double tap on a tall video switches between full screen and the two-thirds size (back to the size it had before);
+  near the left / right edges a double tap still seeks −/+ as now, the switch is on the middle of the picture
+  (requested 2026-11-20 17:54).
