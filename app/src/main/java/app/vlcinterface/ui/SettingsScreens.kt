@@ -284,7 +284,15 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
                 ToggleRow("Auto-download missing subtitles", "When a movie has none in your languages", s.autoDownloadSubs) { set(s.copy(autoDownloadSubs = it)) }
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
-                    Text("OpenSubtitles.com account (free). Create an API key under your profile → API consumers.", color = C.muted, fontSize = 13.sp)
+                    // Helper: how to get the account, the API key and what username / password are for.
+                    var osHelp by remember { mutableStateOf(false) }
+                    if (osHelp) HelperDialog("OpenSubtitles account", SettingHelp.text("OpenSubtitles account", "")) { osHelp = false }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("OpenSubtitles.com account (free). Create an API key under your profile → API consumers.", color = C.muted, fontSize = 13.sp,
+                            modifier = Modifier.weight(1f).explain("OpenSubtitles account"))
+                        Text("How?", color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clip(RoundedCornerShape(12.dp)).clickable { osHelp = true }.padding(horizontal = 10.dp, vertical = 6.dp))
+                    }
                     Field("API key", s.osApiKey, password = true) { set(s.copy(osApiKey = it.trim())) }
                     Field("Username", s.osUser) { set(s.copy(osUser = it.trim())) }
                     Field("Password", s.osPassword, password = true) { set(s.copy(osPassword = it)) }

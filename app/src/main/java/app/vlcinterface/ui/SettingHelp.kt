@@ -125,6 +125,14 @@ object SettingHelp {
         "Pop-up opacity" to "How see-through pop-up windows are. More see-through shows what's behind; fully opaque is easier to read.",
         "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
+        "OpenSubtitles account" to "Subtitles are searched and downloaded from OpenSubtitles.com. It needs three things from a free account there:\n\n" +
+            "1. Account: on opensubtitles.com choose Register, confirm the e-mail it sends, then log in.\n" +
+            "2. API key: open your profile → API consumers → New consumer; any name (for example 'vlc interface'); " +
+            "copy the long key it shows and paste it into 'API key' here.\n" +
+            "3. Username and password: the ones you log in with on the site (needed to download; searching works with the key alone).\n\n" +
+            "The site limits downloads per day (more with a VIP account); when the limit is reached the app says so. " +
+            "The key and the password are kept on the phone and left out of exported setups unless you give a passphrase.\n\n" +
+            "With 'Auto-download missing subtitles' on, a film with none in your preferred languages gets one by itself a few seconds after it starts.",
         "Video decoding" to "How videos are turned into pictures.\n\n" +
             "Automatic: chosen for each video from its encoding — the phone's hardware decoder (fast, saves battery) when it can decode that codec " +
             "at that size, otherwise the app's own software decoder; if the hardware fails on a video, it switches to software at once and keeps that " +

@@ -165,3 +165,8 @@
 - Its subtitles are deleted automatically only on the phone and only those the app downloaded (OpenSubtitles):
   the app's copy and its undo copy (21:48 / 21:51). Subtitle files on the NAS are never deleted (21:50); copies of
   subtitles found next to a video are left alone.
+
+## Helper for the OpenSubtitles credentials (requested 2026-11-20 21:52)
+- Settings → Video → Subtitles: a "How?" button next to the OpenSubtitles text (and a long press on the text) opens
+  a helper: create the free account, make the API key (profile → API consumers → New consumer), what username and
+  password are for, the site's daily download limit, how the key and password are kept, and auto-download.
