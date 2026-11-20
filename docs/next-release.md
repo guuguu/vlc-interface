@@ -35,3 +35,6 @@
   buttons) get less free space around them: the slider's tall touch row, the switch's surrounding gap and the pills'
   outer margins shrink (touch areas stay usable); the "Vertical spacing" slider scales this space too
   (requested 2026-11-20 17:24).
+- Every triangle arrow on the settings pages (▶ on links, ▲ ▼ for ordering, ▶ in the wizard / help, ▾ on menus) has
+  one size and is clearly visible: the same bright colour, with a disabled arrow (first ▲ / last ▼) still visible
+  as a dimmer grey, never near-invisible (requested 2026-11-20 17:24).
