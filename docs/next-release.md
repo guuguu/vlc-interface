@@ -12,3 +12,5 @@
 - The ▲ ▼ arrows are removed from this box; the result counter stays (requested 2026-11-20 18:09).
 - The results list is tighter: no extra gap between stations (only the thin grey line), slimmer rows with the
   name and its details close together (requested 2026-11-20 18:09).
+- In front of each station in the results: its country's flag, or a small 🌐 when the country isn't known
+  (requested 2026-11-20 18:11).

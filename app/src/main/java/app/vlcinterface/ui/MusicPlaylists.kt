@@ -1720,6 +1720,8 @@ fun StationSearch() {
                 if (rDetails) StationDetailsDialog(app.vlcinterface.data.Station(name = r.name, url = r.url, meta = r.meta, favicon = r.favicon)) { rDetails = false }
                 Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.playStation(r.name, r.url) }, onLongClick = { rMenu = true })
                     .padding(vertical = (3 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
+                    // The station's country flag (🌐 when the country isn't known).
+                    Text(flagOf(r.country), fontSize = 18.sp, lineHeight = 20.sp, modifier = Modifier.padding(end = 8.dp))
                     Column(Modifier.weight(1f)) {
                         Text(r.name, color = C.text, fontSize = 14.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (r.meta.isNotEmpty()) Text(r.meta, color = if (r.isFlac) C.bad.copy(alpha = 0.8f) else C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -2099,4 +2101,12 @@ fun playerRowOrder(s: app.vlcinterface.data.Settings, radio: Boolean): List<Stri
     val def = if (radio) PLAYER_RADIO_ROWS else PLAYER_SONG_ROWS
     val saved = (if (radio) s.rowOrderRadio else s.rowOrderSong).filter { it in def }
     return saved + def.filter { it !in saved }
+}
+
+
+/** Flag emoji of a two-letter country code ("FR" → 🇫🇷); 🌐 when unknown. */
+fun flagOf(code: String): String {
+    val c = code.trim().uppercase()
+    if (c.length != 2 || !c.all { it in 'A'..'Z' }) return "🌐"
+    return String(Character.toChars(0x1F1E6 + (c[0] - 'A'))) + String(Character.toChars(0x1F1E6 + (c[1] - 'A')))
 }
