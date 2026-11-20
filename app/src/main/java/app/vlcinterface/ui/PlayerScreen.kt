@@ -266,7 +266,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         }
         if (fullscreen) {
             // Picture fills the screen; controls and panels sit on top of it.
-            if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second,
+            if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second + "\u0000" + scales[(scaleIdx + 1) % scales.size].second,
                 onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS }, onPicture = { panel = Panel.PICTURE },
                 onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first); toast = scales[scaleIdx].second },
                 onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ })
@@ -285,7 +285,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
             // Phone upright with a widescreen video: video on top, everything else below it.
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Box(Modifier.fillMaxWidth().then(if (videoPortrait) Modifier.fillMaxHeight(0.667f) else Modifier.aspectRatio(ratio))) {
-                    if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second,
+                    if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second + "\u0000" + scales[(scaleIdx + 1) % scales.size].second,
                         onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS }, onPicture = { panel = Panel.PICTURE },
                         onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first) },
                         onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ }, compact = true)
@@ -522,7 +522,7 @@ private fun BoxScope.ControlsOverlayBody(
     val landB = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
     val symSize = maxOf(20 * ks, 22f).sp
     val bottomItems: @Composable () -> Unit = {
-        OverlayChip(scaleLabel, onScale)
+        FormatControl(scaleLabel, onScale)
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
         Text("🔄", color = Color.White, fontSize = symSize, modifier = Modifier.clickable(onClick = onRotate).padding(8.dp))
@@ -536,7 +536,7 @@ private fun BoxScope.ControlsOverlayBody(
         else androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) { bottomItems() }
     } else androidx.compose.foundation.layout.FlowRow(Modifier.align(Alignment.End).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        OverlayChip(scaleLabel, onScale)
+        FormatControl(scaleLabel, onScale)
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
         Text("🔄", color = Color.White, fontSize = symSize, modifier = Modifier.clickable(onClick = onRotate).padding(6.dp))
@@ -1079,4 +1079,19 @@ private fun VideoDetailsDialog(onDone: () -> Unit) {
         confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
         dismissButton = { STextButton({ copy(report(), "Details") }) { Text("Copy all") } },
     )
+}
+
+
+/**
+ * Picture format on the video: the format shown now as a label, and the button names the format a press will set
+ * ("Format: Fit" · "→ Fill"). [label] = current + '\u0000' + next.
+ */
+@Composable
+private fun FormatControl(label: String, onScale: () -> Unit) {
+    val parts = label.split('\u0000')
+    val cur = parts[0]; val nxt = parts.getOrElse(1) { "" }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text("Format: $cur", color = Color.White.copy(alpha = 0.9f), fontSize = maxOf(13f * btnScale(), 13f).sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+        OverlayChip(if (nxt.isEmpty()) cur else "→ $nxt", onScale)
+    }
 }

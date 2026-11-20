@@ -170,3 +170,7 @@
 - Settings → Video → Subtitles: a "How?" button next to the OpenSubtitles text (and a long press on the text) opens
   a helper: create the free account, make the API key (profile → API consumers → New consumer), what username and
   password are for, the site's daily download limit, how the key and password are kept, and auto-download.
+
+## Video player: current format shown, format button names the next one (requested 2026-11-20 21:53)
+- Next to the format button: "Format: Fit" (the format shown now). The button itself shows what a press will set:
+  "→ Fill", then "→ Crop", "→ 16:9", "→ 4:3", "→ 1:1", "→ Fit". Upright and sideways, in both control layouts.
