@@ -1,3 +1,5 @@
 # Next release: requests kept
 
-Nothing open — ringing screen sideways, alarm rows and list, wide alarm switches with confirmation, short pop-up duration, switch colours and the radio player without the VPN-NAS button went into 1.39.0.
+## Floating play / pause colour (requested 2026-11-20 12:27)
+- A Look setting "Floating button colour" for the floating play / pause button, separate from the accent colour:
+  current colour shown with a "+ Create" button opening the colour editor (default: the accent colour).
