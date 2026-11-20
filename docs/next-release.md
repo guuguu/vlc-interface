@@ -184,3 +184,8 @@
 - The Save button on the alarm page (new or existing alarm) is gone. Leaving the page — back, home, the red ✕,
   any other page — saves the alarm when something was set by hand. Left untouched, nothing is saved: a new alarm
   isn't created, an existing one isn't saved again. "Delete alarm" still deletes it (not saved back).
+
+## Sine button didn't scroll to the tone sliders (reported 2026-11-20 22:14)
+- Its scroll was cut short by the cover / clock hiding (which also scrolled the page back up later). Now the
+  page glides straight to the sliders (centred in the free space, or as far as the page goes) with the hiding
+  kept out of it; when they're already where they'd go, a short note says "Tone sliders are in view".

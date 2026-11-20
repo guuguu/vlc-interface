@@ -405,7 +405,14 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                             // Free space: the page's area below the frozen title block (upright).
                             val top = v.top + (if (landscape) 0f else titleHpx.toFloat())
                             val delta = t.center.y - (top + v.bottom) / 2f
-                            sleepScope.launch { scroll.animateScrollBy(delta) }
+                            val target = (scroll.value + delta).toInt().coerceIn(0, scroll.maxValue)
+                            if (kotlin.math.abs(target - scroll.value) < 4) ShortNote.show("Tone sliders are in view")
+                            // The cover / clock hiding must not take part in this scroll (it used to stop it half-way
+                            // and later scroll the page back up).
+                            else sleepScope.launch {
+                                ignoreScrollUntil = Long.MAX_VALUE
+                                try { scroll.animateScrollTo(target) } finally { ignoreScrollUntil = System.currentTimeMillis() + 300 }
+                            }
                         }
                     }, contentAlignment = Alignment.Center) {
                     val wave = accent()
