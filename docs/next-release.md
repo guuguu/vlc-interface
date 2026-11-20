@@ -97,3 +97,5 @@
 - Every on/off switch (settings pages, wizard, alarm pages, the wide alarm switches) now grows and shrinks with the
   text next to it: settings "Text size" × the phone's font size (limited to 70 %–180 %), taking matching room on
   its row, so a switch is never tiny beside big text or oversized beside small text.
+- All switches one third smaller than before (2/3 of the old size), then scaled with the text as above
+  (requested 2026-11-20 21:26).

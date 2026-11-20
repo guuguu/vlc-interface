@@ -425,7 +425,10 @@ fun AppSwitch(checked: Boolean, onChange: ((Boolean) -> Unit)?, modifier: Modifi
 
 /** How big the switches are drawn: the text's size factor (settings Text size × phone font size), within limits. */
 @Composable
-fun switchK(): Float = androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceIn(0.7f, 1.8f)
+fun switchK(): Float = androidx.compose.ui.platform.LocalDensity.current.fontScale.coerceIn(0.7f, 1.8f) * SWITCH_BASE
+
+/** Switches are drawn at 2/3 of Android's standard size (one third smaller), before the text-size factor. */
+const val SWITCH_BASE = 2f / 3f
 
 /** Wide, horizontally elongated switch (alarm rows): easier to hit; same colours as the other switches. */
 @Composable
