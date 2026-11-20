@@ -18,3 +18,9 @@
   wizard, the help guide and the helper pop-ups together; titles stay proportionally bigger.
 - With a helper pop-up while Helpers are on, previewing a sample setting (title + text) at the chosen size
   (requested 2026-11-20 16:51).
+
+## Text that fits by itself on the players and the clock (requested 2026-11-20 16:53)
+- On the players' front (songs and radio) and on the clock front (clock, its date / weather / alarms, screen saver),
+  text sizes itself automatically to what fits: long titles, station names, artist / album lines, badges and times
+  shrink (down to a readable minimum) instead of being cut or wrapping badly, and use the room when there is some.
+- These aren't governed by the Settings "Text size" slider (which is for Settings, wizard, help and helpers only).
