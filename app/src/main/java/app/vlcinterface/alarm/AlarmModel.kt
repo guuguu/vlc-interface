@@ -248,10 +248,12 @@ data class VisSettings(
     val specGain: Float = 1.3f,
     /** Screen brightness while the visualisation is full screen: 0.01…1, or -1 = the phone's own. */
     val fsBright: Float = -1f,
+    /** Spectrum / analyser movement amplitude 0.4…2.5: how much the bars jump between quiet and loud. */
+    val specAmp: Float = 1f,
 ) {
     fun toJson(): JSONObject = JSONObject().put("palette", palette).put("hue1", hue1.toDouble()).put("hue2", hue2.toDouble())
         .put("hue3", hue3.toDouble()).put("brightness", brightness.toDouble()).put("effect", effect).put("move", move.toDouble())
-        .put("mix", mix.toDouble()).put("fLo", fLo.toDouble()).put("fHi", fHi.toDouble()).put("sharp", sharp.toDouble()).put("colourSpeed", colourSpeed.toDouble()).put("specBar", specBar.toDouble()).put("specGain", specGain.toDouble()).put("fsBright", fsBright.toDouble())
+        .put("mix", mix.toDouble()).put("fLo", fLo.toDouble()).put("fHi", fHi.toDouble()).put("sharp", sharp.toDouble()).put("colourSpeed", colourSpeed.toDouble()).put("specBar", specBar.toDouble()).put("specGain", specGain.toDouble()).put("fsBright", fsBright.toDouble()).put("specAmp", specAmp.toDouble())
     companion object {
         /** Offered visualisations; an older saved one (clouds, plasma, …) becomes the centred spectrum. */
         val EFFECTS = listOf("mirror", "am_led", "am_lumi", "am_area", "am_radial")
@@ -259,7 +261,7 @@ data class VisSettings(
             o.optDouble("hue1", 20.0).toFloat(), o.optDouble("hue2", 200.0).toFloat(), o.optDouble("hue3", 300.0).toFloat(),
             o.optDouble("brightness", 0.85).toFloat(), o.optString("effect", "mirror").let { if (it in EFFECTS) it else "mirror" },
             o.optDouble("move", 1.0).toFloat(), o.optDouble("mix", 0.6).toFloat(), o.optDouble("fLo", 30.0).toFloat(), o.optDouble("fHi", 150.0).toFloat(),
-            o.optDouble("sharp", 0.25).toFloat(), o.optDouble("colourSpeed", 1.0).toFloat(), o.optDouble("specBar", 10.0).toFloat(), o.optDouble("specGain", 1.3).toFloat(), o.optDouble("fsBright", -1.0).toFloat())
+            o.optDouble("sharp", 0.25).toFloat(), o.optDouble("colourSpeed", 1.0).toFloat(), o.optDouble("specBar", 10.0).toFloat(), o.optDouble("specGain", 1.3).toFloat(), o.optDouble("fsBright", -1.0).toFloat(), o.optDouble("specAmp", 1.0).toFloat())
     }
 }
 

@@ -275,3 +275,8 @@
 - The label shows the turn ("Rotate · 90°"); the picture format is worked out for the turned picture (a sideways
   film turned upright is sized as an upright one). Kept with the video file (and forgotten with it); reopens the
   video at the same spot to apply. Video details show "Turned with Rotate".
+
+## Spectrum / analyser "Amplitude" (requested 2026-11-20 23:25)
+- New slider on Settings → Visualisation for all spectrum / analyser pictures: how much the bars jump between quiet
+  and loud — ×0.4 (steady height, small ripples) … ×2.5 (from almost nothing to the full frame), default ×1.
+  Works with Sensitivity (which lifts the whole movement). Helper with a live preview on a still hold.

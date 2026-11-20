@@ -300,7 +300,10 @@ private fun rememberVisMotion(v: VisSettings, live: Boolean, shown: () -> Boolea
                         val raw = m.specRaw[i]
                         m.specRef[i] = max(m.specRef[i] * (1f - dt * 0.2f), max(raw, 1e-4f))
                         // Sensitivity: higher values lift the bars so loud parts reach the edges of the frame.
-                        val db = if (raw <= 1e-6f) 0f else (((20f * kotlin.math.log10(raw / m.specRef[i]) + 42f) / 42f) * vs.specGain.coerceIn(0.5f, 3f)).coerceIn(0f, 1f)
+                        // Amplitude: the loudness window the bars span — small: a wide window, bars stay near a steady
+                        // height; big: a narrow window, they swing from almost nothing to the full frame.
+                        val win = 42f / vs.specAmp.coerceIn(0.4f, 2.5f)
+                        val db = if (raw <= 1e-6f) 0f else (((20f * kotlin.math.log10(raw / m.specRef[i]) + win) / win) * vs.specGain.coerceIn(0.5f, 3f)).coerceIn(0f, 1f)
                         m.spec[i] = if (db > m.spec[i]) db else max(db, m.spec[i] - dt * 1.6f)
                         m.specPeak[i] = if (m.spec[i] >= m.specPeak[i]) m.spec[i] else max(m.spec[i], m.specPeak[i] - dt * 0.5f)
                     }
@@ -791,6 +794,18 @@ fun VisualisationSettings() {
             }
         }
         // Centred spectrum: bar thickness (thicker → fewer bars). Helper with a live preview on a still hold.
+        if (v.effect in SPEC_FX) {
+            var ampHelp by remember { mutableStateOf(false) }
+            if (ampHelp) HelperDialog("Amplitude", SettingHelp.text("Amplitude", ""), extra = {
+                VisCanvas(v, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)), live = true)
+            }) { ampHelp = false }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Amplitude", color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain("Amplitude"))
+                ThinSlider(v.specAmp, { set(v.copy(specAmp = (Math.round(it * 10f) / 10f))) }, Modifier.weight(1f), valueRange = 0.4f..2.5f,
+                    onHoldStill = { if (Alarms.current.global.helpers) ampHelp = true })
+                Text("×%.1f".format(v.specAmp), color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
+            }
+        }
         if (v.effect in SPEC_FX) {
             var gainHelp by remember { mutableStateOf(false) }
             if (gainHelp) HelperDialog("Sensitivity", SettingHelp.text("Sensitivity", ""), extra = {
