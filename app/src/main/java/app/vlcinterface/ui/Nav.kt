@@ -214,6 +214,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 FailAskHost()
                 RgAskHost()
                 RgAutoSummaryHost()
+                RgRecentAskHost()
                 LowBatteryHost()
                 WifiLostHost()
                 MobileIdleHost()

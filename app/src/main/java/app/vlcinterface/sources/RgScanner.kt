@@ -142,6 +142,10 @@ object RgScanner {
      * (null = couldn't be measured). Shown for 5 s, then cleared.
      */
     data class AutoSummary(val folder: String, val songs: List<Pair<String, Float?>>)
+
+    /** Network songs scanned less than 10 days ago, waiting for "Scan again" / "Skip them" (see [start]). */
+    class RecentAsk(val songs: List<Pair<String, Long>>, val uris: Set<String>, val go: (again: Boolean) -> Unit)
+    val recentAsk = MutableStateFlow<RecentAsk?>(null)
     val autoDone = MutableStateFlow<AutoSummary?>(null)
     private val queue = java.util.concurrent.ConcurrentLinkedDeque<Queued>()
     private var current: Queued? = null
@@ -174,9 +178,20 @@ object RgScanner {
      * [confirmTitle]: when not empty, a confirmation pop-up says what was done when the scan ends.
      */
     fun start(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescanTagged: Boolean,
-              onlyWithoutRg: Boolean = false, confirmTitle: String = "", silent: Boolean = false) {
+              onlyWithoutRg: Boolean = false, confirmTitle: String = "", silent: Boolean = false, recentOk: Boolean = false) {
         if (app.vlcinterface.player.BatteryGuard.busyBlocked()) return     // battery 15 % or less: only playing
         val music = items.filter { it.isMusic && it.startMs < 0 }.distinctBy { it.uri }
+        // Network songs scanned in the last 10 days (2026-11-21 12:06): first a pop-up says when, and you choose.
+        if (!silent && !recentOk) {
+            val recent = music.filter { RgScanDates.isNetwork(it.uri) }.mapNotNull { m -> RgScanDates.recent(m.uri)?.let { m to it } }
+            if (recent.isNotEmpty()) {
+                recentAsk.value = RecentAsk(recent.map { (m, t) -> m.title to t }, recent.map { it.first.uri }.toSet()) { again ->
+                    val its = if (again) items else items.filter { it.uri !in recent.map { r -> r.first.uri }.toSet() }
+                    if (its.any { it.isMusic }) start(ctx, its, mode, target, rescanTagged, onlyWithoutRg, confirmTitle, false, recentOk = true)
+                }
+                return
+            }
+        }
         if (_state.value.running || app.vlcinterface.player.BackgroundWork.paused.value) {
             // Busy (or background work paused): queued, started when the scans before it are done.
             val label = confirmTitle.ifEmpty { if (music.size == 1) music[0].title else "${music.size} songs" }
@@ -400,7 +415,7 @@ object RgScanner {
             // A measurement that came out silent / invalid is a failure, never written as 0.00 dB.
             val bad = m != null && (m.integrated.let { v -> v.isNaN() || v.isInfinite() } || m.peak.isNaN() || m.peak > 4f)
             if (bad) addResult(RgResult(it.title, "measurement failed (no usable sound decoded) — nothing written", false))
-            if (m != null && !bad) meters[it.uri] = m
+            if (m != null && !bad) { meters[it.uri] = m; RgScanDates.record(ctx, it.uri) }
             synchronized(measuredCopies) { measuredCopies += it.uri }   // its copy may go when room is needed
             fracs.remove(it.uri)
             update { s -> s.copy(done = s.done + 1, measured = s.measured + 1, problems = s.problems + if (m == null || bad) 1 else 0, results = snapshot()) }
@@ -913,6 +928,18 @@ object RgScanner {
 }
 
 /** ReplayGain values measured by the scanner and kept inside the app (for files that weren't written). */
+/** When each song was last measured for ReplayGain (any scan, any target), to warn before scanning it again. */
+object RgScanDates {
+    const val DAYS = 10
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences("rgScanDates", Context.MODE_PRIVATE)
+    fun record(ctx: Context, uri: String) = try { prefs(ctx).edit().putLong(uri, System.currentTimeMillis()).apply() } catch (_: Exception) {}
+    /** When [uri] was measured, if less than [DAYS] days ago. */
+    fun recent(uri: String): Long? = try {
+        prefs(app.vlcinterface.App.instance).getLong(uri, 0L).takeIf { it > 0 && System.currentTimeMillis() - it < DAYS * 86_400_000L }
+    } catch (_: Exception) { null }
+    fun isNetwork(uri: String) = uri.contains("://") && !uri.startsWith("content://") && !uri.startsWith("file://")
+}
+
 object RgStore {
     private lateinit var file: File
     private val map = HashMap<String, Map<String, String>>()

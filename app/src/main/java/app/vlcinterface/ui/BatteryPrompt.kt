@@ -217,6 +217,51 @@ fun RgAutoSummaryHost() {
 }
 
 
+/**
+ * Before scanning network songs again within 10 days (2026-11-21 12:06): "This item was previously scanned for
+ * ReplayGain on: <date>" (a list when several), then Scan again / Skip them / Cancel.
+ */
+@Composable
+fun RgRecentAskHost() {
+    val ask by app.vlcinterface.sources.RgScanner.recentAsk.collectAsState()
+    val a = ask ?: return
+    fun close() { app.vlcinterface.sources.RgScanner.recentAsk.value = null }
+    val fmt = java.text.SimpleDateFormat("d MMM yyyy, HH:mm", java.util.Locale.getDefault())
+    AlertDialog(onDismissRequest = { close() }, containerColor = C.panel,
+        title = { Text("Already scanned", color = C.text) },
+        text = {
+            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.heightIn(max = 420.dp)
+                .verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                if (a.songs.size == 1) {
+                    val (t, at) = a.songs[0]
+                    Text("\"$t\"", color = C.text, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                    Text("This item was previously scanned for ReplayGain on:", color = C.muted, fontSize = 13.sp, modifier = androidx.compose.ui.Modifier.padding(top = 6.dp))
+                    Text(fmt.format(java.util.Date(at)), color = accent(), fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+                } else {
+                    Text("These ${a.songs.size} items were previously scanned for ReplayGain (in the last ${app.vlcinterface.sources.RgScanDates.DAYS} days) on:",
+                        color = C.muted, fontSize = 13.sp, modifier = androidx.compose.ui.Modifier.padding(bottom = 6.dp))
+                    a.songs.sortedByDescending { it.second }.forEachIndexed { i, (t, at) ->
+                        if (i > 0) Divider()
+                        androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                            Text(t, color = C.text, fontSize = 13.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                modifier = androidx.compose.ui.Modifier.weight(1f).padding(end = 8.dp))
+                            Text(fmt.format(java.util.Date(at)), color = accent(), fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton({ close(); a.go(true) }) { Text("Scan again", color = accent()) } },
+        dismissButton = {
+            androidx.compose.foundation.layout.Row {
+                STextButton({ close() }) { Text("Cancel") }
+                STextButton({ close(); a.go(false) }) { Text(if (a.songs.size == 1) "Skip it" else "Skip them") }
+            }
+        },
+    )
+}
+
+
 /** Low battery pop-ups: the 15 % warning, and "stopped" at 10 %. */
 @Composable
 fun LowBatteryHost() {
