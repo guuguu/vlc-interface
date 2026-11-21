@@ -359,8 +359,12 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
             // Phone upright with a widescreen video: video on top, everything else below it.
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Box(Modifier.fillMaxWidth().height(headerDp))
-                // Tall video: two thirds of the room, or more with "Bigger"; wide video: its own shape.
-                val vMod = if (videoPortrait) Modifier.fillMaxHeight(if (tallFull) 0.82f else 0.62f) else Modifier.aspectRatio(ratio)
+                // Upright (16:26): the picture is never more than 2/3 of the screen height — as tall as its Fit shape needs
+                // across the full width, at most 2/3 — and never scrolls; everything else scrolls in the room left under it.
+                val confV = LocalConfiguration.current
+                val realAspect = if (p.videoW > 0 && p.videoH > 0) p.videoW.toFloat() / p.videoH else 16f / 9f
+                val vH = minOf(confV.screenHeightDp * 2f / 3f, confV.screenWidthDp / realAspect)
+                val vMod = Modifier.height(vH.dp)
                 Box(Modifier.fillMaxWidth().then(vMod).onSizeChanged { videoHpx = it.height }) {
                     // On the picture upright: only the position bar (comes and goes with a tap); everything else is below.
                     if (controls && panel == Panel.NONE && !locked) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0x77000000))) {
@@ -715,8 +719,6 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             val parts = scaleLabel.split('\u0000')
             Pill(if (parts.getOrElse(1) { "" }.isEmpty()) parts[0] else "Format: ${parts[0]} → ${parts[1]}") { onScale() }
             Pill(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() }
-            if (tallVid) Pill(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Bigger") {
-                App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) } }
         }
         }
         val rowUpNext: @Composable () -> Unit = {

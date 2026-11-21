@@ -818,3 +818,9 @@
 - Each video now always starts with the Fit format (whole picture, to the edges), whatever format it had last time.
   The format button changes it while watching; a reopen of the same video at the same spot (subtitle format,
   decoder, format check) keeps the format chosen meanwhile.
+
+## Upright: picture at most 2/3 of the screen, never scrolling (answered 2026-11-21 16:26)
+- Upright, the picture is as tall as its Fit shape needs across the full width, but never more than 2/3 of the screen
+  height (tall videos: exactly 2/3); it stays in place. Everything else (title, play buttons, button groups, Up next)
+  is ordered under it and scrolls in the remaining area.
+- The "Bigger / Smaller" button is removed (no longer needed).
