@@ -120,52 +120,110 @@ object SubtitleFiles {
     }
 
     /**
-     * Subtitles one folder level down (2026-11-21 21:11: films whose subtitles sit in a subfolder that can't be browsed
-     * by hand, e.g. "Movie/Subs/2_English.srt"). In each subfolder of the video's folder, a subtitle file is taken when
-     * its name starts with the video's name, or when the subfolder itself is a subtitle folder (Subs, Subtitles, Sub,
-     * Subtitulos …) or is named after the video — there every subtitle file counts. At most 12 subfolders and 24 files
-     * (500 KB each); copied into the app (for the player and for sync saving back into the file).
+     * Subtitles one folder level down and in season archives (2026-11-21 21:11 / 21:16), e.g. "Movie/Subs/2_English.srt"
+     * or "Show/Subs/Show.S02E05.srt" or "Show/Show.S02.subs.zip". Only files that can really be told to belong to the
+     * playing video are offered:
+     *  - a file named like the video (its name starts with the video's name), or carrying the same episode code
+     *    (S02E05, 2x05, same series or no series name);
+     *  - any subtitle file in a subfolder named after the video, or in a subtitle folder (Subs, Subtitles …) when the
+     *    video's folder holds only this one video (a film folder); with several videos there (a season), bulk subtitles
+     *    aren't offered unless named as above;
+     *  - .zip archives whose name has this video's season (S02, Season 2), in the video's folder or one level down:
+     *    the entries for this episode (episode code) — a whole season's subtitles in one archive.
+     * At most 12 subfolders, 24 files (500 KB each), archives up to 20 MB. Copied into the app.
      * Network videos (SMB / web) and phone videos with a real file path.
      */
     private val subRefs = HashMap<String, List<SubRef>>()
     private val SUB_EXT = setOf("srt", "ass", "ssa", "vtt", "sub")
+    private val VIDEO_EXT = setOf("mkv", "mp4", "avi", "mov", "m4v", "wmv", "ts", "m2ts", "mts", "mpg", "mpeg", "webm", "flv", "vob", "3gp", "divx", "ogv")
     private val SUB_DIR = Regex("""(?i)^(subs?|subtitles?|subtitulos?|sottotitoli|untertitel|legendas?|sous[- ]?titres?|subtitrari)$""")
+
+    private fun norm(x: String) = x.lowercase().replace(Regex("""[\s._\-]+"""), " ").trim()
+
+    /** The season in an archive's name: S02 / s2 / Season 2 / Temporada 2 / Staffel 2 / Saison 2 / Stagione 2. */
+    private fun seasonOf(name: String): Int? {
+        val n = Uri.decode(name).substringBeforeLast('.')
+        Regex("""(?i)(?:^|[^a-z0-9])s(\d{1,2})(?:[^0-9e]|$)""").find(n)?.let { return it.groupValues[1].toInt() }
+        Regex("""(?i)(?:season|temporada|staffel|saison|stagione|sezon)[\s._-]*(\d{1,2})""").find(n)?.let { return it.groupValues[1].toInt() }
+        return null
+    }
 
     suspend fun findInSubfolders(ctx: Context, item: PlayItem, phonePath: String?): List<SubRef> = withContext(Dispatchers.IO) {
         subRefs[item.uri]?.let { return@withContext it }
-        val base = Uri.decode(item.uri.substringAfterLast('/')).substringBeforeLast('.')
-        fun norm(x: String) = x.lowercase().replace(Regex("""[\s._\-]+"""), " ").trim()
+        val vName = Uri.decode(item.uri.substringAfterLast('/'))
+        val base = vName.substringBeforeLast('.')
         val nb = norm(base)
-        fun wanted(dirName: String, fileName: String): Boolean {
-            if (fileName.ext() !in SUB_EXT) return false
-            val d = Uri.decode(dirName).trimEnd('/')
-            return SUB_DIR.matches(d) || norm(d) == nb || norm(Uri.decode(fileName).substringBeforeLast('.')).startsWith(nb)
+        val ep = app.vlcinterface.player.Episodes.parse(vName)
+        /** The file belongs to this video by its name: same name start, or the same episode (series matching or absent). */
+        fun named(file: String): Boolean {
+            val f = Uri.decode(file)
+            if (norm(f.substringBeforeLast('.')).startsWith(nb)) return true
+            if (ep == null) return false
+            val e = app.vlcinterface.player.Episodes.parse(f) ?: return false
+            return e.season == ep.season && e.episode == ep.episode && (e.series.isEmpty() || e.series == ep.series || ep.series.contains(e.series) || e.series.contains(ep.series))
         }
         val out = ArrayList<SubRef>()
         val store = dir(ctx, "subtitles/" + hash(item.uri) + "/sub")
+        fun keep(fileName: String, bytes: ByteArray, from: String, src: Source?, remoteFolder: String, remoteName: String) {
+            if (out.size >= 24 || bytes.size > 500_000) return
+            val local = File(store, ("$from - $fileName").replace('/', '_')).apply { writeBytes(bytes) }
+            out += SubRef(local, src, remoteFolder, remoteName)
+        }
+        /** This episode's subtitles out of a season archive. */
+        fun fromZip(zipName: String, bytes: ByteArray) {
+            if (ep == null) return
+            try {
+                java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes)).use { z ->
+                    var e = z.nextEntry
+                    while (e != null && out.size < 24) {
+                        val en = e.name.substringAfterLast('/')
+                        if (!e.isDirectory && en.ext() in SUB_EXT && named(en)) keep(en, z.readBytes(), Uri.decode(zipName).substringBeforeLast('.'), null, "", en)
+                        e = z.nextEntry
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        fun seasonZip(name: String) = ep != null && name.ext() == "zip" && (seasonOf(name) == ep.season || named(name))
         try {
             val src = sourceOf(item)
             if (src != null && (item.uri.startsWith("smb://") || item.uri.startsWith("http"))) {
                 val list = Browse.listAll(src, Urls.parent(item.uri), "subtitles").getOrNull() ?: emptyList()
+                val oneVideo = list.count { !it.isDir && it.name.ext() in VIDEO_EXT } <= 1
+                // Next to the video: this episode's file under another name (the exact same name is the sidecar), season archives.
+                for (f in list.filter { !it.isDir }) {
+                    val fn = Uri.decode(f.name)
+                    if (fn.ext() in SUB_EXT && fn.substringBeforeLast('.') != base && ep != null && named(fn)) read(src, f.uri)?.let { keep(fn, it, "here", src, Urls.parent(item.uri), fn) }
+                    else if (seasonZip(fn) && (f.size <= 0 || f.size <= 20_000_000)) read(src, f.uri)?.let { fromZip(fn, it) }
+                }
                 for (d in list.filter { it.isDir }.take(12)) {
                     if (out.size >= 24) break
+                    val dn = Uri.decode(d.name).trimEnd('/')
+                    val all = norm(dn) == nb || (SUB_DIR.matches(dn) && oneVideo)
                     val files = Browse.listAll(src, d.uri, "subtitles").getOrNull() ?: continue
-                    for (f in files.filter { !it.isDir && wanted(d.name, it.name) && (it.size <= 0 || it.size <= 500_000) }) {
+                    for (f in files.filter { !it.isDir }) {
                         if (out.size >= 24) break
-                        val bytes = read(src, f.uri) ?: continue
-                        val name = Uri.decode(f.name)
-                        // The copy is named "<subfolder> - <file>" so two "English.srt" in different subfolders don't clash.
-                        val local = File(store, (Uri.decode(d.name).trimEnd('/') + " - " + name).replace('/', '_')).apply { writeBytes(bytes) }
-                        out += SubRef(local, src, d.uri, name)
+                        val fn = Uri.decode(f.name)
+                        if (fn.ext() in SUB_EXT && (all || named(fn)) && (f.size <= 0 || f.size <= 500_000)) read(src, f.uri)?.let { keep(fn, it, dn, src, d.uri, fn) }
+                        else if (seasonZip(fn) && (f.size <= 0 || f.size <= 20_000_000)) read(src, f.uri)?.let { fromZip(fn, it) }
                     }
                 }
             } else if (phonePath != null) {
                 val folder = File(phonePath).parentFile
-                folder?.listFiles()?.filter { it.isDirectory }?.take(12)?.forEach { d ->
-                    // libVLC already loads files in Subs / Subtitles whose name contains the video's: not added twice.
-                    d.listFiles()?.filter { it.isFile && wanted(d.name, it.name) && it.length() <= 500_000 &&
-                        !(SUB_DIR.matches(d.name) && norm(it.name.substringBeforeLast('.')).contains(nb)) }?.forEach { f ->
-                        if (out.size < 24) out += SubRef(f, null, "", f.name)
+                val list = folder?.listFiles()?.toList() ?: emptyList()
+                val oneVideo = list.count { it.isFile && it.name.ext() in VIDEO_EXT } <= 1
+                for (f in list.filter { it.isFile }) {
+                    // Same-folder files with this video's name are found by libVLC itself; other names with this episode's code are added.
+                    if (f.name.ext() in SUB_EXT && ep != null && !norm(f.name.substringBeforeLast('.')).contains(nb) && named(f.name) && f.length() <= 500_000) out += SubRef(f, null, "", f.name)
+                    else if (seasonZip(f.name) && f.length() <= 20_000_000) fromZip(f.name, f.readBytes())
+                }
+                for (d in list.filter { it.isDirectory }.take(12)) {
+                    val all = norm(d.name) == nb || (SUB_DIR.matches(d.name) && oneVideo)
+                    d.listFiles()?.filter { it.isFile }?.forEach { f ->
+                        if (out.size >= 24) return@forEach
+                        // libVLC already loads files in Subs / Subtitles whose name contains the video's: not added twice.
+                        if (f.name.ext() in SUB_EXT && (all || named(f.name)) && f.length() <= 500_000 &&
+                            !(SUB_DIR.matches(d.name) && norm(f.name.substringBeforeLast('.')).contains(nb))) out += SubRef(f, null, "", f.name)
+                        else if (seasonZip(f.name) && f.length() <= 20_000_000) fromZip(f.name, f.readBytes())
                     }
                 }
             }

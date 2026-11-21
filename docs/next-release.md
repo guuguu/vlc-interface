@@ -1021,13 +1021,19 @@
 - **Checked, already direct:** the song / radio player's menus and pop-ups (sleep timer, Jump to, speed, song menu, Play next pick) close straight to the player.
 - **Left as it is:** the Sound output sheet stays open after a device is picked. It also holds that device's volume, preamp and balance.
 
-## Subtitles found in subfolders (requested 2026-11-21 21:11)
-- When a video opens, the folders one level under the video's folder are checked for subtitle files (.srt, .ass, .ssa, .vtt, .sub). This covers subtitles in a subfolder that can't be browsed by hand, e.g. "Movie/Subs/2_English.srt".
-- **Taken:** a file whose name starts with the video's name, or any subtitle file in a subtitle folder ("Subs", "Subtitles", "Sub", "Subtitulos", "Sottotitoli", "Untertitel", "Legendas", "Sous-titres", "Subtitrari") or in a folder named after the video.
-- **Limits:** at most 12 subfolders and 24 files.
+## Subtitles found in subfolders and season archives (requested 2026-11-21 21:11 / 21:16)
+- When a video opens, its folder and the folders one level under it are checked for subtitles (.srt, .ass, .ssa, .vtt, .sub). This covers subtitles in a subfolder that can't be browsed by hand.
+- **Only files that clearly belong to the playing video are offered:**
+  - a file named like the video (its name starts with the video's name);
+  - a file with the same episode code (S02E05, 2x05), with the same series name or none ("S02E05.srt");
+  - any subtitle file in a subfolder named after the video;
+  - any subtitle file in a subtitle folder (Subs, Subtitles, Sub, Subtitulos, Sottotitoli, Untertitel, Legendas, Sous-titres, Subtitrari) — only when the video's folder holds just this one video (a film folder).
+- **Left out:** in a folder with many videos (a season), bulk files like "2_English.srt" or another episode's file are not offered.
+- **Season archives:** a .zip whose name has the video's season ("Show.S02.Subs.zip", "Show Season 2.zip") or this episode ("Show.S02E05.zip") is opened, in the video's folder or one level down. Only the entries for this episode are taken. (Only zip; .rar / .7z can't be opened.)
+- **Limits:** at most 12 subfolders, 24 files of 500 KB each, archives up to 20 MB.
 - **Where:** network videos (SMB / web) and phone videos.
-  - On the phone, libVLC already loads Subs / Subtitles files containing the video's name; those aren't added twice.
+  - On the phone, libVLC already loads files containing the video's name next to it and in Subs / Subtitles; those aren't added twice.
 - **How they're used:**
-  - They're copied into the app, colour codes taken out like every subtitle file, and added as choices. They appear in the subtitle pop-up when the video opens and in Subs/Change.
+  - They're copied into the app, colour codes taken out, and added as choices in the subtitle pop-up and Subs/Change.
   - They aren't switched on by themselves; the same-name file next to the video still is.
-  - The pop-up now waits up to 12 s for subtitles (network subfolders take a moment), and subtitles arriving later appear in it while it's open.
+  - The pop-up waits up to 12 s for subtitles, and subtitles arriving later appear in it while it's open.
