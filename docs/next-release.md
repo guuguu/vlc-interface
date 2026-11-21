@@ -882,3 +882,6 @@
   folder browser of that location from its top: tap a folder to go in, ‹ to go up, "Add this folder" to add the one
   shown — it joins the location's folders (the same as ★ on a folder page) and is indexed for search in the
   background. A folder already added says so.
+- For every network location (16:59): each saved LAN and Internet location (and every one added later) has "+ Folder";
+  locations "Found on your LAN" have it too, next to "Save as preset" — adding a folder there saves that location
+  with the folder (when it needs a user name, Save as preset first). Not for UPnP media servers (no folder paths).

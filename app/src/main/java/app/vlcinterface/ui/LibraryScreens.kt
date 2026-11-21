@@ -500,12 +500,15 @@ fun SourcesTab(nav: Navigator, zone: Zone) {
                                 Text(e.name, color = C.text, fontSize = 14.sp)
                                 Text(e.meta + " · " + e.uri, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
-                            Pill("Save as preset") {
-                                val proto = e.uri.substringBefore("://").lowercase()
-                                val draft = if (proto == "upnp") Source(zone = Zone.LAN, proto = "upnp", name = e.name, host = e.uri)
-                                else Source(zone = Zone.LAN, proto = proto, name = e.name, host = Urls.hostOnly(e.uri.substringAfter("://")))
-                                nav.go(Screen.EditSource(Zone.LAN, draft = draft))
-                            }
+                            val proto = e.uri.substringBefore("://").lowercase()
+                            val draft = remember(e.uri) { if (proto == "upnp") Source(zone = Zone.LAN, proto = "upnp", name = e.name, host = e.uri)
+                                else Source(zone = Zone.LAN, proto = proto, name = e.name, host = Urls.hostOnly(e.uri.substringAfter("://"))) }
+                            // A location found on the LAN (16:59): "+ Folder" too — adding a folder saves the location with it.
+                            var pickFound by remember { mutableStateOf(false) }
+                            if (proto != "upnp") Pill("+ Folder") { pickFound = true }
+                            if (pickFound) AddFolderDialog(draft) { pickFound = false }
+                            Box(Modifier.width(6.dp))
+                            Pill("Save as preset") { nav.go(Screen.EditSource(Zone.LAN, draft = draft)) }
                         }
                         Divider()
                     }
@@ -608,7 +611,7 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
             }
             // Add a folder of this location (2026-11-21 16:57): pick it in a small folder browser; it's pinned and indexed.
             var pickFolder by remember { mutableStateOf(false) }
-            Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, a, RoundedCornerShape(8.dp)).clickable { pickFolder = true }
+            if (s.proto != "upnp") Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, a, RoundedCornerShape(8.dp)).clickable { pickFolder = true }
                 .padding(horizontal = 12.dp, vertical = 7.dp)) { Text("+ Folder", color = a, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
             if (pickFolder) AddFolderDialog(s) { pickFolder = false }
             Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable {
@@ -966,7 +969,8 @@ private fun AddFolderDialog(src: app.vlcinterface.data.Source, onDone: () -> Uni
     LaunchedEffect(uri) {
         dirs = null; err = ""
         Browse.list(src, uri).onSuccess { l -> dirs = l.filter { it.isDir }.sortedBy { it.name.lowercase() } }
-            .onFailure { e -> dirs = emptyList(); err = "Could not open: " + SmbErrors.explain(e, src.user.isEmpty()) }
+            .onFailure { e -> dirs = emptyList(); err = "Could not open: " + SmbErrors.explain(e, src.user.isEmpty()) +
+                (if (src.user.isEmpty()) " — if it needs a user name, use Save as preset first." else "") }
     }
     val path = android.net.Uri.decode(uri.substringAfter("://").substringAfter('/', "")).let { "/" + it.trimEnd('/') }
     val already = path in src.pins
@@ -995,8 +999,10 @@ private fun AddFolderDialog(src: app.vlcinterface.data.Source, onDone: () -> Uni
         },
         confirmButton = { STextButton({
             if (!already) {
-                App.instance.store.update { st -> st.copy(sources = st.sources.map { if (it.id == src.id) it.copy(pins = it.pins + path) else it }) }
-                app.vlcinterface.sources.NetIndex.build(src, path)
+                // A location found on the LAN and not saved yet is saved now, with this folder.
+                App.instance.store.update { st -> if (st.sources.any { it.id == src.id }) st.copy(sources = st.sources.map { if (it.id == src.id) it.copy(pins = it.pins + path) else it })
+                    else st.copy(sources = st.sources + src.copy(pins = listOf(path))) }
+                app.vlcinterface.sources.NetIndex.build(App.instance.store.current.sources.firstOrNull { it.id == src.id } ?: src, path)
                 ShortNote.show("Added: " + path.trim('/').substringAfterLast('/').ifEmpty { path } + " — indexing for search")
             }
             onDone()
