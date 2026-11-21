@@ -1076,8 +1076,15 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = s.copy(queue = q, index = q.indexOfFirst { it === cur }.coerceAtLeast(0))
     }
 
-    fun playQueue(items0: List<PlayItem>, index0: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null, keepOrder: Boolean = false) {
-        if (items0.isEmpty()) return
+    fun playQueue(items00: List<PlayItem>, index00: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null, keepOrder0: Boolean = false) {
+        if (items00.isEmpty()) return
+        // An episode played from a folder (16:48): the queue is the whole succession of its series, in episode order
+        // (never shuffled), starting at the one tapped.
+        val tapped0 = items00.getOrNull(index00.coerceIn(0, items00.size - 1))
+        val series = if (tapped0 != null && origin.kind in setOf("folder", "local") && !tapped0.isMusic && !tapped0.isRadio) Episodes.series(items00, tapped0) else null
+        val items0 = series ?: items00
+        val index0 = if (series != null) series.indexOfFirst { qKey(it) == qKey(tapped0!!) }.coerceAtLeast(0) else index00
+        val keepOrder = keepOrder0 || series != null
         // Duplicates are left out (first one kept); the item that was tapped stays the one that starts.
         val tapped = items0.getOrNull(index0.coerceIn(0, items0.size - 1))
         // NAS not usable: a NAS song picked by hand doesn't start ("NAS offline"); lists keep only local songs.

@@ -859,3 +859,15 @@
 - Lines are fixed (at most 3 buttons, never wrapping), centred; all buttons the same size, at most a third of the
   width each — they shrink together, text included, when that's needed. An order saved before keeps its place
   (the old single line becomes the two lines).
+
+## Episodes: the whole series in the queue; save queues as playlists (requested 2026-11-21 16:48)
+- Playing a video whose name looks like an episode from a folder (phone or network, subfolders included): the queue is
+  the whole succession of that series — every file there with the same series name — in season / episode order
+  (never shuffled), starting at the one tapped. Other files of the folder are left out.
+  - Recognised: S01E05 / s1e5 / S01.E05, 1x05, Episode 5 / Ep 5 / E05, or a plain number after the name
+    ("Show - 05"); the series name is what comes before it (separators, case and years ignored), e.g.
+    "The.Office.S02E05.720p" and "the office s2e6" are the same series.
+  - Videos that aren't episodes play the folder as before.
+- "Save" next to "Up next" (video player and song player): saves the whole queue as a new playlist; the name proposed
+  is the series ("The Office") or where it was played from, and can be changed. The Queue page keeps its
+  "Save as playlist".

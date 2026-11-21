@@ -563,7 +563,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (next.isNotEmpty()) Column(Modifier.fillMaxWidth().onGloballyPositioned { upNextYpx = it.positionInParent().y.toInt() }) {
                 Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); 
 
-                    QueueTimeLeft(item) { nav.go(Screen.Queue) } }
+                    SaveQueueButton(); QueueTimeLeft(item) { nav.go(Screen.Queue) } }
                 next.forEachIndexed { i, n ->
                     Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
                         .padding(vertical = if (landscape) 5.dp else 8.dp)) {
@@ -2201,4 +2201,35 @@ fun flagOf(code: String): String {
     val c = code.trim().uppercase()
     if (c.length != 2 || !c.all { it in 'A'..'Z' }) return ""   // unknown: the caller shows a globe instead
     return String(Character.toChars(0x1F1E6 + (c[0] - 'A'))) + String(Character.toChars(0x1F1E6 + (c[1] - 'A')))
+}
+
+
+/**
+ * "Save" next to Up next (2026-11-21 16:48): the whole queue as a new playlist, with a name proposed — the series for
+ * episodes ("The Office"), else where it was played from — that can be changed.
+ */
+@Composable
+fun SaveQueueButton() {
+    val p by App.instance.player.state.collectAsState()
+    var name by remember { mutableStateOf<String?>(null) }
+    if (p.queue.size < 2) return
+    Text("Save", color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable {
+            val cur = p.item
+            val ser = cur?.let { app.vlcinterface.player.Episodes.parse(it.fileName.ifEmpty { android.net.Uri.decode(it.uri.substringAfterLast('/')) }) }?.series
+            name = ser?.split(' ')?.joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } }?.takeIf { it.isNotBlank() }
+                ?: p.origin.title.ifEmpty { "Queue" }
+        }.padding(horizontal = 8.dp, vertical = 4.dp))
+    name?.let { n ->
+        AlertDialog(onDismissRequest = { name = null }, containerColor = C.panel,
+            title = { Text("Save the queue as a playlist", color = C.text) },
+            text = { OutlinedTextField(n, { name = it }, singleLine = true, placeholder = { Text("Playlist name") }) },
+            confirmButton = { STextButton({
+                val items = p.queue.map { MusicLibrary.toPlEntry(it) }
+                App.instance.store.update { s -> s.copy(playlists = s.playlists + Playlist(name = n.ifBlank { "Queue" }, items = items)) }
+                ShortNote.show("Playlist \"${n.ifBlank { "Queue" }}\" saved · ${items.size} items")
+                name = null
+            }) { Text("Save", color = accent()) } },
+            dismissButton = { STextButton({ name = null }) { Text("Cancel") } })
+    }
 }

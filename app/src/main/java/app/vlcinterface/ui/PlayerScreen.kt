@@ -732,7 +732,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         val cur = p.item
         if (next.isNotEmpty() && cur != null) Column(Modifier.fillMaxWidth()) {
             var upMenu by remember { mutableIntStateOf(-1) }
-            Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); QueueTimeLeft(cur) { nav.go(Screen.Queue) } }
+            Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); SaveQueueButton(); QueueTimeLeft(cur) { nav.go(Screen.Queue) } }
             next.forEachIndexed { i, n ->
                 Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
                     .padding(vertical = 8.dp)) {
