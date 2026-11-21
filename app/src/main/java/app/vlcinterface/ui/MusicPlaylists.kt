@@ -1682,14 +1682,17 @@ private fun RadioPanel(nav: Navigator) {
                 items(st.stations.size) { i ->
                     val s = st.stations[i]
                     val on = s.url == cur
+                    // Same tight rows as the search results (2026-11-21 02:58): flag (or globe) in front, no extra gap.
                     Row(Modifier.fillMaxWidth().background(if (on) accent().copy(alpha = 0.14f) else Color.Transparent)
                         .combinedClickable(onClick = { player.playStation(s.name, s.url) }, onLongClick = { menu = s.id })
-                        .padding(start = 6.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text((if (on) "▶ " else "") + s.name, color = if (on) accent() else C.text, fontSize = 15.sp, maxLines = 1,
+                        .padding(start = 6.dp, top = (3 * sg()).dp, bottom = (3 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
+                        val rs = remember(s.url, s.meta) { app.vlcinterface.sources.RadioStation("", s.name, s.url, "", 0, stationCountry(s.meta), "", s.favicon) }
+                        StationFlag(rs)
+                        Text((if (on) "▶ " else "") + s.name, color = if (on) accent() else C.text, fontSize = 15.sp, lineHeight = 17.sp, maxLines = 1,
                             overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                        Text("  " + stationQuality(s.meta), color = C.muted, fontSize = 12.sp, maxLines = 1, softWrap = false)
+                        Text("  " + stationQuality(s.meta), color = C.muted, fontSize = 12.sp, lineHeight = 14.sp, maxLines = 1, softWrap = false)
                         Box {
-                            Text("⋮", color = C.text, fontSize = 20.sp, modifier = Modifier.clickable { menu = s.id }.padding(horizontal = 12.dp, vertical = 6.dp))
+                            Text("⋮", color = C.text, fontSize = 20.sp, lineHeight = 20.sp, modifier = Modifier.clickable { menu = s.id }.padding(horizontal = 10.dp))
                             SDropdownMenu(menu == s.id, { menu = null }) {
                                 SMenuItem({ Text("▶  Play") }, { menu = null; player.playStation(s.name, s.url) })
                                 SMenuItem({ Text("Rename…") }, { menu = null; rename = s })
@@ -1791,15 +1794,7 @@ fun StationSearch() {
                     .padding(vertical = (3 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                     // The station's country flag; when the country isn't known, a globe turned to where the station is
                     // (Europe while looking it up and when nothing is found).
-                    val flag = flagOf(r.country)
-                    if (flag.isNotEmpty()) Text(flag, fontSize = 18.sp, lineHeight = 20.sp, modifier = Modifier.padding(end = 8.dp))
-                    else {
-                        val globe by produceState(app.vlcinterface.sources.Globe.known(r) ?: app.vlcinterface.sources.Globe.EUROPE, r.url) {
-                            if (app.vlcinterface.sources.Globe.known(r) == null) value = app.vlcinterface.sources.Globe.lookup(r)
-                        }
-                        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(globe), "Station location",
-                            Modifier.padding(end = 8.dp).size(20.dp))
-                    }
+                    StationFlag(r)
                     Column(Modifier.weight(1f)) {
                         Text(r.name, color = C.text, fontSize = 14.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (r.meta.isNotEmpty()) Text(r.meta, color = if (r.isFlac) C.bad.copy(alpha = 0.8f) else C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -1961,6 +1956,27 @@ private fun ToneSliders() {
 
 
 /** "128 kbps MP3" out of a station's details (bitrate and codec only), or "" if unknown. */
+/**
+ * The station's country flag; when the country isn't known, a globe turned to where the station is (Europe while
+ * looking it up and when nothing is found). Used by the search results and the favourites.
+ */
+@Composable
+fun StationFlag(r: app.vlcinterface.sources.RadioStation) {
+    val flag = flagOf(r.country)
+    if (flag.isNotEmpty()) Text(flag, fontSize = 18.sp, lineHeight = 20.sp, modifier = Modifier.padding(end = 8.dp))
+    else {
+        val globe by produceState(app.vlcinterface.sources.Globe.known(r) ?: app.vlcinterface.sources.Globe.EUROPE, r.url) {
+            if (app.vlcinterface.sources.Globe.known(r) == null) value = app.vlcinterface.sources.Globe.lookup(r)
+        }
+        androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(globe), "Station location",
+            Modifier.padding(end = 8.dp).size(20.dp))
+    }
+}
+
+/** Country code kept in a favourite's details ("Blues · 1500 kbps OGG · ES" → "ES"); "" when it has none. */
+fun stationCountry(meta: String): String =
+    meta.split(" · ").map { it.trim() }.lastOrNull { Regex("^[A-Z]{2}$").matches(it) } ?: ""
+
 fun stationQuality(meta: String): String =
     Regex("""(\d{2,4})\s*kbps\s*([A-Za-z0-9+]*)""", RegexOption.IGNORE_CASE).find(meta)?.let { m ->
         listOf(m.groupValues[1] + " kbps", m.groupValues[2].uppercase()).filter { it.isNotBlank() }.joinToString(" ")

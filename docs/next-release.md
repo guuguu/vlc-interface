@@ -424,3 +424,9 @@
   area and the picture is fitted with its real proportions — Fit (whole picture, to the edges), Fill (whole area,
   stretched on purpose), Crop (whole area, edges cut), 16:9 and 4:3 (that shape), 1:1 (own shape, grown to the edges
   like Fit). Small videos still grow to the edges.
+
+## Favourite stations: tight rows with flags (reported 2026-11-21 02:58)
+- The favourites list now looks like the Find stations results: no extra gap between stations (the ⋮ button no
+  longer adds height; the row spacing follows Look → vertical spacing), and in front of each station its country's
+  flag — read from the country code kept with the favourite (e.g. "· ES") — or, when it has none, the globe turned to
+  where the station's server is (looked up once per server, Europe while looking / when nothing is found).
