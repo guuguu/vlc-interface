@@ -1440,7 +1440,7 @@ private fun VideoDetailsDialog(onDone: () -> Unit) {
 private fun FormatControl(label: String, onScale: () -> Unit) {
     val parts = label.split('\u0000')
     val cur = parts[0]; val nxt = parts.getOrElse(1) { "" }
-    OverlayChip(if (nxt.isEmpty()) cur else "→ $nxt", onScale)
+    OverlayChip(if (nxt.isEmpty()) cur else "→ $nxt", onClick = onScale)
 }
 
 
