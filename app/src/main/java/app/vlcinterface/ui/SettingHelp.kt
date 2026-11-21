@@ -30,7 +30,7 @@ object SettingHelp {
             "Tap it to open Android's battery page for the app.",
         // ---------------------------------------------------------------- Audio
         "Sound check" to "Measures what really happens to the song playing, on this phone, instead of guessing. Start it while a song plays; " +
-            "it takes about 15 s.\n\n" +
+            "it takes about 15 s. Songs, videos and radio stations (for live radio, decoding isn't compared: a live stream can't be read twice).\n\n" +
             "Decoding: 10 s of what libVLC hands the app's sound engine are compared, sample by sample, with the same passage " +
             "decoded by Android's own decoder. 'Identical' means the file arrives exactly as it is.\n\n" +
             "Sound engine: what the engine sends to Android is compared with what it received — bit-identical, only a level change " +

@@ -957,7 +957,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     CardBox {
                         Column(Modifier.explain("Sound check")) {
                             ValueRow("Sound check", if (scStep.isNotEmpty()) scStep else
-                                "While a song plays: 10 s of what libVLC gives the app's sound engine and what the engine sends to Android are " +
+                                "While a song, video or radio station plays: 10 s of what libVLC gives the app's sound engine and what the engine sends to Android are " +
                                 "compared with the same passage decoded by Android's own decoder — decoding, processing, rate conversion, output, Bluetooth",
                                 if (scStep.isNotEmpty()) "…" else "Start") {
                                 if (scStep.isEmpty()) scopeL.launch {

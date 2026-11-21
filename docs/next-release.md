@@ -1089,10 +1089,11 @@
 - **Fixed:**
   - libVLC now always sends the file's own rate, and the app converts it in its sound engine with the windowed-sinc converter. Measured with a 44.1 kHz file on a 48 kHz output, at 1, 10 and 16 kHz: aliasing and noise ≈ 90 dB under the music, which is the 16-bit floor of the file itself.
   - Anything libVLC still converts (its own output, the fallback) uses soxr, as VLC's own Android app does. The engine still starts if soxr were missing.
+- **Applies to everything played (22:32):** songs, video sound and online radio all go through the same sound engine and the same rate setup; libVLC's own output (fallback) uses soxr.
 - **Checked and fine:** time-stretch at normal speed passes the sound through untouched (VLC's source); the app's processing at neutral is bit-perfect; the visualisation never touches the sound.
 
 ## Sound check (requested 2026-11-21 22:28)
-- **Where:** Settings → Logs → "Sound check" → Start, while a song plays. It takes about 15 s and shows a report in the shared details style (copy / share). Text helper on a hold.
+- **Where:** Settings → Logs → "Sound check" → Start, while a song, a video or a radio station plays (22:32). For live radio, decoding isn't compared, since a live stream can't be read twice; the engine and the output are measured. It takes about 15 s and shows a report in the shared details style (copy / share). Text helper on a hold.
 - **What it does:** it measures, on the phone itself, what happens to the song playing.
   - It captures 10 s of what libVLC hands the app's sound engine, and of what the engine writes to Android (a capture tap in the engine; nothing is changed).
   - It decodes the same passage of the file a second, independent way, with Android's own decoder (phone, SMB and web files).

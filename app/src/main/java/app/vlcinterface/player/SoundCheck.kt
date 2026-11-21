@@ -34,9 +34,9 @@ object SoundCheck {
         val player = App.instance.player
         val item = player.state.value.item
         fun fail(why: String) = Report("Sound check", listOf("Sound check" to listOf("Result" to why)), "")
-        if (item == null || !item.isMusic) return@withContext fail("Play a song first (the check listens to the song playing).")
+        if (item == null) return@withContext fail("Play something first: a song, a video or a radio station (the check listens to what plays).")
         if (!NativeAudio.active) return@withContext fail("The app's own sound output isn't in use (Settings → Audio → sound engine is libVLC's), so there is nothing of the app's to check.")
-        if (!player.state.value.isPlaying) return@withContext fail("The song is paused: press play, then start the check.")
+        if (!player.state.value.isPlaying) return@withContext fail("It's paused: press play, then start the check.")
         val seconds = 10
         val posMs = player.state.value.time
         if (!NativeAudio.capture(seconds)) return@withContext fail("Not enough memory for the capture.")
@@ -60,18 +60,21 @@ object SoundCheck {
 
         // 2. Android's own decoder, same passage (a few seconds around it, aligned below).
         progress("Decoding the file with Android's decoder…")
-        val dec = try { decode(ctx, item, ((posMs - 4000).coerceAtLeast(0)) * 1000L, seconds + 10) } catch (e: Exception) { null }
+        // A live radio stream can't be read a second time at the same spot: decoding isn't compared there.
+        val dec = if (item.isRadio) null else try { decode(ctx, item, ((posMs - 4000).coerceAtLeast(0)) * 1000L, seconds + 10) } catch (e: Exception) { null }
 
         // 3. Decoders compared.
         progress("Comparing…")
         val decRows = ArrayList<Pair<String, String>>()
-        if (dec == null) decRows += "Android's decoder" to "couldn't open this file (${item.uri.substringBefore(':')})"
+        if (item.isRadio) decRows += "Live radio" to "a live stream can't be decoded a second time at the same moment — decoding not compared; engine and output below are measured"
+        else if (dec == null) decRows += "Android's decoder" to "couldn't open this file (${item.uri.substringBefore(':')})"
         else {
             decRows += "File (Android reads)" to "${dec.rate} Hz · ${dec.channels} ch · ${dec.encoding}"
             decRows += "libVLC hands the engine" to "$src Hz · 2 ch · 16-bit"
             when {
                 dec.rate != src -> decRows += "Rate" to "libVLC converted ${dec.rate} → $src Hz before the engine (soxr) — samples can't be compared one to one"
                 dec.channels > 2 -> decRows += "Channels" to "the file has ${dec.channels} channels; libVLC mixes them to stereo — not compared"
+                !item.isMusic && dec.frames == 0 -> decRows += "Video" to "Android's decoder gave no sound for this video — not compared"
                 else -> {
                     val m = compareDecoders(capIn, inN, dec.pcm, dec.frames)
                     if (m == null) decRows += "Same samples?" to "couldn't line the two up (they differ by more than rounding)"
@@ -119,7 +122,7 @@ object SoundCheck {
         outRows += "Phone volume" to "${player.volumeNowPct().toInt()} %"
         outRows += "Phone sound effects" to "an app can't read them; with no audio session, per-app effects (e.g. Dolby, Adapt Sound) may apply differently than to other players"
 
-        Report("Sound check · ${item.title}",
+        Report("Sound check · ${item.title}" + when { item.isRadio -> " (radio)"; !item.isMusic -> " (video)"; else -> "" },
             listOf("Decoding (libVLC vs Android)" to decRows, "App's sound engine" to engRows, "Output" to outRows),
             "Captured $seconds s from ${fmt(posMs)}. Share or copy this to compare.")
     }
