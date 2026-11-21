@@ -608,8 +608,9 @@
 # After 1.62.0
 
 ## Alarm history (requested 2026-11-21 12:30)
-- One-time alarms that already rang (and "specific dates" alarms whose last date has passed) are no longer shown in
-  the alarm area in front of the player.
+- Past alarms are no longer shown in the alarm area in front of the player (12:30 / 12:31): one-time alarms that
+  already rang — also those that rang with an older version — and switched-off one-time / "specific dates" alarms
+  whose date (or every date) is over.
 - They're listed in Alarm settings → new section "History" (under Alarm health), newest first: time, name and when it
   was set for, "Rang <day, time>"; a tap opens the alarm. Each has a switch — on sets it again for its next time
   (a passed date is dropped) and it goes back in front of the player, "06:30 will ring" — and a red ✕ that deletes it.

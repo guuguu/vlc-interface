@@ -404,6 +404,23 @@ object Alarms {
     fun planned(id: String): Long = prefs.getLong("planned_$id", 0)
     fun setPlanned(id: String, t: Long) = prefs.edit().putLong("planned_$id", t).apply()
     fun lastRung(id: String): Long = prefs.getLong("rung_$id", 0)
+
+    /**
+     * A past alarm (2026-11-21 12:31): one-time / specific-dates alarm that's off and already done — it rang (marked
+     * now, or noted as rung by older versions) or its date / all its dates are over. Shown only in History.
+     */
+    fun isPast(a: Alarm, now: Long = System.currentTimeMillis()): Boolean {
+        if (a.on || a.mode == "weekly") return false
+        if (a.used > 0L || lastRung(a.id) > 0L) return true
+        return when (a.mode) {
+            "dates" -> a.dates.isEmpty() || a.dates.all { (AlarmScheduler.atDate(it, a) ?: 0L) < now }
+            else -> a.date.isNotEmpty() && (AlarmScheduler.atDate(a.date, a) ?: 0L) < now
+        }
+    }
+
+    /** When a past alarm rang (or was due), for History. */
+    fun pastAt(a: Alarm): Long = a.used.takeIf { it > 0 } ?: lastRung(a.id).takeIf { it > 0 }
+        ?: (if (a.mode == "dates") a.dates.mapNotNull { AlarmScheduler.atDate(it, a) }.maxOrNull() else AlarmScheduler.atDate(a.date, a)) ?: 0L
     fun setRung(id: String, t: Long) = prefs.edit().putLong("rung_$id", t).apply()
     /** The alarm ringing / watched now ("" = none): a restarted app picks it up again. */
     var active: String

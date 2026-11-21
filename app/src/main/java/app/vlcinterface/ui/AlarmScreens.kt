@@ -83,7 +83,7 @@ fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
     val ctxH = LocalContext.current
     val issues = remember(resumeTick()) { alarmIssues(ctxH) }
     // One-time alarms that already rang are not shown here (2026-11-21 12:30): they're in Alarm settings → History.
-    val list = d.alarms.filter { it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID && !it.inHistory }.sortedBy { it.hour * 60 + it.minute }
+    val list = d.alarms.filter { it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID && !Alarms.isPast(it) }.sortedBy { it.hour * 60 + it.minute }
     val warn = issues.isNotEmpty() && list.any { it.on }
     // Permissions missing (typically right after a new install, 2026-11-21 11:41): the alarm area is red and any touch
     // on it (an alarm, its switch, + Add, ⚙, ⚠) first shows a pop-up with a link to each setting to fix; "Later" goes
@@ -1099,7 +1099,7 @@ private fun CalendarPickDialog(onDone: () -> Unit) {
 @Composable
 private fun AlarmHistory(nav: Navigator) {
     val d by Alarms.state.collectAsState()
-    val used = d.alarms.filter { it.inHistory && it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID }.sortedByDescending { it.used }
+    val used = d.alarms.filter { Alarms.isPast(it) && it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID }.sortedByDescending { Alarms.pastAt(it) }
     if (used.isEmpty()) return
     val fmt = java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale.getDefault())
     SectionTitle("History")
@@ -1112,7 +1112,7 @@ private fun AlarmHistory(nav: Navigator) {
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
                     Text(listOf(al.name, Alarm.whenText(al)).filter { it.isNotEmpty() }.joinToString(" · "), color = C.text, fontSize = 14.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("Rang " + fmt.format(java.util.Date(al.used)), color = C.muted, fontSize = 12.sp)
+                    Alarms.pastAt(al).takeIf { it > 0 }?.let { t -> Text("Rang " + fmt.format(java.util.Date(t)), color = C.muted, fontSize = 12.sp) }
                 }
                 // On: set again for its next time (a passed date is dropped) — it leaves the history.
                 AppSwitch(false, { on ->
