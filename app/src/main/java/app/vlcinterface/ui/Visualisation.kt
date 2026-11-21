@@ -40,6 +40,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -868,6 +869,16 @@ fun VisualisationScreen(nav: Navigator) {
         if (note.isNotEmpty()) Text(note, color = Color.White.copy(alpha = 0.85f), fontSize = 20.sp, modifier = Modifier.align(Alignment.Center).padding(top = 60.dp))
         LaunchedEffect(shownAt) { kotlinx.coroutines.delay(1300); showB = false }
         LaunchedEffect(noteAt) { kotlinx.coroutines.delay(1300); note = "" }
+        // On opening: a short pop-up in the middle telling how to leave (fades away after ~2.5 s).
+        var exitHint by remember { mutableStateOf(true) }
+        LaunchedEffect(Unit) { kotlinx.coroutines.delay(2500); exitHint = false }
+        val hintA by androidx.compose.animation.core.animateFloatAsState(if (exitHint) 1f else 0f, androidx.compose.animation.core.tween(500), label = "exitHint")
+        if (hintA > 0.01f) Box(Modifier.align(Alignment.Center).padding(24.dp).graphicsLayer { alpha = hintA }
+            .clip(RoundedCornerShape(18.dp)).background(Color(0xCC000000)).border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
+            .padding(horizontal = 28.dp, vertical = 20.dp), contentAlignment = Alignment.Center) {
+            Text("Double tap to exit", color = Color.White, fontSize = 30.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
     }
 }
 
