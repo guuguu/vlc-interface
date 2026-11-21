@@ -48,6 +48,8 @@ data class Origin(
 const val NO_RG_DB = 0f
 /** Loudness and treble act 30 % deeper than their slider values (same logic, stronger effect). */
 const val TONE_DEPTH = 1.3f
+/** Treble shelf (app output): dB per slider step (±5 steps → ±10 dB). */
+const val TREBLE_DB_PER_STEP = 2f
 /** Songs without ReplayGain reached over the VPN: 6 dB lower (not scanned there). */
 const val VPN_NO_RG_DB = -6f     // no ReplayGain: played as it is (no preamp either); the scan question handles it
 
@@ -433,13 +435,18 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
-    /** Band gains in use now (sliders on / off, Auto loudness included). */
+    /**
+     * The app's own output: 10 band gains for loudness, plus an 11th value — the treble shelf in dB (2026-11-21 21:45:
+     * a high shelf from ~2 kHz rising to 12 kHz and above, ±10 dB at the ends of the slider; the old treble on the top
+     * bands only acted above 8–12 kHz and was hardly heard).
+     */
     private fun currentToneGains(): FloatArray {
         val s = _state.value
         val on = store.current.settings.toneSliders
         val l = if (on) autoLoudness(s.loudDb) else 0f; val t = if (on) s.trebleDb else 0f
         if (l != s.loudEffDb) _state.value = _state.value.copy(loudEffDb = l)
-        return if (l == 0f && t == 0f) FloatArray(10) else toneGains(l, t)
+        val bands = if (l == 0f) FloatArray(10) else toneGains(l, 0f)
+        return bands + floatArrayOf(t * TREBLE_DB_PER_STEP)
     }
 
     /** Band gains (10 bands, all ≤ 0 dB) for loudness [l] and treble [t]. */
@@ -466,7 +473,9 @@ class PlayerController(private val context: Context, private val store: Store) {
      * How much the overall level drops with these loudness / treble settings (dB, ≥ 0): the band gains weighted by
      * a typical music spectrum (about equal energy per octave, less at the very top).
      */
-    private fun toneLevelDrop(l: Float, t: Float): Float {
+    private fun toneLevelDrop(l: Float, t0: Float): Float {
+        // App output: treble is a shelf on the highs (mids untouched), so only loudness lowers the level.
+        val t = if (NativeAudio.active) 0f else t0
         if (l == 0f && t == 0f) return 0f
         val w = floatArrayOf(1f, 1f, 1f, 1f, 1f, 1f, 0.7f, 0.4f, 0.2f, 0.1f)
         val g = toneGains(l, t)

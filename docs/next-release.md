@@ -1053,3 +1053,12 @@
 - **1.69.0 dancing:** the size check flipped to another format and back while the picture was still wrong, with no limit, so the picture kept jumping between two sizes. That flipping is removed. The check is back to its plain re-apply (at most 6 tries).
 - **Real cause of the small picture upright:** libVLC's own sizing assumes the video fills the screen. With the phone upright and the video area wider than tall (a wide film in the upper part), it swaps the area's width and height before fitting the picture. A 1080 × 600 area got a picture made for 600 × 1080, drawn small in the middle. Sideways nothing is swapped, which is why turning the phone fixed it.
 - **Fixed:** the video view now tells libVLC an orientation that follows the view's own shape (wider than tall → landscape, taller → portrait). That's the case libVLC handles right, so the picture is sized right upright in every format, from the start.
+
+## Treble: a real treble control (reported 2026-11-21 21:45 / 21:46: "too mild, almost none"; "raise sensibly at least until 12 kHz")
+- **Why it was mild:** the old Treble only acted on the top bands, from 8 kHz up and at full strength only near 14–16 kHz, where music has little energy and hearing is least sensitive. The 2–8 kHz range, which is what sounds brighter, wasn't touched.
+- **Now (app's own sound output):** Treble is one high-shelf filter in the sound engine, like an amplifier's treble knob, with its corner at 4 kHz.
+  - The rise is smooth from about 2 kHz and keeps climbing to 12 kHz, then holds. Mids and bass are untouched.
+  - At the slider's end (+5): 1 kHz +0.5 dB, 2 kHz +1.8, 4 kHz +5, 8 kHz +8.4, 12 kHz +9.5, 16 kHz +10 (measured on the engine). −5 is the exact mirror. Each step is 2 dB at the top.
+  - It glides when moved, like the other tone controls. Loudness keeps its ten bands.
+  - Treble no longer moves the Preamp, since the mids' level doesn't change.
+- **libVLC's own output** (fallback) keeps the previous band treble.

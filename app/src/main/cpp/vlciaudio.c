@@ -382,6 +382,47 @@ static void eq_update(void) {
     g_eqActive = any;
 }
 
+/*
+ * Treble (2026-11-21 21:45): one high-shelf filter (corner 4 kHz, slope 0.6), like an amplifier's treble knob — a smooth
+ * rise from about 2 kHz that keeps climbing to 12 kHz and holds above (at +10 dB: 2k +1.8, 4k +5, 8k +8.4, 12k +9.5).
+ * The ten bands above stay for loudness. Glides like the bands.
+ */
+static _Atomic float g_trebleTarget;
+static float g_trebleCur, g_trebleUsed = 99.f;
+static bq_t g_ts;
+static float g_tz[2][2];
+static bool g_trebleActive;
+static void treble_update(void) {
+    float t = atomic_load(&g_trebleTarget);
+    float c = g_trebleCur + (t - g_trebleCur) * 0.5f;
+    if (fabsf(t - c) < 0.02f) c = t;
+    g_trebleCur = c;
+    if (g_eqRateChanged) memset(g_tz, 0, sizeof g_tz);
+    if (g_eqRateChanged || fabsf(c - g_trebleUsed) > 0.001f) {
+        float fs = (float)(g_src ? g_src : g_rate), f0 = 4000.f, S = 0.6f;
+        if (f0 > fs * 0.45f) f0 = fs * 0.45f;
+        float A = powf(10.f, c / 40.f), w0 = 2.f * (float)M_PI * f0 / fs, cw = cosf(w0);
+        float al = sinf(w0) / 2.f * sqrtf((A + 1.f / A) * (1.f / S - 1.f) + 2.f), sA = 2.f * sqrtf(A) * al;
+        float a0 = (A + 1.f) - (A - 1.f) * cw + sA;
+        g_ts.b0 = A * ((A + 1.f) + (A - 1.f) * cw + sA) / a0;
+        g_ts.b1 = -2.f * A * ((A - 1.f) + (A + 1.f) * cw) / a0;
+        g_ts.b2 = A * ((A + 1.f) + (A - 1.f) * cw - sA) / a0;
+        g_ts.a1 = 2.f * ((A - 1.f) - (A + 1.f) * cw) / a0;
+        g_ts.a2 = ((A + 1.f) - (A - 1.f) * cw - sA) / a0;
+        g_trebleUsed = c;
+    }
+    bool on = fabsf(c) > 0.001f;
+    if (!on && g_trebleActive) memset(g_tz, 0, sizeof g_tz);
+    g_trebleActive = on;
+}
+static inline float treble_run(float x, int ch) {
+    float *z = g_tz[ch];
+    float y = g_ts.b0 * x + z[0];
+    z[0] = g_ts.b1 * x - g_ts.a1 * y + z[1];
+    z[1] = g_ts.b2 * x - g_ts.a2 * y;
+    return y;
+}
+
 static inline float eq_run(float x, int ch) {
     for (int b = 0; b < NB; b++) {
         if (fabsf(g_eqCur[b]) < 0.001f) continue;
@@ -494,6 +535,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     float gl = atomic_load(&g_gainL), gr = atomic_load(&g_gainR);
     float v = atomic_load(&g_mute) ? 0.f : atomic_load(&g_vol) * atomic_load(&g_appVol);
     gl *= v; gr *= v;
+    treble_update();                                   /* before eq_update, which clears the rate-change flag */
     eq_update();
     /* New stream (song start): the level starts where it should, not ramped from the last song's. */
     if (g_prevL < 0.f) { g_prevL = gl; g_prevR = gr; }
@@ -525,6 +567,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
             if (specOn) for (int b = 0; b < SPEC_N; b++) { float s = sbp_run(&g_sb[b], m); es[b] += s * s; }
             if (pcmOn) { unsigned pi = (pcmStart + done + i) % PCM_N; g_pcm[pi * 2] = x; g_pcm[pi * 2 + 1] = y; }
             if (g_eqActive) { x = eq_run(x, 0); y = eq_run(y, 1); }
+            if (g_trebleActive) { x = treble_run(x, 0); y = treble_run(y, 1); }
             float k = (float)(done + i);
             float l = x * (sl + dl * k), r = y * (sr + dr * k);
             limit2(&l, &r, rel);                              /* only acts on overs */
@@ -693,6 +736,10 @@ Java_app_vlcinterface_player_NativeAudio_setGainsEq(JNIEnv *env, jobject thiz, j
     jfloat g[NB] = { 0 };
     if (eq && (*env)->GetArrayLength(env, eq) >= NB) (*env)->GetFloatArrayRegion(env, eq, 0, NB, g);
     for (int b = 0; b < NB; b++) atomic_store(&g_eqTarget[b], g[b]);
+    /* An 11th value: treble shelf in dB (0 when the array is the old 10-band one). */
+    jfloat tr = 0.f;
+    if (eq && (*env)->GetArrayLength(env, eq) >= NB + 1) (*env)->GetFloatArrayRegion(env, eq, NB, 1, &tr);
+    atomic_store(&g_trebleTarget, tr);
     atomic_store(&g_gainL, l);
     atomic_store(&g_gainR, r);
     atomic_store(&g_limit, lim);
