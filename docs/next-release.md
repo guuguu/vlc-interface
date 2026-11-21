@@ -1009,7 +1009,7 @@
 
 ## Subtitle / sound operations go straight back to the video (requested 2026-11-21 21:06)
 - Done on subtitle Sync or Sync sound (sideways and upright) closes to the video; it used to stop on "Audio & subtitles" first.
-- A subtitle file picked with "From file" is loaded, put on, and the panel closes.
+- A subtitle file picked with "From file" (now the in-app folder browser, see below) is loaded, put on, and the panel closes.
 - Picture colour's back arrow goes to the video (it's opened from Hue/Sat, there's no step before it).
 - Kept as steps, for going back and forth (21:09):
   - The back arrow from Download subtitles still goes to Audio & subtitles, and from there to the video.
@@ -1037,3 +1037,12 @@
   - They're copied into the app, colour codes taken out, and added as choices in the subtitle pop-up and Subs/Change.
   - They aren't switched on by themselves; the same-name file next to the video still is.
   - The pop-up waits up to 12 s for subtitles, and subtitles arriving later appear in it while it's open.
+
+## Subtitle file from the movie's folder, browsed in the app (requested 2026-11-21 21:17)
+- "From file" (Subs/Sync → Audio & subtitles) and a new "📂 Browse the video's folder…" at the bottom of the Subs/Change pop-up open the app's own browser. Android's file picker is no longer used there.
+- **Where it starts:** the movie's own folder (network: SMB / web; phone: the file's folder).
+- **Moving around:** a tap on a folder goes in, ‹ goes up, as far as the top of that network location or phone storage.
+- **What it lists:** folders, subtitle files (.srt .ass .ssa .vtt .sub) and .zip archives. An archive opens to the subtitles inside it.
+- **Matching first:** files that belong to the video (its name or episode code) come first after the folders, in the accent colour.
+- **Picking a file:** it's loaded (colour codes taken out), put on, and saved silently as this video's subtitles. "Subtitles on: …" shows briefly, and it goes back to the video. Cancel goes back to where it was opened from.
+- A phone video without a real file path says the folder can't be read from the app.

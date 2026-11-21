@@ -219,6 +219,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
             delay(500)
         }
     }
+    // Picked: back to the video (panels closed); Cancel keeps where it was (21:17).
+    if (SubBrowseUi.open) SubtitleBrowseDialog(onPicked = { panel = Panel.NONE }) { SubBrowseUi.open = false }
     if (SubChoiceUi.open) SubtitleChoiceDialog(p, onPick = { id -> player.selectSpu(id); SubChoiceUi.open = false }) { SubChoiceUi.open = false }
 
     // Auto-download subtitles when nothing in the preferred languages is present.
@@ -1090,8 +1092,6 @@ private fun BoxScope.PictureBar(onClose: () -> Unit) {
 @Composable
 private fun TracksPanel(p: PlayerState, nav: Navigator, onPanel: (Panel) -> Unit) {
     val player = App.instance.player
-    // A subtitle file picked: loaded, and back to the video (2026-11-21 21:06).
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) { player.addSubtitleFile(uri, keep = true); onPanel(Panel.NONE) } }
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SectionTitle("Audio")
@@ -1110,7 +1110,8 @@ private fun TracksPanel(p: PlayerState, nav: Navigator, onPanel: (Panel) -> Unit
         p.spuTracks.forEach { t -> TrackRow(if (t.id < 0) "Off" else t.name, t.id == p.spuTrack) { player.selectSpu(t.id) } }
         FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("Download", filled = true) { onPanel(Panel.DOWNLOAD) }
-            Pill("From file") { pick.launch(arrayOf("*/*")) }
+            // The movie's folder, browsed inside the app (21:17); Android's picker no longer used here.
+            Pill("From file") { SubBrowseUi.open = true }
             Pill("Sync") { onPanel(Panel.SYNC_SUB) }
         }
         Text("Subtitle offset ${p.spuDelayMs} ms", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
@@ -1609,8 +1610,96 @@ private fun SubtitleChoiceDialog(p: PlayerState, onPick: (Int) -> Unit, onDismis
                     }
                 }
             }
+            // Browse the movie's folder for a subtitle file, inside the app (21:17).
+            Text("📂  Browse the video's folder…", color = accent(), fontSize = 15.sp, modifier = Modifier.fillMaxWidth()
+                .clickable { onDismiss(); SubBrowseUi.open = true }.padding(horizontal = 20.dp, vertical = 12.dp))
         }
     }
+}
+
+/** The in-app subtitle browser is open. */
+object SubBrowseUi {
+    var open by mutableStateOf(false)
+}
+
+/**
+ * Subtitle file from the video's folder, browsed inside the app (2026-11-21 21:17: no Android file picker). Starts in
+ * the movie's folder; folders go in, ‹ goes up (to the top of that network location / phone storage); .zip archives
+ * open to their subtitles; files matching the video (its name or episode code) come first, in the accent colour.
+ * A tap loads that file, puts it on, saves it as this video's subtitles and goes back to the video.
+ */
+@Composable
+fun SubtitleBrowseDialog(onPicked: () -> Unit = {}, onDone: () -> Unit) {
+    val ctx = LocalContext.current
+    val player = App.instance.player
+    val item = player.state.collectAsState().value.item ?: run { onDone(); return }
+    val start = remember(item.uri) { app.vlcinterface.sources.SubtitleFiles.browseStart(item, player.phonePathOf(item)) }
+    val scope = rememberCoroutineScope()
+    var where by remember(item.uri) { mutableStateOf(start?.second ?: "") }
+    var zipFiles by remember { mutableStateOf<Pair<String, List<java.io.File>>?>(null) }
+    var list by remember { mutableStateOf<List<app.vlcinterface.sources.SubtitleFiles.BEntry>?>(null) }
+    var err by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    LaunchedEffect(where) {
+        if (start == null) return@LaunchedEffect
+        list = null; err = ""
+        app.vlcinterface.sources.SubtitleFiles.browse(start.first, where).onSuccess { l ->
+            // Files belonging to the video first (after the folders).
+            list = l.sortedWith(compareBy({ it.kind != 'd' }, { !(it.kind != 'd' && app.vlcinterface.sources.SubtitleFiles.belongs(item, it.name)) }))
+        }.onFailure { e -> list = emptyList(); err = "Could not open this folder: ${e.message ?: e.javaClass.simpleName}" }
+    }
+    fun use(f: java.io.File?) {
+        busy = false
+        if (f == null) { err = "Could not read that file"; return }
+        player.addSubtitleFile(android.net.Uri.fromFile(f), keep = true)
+        ShortNote.show("Subtitles on: " + f.name)
+        onPicked(); onDone()
+    }
+    val canUp = start != null && zipFiles == null && where.trimEnd('/') != start.third.trimEnd('/') && where.trimEnd('/').length > start.third.trimEnd('/').length
+    androidx.compose.material3.AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("Subtitles from a folder", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (start == null) { Text("This video's folder can't be read from the app (no file path).", color = C.muted, fontSize = 13.sp); return@Column }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (zipFiles != null || canUp) Text("‹", color = accent(), fontSize = 24.sp, modifier = Modifier.clickable {
+                        if (zipFiles != null) zipFiles = null else where = where.trimEnd('/').substringBeforeLast('/') + if (start.first != null) "/" else ""
+                    }.padding(end = 12.dp))
+                    val shown = zipFiles?.first ?: android.net.Uri.decode(where.substringAfter("://").substringAfter('/', where)).trimEnd('/').ifEmpty { "/" }
+                    Text(shown, color = C.muted, fontSize = 12.sp, maxLines = 2)
+                }
+                Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) {
+                    val zf = zipFiles
+                    when {
+                        busy -> CircularProgressIndicator(color = accent(), strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                        zf != null -> if (zf.second.isEmpty()) Text("No subtitle files in this archive.", color = C.muted, fontSize = 13.sp)
+                            else zf.second.sortedBy { !app.vlcinterface.sources.SubtitleFiles.belongs(item, it.name) }.forEach { f ->
+                                val mine = app.vlcinterface.sources.SubtitleFiles.belongs(item, f.name)
+                                Text("≣  " + f.name, color = if (mine) accent() else C.text, fontSize = 15.sp, maxLines = 2, fontWeight = if (mine) FontWeight.SemiBold else FontWeight.Normal,
+                                    modifier = Modifier.fillMaxWidth().clickable { use(f) }.padding(vertical = 10.dp))
+                            }
+                        list == null -> CircularProgressIndicator(color = accent(), strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                        err.isNotEmpty() && list!!.isEmpty() -> Text(err, color = C.bad, fontSize = 13.sp)
+                        list!!.isEmpty() -> Text("No folders or subtitle files here.", color = C.muted, fontSize = 13.sp)
+                        else -> list!!.forEach { e ->
+                            val mine = e.kind != 'd' && app.vlcinterface.sources.SubtitleFiles.belongs(item, e.name)
+                            val icon = when (e.kind) { 'd' -> "▤"; 'z' -> "🗜"; else -> "≣" }
+                            Text("$icon  " + e.name, color = if (mine) accent() else C.text, fontSize = 15.sp, maxLines = 2,
+                                fontWeight = if (mine) FontWeight.SemiBold else FontWeight.Normal,
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    when (e.kind) {
+                                        'd' -> where = e.uri.trimEnd('/') + if (start.first != null) "/" else ""
+                                        'z' -> { busy = true; scope.launch { val fs = app.vlcinterface.sources.SubtitleFiles.unzip(ctx, item, start.first, e); busy = false; zipFiles = e.name to fs } }
+                                        else -> { busy = true; scope.launch { use(app.vlcinterface.sources.SubtitleFiles.fetch(ctx, item, start.first, e)) } }
+                                    }
+                                }.padding(vertical = 10.dp))
+                        }
+                    }
+                }
+                if (err.isNotEmpty() && list?.isNotEmpty() == true) Text(err, color = C.bad, fontSize = 12.sp)
+            }
+        },
+        confirmButton = { STextButton(onDone) { Text("Cancel", color = accent()) } })
 }
 
 

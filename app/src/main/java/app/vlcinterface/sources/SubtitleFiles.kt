@@ -231,6 +231,70 @@ object SubtitleFiles {
         out.also { subRefs[item.uri] = it }
     }
 
+    // ---------- in-app subtitle browser (2026-11-21 21:17): the movie's folder, without Android's file picker ----------
+
+    /** The file name belongs to this video: same name start, or the same episode code (series matching or absent). */
+    fun belongs(item: PlayItem, file: String): Boolean {
+        val vName = Uri.decode(item.uri.substringAfterLast('/'))
+        val nb = norm(vName.substringBeforeLast('.'))
+        val f = Uri.decode(file)
+        if (norm(f.substringBeforeLast('.')).startsWith(nb)) return true
+        val ep = app.vlcinterface.player.Episodes.parse(vName) ?: return false
+        val e = app.vlcinterface.player.Episodes.parse(f) ?: return false
+        return e.season == ep.season && e.episode == ep.episode && (e.series.isEmpty() || e.series == ep.series || ep.series.contains(e.series) || e.series.contains(ep.series))
+    }
+
+    fun isSub(name: String) = name.ext() in SUB_EXT
+    fun isZip(name: String) = name.ext() == "zip"
+
+    /** One entry of the browser: a folder, a subtitle file, or a zip archive (its subtitles listed when opened). */
+    data class BEntry(val name: String, val uri: String, val kind: Char)   // 'd' folder, 's' subtitle, 'z' zip
+
+    /** Where the browser starts and how far up it may go: (source or null for the phone, start folder, top folder). */
+    fun browseStart(item: PlayItem, phonePath: String?): Triple<Source?, String, String>? {
+        val src = sourceOf(item)
+        if (src != null && (item.uri.startsWith("smb://") || item.uri.startsWith("http"))) return Triple(src, Urls.parent(item.uri), Urls.forSource(src))
+        val folder = phonePath?.let { File(it).parentFile } ?: return null
+        val top = listOf("/storage/emulated/0", "/sdcard").firstOrNull { folder.path.startsWith(it) }
+            ?: folder.path.split('/').take(3).joinToString("/")          // a card: /storage/XXXX-XXXX
+        return Triple(null, folder.path, top)
+    }
+
+    /** Folders, subtitle files and zip archives in [where] (sorted: folders, then files). */
+    suspend fun browse(src: Source?, where: String): Result<List<BEntry>> = withContext(Dispatchers.IO) {
+        try {
+            val all = if (src != null) Browse.listAll(src, where, "subtitles").getOrThrow().map { BEntry(Uri.decode(it.name).trimEnd('/'), it.uri, if (it.isDir) 'd' else 'f') }
+                else (File(where).listFiles() ?: throw IllegalStateException("can't read this folder")).map { BEntry(it.name, it.path, if (it.isDirectory) 'd' else 'f') }
+            Result.success(all.mapNotNull { e -> when { e.kind == 'd' -> e; isSub(e.name) -> e.copy(kind = 's'); isZip(e.name) -> e.copy(kind = 'z'); else -> null } }
+                .filter { !it.name.startsWith(".") }.sortedWith(compareBy({ it.kind != 'd' }, { it.name.lowercase() })))
+        } catch (e: Exception) { Result.failure(e) }
+    }
+
+    /** A subtitle file picked in the browser, copied into the app (phone files used where they are). */
+    suspend fun fetch(ctx: Context, item: PlayItem, src: Source?, e: BEntry): File? = withContext(Dispatchers.IO) {
+        if (src == null) return@withContext File(e.uri).takeIf { it.canRead() }
+        val bytes = read(src, e.uri) ?: return@withContext null
+        File(dir(ctx, "subtitles/" + hash(item.uri) + "/picked"), e.name.replace('/', '_')).apply { writeBytes(bytes) }
+    }
+
+    /** The subtitles inside a zip archive, unpacked into the app (up to 20 MB archives, 60 entries). */
+    suspend fun unzip(ctx: Context, item: PlayItem, src: Source?, e: BEntry): List<File> = withContext(Dispatchers.IO) {
+        val bytes = (if (src == null) File(e.uri).takeIf { it.length() <= 20_000_000 }?.readBytes() else read(src, e.uri)) ?: return@withContext emptyList()
+        val out = ArrayList<File>()
+        val d = dir(ctx, "subtitles/" + hash(item.uri) + "/zip-" + hash(e.uri))
+        try {
+            java.util.zip.ZipInputStream(java.io.ByteArrayInputStream(bytes)).use { z ->
+                var en = z.nextEntry
+                while (en != null && out.size < 60) {
+                    val n = en.name.substringAfterLast('/')
+                    if (!en.isDirectory && isSub(n)) { val b = z.readBytes(); if (b.size <= 2_000_000) out += File(d, n).apply { writeBytes(b) } }
+                    en = z.nextEntry
+                }
+            }
+        } catch (_: Exception) {}
+        out
+    }
+
     private fun read(src: Source, uri: String): ByteArray? = try {
         when {
             uri.startsWith("smb://") -> SmbFile(VpnLink.route(Uri.decode(uri)), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain)).openInputStream().use { it.readBytes() }

@@ -1810,6 +1810,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     /** A phone file's real path, when Android gives one and it can be read; null otherwise. */
+    /** The phone path of a video, for the in-app subtitle browser (null for network items or without a real path). */
+    fun phonePathOf(item: PlayItem): String? = phonePath(item)
     private fun phonePath(item: PlayItem): String? = try {
         app.vlcinterface.sources.PhysicalPath.of(context, item).takeIf { it.startsWith("/") && java.io.File(it).canRead() }
     } catch (_: Exception) { null }
