@@ -281,9 +281,19 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         }
     }
     if (showDetails) VideoDetailsDialog { showDetails = false }
+    // Upright (2026-11-21 15:30): a header bar above the picture like the song player's — symbols on the first row,
+    // the other two players and the output on the second — and those buttons are no longer drawn on the picture.
+    val headerOn = !landscape && !inPip
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    var headerHpx by remember { mutableIntStateOf(0) }
+    val headerDp = if (headerOn) with(dens) { headerHpx.toDp() } else 0.dp
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        video(if (fullscreen) Modifier.fillMaxSize() else if (videoPortrait) Modifier.safeDrawingPadding().fillMaxWidth().fillMaxHeight(0.667f)
-            else Modifier.safeDrawingPadding().fillMaxWidth().aspectRatio(ratio))
+        video(if (fullscreen && !headerOn) Modifier.fillMaxSize()
+            else if (fullscreen) Modifier.safeDrawingPadding().padding(top = headerDp).fillMaxSize()
+            else if (videoPortrait) Modifier.safeDrawingPadding().padding(top = headerDp).fillMaxWidth().fillMaxHeight(0.667f)
+            else Modifier.safeDrawingPadding().padding(top = headerDp).fillMaxWidth().aspectRatio(ratio))
+        if (headerOn) VideoHeader(nav, locked, openOutput, onLock = { locked = !locked },
+            Modifier.align(Alignment.TopCenter).safeDrawingPadding().onSizeChanged { headerHpx = it.height })
         // Analysis mode, not running yet: the button that starts it (and ✕ to leave the mode). Kept off the photos.
         if (analysing && !checking && !inPip) Row(Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp)).background(Color(0xD0000000)),
             verticalAlignment = Alignment.CenterVertically) {
@@ -302,10 +312,11 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         }
         if (fullscreen) {
             // Picture fills the screen; controls and panels sit on top of it.
-            if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second + "\u0000" + scales[(scaleIdx + 1) % scales.size].second,
+            if (controls && panel == Panel.NONE) Box(if (headerOn) Modifier.fillMaxSize().safeDrawingPadding().padding(top = headerDp) else Modifier.fillMaxSize()) {
+                ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second + "\u0000" + scales[(scaleIdx + 1) % scales.size].second,
                 onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS }, onPicture = { panel = Panel.PICTURE },
                 onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first); toast = scales[scaleIdx].second },
-                onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ })
+                onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ }) }
             if (AudioSyncUi.open) AudioSyncBar { AudioSyncUi.open = false }
             when (panel) {
                 // Hue & saturation over the full-screen picture: a slim bar at the bottom, nothing darkened,
@@ -321,6 +332,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         } else {
             // Phone upright with a widescreen video: video on top, everything else below it.
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+                Box(Modifier.fillMaxWidth().height(headerDp))
                 Box(Modifier.fillMaxWidth().then(if (videoPortrait) Modifier.fillMaxHeight(0.667f) else Modifier.aspectRatio(ratio))) {
                     if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second + "\u0000" + scales[(scaleIdx + 1) % scales.size].second,
                         onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS }, onPicture = { panel = Panel.PICTURE },
@@ -527,21 +539,10 @@ private fun BoxScope.ControlsOverlayBody(
         }
     } else CompositionLocalProvider(LocalBtnScale provides topK) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        // Symbols spread evenly over the whole bar (the title is shown under the video, so it isn't squeezed in here).
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
-            HomeButton(nav, Color.White)
-            SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
-            // Video player → Video settings.
-            SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
-            ShazamButton(Color.White)
-            BackgroundWorkButton()
-            ScreenOnSign(Color.White)
-            ExitButton(Color.White)
-        }
+        // Upright: back, home, lock, settings, Shazam, signs, exit, the other players and the output are in the header
+        // bar above the picture (VideoHeader), not on it.
         // Short video area upright (compact): these chips are under the video instead, so nothing overlaps.
         if (!compact) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutputPill(openOutput)
             OverlayChip("Audio & subs") { onTouch(); onPanel() }
             // Browse: the folder the video came from, in the Library (Back returns here); Queue: what plays next.
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
@@ -550,9 +551,6 @@ private fun BoxScope.ControlsOverlayBody(
             // Dedicated button: hue & saturation, straight to the sliders.
             OverlayChip("Hue & sat") { onTouch(); onPicture() }
             speedChip()
-            // The other two players (each resumes what it last played).
-            OverlayChip("Songs") { PlayerSwitch.go(nav, "songs") }
-            OverlayChip("Radio") { PlayerSwitch.go(nav, "radio") }
         }
     }
     }
@@ -660,9 +658,6 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                 val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
                 player.setRate(rates[(i + 1) % rates.size])
             }
-            Pill("Songs") { PlayerSwitch.go(nav, "songs") }
-            Pill("Radio") { PlayerSwitch.go(nav, "radio") }
-            OutputPill(onOutput)
         }
         // Wide video upright: the video collection in its own scrolling box, like the song player's "Up next".
         val next = if (p.index >= 0) p.queue.drop(p.index + 1) else emptyList()
@@ -1213,5 +1208,37 @@ private fun VideoQueuePanel(p: PlayerState, nav: Navigator, onClose: () -> Unit)
             }
         }
         Pill("📂 Browse files to add", filled = true, modifier = Modifier.fillMaxWidth()) { onClose(); openOrigin(nav, keepStack = true) }
+    }
+}
+
+
+/** Header bar of the video player upright, like the song player's: symbols, then the other two players and the output. */
+@Composable
+private fun VideoHeader(nav: Navigator, locked: Boolean, openOutput: () -> Unit, onLock: () -> Unit, modifier: Modifier) {
+    Scaled {
+        Column(modifier.fillMaxWidth().background(Color.Black).padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                if (locked) {
+                    // Locked: only the lock, to unlock.
+                    Grow()
+                    SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Unlock controls", tint = accent()) }
+                } else {
+                    SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
+                    HomeButton(nav, Color.White)
+                    SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
+                    // Video player → Video settings.
+                    SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
+                    ShazamButton(Color.White)
+                    BackgroundWorkButton()
+                    ScreenOnSign(Color.White)
+                    ExitButton(Color.White)
+                }
+            }
+            if (!locked) Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // The other two players (each resumes what it last played), then the output on the right.
+                PlayerSwitchButtons(nav, "video", Color.White)
+                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { OutputPill(openOutput) }
+            }
+        }
     }
 }

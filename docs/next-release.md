@@ -702,3 +702,11 @@
 - Queue opens a panel over the video (it keeps playing): where it was played from ("Folder: …" / "Playlist: …"),
   Now playing, Up next with each video's length — tap to play it, ✕ to take it out of the queue, long press for its
   menu (Play next, Move up / down, Details …) — "Clear the rest", and "📂 Browse files to add".
+
+## Video player upright: header bar like the song player (requested 2026-11-21 15:30)
+- Upright (phone held upright, also with a tall video full screen), a fixed black header bar above the picture, as on
+  the song / radio player: first row back, home, lock, video settings, Shazam, background-work sign, screen-on sign,
+  exit, spread evenly; second row the other two players (Songs, Radio) on the left and the output on the right.
+  Always shown (doesn't hide with the controls); locked, it shows only the lock to unlock.
+- These buttons are taken off the picture upright (top symbol row, output, Songs, Radio) and out of the button row
+  under the video; the picture starts under the header. Sideways stays as it was (one row over the picture).
