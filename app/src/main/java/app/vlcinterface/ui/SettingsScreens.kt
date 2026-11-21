@@ -913,7 +913,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                 }
                 CardBox {
-                    ValueRow("Collect all logs", "One zip with every log, the app's system log, crashes and phone details (no passwords) — to send for a problem", "Save") {
+                    ValueRow("Collect error logs", "One zip with only the errors: every log's failures, the app's system errors, crashes and phone details (no passwords) — to send for a problem", "Save") {
                         saveZip.launch(app.vlcinterface.data.LogPack.fileName())
                     }
                 }
