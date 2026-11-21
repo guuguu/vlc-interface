@@ -478,7 +478,7 @@
   plain notification instead of not at all.
 - The old "Playback" channel is removed from the app's notification settings (replaced by "Player working").
 
-## Settings lists: drag to reorder, ✕ to remove (requested 2026-11-21 11:28 / 11:29 "on all of it")
+## Settings lists: drag to reorder (requested 2026-11-21 11:28 / 11:29 "on all of it")
 - Every ordered list in the settings — Look → "Order of the player rows" (Songs / Radio / Both) and Look → "Order of
   the Settings links" — no longer uses ▲ ▼: drag a row by its ≡ handle (or long-press anywhere on it) up or down,
   the other rows make room as it passes, let go to keep the new order.
@@ -585,3 +585,7 @@
 - Every log (servers, ReplayGain, sound engine, player, deleted files, crashes …) drops its entries older than one
   month, oldest first; a log left empty is removed. Done at each app start and once a day while the app runs.
   (The 1000-entries-per-log limit stays.)
+
+## Review of the requests since 1.61.0 (2026-11-21 12:13)
+- Long names also glide in the queue (Up next autoscroll) and in playlists and the saved radio songs list (Songs list
+  autoscroll) — these had been left cut with "…".

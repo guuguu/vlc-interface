@@ -440,7 +440,7 @@ fun SavedSongsDialog(onDone: () -> Unit) {
                                 }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 SCheckbox(on, { chosen = if (it) chosen + e.uri else chosen - e.uri })
                                 Column(Modifier.weight(1f)) {
-                                    Text(e.name, color = C.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    MarqueeText(e.name, C.text, Modifier.fillMaxWidth(), fontSize = 14.sp, list = "songs")
                                     Text(listOfNotNull(e.station.ifEmpty { null }, java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.US).format(java.util.Date(e.at)),
                                         e.path.substringBeforeLast('/').ifEmpty { null }).joinToString(" · "), color = C.muted, fontSize = 11.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                 }

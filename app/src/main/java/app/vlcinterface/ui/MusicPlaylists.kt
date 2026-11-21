@@ -874,7 +874,7 @@ fun QueueScreen(nav: Navigator) {
                     .combinedClickable(onClick = { player.jumpTo(i) }, onLongClick = { qMenu = i }).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("${i + 1}", color = if (i == p.index) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
                     Column(Modifier.weight(1f)) {
-                        Text(q.title, color = if (i == p.index) accent() else C.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        MarqueeText(q.title, if (i == p.index) accent() else C.text, Modifier.fillMaxWidth(), fontSize = 16.sp, list = "upnext")
                         if (q.artist.isNotEmpty()) Text(q.artist, color = C.muted, fontSize = 12.sp, maxLines = 1)
                     }
                     if (q.durationMs > 0) Text(fmtTime(q.durationMs), color = C.muted, fontSize = 13.sp)
@@ -1105,7 +1105,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(if (i in selected) "✓" else "${i + 1}", color = if (cur || i in selected) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
                     Column(Modifier.weight(1f)) {
-                        Text(e.title, color = if (cur) accent() else C.text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        MarqueeText(e.title, if (cur) accent() else C.text, Modifier.fillMaxWidth(), fontSize = 16.sp, list = "songs")
                         val sub = listOfNotNull(e.artist.ifEmpty { null }, e.album.ifEmpty { null }).joinToString(" · ")
                         if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 12.sp, maxLines = 1)
                     }

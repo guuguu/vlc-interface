@@ -403,7 +403,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     Text("75 % = 25 % smaller than standard (default) · 100 % = standard Android size", color = C.muted, fontSize = 13.sp)
                 }
             }
-            ScrollSpeedCard("Up next autoscroll", "Long names in the players' Up next lists", "upnext")
+            ScrollSpeedCard("Up next autoscroll", "Long names in the players' Up next lists and the queue", "upnext")
             ScrollSpeedCard("Player titles autoscroll", "Long song, station and video titles on the players (one line)", "player")
             CardBox {
                 Row(Modifier.explain("Up next songs on the player").padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
@@ -723,7 +723,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
                 "library" -> {
             SectionTitle("Horizontal autoscroll")
-            ScrollSpeedCard("Songs list autoscroll", "Long rows in Library → Songs", "songs")
+            ScrollSpeedCard("Songs list autoscroll", "Long rows in Library → Songs, playlists and saved radio songs", "songs")
             ScrollSpeedCard("Folder lists autoscroll", "Long folder and song names in the phone and network folder lists", "folders")
             SectionTitle("Library scanning")
             CardBox {
