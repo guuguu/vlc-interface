@@ -699,23 +699,26 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         // The buttons under the picture (16:41): all the same size, linked across their rows (the widest label sets the
         // width for every one), wrapped in centred rows; when even one doesn't fit the width, all shrink together.
         val parts = scaleLabel.split('\u0000')
-        val soundBtns = listOf(
-            UBtn("Subs/Change", p.spuTracks.any { it.id >= 0 }) { SubChoiceUi.open = true },   // lit: the video has subtitles (16:38)
-            UBtn("Subs/Sync") { onPanel() },
-            UBtn(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true },
-            UBtn("Hue/Sat") { onPicture() },
-            UBtn("Subs/Format") { openSubtitleFormat(nav) },
-            UBtn("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
+        // In the order set in Look → "Order of the player rows" → Video → buttons (16:43).
+        val soundById = mapOf(
+            "change" to UBtn("Subs/Change", p.spuTracks.any { it.id >= 0 }) { SubChoiceUi.open = true },   // lit: the video has subtitles (16:38)
+            "sync" to UBtn("Subs/Sync") { onPanel() },
+            "audiosync" to UBtn(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true },
+            "huesat" to UBtn("Hue/Sat") { onPicture() },
+            "format" to UBtn("Subs/Format") { openSubtitleFormat(nav) },
+            "speed" to UBtn("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
                 val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
                 val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
                 player.setRate(rates[(i + 1) % rates.size])
             },
         )
+        val soundBtns = orderOf(st.settings.videoBtnSound, VIDEO_SOUND_BTNS).mapNotNull { soundById[it] }
         val fileBtns = listOf(UBtn("📂 Browse") { openOrigin(nav, keepStack = true) })
-        val formatBtns = listOf(
-            UBtn(if (parts.getOrElse(1) { "" }.isEmpty()) parts[0] else "${parts[0]} → ${parts[1]}") { onScale() },
-            UBtn(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() },
+        val formatById = mapOf(
+            "fmt" to UBtn(if (parts.getOrElse(1) { "" }.isEmpty()) parts[0] else "${parts[0]} → ${parts[1]}") { onScale() },
+            "rotate" to UBtn(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() },
         )
+        val formatBtns = orderOf(st.settings.videoBtnFormat, VIDEO_FORMAT_BTNS).mapNotNull { formatById[it] }
         val cell = underCell((soundBtns + fileBtns + formatBtns).map { it.label })
         // Sound & picture.
         val rowSound: @Composable () -> Unit = { UnderButtons(soundBtns, cell) }

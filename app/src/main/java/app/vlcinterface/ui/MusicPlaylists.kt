@@ -2186,6 +2186,14 @@ val PLAYER_VIDEO_ROWS = listOf("title", "playing", "sound", "files", "format", "
 val VIDEO_ROW_NAMES = mapOf("title" to "Title", "playing" to "Play buttons (⏮ −10 ▶ +10 ⏭)", "sound" to "Subs/Sync, Audio/Sync, Hue/Sat, speed",
     "files" to "Browse", "format" to "Format, Rotate", "upnext" to "Up next")
 
+/** Buttons inside the video player's button rows, in Look (16:43). */
+val VIDEO_SOUND_BTNS = listOf("change", "sync", "audiosync", "huesat", "format", "speed")
+val VIDEO_FORMAT_BTNS = listOf("fmt", "rotate")
+val VIDEO_BTN_NAMES = mapOf("change" to "Subs/Change", "sync" to "Subs/Sync", "audiosync" to "Audio/Sync", "huesat" to "Hue/Sat",
+    "format" to "Subs/Format", "speed" to "Speed", "fmt" to "Format (Fit → Fill)", "rotate" to "Rotate")
+
+fun orderOf(saved: List<String>, def: List<String>): List<String> = saved.filter { it in def } + def.filter { it !in saved.filter { s -> s in def } }
+
 fun videoRowOrder(s: app.vlcinterface.data.Settings): List<String> {
     val saved = s.rowOrderVideo.filter { it in PLAYER_VIDEO_ROWS }
     return saved + PLAYER_VIDEO_ROWS.filter { it !in saved }

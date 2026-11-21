@@ -850,3 +850,9 @@
 - Sizes follow the Button size setting; when the widest button wouldn't fit across the screen, all of them shrink
   together, text included. Highlighted buttons (Subs/Change with subtitles) keep the accent look.
 - The format button now reads "Fit → Fill" (without "Format:") to keep the shared width small.
+
+## Reordering the buttons inside each video button row (requested 2026-11-21 16:43)
+- Settings → Look → "Order of the player rows" → Video: under the rows list, "Buttons in the row Subs/Change … speed"
+  (Subs/Change, Subs/Sync, Audio/Sync, Hue/Sat, Subs/Format, Speed) and "Buttons in the row Format, Rotate" — each a
+  drag list (≡ or long press, no ✕) — and "Reset button order". (Browse is alone in its row.)
+- The buttons under the upright video follow that order (still same size, centred rows). Kept in settings and export.
