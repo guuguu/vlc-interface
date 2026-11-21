@@ -906,3 +906,5 @@
   the video player's buttons bigger or smaller together: the side columns sideways and the buttons under the picture
   upright. Never larger than the screen allows: the columns' buttons share the height equally at most, so they never
   overlap or leave the screen (gaps counted); long labels are cut with "…" when a button gets narrow.
+- Position bar sideways (17:18): under the side columns, from edge to edge with 20 dp to each edge (tap or drag
+  anywhere on it to jump); the columns end above it and are compressed to the height left.

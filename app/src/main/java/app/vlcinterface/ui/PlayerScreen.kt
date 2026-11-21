@@ -604,7 +604,8 @@ private fun BoxScope.ControlsOverlayBody(
         Text("⏮", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.prev() }.padding(8.dp))
         Text("⏭", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.next() }.padding(8.dp))
     }
-    if (!compact) Column(Modifier.fillMaxWidth().padding(horizontal = if (landB) 96.dp else 16.dp, vertical = 6.dp)) {
+    // Sideways (17:18): the position bar runs under the side columns from edge to edge, 20 dp from each edge.
+    if (!compact) Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = if (landB) 10.dp else 6.dp)) {
         SeekRow(p, Modifier)
         // Sideways: only the position bar here; format and Rotate are in the right column (17:06).
         if (!landB) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -642,7 +643,8 @@ private fun BoxScope.ControlsOverlayBody(
         // size: set by Video → "On screen buttons size", never taller than the height shared equally allows.
         val pct = App.instance.store.state.collectAsState().value.settings.videoBtnPct / 100f
         val outName = App.instance.output.devices.collectAsState().value.firstOrNull { it.active }?.name ?: "Output"
-        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize().padding(top = 40.dp, bottom = 44.dp, start = 4.dp, end = 4.dp)) {
+        // The columns end above the position bar (it runs under them, edge to edge): they're compressed to the room left.
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize().padding(top = 40.dp, bottom = 62.dp, start = 4.dp, end = 4.dp)) {
             val n = maxOf(right.size, left.size + 1)
             val gap = 6f
             val chipH = minOf(34f * pct, (maxHeight.value - gap * (n - 1)) / n).dp
