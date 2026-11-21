@@ -296,7 +296,7 @@ fun MediaList(
                         Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) {
                             Text(if (r.e.uri in selected) "✓" else "▤", color = accent(), fontWeight = FontWeight.Bold)
                         }
-                        Text(r.e.name, color = C.text, fontSize = 15.sp, modifier = Modifier.padding(start = 14.dp).weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        MarqueeText(r.e.name, C.text, Modifier.padding(start = 14.dp).weight(1f), fontSize = 15.sp, list = "folders")
                         Box { if (menuFor == r.e) EntryMenu(r.e, true, source, onDismiss = { menuFor = null },
                             onPlayNext = { scope.launch { App.instance.player.playNext(itemsOfDir(r.e)()) } },
                             onQueue = { scope.launch { App.instance.player.addToQueue(itemsOfDir(r.e)()) } },
@@ -349,7 +349,7 @@ fun MediaList(
                             .combinedClickable(onClick = { play(e) }, onLongClick = { menuFor = e }), verticalAlignment = Alignment.CenterVertically) {
                             Text("▶", color = accent(), modifier = Modifier.padding(start = 6.dp, end = 14.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(e.name, color = C.text, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                MarqueeText(e.name, C.text, Modifier.fillMaxWidth(), fontSize = 15.sp, list = if (e.isVideo) "videos" else "folders")
                                 val meta = listOfNotNull(if (e.durationMs > 0) fmtTime(e.durationMs) else null, if (e.size > 0) "%.0f MB".format(e.size / 1e6) else null).joinToString(" · ")
                                 if (meta.isNotEmpty()) Text(meta, color = C.muted, fontSize = 12.sp)
                             }

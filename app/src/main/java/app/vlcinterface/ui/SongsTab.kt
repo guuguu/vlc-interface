@@ -271,8 +271,8 @@ fun SongsTab(nav: Navigator) {
                     .combinedClickable(onClick = { selected = if (on) selected - s.uri else selected + s.uri },
                         onLongClick = { if (selected.isNotEmpty()) ask = true else songMenu = s.uri })
                     .padding(horizontal = 6.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    DriftText(listOf(s.artist.ifEmpty { "Unknown artist" }, s.album.ifEmpty { "—" }, s.title).joinToString("  –  "),
-                        if (on) accent() else C.text, Modifier.weight(1f))
+                    MarqueeText(listOf(s.artist.ifEmpty { "Unknown artist" }, s.album.ifEmpty { "—" }, s.title).joinToString("  –  "),
+                        if (on) accent() else C.text, Modifier.weight(1f), list = "songs")
                     Text(if (s.durationMs > 0) fmtLong(s.durationMs) else "–:––", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 8.dp))
                     Box { if (songMenu == s.uri) FileMenu(nav, s, true, { songMenu = null }, FileMenuExtras(
                         onSelect = { selected = selected + s.uri },
@@ -358,16 +358,20 @@ internal fun DriftText(text: String, color: Color, modifier: Modifier, fontSize:
 
 
 /**
- * One line that, when too long, glides continuously in one direction (right to left, starting over seamlessly).
- * Speed follows Settings → Songs list horizontal autoscroll (0 = still).
+ * One line that, when too long, glides continuously in one direction (right to left, starting over seamlessly);
+ * a name that fits stays still. [list]: which list's speed to use (Settings: Radio / Library / Video / Look,
+ * "… horizontal autoscroll"; 0 = still); null = the Up next lists. [center]: a name that fits is centred.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun MarqueeText(text: String, color: Color, modifier: Modifier, fontSize: androidx.compose.ui.unit.TextUnit = 13.sp) {
-    val speed = App.instance.store.state.collectAsState().value.settings.songsScrollSpeed
+fun MarqueeText(text: String, color: Color, modifier: Modifier, fontSize: androidx.compose.ui.unit.TextUnit = 13.sp,
+                list: String? = null, fontWeight: androidx.compose.ui.text.font.FontWeight? = null, center: Boolean = false,
+                lineHeight: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified) {
+    val speed = app.vlcinterface.data.scrollSpeedOf(App.instance.store.state.collectAsState().value.settings, list)
     val startDelay = remember(text) { kotlin.random.Random.nextInt(300, 3_000) }
-    Box(modifier.clipToBounds()) {
-        Text(text, color = color, fontSize = fontSize, maxLines = 1, softWrap = false,
+    Box(modifier.clipToBounds(), contentAlignment = if (center) Alignment.Center else Alignment.CenterStart) {
+        Text(text, color = color, fontSize = fontSize, fontWeight = fontWeight, lineHeight = lineHeight, maxLines = 1, softWrap = false,
+            overflow = if (speed <= 0) androidx.compose.ui.text.style.TextOverflow.Ellipsis else androidx.compose.ui.text.style.TextOverflow.Clip,
             modifier = if (speed <= 0) Modifier else Modifier.basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = startDelay,
                 repeatDelayMillis = 0, spacing = androidx.compose.foundation.MarqueeSpacing(48.dp), velocity = (40f * speed / 100f).dp))
     }

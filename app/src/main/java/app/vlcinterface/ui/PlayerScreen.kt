@@ -484,8 +484,7 @@ private fun BoxScope.ControlsOverlayBody(
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
             HomeButton(nav, Color.White)
-            Text(p.item?.title ?: "", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 220.dp))
+            MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 220.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
             OutputPill(openOutput)
             OverlayChip("Audio & subs") { onTouch(); onPanel() }
             OverlayChip("Hue & sat") { onTouch(); onPicture() }
@@ -615,7 +614,7 @@ private fun RoundBtn(text: String, sizeDp: Int, onClick: () -> Unit) {
 private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPanel: () -> Unit, onOutput: () -> Unit, onPicture: () -> Unit = {}) {
     val player = App.instance.player
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        FitText(p.item?.title ?: "", color = C.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, minSize = 13.sp)
+        MarqueeText(p.item?.title ?: "", C.text, Modifier.fillMaxWidth(), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, list = "player")
         // Under the video (upright): play / pause, panels, speed, the other two players and the output — moved here
         // from over the picture so the buttons on the video never overlap.
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

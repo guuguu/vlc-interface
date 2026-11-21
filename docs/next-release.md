@@ -485,3 +485,18 @@
 - No ✕ on these lists (2026-11-21 11:30–11:32): a list that is only for putting items in order never has an ✕ —
   every player row and every settings link always stays; they can only be moved. "Reset order" puts back the
   original order. Helpers and the help guide updated.
+
+## Long names scroll sideways, one way, with a speed per list (requested 2026-11-21 11:34 / 11:35, text helpers)
+- Names too long for their row glide continuously right to left, starting over seamlessly (no back-and-forth);
+  names that fit stay still. Each row starts at its own moment so a list doesn't move all at once.
+- Where: radio station names in every list — favourite stations (radio player, Library → Radio), Find stations
+  results (radio player, Library → Radio) and station lists from playlists; Library → Songs (was back-and-forth);
+  the phone and network folder lists (folders and songs; were cut to two lines); video names in those lists; the
+  players' titles — song, station name and what it plays, video title (under the video and in the sideways bar) —
+  now on one line at full size, centred when they fit, gliding when too long (were shrunk onto two lines); Up next
+  lists as before.
+- A speed slider for each list on its own settings page (0 = still, cut with …; 100 % normal; up to 300 %; Reset):
+  Radio → "Favourite stations autoscroll", "Find stations autoscroll"; Library & files → "Songs list autoscroll"
+  (starts from the old Songs list setting), "Folder lists autoscroll"; Video → "Video lists autoscroll"; Look →
+  "Up next autoscroll" (the old Look slider), "Player titles autoscroll". Text helper on a long press or a still
+  hold on the slider.

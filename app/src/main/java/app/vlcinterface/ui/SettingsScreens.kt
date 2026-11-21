@@ -216,6 +216,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             SoundSettings(s, ::set)
                 }
                 "video" -> {
+            SectionTitle("Horizontal autoscroll")
+            ScrollSpeedCard("Video lists autoscroll", "Long video names in the phone and network folder lists", "videos")
             SectionTitle("Picture")
             run {
                 var vHelp by remember { mutableStateOf("") }
@@ -305,6 +307,9 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             }
                 }
                 "radio" -> {
+            SectionTitle("Horizontal autoscroll")
+            ScrollSpeedCard("Favourite stations autoscroll", "Long station names in the favourites (radio player and Library → Radio)", "radioFav")
+            ScrollSpeedCard("Find stations autoscroll", "Long station names in the search results and station lists", "radioFind")
             // Radio songs saved from the player (station menu → Save this song).
             SectionTitle("Saved songs")
             CardBox {
@@ -398,20 +403,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     Text("75 % = 25 % smaller than standard (default) · 100 % = standard Android size", color = C.muted, fontSize = 13.sp)
                 }
             }
-            CardBox {
-                Column(Modifier.explain("Songs list horizontal autoscroll").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Songs list horizontal autoscroll", color = C.text, fontSize = 15.sp)
-                            Text("Speed of long rows gliding to their end and back (Library → Songs)", color = C.muted, fontSize = 13.sp)
-                        }
-                        Text(if (s.songsScrollSpeed == 0) "Off" else "${s.songsScrollSpeed}%", color = accent(), fontWeight = FontWeight.SemiBold)
-                        STextButton({ set(s.copy(songsScrollSpeed = 100)) }) { Text("Reset") }
-                    }
-                    ThinSlider(s.songsScrollSpeed.toFloat(), { v -> set(s.copy(songsScrollSpeed = (Math.round(v / 10f) * 10).coerceIn(0, 300))) }, valueRange = 0f..300f)
-                    Text("0 = rows stay still · 100 % = normal (slow) · 300 % = three times faster", color = C.muted, fontSize = 13.sp)
-                }
-            }
+            ScrollSpeedCard("Up next autoscroll", "Long names in the players' Up next lists", "upnext")
+            ScrollSpeedCard("Player titles autoscroll", "Long song, station and video titles on the players (one line)", "player")
             CardBox {
                 Row(Modifier.explain("Up next songs on the player").padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Up next songs on the player", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
@@ -729,6 +722,9 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             }
                 }
                 "library" -> {
+            SectionTitle("Horizontal autoscroll")
+            ScrollSpeedCard("Songs list autoscroll", "Long rows in Library → Songs", "songs")
+            ScrollSpeedCard("Folder lists autoscroll", "Long folder and song names in the phone and network folder lists", "folders")
             SectionTitle("Library scanning")
             CardBox {
                 ToggleRow("Automatic scanning", "Off: only scans when you tap Rescan", s.autoScan) { set(s.copy(autoScan = it)) }; Divider()
@@ -1298,3 +1294,35 @@ fun OpacityPreview(alpha: Float, label: String, fontSp: Int) {
         }
     }
 }
+
+/**
+ * Speed of one list's horizontal autoscroll (requested 2026-11-21 11:34): names too long for their row glide
+ * continuously one way; 0 = still, 100 % = normal, up to 300 %. Text helper on a long press or a still hold.
+ */
+@Composable
+fun ScrollSpeedCard(title: String, what: String, key: String) {
+    val st by App.instance.store.state.collectAsState()
+    val s = st.settings
+    val v = app.vlcinterface.data.scrollSpeedOf(s, key)
+    val ex = LocalExplain.current
+    fun put(x: Int) = App.instance.store.update { a ->
+        if (key == "upnext") a.copy(settings = a.settings.copy(songsScrollSpeed = x))
+        else a.copy(settings = a.settings.copy(listScroll = a.settings.listScroll + (key to x)))
+    }
+    CardBox {
+        Column(Modifier.explain(title).padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, color = C.text, fontSize = 15.sp)
+                    Text(what, color = C.muted, fontSize = 13.sp)
+                }
+                Text(if (v == 0) "Off" else "$v%", color = accent(), fontWeight = FontWeight.SemiBold)
+                STextButton({ put(100) }) { Text("Reset") }
+            }
+            ThinSlider(v.toFloat(), { x -> put((Math.round(x / 10f) * 10).coerceIn(0, 300)) }, valueRange = 0f..300f,
+                onHoldStill = { ex(title, "") })
+            Text("0 = names stay still · 100 % = normal · 300 % = three times faster", color = C.muted, fontSize = 13.sp)
+        }
+    }
+}
+

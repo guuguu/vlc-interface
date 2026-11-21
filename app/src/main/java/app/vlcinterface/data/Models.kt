@@ -265,6 +265,8 @@ data class Settings(
     val rowHiddenRadio: List<String> = emptyList(),
     /** Settings links removed with ✕ in Look (not shown on the main Settings page). */
     val settingsHidden: List<String> = emptyList(),
+    /** Horizontal autoscroll speed per list (list key → %, 0 = still, 100 = normal); see [scrollSpeedOf]. */
+    val listScroll: Map<String, Int> = emptyMap(),
     /** Gap between the player's rows (dp). */
     val playerGap: Int = 4,
     /** Text size in Settings, the wizard, the help guide and helper pop-ups (%). */
@@ -295,7 +297,7 @@ data class Settings(
         .put("rgPreampDb", rgPreampDb.toDouble()).put("rgClipProtect", rgClipProtect).put("allowSmb1", allowSmb1)
         .put("repeat", repeat).put("shuffle", shuffle).put("soundEngine", soundEngine)
         .put("pictureHue", pictureHue.toDouble()).put("pictureSat", pictureSat.toDouble()).put("pictureHighlights", pictureHighlights.toDouble()).put("libraryKind", libraryKind).put("buttonScale", buttonScale).put("coverDownload", coverDownload).put("rgLastMode", rgLastMode).put("rgChoices", JSONObject(rgChoices)).put("pictureByFile", JSONObject(pictureByFile)).put("songsScrollSpeed", songsScrollSpeed).put("autoRotate", autoRotate).put("sessionDay", sessionDay).put("sessionPlaylistId", sessionPlaylistId).put("sessionStartHour", sessionStartHour).put("sessionManual", sessionManual).put("sessionLog", org.json.JSONArray().also { a -> sessionLog.forEach { e -> a.put(e.toJson()) } }).put("hiddenUris", org.json.JSONArray(hiddenUris.toList())).put("popupOpacity", popupOpacity).put("menuFont", menuFont).put("customAccents", org.json.JSONArray(customAccents)).put("menuOpacity", menuOpacity).put("menuGap", menuGap).put("vpnNas", vpnNas).put("vpnAskStart", vpnAskStart).put("vpnApp", vpnApp).put("vpnRetrySec", vpnRetrySec).put("upNextCount", upNextCount).put("radioAccent", radioAccent).put("autoLoud", autoLoud).put("toneSliders", toneSliders).put("controlShadow", controlShadow).put("toneLoud", toneLoud.toDouble()).put("toneTreble", toneTreble.toDouble()).put("radioPreLast", radioPreLast.toDouble()).put("songPreLast", songPreLast.toDouble()).put("saveFolder", saveFolder).put("saveFormat", saveFormat).put("radioCapture", radioCapture).put("scrollbarPx", scrollbarPx).put("spaceUnderGb", spaceUnderGb).put("radioBufferMin", radioBufferMin).put("spotifyId", spotifyId).put("spotifySecret", spotifySecret).put("spacePercent", spacePercent).put("btQuality", btQuality).put("settingsOrder", org.json.JSONArray(settingsOrder)).put("wizardDone", wizardDone).put("phoneFolders", org.json.JSONArray(phoneFolders)).put("phoneFoldersSet", phoneFoldersSet).put("floatBtnSize", floatBtnSize).put("floatBtnAlpha", floatBtnAlpha).put("floatBtnX", floatBtnX.toDouble()).put("floatBtnY", floatBtnY.toDouble())
-            .put("alarmRowPct", alarmRowPct).put("shortPopupSec", shortPopupSec).put("switchOn", switchOn).put("switchOff", switchOff).put("floatBtnColor", floatBtnColor).put("clockHideSec", clockHideSec).put("coverHideSec", coverHideSec).put("floatBtnMode", floatBtnMode).put("clockAutoHide", clockAutoHide).put("coverAutoHide", coverAutoHide).put("rowOrderSong", org.json.JSONArray(rowOrderSong)).put("rowOrderRadio", org.json.JSONArray(rowOrderRadio)).put("rowHiddenSong", org.json.JSONArray(rowHiddenSong)).put("rowHiddenRadio", org.json.JSONArray(rowHiddenRadio)).put("settingsHidden", org.json.JSONArray(settingsHidden)).put("playerGap", playerGap).put("settingsTextPct", settingsTextPct).put("settingsGapPct", settingsGapPct).put("videoTallFull", videoTallFull).put("visInsteadCover", visInsteadCover).put("videoDecoder", videoDecoder).put("videoDeinterlace", videoDeinterlace)
+            .put("alarmRowPct", alarmRowPct).put("shortPopupSec", shortPopupSec).put("switchOn", switchOn).put("switchOff", switchOff).put("floatBtnColor", floatBtnColor).put("clockHideSec", clockHideSec).put("coverHideSec", coverHideSec).put("floatBtnMode", floatBtnMode).put("clockAutoHide", clockAutoHide).put("coverAutoHide", coverAutoHide).put("rowOrderSong", org.json.JSONArray(rowOrderSong)).put("rowOrderRadio", org.json.JSONArray(rowOrderRadio)).put("rowHiddenSong", org.json.JSONArray(rowHiddenSong)).put("rowHiddenRadio", org.json.JSONArray(rowHiddenRadio)).put("settingsHidden", org.json.JSONArray(settingsHidden)).put("listScroll", JSONObject(listScroll as Map<*, *>)).put("playerGap", playerGap).put("settingsTextPct", settingsTextPct).put("settingsGapPct", settingsGapPct).put("videoTallFull", videoTallFull).put("visInsteadCover", visInsteadCover).put("videoDecoder", videoDecoder).put("videoDeinterlace", videoDeinterlace)
 
     companion object {
         fun fromJson(o: JSONObject?, passwordTransform: (String) -> String): Settings {
@@ -376,6 +378,7 @@ data class Settings(
                 rowHiddenSong = o.optJSONArray("rowHiddenSong")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
                 rowHiddenRadio = o.optJSONArray("rowHiddenRadio")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
                 settingsHidden = o.optJSONArray("settingsHidden")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
+                listScroll = o.optJSONObject("listScroll")?.let { m -> m.keys().asSequence().associateWith { k -> m.optInt(k, 100).coerceIn(0, 300) } } ?: emptyMap(),
                 playerGap = o.optInt("playerGap", 4), settingsTextPct = o.optInt("settingsTextPct", 100), settingsGapPct = o.optInt("settingsGapPct", 85), videoTallFull = o.optBoolean("videoTallFull", false), visInsteadCover = o.optString("visInsteadCover", "off"), videoDecoder = o.optString("videoDecoder", "auto"), videoDeinterlace = o.optString("videoDeinterlace", "auto"),
                 settingsOrder = o.optJSONArray("settingsOrder")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
                 customAccents = ((o.optJSONArray("customAccents")?.let { a -> (0 until a.length()).map { a.getLong(it) } }
@@ -490,3 +493,13 @@ fun JSONObject?.longMap(): Map<String, Long> {
 }
 
 fun Map<String, Long>.toJson(): JSONObject = JSONObject().also { o -> forEach { (k, v) -> o.put(k, v) } }
+
+/**
+ * Autoscroll speed of a list's long names (%, 0 = still): radioFav, radioFind, songs, folders, videos, player.
+ * The Songs list starts from the older "Songs list" setting; "upnext" is that older setting itself.
+ */
+fun scrollSpeedOf(s: Settings, key: String?): Int = when (key) {
+    null, "upnext" -> s.songsScrollSpeed
+    else -> s.listScroll[key] ?: if (key == "songs") s.songsScrollSpeed else 100
+}
+

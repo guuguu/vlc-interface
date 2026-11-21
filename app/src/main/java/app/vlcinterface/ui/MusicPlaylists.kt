@@ -332,8 +332,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 // Long-press: the song's menu (ReplayGain scan, YouTube / Spotify links, file path).
                 var songMenu by remember { mutableStateOf(false) }
                 Box {
-                    FitText(item.title, color = C.text, fontSize = (22 * tk).sp, minSize = 15.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.combinedClickable(onClick = { openItemFolder(nav, item) }, onLongClick = { songMenu = true }))
+                    // One line; a title too long glides continuously one way (Look → Player titles autoscroll).
+                    MarqueeText(item.title, C.text, Modifier.fillMaxWidth().combinedClickable(onClick = { openItemFolder(nav, item) }, onLongClick = { songMenu = true }),
+                        fontSize = (22 * tk).sp, fontWeight = FontWeight.Bold, center = true, list = "player")
                     SongTitleMenu(item.copy(album = p.metaAlbum.ifEmpty { item.album }), p.metaArtist.ifEmpty { item.artist }, p.length, songMenu) { songMenu = false }
                 }
                 // Long-press the album: ReplayGain scan of the whole album (its songs in the current folder / queue).
@@ -1585,15 +1586,15 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
         val song = Modifier.combinedClickable(onClick = { songMenu = true }, onLongClick = { songMenu = true })
         Text("RADIO STATION", color = accent(), fontSize = 12.sp, lineHeight = 14.sp, letterSpacing = 1.sp, modifier = station)
         Box {
-            FitText(name + if (p.stationName.isNotBlank() && !p.stationName.equals(name, true)) " · ${p.stationName}" else "",
-                color = C.text, fontSize = (16 * tk).sp, minSize = 12.sp, lineHeight = (19 * tk).sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                modifier = station)
+            MarqueeText(name + if (p.stationName.isNotBlank() && !p.stationName.equals(name, true)) " · ${p.stationName}" else "",
+                C.text, Modifier.fillMaxWidth().then(station), fontSize = (16 * tk).sp, lineHeight = (19 * tk).sp, fontWeight = FontWeight.SemiBold,
+                center = true, list = "player")
             StationMenu(item, stMenu, "station") { stMenu = false }
         }
         Text(item.uri.substringAfter("://").take(60), color = C.muted, fontSize = 11.sp, lineHeight = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = station)
         Box {
-            FitText(title.ifEmpty { "Live" }, color = C.text, fontSize = (22 * tk).sp, minSize = 15.sp, lineHeight = (25 * tk).sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
-                maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp).then(song))
+            MarqueeText(title.ifEmpty { "Live" }, C.text, Modifier.fillMaxWidth().padding(top = 6.dp).then(song), fontSize = (22 * tk).sp,
+                lineHeight = (25 * tk).sp, fontWeight = FontWeight.Bold, center = true, list = "player")
             StationMenu(item, songMenu, "song") { songMenu = false }
         }
         if (artist.isNotEmpty()) FitText(artist, color = C.muted, fontSize = (15 * tk).sp, minSize = 12.sp, lineHeight = (18 * tk).sp, textAlign = TextAlign.Center, modifier = song)
@@ -1688,8 +1689,8 @@ private fun RadioPanel(nav: Navigator) {
                         .padding(start = 6.dp, top = (3 * sg()).dp, bottom = (3 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                         val rs = remember(s.url, s.meta) { app.vlcinterface.sources.RadioStation("", s.name, s.url, "", 0, stationCountry(s.meta), "", s.favicon) }
                         StationFlag(rs)
-                        Text((if (on) "▶ " else "") + s.name, color = if (on) accent() else C.text, fontSize = 15.sp, lineHeight = 17.sp, maxLines = 1,
-                            overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        MarqueeText((if (on) "▶ " else "") + s.name, if (on) accent() else C.text, Modifier.weight(1f), fontSize = 15.sp,
+                            lineHeight = 17.sp, list = "radioFav")
                         Text("  " + stationQuality(s.meta), color = C.muted, fontSize = 12.sp, lineHeight = 14.sp, maxLines = 1, softWrap = false)
                         Box {
                             Text("⋮", color = C.text, fontSize = 20.sp, lineHeight = 20.sp, modifier = Modifier.clickable { menu = s.id }.padding(horizontal = 10.dp))
@@ -1796,7 +1797,7 @@ fun StationSearch() {
                     // (Europe while looking it up and when nothing is found).
                     StationFlag(r)
                     Column(Modifier.weight(1f)) {
-                        Text(r.name, color = C.text, fontSize = 14.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        MarqueeText(r.name, C.text, Modifier.fillMaxWidth(), fontSize = 14.sp, lineHeight = 16.sp, list = "radioFind")
                         if (r.meta.isNotEmpty()) Text(r.meta, color = if (r.isFlac) C.bad.copy(alpha = 0.8f) else C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text(if (fav) "★" else "☆", color = accent(), fontSize = 20.sp, lineHeight = 20.sp, modifier = Modifier.clickable {
