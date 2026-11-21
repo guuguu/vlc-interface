@@ -739,5 +739,5 @@
 - The video player lays its rows out in that order; the helper's preview shows a Video column next to Songs and Radio.
 
 ## Video player button labels (requested 2026-11-21 15:47)
-- "Audio & subs" → "Subs/sync", "Audio sync" → "Audio/sync" (no value on the button, 15:48 — it's in the bar it opens),
-  "Hue & sat" → "Hue/sat" — on the video player upright and sideways, and in Look's Video row names.
+- "Audio & subs" → "Subs/Sync", "Audio sync" → "Audio/Sync" (no value on the button, 15:48 — it's in the bar it opens),
+  "Hue & sat" → "Hue/Sat" (both words capitalised, 15:48) — on the video player upright and sideways, and in Look's Video row names.
