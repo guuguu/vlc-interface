@@ -554,7 +554,7 @@ private fun BoxScope.ControlsOverlayBody(
             HomeButton(nav, Color.White)
             MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 220.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
             OutputPill(openOutput)
-            OverlayChip("Subs/Change") { onTouch(); SubChoiceUi.open = true }
+            OverlayChip("Subs/Change", lit = p.spuTracks.any { it.id >= 0 }) { onTouch(); SubChoiceUi.open = true }
             OverlayChip("Subs/Sync") { onTouch(); onPanel() }
             // Browse: the folder the video came from, in the Library (Back returns here).
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
@@ -577,7 +577,7 @@ private fun BoxScope.ControlsOverlayBody(
         // bar above the picture (VideoHeader), not on it.
         // Short video area upright (compact): these chips are under the video instead, so nothing overlaps.
         if (!compact) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            OverlayChip("Subs/Change") { onTouch(); SubChoiceUi.open = true }
+            OverlayChip("Subs/Change", lit = p.spuTracks.any { it.id >= 0 }) { onTouch(); SubChoiceUi.open = true }
             OverlayChip("Subs/Sync") { onTouch(); onPanel() }
             // Browse: the folder the video came from, in the Library (Back returns here).
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
@@ -655,10 +655,12 @@ private fun SeekRow(p: PlayerState, modifier: Modifier) {
 }
 
 @Composable
-private fun OverlayChip(text: String, onClick: () -> Unit) {
+private fun OverlayChip(text: String, lit: Boolean = false, onClick: () -> Unit) {
     val k = btnScale()
-    // Never smaller than readable: at least 34 dp high and 13 sp text.
-    Box(Modifier.heightIn(min = maxOf(40 * k, 34f).dp).clip(RoundedCornerShape(18.dp)).background(Color(0x33FFFFFF)).clickable(onClick = onClick).padding(horizontal = maxOf(14 * k, 12f).dp),
+    val a = accent()
+    // Never smaller than readable: at least 34 dp high and 13 sp text. [lit]: highlighted in the accent colour.
+    Box(Modifier.heightIn(min = maxOf(40 * k, 34f).dp).clip(RoundedCornerShape(18.dp)).background(if (lit) a.copy(alpha = 0.35f) else Color(0x33FFFFFF))
+        .then(if (lit) Modifier.border(1.dp, a, RoundedCornerShape(18.dp)) else Modifier).clickable(onClick = onClick).padding(horizontal = maxOf(14 * k, 12f).dp),
         contentAlignment = Alignment.Center) { Text(text, color = Color.White, fontSize = maxOf(14 * k, 13f).sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
 }
 
@@ -697,7 +699,8 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         // Sound & picture.
         val rowSound: @Composable () -> Unit = {
         androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill("Subs/Change") { SubChoiceUi.open = true }
+            // Highlighted while the video has subtitles of its own (16:38).
+            Pill("Subs/Change", selected = p.spuTracks.any { it.id >= 0 }) { SubChoiceUi.open = true }
             Pill("Subs/Sync") { onPanel() }
             Pill(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true }
             Pill("Hue/Sat") { onPicture() }

@@ -840,3 +840,5 @@
   downloaded or added), the one in use highlighted (16:37: accent-tinted band with an accent edge, bold, ● and
   "in use"). A tap puts that one on, saves it silently for this video and closes the
   pop-up. With none: it says so and offers only Off.
+- The "Subs/Change" button is highlighted in the accent colour (tinted, with an accent edge) while the playing video
+  has subtitles of its own (16:38); plain when it has none.
