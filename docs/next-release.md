@@ -1117,4 +1117,8 @@
 ## ReplayGain scan didn't write tags to an album (reported 2026-11-21 22:49)
 - **Found:** a scan that writes to the files decided "already tagged" from values the app keeps itself, such as the automatic folder scan's (since 1.70 these include album gain). So an album played once, then scanned to write tags, could be passed over.
 - **Fixed:** scans that write to the files now check only the files' own tags.
-- **Still investigated:** the user saw the scan run without skipping and still write nothing, the playing song included. The scan's per-song result line (or Settings → Logs → ReplayGain) says why.
+- **The real case (22:51, NAS album, the automatic scan):** the automatic folder ReplayGain kept its values in the app and never wrote the files (as built at 12:01).
+  - Now, for network songs (the NAS at home), it writes the tags into the files like a menu scan, track and album gain. The song playing is written as soon as it ends (a file can't be changed while it plays). A read-only share keeps the values in the app.
+  - Albums it measured before with values only in the app are measured again, once, and written.
+  - Phone songs still keep the values in the app: changing phone files needs Android's confirmation, which a silent scan can't ask; "ReplayGain scan…" from a menu does.
+  - The setting's line and helper say so.

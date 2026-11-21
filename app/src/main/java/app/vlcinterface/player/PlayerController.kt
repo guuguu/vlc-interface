@@ -1433,7 +1433,11 @@ class PlayerController(private val context: Context, private val store: Store) {
                 // Track and album gain (the folder as one album, 2026-11-21 audio check): with track gain alone an album
                 // played in order fell back to track gain, every song pulled to the same loudness.
                 app.vlcinterface.sources.RgScanner.start(context, folder.filter { it.isMusic }, app.vlcinterface.sources.RgMode.ALBUMS_BY_FOLDERS,
-                    app.vlcinterface.sources.RgTarget.APP, rescanTagged = false, onlyWithoutRg = true, confirmTitle = name, silent = true)
+                    // Network songs: written into the files (2026-11-21 22:51: the NAS album got no tags — the values stayed in the
+                    // app); the playing song is written when it ends, a read-only share keeps them in the app. Phone songs: kept in the
+                    // app (writing phone files needs Android's confirmation, which a silent scan can't ask; the menu scan does).
+                    if (net) app.vlcinterface.sources.RgTarget.FILES else app.vlcinterface.sources.RgTarget.APP,
+                    rescanTagged = false, onlyWithoutRg = true, confirmTitle = name, silent = true)
             }
             return
         }
