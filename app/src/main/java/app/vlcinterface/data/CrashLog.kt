@@ -30,6 +30,20 @@ object CrashLog {
         recordLastExit(ctx)
     }
 
+    /**
+     * Safety net for the app's background work: an unexpected error inside one background task is written to
+     * Settings → Logs → Crashes (as "Background error", with its trace) and that task stops — the app stays open
+     * instead of closing.
+     */
+    val guard = kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
+        try {
+            android.util.Log.e("vlcinterface", "background error", e)
+            ServerLog.log(KEY, "error", "app", "", false,
+                "Background error (app kept running): ${e.javaClass.simpleName}: ${e.message ?: ""}".take(300),
+                context() + "\nScreen: $screen" + appFrames(e) + "\n\n" + android.util.Log.getStackTraceString(e))
+        } catch (_: Throwable) {}
+    }
+
     /** The page on screen (set by the navigation), for crash reports. */
     @Volatile var screen: String = ""
 

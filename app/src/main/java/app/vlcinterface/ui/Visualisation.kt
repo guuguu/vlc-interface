@@ -406,7 +406,9 @@ private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
     val res = remember(v.effect) { floatArrayOf(1.6f, 0f, 0f, 0f, 0f) }
     // Gone from the screen for good (cover found, clock switched on, another page): its picture memory is freed at once.
     // (Its frame loop and the spectrum measuring stop with it.)
-    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { try { field[0]?.bmp?.recycle(); field[0] = null; plasma.recycle(); lavaBmp[0]?.recycle(); lavaBmp[0] = null } catch (_: Exception) {} } }
+    // Pictures let go when it closes (freed by Android shortly after). Not recycled by hand: the last frame may still be
+    // on its way to the screen, and drawing a recycled picture closes the app.
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { field[0] = null; lavaBmp[0] = null; lavaPxBox[0] = null } }
     // The analyser is measured only while a live spectrum picture is shown (saves battery otherwise).
     // Measured only while the screen is on and the app is in the foreground.
     if (live && v.effect in SPEC_FX) {
@@ -430,7 +432,7 @@ private fun VisCanvas2D(v: VisSettings, modifier: Modifier, live: Boolean) {
             val sh = (90 * lavaRes[0]).toInt(); val lg = (160 * lavaRes[0]).toInt()
             val (lw, lh) = if (size.width > size.height) lg to sh else sh to lg
             val lb = lavaBmp[0]?.takeIf { it.width == lw && it.height == lh && !it.isRecycled }
-                ?: android.graphics.Bitmap.createBitmap(lw, lh, android.graphics.Bitmap.Config.ARGB_8888).also { old -> lavaBmp[0]?.recycle(); lavaBmp[0] = old; lavaPxBox[0] = IntArray(lw * lh) }
+                ?: android.graphics.Bitmap.createBitmap(lw, lh, android.graphics.Bitmap.Config.ARGB_8888).also { nb -> lavaBmp[0] = nb; lavaPxBox[0] = IntArray(lw * lh) }
             val t0 = System.nanoTime()
             drawLava(m, a, cols, lb, lavaPxBox[0]!!, v.lavaAmp)
             val nowMs = (t0 / 1_000_000L % 10_000_000L).toFloat()

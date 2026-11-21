@@ -22,7 +22,7 @@ import java.io.File
  * Follows the network rules: nothing on mobile data unless allowed, no NAS while it can't be used, not on low battery.
  */
 object Prefetch {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + app.vlcinterface.data.CrashLog.guard)
     private lateinit var dir: File
     private var job: Job? = null
     @Volatile private var target = ""                            // uri being cached now

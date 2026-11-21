@@ -72,7 +72,7 @@ object RadioCapture {
     @Volatile var saveStartedAt = 0L; private set
     private var stageBase = 0f; private var stageSpan = 0f; private var stageSec = 1.0
     private fun stage(base: Float, span: Float, totalSec: Double) { stageBase = base; stageSpan = span; stageSec = totalSec.coerceAtLeast(0.1); saveProgress.value = base }
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + app.vlcinterface.data.CrashLog.guard)
     /**
      * Saving (decode, LAME, tags, copy) runs on one thread at Android's lowest priority, one song at a time, with a
      * short pause after each chunk: the live sound (its own high-priority audio thread) always goes first.

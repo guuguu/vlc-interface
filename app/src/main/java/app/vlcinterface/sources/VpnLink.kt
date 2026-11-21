@@ -53,7 +53,7 @@ object VpnLink {
     /** Searching the VPN now (Settings shows it). */
     val searching = MutableStateFlow("")
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + app.vlcinterface.data.CrashLog.guard)
     private lateinit var appCtx: Context
     private class Net(val addr: Int, val prefix: Int) { fun contains(ip: Int) = prefix == 0 || ((ip xor addr) ushr (32 - prefix)) == 0 }
     @Volatile private var homeNets: List<Net> = emptyList()      // non-VPN networks (Wi-Fi / Ethernet)

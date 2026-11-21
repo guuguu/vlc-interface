@@ -84,7 +84,7 @@ object AlarmEngine {
 
     private val _ui = MutableStateFlow(AlarmUi())
     val ui: StateFlow<AlarmUi> = _ui
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + app.vlcinterface.data.CrashLog.guard)
     private var ringJob: Job? = null
     private var fxJob: Job? = null
     private var watchJob: Job? = null

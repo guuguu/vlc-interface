@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 class MediaCenter(private val ctx: Context, private val player: PlayerController) {
     val session = MediaSession(ctx, "vlc-interface")
     private val nm = ctx.getSystemService(NotificationManager::class.java)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + app.vlcinterface.data.CrashLog.guard)
     private var lastSig: List<Any?> = emptyList()
     private var lastPos = 0L
     private var lastPosAt = 0L

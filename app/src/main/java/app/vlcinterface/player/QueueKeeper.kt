@@ -28,7 +28,7 @@ object QueueKeeper {
         File(dir, "queue.json").let { old -> if (old.isFile) { val k = "audio"; if (!file(k).exists()) old.renameTo(file(k)) else old.delete() } }
         val p = App.instance.player
         // Saved when the queue, the song or the order changes; the position every 5 s while playing.
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO + app.vlcinterface.data.CrashLog.guard).launch {
             p.state.collect { s ->
                 if (s.queue.isEmpty()) return@collect                      // a stop doesn't wipe what was kept
                 val key = "${s.index}|${s.queue.size}|${s.queue.firstOrNull()?.uri}|${s.queue.getOrNull(s.index)?.uri}|${s.origin}|${s.isPlaying}"

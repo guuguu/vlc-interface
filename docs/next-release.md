@@ -386,3 +386,29 @@
 - Checked again, no other pitch difference: the app's own output tells libVLC the rate the phone really opened (libVLC
   converts to it); when the phone changes output mid-song, the app's converter goes from the song's rate to the new
   one exactly (no drift); the visualisation, EQ and meters use the song's rate.
+
+# After 1.58.0
+
+## Whole-code check (requested 2026-11-21 02:34)
+- Checked: the release build's compiler warnings (only 3 deprecation notes), the C sound / projectM / MP3 code with
+  the clang analyzer (no findings), and the whole Kotlin code for the kinds of mistakes that close an app
+  (scrolling inside scrolling like the ReplayGain crash, limits that can turn upside down, empty lists, forced
+  values, network on the screen's thread, background errors, pictures used after being freed, damaged saved data).
+- Fixed:
+  - Seek bubble on a narrow player bar (narrower than the bubble) and dragging the floating play button on a
+    window smaller than it: a limit could turn upside down → the app closed.
+  - A network song cached ahead: looked up twice; if the cache dropped it in between, the app closed when the song
+    started. Now looked up once.
+  - Very long, thin album pictures (a side shrinking to 0 px when resized) → the app closed. At least 1 px now.
+  - Background work (cover search, ReplayGain scanning, radio recording, weather, VPN checks, saving settings,
+    alarms, playback service…): an unexpected error in one task no longer closes the whole app; the task stops and
+    the error is written to Settings → Logs → Crashes as "Background error (app kept running)" with its trace.
+  - Visualisation pictures were freed by hand while the last frame could still be on its way to the screen (a
+    "recycled bitmap" crash risk, when closing or when the lava grid changes size). Now simply let go and freed by
+    Android.
+  - MusicBrainz lookups (cover search) always run off the screen's thread.
+  - Alarms: one damaged part of the saved alarms (or one damaged alarm) emptied the whole alarm list, and the next
+    save wrote that empty list back. Each part and each alarm is now read on its own.
+  - Settings file unreadable: before defaults are used (and saved over it), it is kept aside as
+    state.json.bad-<time> so libraries, playlists and settings can be recovered; noted in the Logs.
+  - projectM: out of memory when creating a picture is handled (no crash).

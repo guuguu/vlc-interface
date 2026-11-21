@@ -18,7 +18,7 @@ import java.util.Locale
 /** Whole-app state in one JSON file. The same JSON (minus secrets handling) is the export format. */
 class Store(private val context: Context) {
     private val file = File(context.filesDir, "state.json")
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + app.vlcinterface.data.CrashLog.guard)
     private val _state = MutableStateFlow(load())
     val state: StateFlow<AppState> = _state
 
@@ -46,6 +46,10 @@ class Store(private val context: Context) {
     private fun load(): AppState = try {
         if (file.exists()) fromJson(JSONObject(file.readText()), Crypto::open) else AppState()
     } catch (e: Exception) {
+        // Unreadable state file: kept aside (state.json.bad-<time>) before the next save writes fresh defaults over it,
+        // so libraries, playlists and settings can still be recovered from it.
+        try { if (file.exists()) file.copyTo(File(file.parentFile, "state.json.bad-" + System.currentTimeMillis()), overwrite = true) } catch (_: Exception) {}
+        try { ServerLog.log(CrashLog.KEY, "error", "app", "", false, "Settings file could not be read (${e.javaClass.simpleName}): kept aside as state.json.bad-…, defaults used") } catch (_: Exception) {}
         AppState()
     }
 

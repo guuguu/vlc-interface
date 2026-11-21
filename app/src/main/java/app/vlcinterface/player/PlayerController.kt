@@ -192,7 +192,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     private var rgDb = 0f
     /** The playing song's peak (ReplayGain tag, linear) for clip protection over the whole gain; 0 = unknown. */
     @Volatile private var rgPeak = 0f
-    private val bg = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
+    private val bg = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main + app.vlcinterface.data.CrashLog.guard)
     private var rgJob: kotlinx.coroutines.Job? = null
 
     /**
@@ -1780,6 +1780,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     private fun makeMedia(item: PlayItem, s: PlayerState, useBridge: Boolean): Media {
+        // Looked up once: the cache may drop the file between two lookups.
+        val cached = app.vlcinterface.sources.Prefetch.localFor(item.uri)
         val media = when {
             // Phone / SD card files: by their real path (like VLC's own app); the file handle only as the fallback.
             item.uri.startsWith("content://") -> {
@@ -1796,8 +1798,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             useBridge && item.uri.startsWith("smb://") ->
                 Media(libVlc, Uri.parse(SmbBridge.urlFor(item.uri, item.smbVersion.ifEmpty { "SMB1" }, item.user, item.password, item.domain)))
             // A network song cached ahead (the next one while the last played): played from the phone.
-            app.vlcinterface.sources.Prefetch.localFor(item.uri) != null ->
-                Media(libVlc, app.vlcinterface.sources.Prefetch.localFor(item.uri)!!.absolutePath)
+            cached != null -> Media(libVlc, cached.absolutePath)
             // SFTP: streamed by the app's own SFTP client (libVLC's SSH library is too old for many servers).
             item.uri.startsWith("sftp://") -> {
                 val src = store.current.sources.firstOrNull { it.id == item.sourceId }

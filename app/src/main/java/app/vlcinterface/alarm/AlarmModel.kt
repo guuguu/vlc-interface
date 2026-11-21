@@ -286,15 +286,19 @@ object Alarms {
 
     fun init(c: Context) {
         ctx = c.applicationContext
-        try {
-            val p = prefs
+        // Each part read on its own: one damaged part (or one damaged alarm) no longer empties the others — which the
+        // next save would then have written back, losing every alarm.
+        val p = try { prefs } catch (_: Exception) { return }
+        val alarms = try {
             val a = JSONArray(p.getString("alarms", "[]"))
-            _state.value = AlarmData((0 until a.length()).map { Alarm.fromJson(a.getJSONObject(it)) },
-                AlarmGlobal.fromJson(p.getString("global", null)?.let { JSONObject(it) }),
-                ClockAspect.fromJson(p.getString("aspect", null)?.let { JSONObject(it) }),
-                p.getBoolean("showClock", false),
-                VisSettings.fromJson(p.getString("vis", null)?.let { JSONObject(it) }))
-        } catch (_: Exception) {}
+            (0 until a.length()).mapNotNull { i -> try { Alarm.fromJson(a.getJSONObject(i)) } catch (_: Exception) { null } }
+        } catch (_: Exception) { emptyList() }
+        val d = AlarmData()
+        _state.value = AlarmData(alarms,
+            try { AlarmGlobal.fromJson(p.getString("global", null)?.let { JSONObject(it) }) } catch (_: Exception) { d.global },
+            try { ClockAspect.fromJson(p.getString("aspect", null)?.let { JSONObject(it) }) } catch (_: Exception) { d.aspect },
+            try { p.getBoolean("showClock", false) } catch (_: Exception) { false },
+            try { VisSettings.fromJson(p.getString("vis", null)?.let { JSONObject(it) }) } catch (_: Exception) { d.vis })
     }
 
     private fun save(d: AlarmData) {

@@ -25,7 +25,7 @@ import java.io.File
  * refreshed by the source's ↻ Rescan, dropped when the pin is removed. Kept in the app's own storage.
  */
 object NetIndex {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + app.vlcinterface.data.CrashLog.guard)
     private val lock = Mutex()
     private lateinit var file: File
 

@@ -154,7 +154,7 @@ fun RgAskHost() {
                     close()
                     // Not tied to this pop-up: it closes at once, and a job tied to it was cancelled with it while the
                     // folder was still being listed (so the folder scan never started).
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + app.vlcinterface.data.CrashLog.guard).launch {
                         val folder = app.vlcinterface.sources.MusicLibrary.folderOf(ctx.applicationContext, it0).ifEmpty { listOf(it0) }
                         start(folder, app.vlcinterface.sources.RgMode.ALBUMS_BY_TAGS, it0.album.ifEmpty { "this folder" })
                     }

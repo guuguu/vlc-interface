@@ -235,7 +235,7 @@ object CoverArt {
     private fun resize(bytes: ByteArray): Pair<Bitmap, ByteArray>? {
         val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
         val k = MAX.toFloat() / maxOf(src.width, src.height)
-        val bmp = if (k < 1f) Bitmap.createScaledBitmap(src, (src.width * k).toInt(), (src.height * k).toInt(), true) else src
+        val bmp = if (k < 1f) Bitmap.createScaledBitmap(src, (src.width * k).toInt().coerceAtLeast(1), (src.height * k).toInt().coerceAtLeast(1), true) else src
         val out = ByteArrayOutputStream(); bmp.compress(Bitmap.CompressFormat.JPEG, 88, out)
         return bmp to out.toByteArray()
     }
@@ -395,7 +395,10 @@ object CoverArt {
     private suspend fun mb(url: String): JSONObject? {
         val wait = 1100 - (System.currentTimeMillis() - lastCall); if (wait > 0) delay(wait)   // MusicBrainz: 1 request/s
         lastCall = System.currentTimeMillis()
-        return Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) JSONObject(r.body!!.string()) else null }
+        // Always off the screen's thread, whoever asks.
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) JSONObject(r.body!!.string()) else null }
+        }
     }
 
     private fun get(url: String): ByteArray? =

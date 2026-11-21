@@ -694,7 +694,7 @@ private fun SeekBlock(item: PlayItem) {
                 val thumbX = 10.dp + (bw - 20.dp) * f
                 androidx.compose.ui.window.Popup(alignment = Alignment.TopStart,
                     offset = with(androidx.compose.ui.platform.LocalDensity.current) {
-                        androidx.compose.ui.unit.IntOffset((thumbX - bubbleW / 2).coerceIn(0.dp, bw - bubbleW).roundToPx(), (-96).dp.roundToPx())
+                        androidx.compose.ui.unit.IntOffset((thumbX - bubbleW / 2).coerceIn(0.dp, (bw - bubbleW).coerceAtLeast(0.dp)).roundToPx(), (-96).dp.roundToPx())
                     }) {
                     Column(Modifier.width(bubbleW).clip(RoundedCornerShape(14.dp)).background(C.popup).border(2.dp, accent(), RoundedCornerShape(14.dp))
                         .padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -2140,7 +2140,7 @@ fun BoxScope.FloatingPlayButton(playing: Boolean, onToggle: () -> Unit) {
             .pointerInput(Unit) {
                 detectDragGestures(onDragEnd = {
                     store.update { it.copy(settings = it.settings.copy(floatBtnX = x / wPx, floatBtnY = y / hPx)) }
-                }) { ch, d -> ch.consume(); x = (x + d.x).coerceIn(0f, wPx - sizePx); y = (y + d.y).coerceIn(0f, hPx - sizePx) }
+                }) { ch, d -> ch.consume(); x = (x + d.x).coerceIn(0f, (wPx - sizePx).coerceAtLeast(0f)); y = (y + d.y).coerceIn(0f, (hPx - sizePx).coerceAtLeast(0f)) }
             }
             .clickable { onToggle() }, contentAlignment = Alignment.Center) {
             Text(if (playing) "❚❚" else "▶", color = floatSymbolColor(s.floatBtnColor), fontSize = (s.floatBtnSize * 0.36f).sp, fontWeight = FontWeight.Bold)

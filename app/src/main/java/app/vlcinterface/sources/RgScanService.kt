@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
  * progress; when it ends, a notification with the summary (tap → scan page with the report).
  */
 class RgScanService : Service() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + app.vlcinterface.data.CrashLog.guard)
     private var job: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null

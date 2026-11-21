@@ -24,10 +24,12 @@ Java_app_vlcinterface_player_ProjectM_nCreate(JNIEnv *env, jclass cls, jint w, j
     projectm_handle pm = projectm_create();
     if (!pm) { LOG("create failed"); return 0; }
     inst_t *in = calloc(1, sizeof(inst_t));
+    if (!in) { projectm_destroy(pm); return 0; }
     in->pm = pm;
     in->max = (int)projectm_pcm_get_max_samples();
     if (in->max <= 0 || in->max > 8192) in->max = 2048;
     in->buf = malloc(sizeof(float) * 2 * in->max);
+    if (!in->buf) { projectm_destroy(pm); free(in); return 0; }
     projectm_set_window_size(pm, (size_t)w, (size_t)h);
     projectm_set_fps(pm, 60);
     projectm_set_mesh_size(pm, 64, 48);
