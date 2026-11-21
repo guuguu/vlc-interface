@@ -1156,7 +1156,7 @@ fun DragOrderList(
 /**
  * The one style of every details pop-up (2026-11-21 11:51) — songs, videos and stations in every player and list:
  * title, "Tap a line to copy it.", sections in the accent colour, each line label on the left and value on the right
- * with thin dividers, tap a line to copy its value, "Copy all" for everything, "Close". [sections]: title → lines;
+ * with thin dividers, tap a line to copy its value, "Share" (Android's share sheet), "Copy all" for everything, "Close". [sections]: title → lines;
  * [note]: a short line at the end (or the state while loading).
  */
 @Composable
@@ -1192,6 +1192,18 @@ fun DetailsDialog(title: String, sections: List<Pair<String, List<Pair<String, S
             }
         },
         confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
-        dismissButton = { STextButton({ copy(report(), "Details") }) { Text("Copy all") } },
+        dismissButton = {
+            Row {
+                // Share (2026-11-21 11:53): Android's share sheet with everything as text (message, mail, notes…).
+                STextButton({
+                    try {
+                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(android.content.Intent.EXTRA_SUBJECT, title).putExtra(android.content.Intent.EXTRA_TEXT, report())
+                        ctx.startActivity(android.content.Intent.createChooser(send, "Share $title").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                    } catch (_: Exception) { copy(report(), "Details") }
+                }) { Text("Share") }
+                STextButton({ copy(report(), "Details") }) { Text("Copy all") }
+            }
+        },
     )
 }

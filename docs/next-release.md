@@ -541,3 +541,5 @@
   - Station (favourites, search results, radio player): "Station details · <name>" — In the app, Live stream (while
     it plays), Radio directory (was label above value, different sizes).
   - Playing video (long press): Video details, unchanged look, now the shared one.
+- Share (11:53): every details pop-up also has "Share" — Android's share sheet with all the details as text (to a
+  message, mail, notes, another app); next to "Copy all" and "Close".
