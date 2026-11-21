@@ -1631,6 +1631,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val s0 = _state.value
         val item = s0.queue.getOrNull(i) ?: return
         if (pictureRecovered != item.uri) pictureRecovered = null      // a different video may be re-opened once again
+        voutNow = 0                                                     // picture outputs are counted per item
         session(item, emptyList())
         loadPictureForFile(item)
         val wanted = store.current.subStyle
@@ -2089,7 +2090,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         main.postDelayed({
             val s = _state.value; val item = s.item ?: return@postDelayed
             if (item.isMusic || item.isRadio || attachedLayout == null || stopping || endHandled) return@postDelayed
-            val count = try { mp.voutCount } catch (_: Throwable) { voutNow }
+            val count = voutNow
             if (count > 0 || !(mp.isPlaying || s.buffering < 100f)) return@postDelayed
             if (pictureRecovered == item.uri) return@postDelayed
             pictureRecovered = item.uri
@@ -2258,7 +2259,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val before = voutNow; voutNow = ev.voutCount
                 refreshTracks(); refreshSurface()
                 // The picture went away while the video plays on (surface lost): bring it back.
-                if (before > 0 && voutNow == 0) checkPicture("picture output lost")
+                if (before > 0 && voutNow == 0) checkPicture("picture output lost", 1_500)
             }
             MediaPlayer.Event.EncounteredError -> {
                 val item = s.item
