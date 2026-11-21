@@ -15,6 +15,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -197,6 +199,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     LaunchedEffect(p.item?.uri, p.item?.startMs) { if (p.item?.isMusic == true || p.item?.isRadio == true) nav.replace(Screen.Music) }
 
     // Subtitle format changed in Settings (16:21): the playing video takes it on when the player is back on screen.
+    // Showing the controls (a tap on the picture) also brings the sideways top bar down.
+    LaunchedEffect(controls) { if (controls) TopBarUi.show() }
     LaunchedEffect(st.subStyle) { if (p.item != null && !p.item!!.isMusic && !p.item!!.isRadio && player.styleChanged()) player.applyStyle() }
 
     // A video with subtitle tracks inside it (2026-11-21 16:14): a pop-up to choose which one to use, once per video
@@ -354,6 +358,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 Panel.SYNC_SUB, Panel.SYNC_AUDIO -> OverlaySync(panel == Panel.SYNC_SUB, p, st.settings.syncPanelOpacity) { panel = Panel.TRACKS }
                 else -> {}
             }
+            // Sideways: the system buttons in a bar that slides down over the picture (17:06).
+            if (landscape && !inPip && panel == Panel.NONE) VideoTopBar(p, nav, locked, onLock = { locked = !locked })
         } else {
             // Phone upright with a widescreen video: video on top, everything else below it.
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -547,31 +553,10 @@ private fun BoxScope.ControlsOverlayBody(
         }
     }
     // Sideways: everything on one clean row (same readable sizes; it scrolls sideways only if a narrow screen needs it).
-    if (landTop) CompositionLocalProvider(LocalBtnScale provides topK) {
-        // Fits the width: shrunk evenly when everything doesn't fit (15:56), never past the edge.
-        FitRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), arrangement = Arrangement.spacedBy(6.dp), minGap = 6.dp) {
-            SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
-            HomeButton(nav, Color.White)
-            MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 220.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
-            OutputPill(openOutput)
-            OverlayChip("Subs/Change", lit = p.spuTracks.any { it.id >= 0 }) { onTouch(); SubChoiceUi.open = true }
-            OverlayChip("Subs/Sync") { onTouch(); onPanel() }
-            // Browse: the folder the video came from, in the Library (Back returns here).
-            OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
-            OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
-            OverlayChip("Hue/Sat") { onTouch(); onPicture() }
-            OverlayChip("Subs/Format") { onTouch(); openSubtitleFormat(nav) }
-            speedChip()
-            OverlayChip("Songs") { PlayerSwitch.go(nav, "songs") }
-            OverlayChip("Radio") { PlayerSwitch.go(nav, "radio") }
-            SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
-            SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
-            ShazamButton(Color.White)
-            BackgroundWorkButton()
-            ScreenOnSign(Color.White)
-            ExitButton(Color.White)
-        }
-    } else CompositionLocalProvider(LocalBtnScale provides topK) {
+    // Sideways (17:06): the system buttons are in the top bar that slides down over the picture (VideoTopBar); the player
+    // buttons are in two slim columns at the side edges (drawn below); only room for the bar is kept here.
+    if (landTop) Box(Modifier.fillMaxWidth().height(40.dp))
+    else CompositionLocalProvider(LocalBtnScale provides topK) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // Upright: back, home, lock, settings, Shazam, signs, exit, the other players and the output are in the header
         // bar above the picture (VideoHeader), not on it.
@@ -590,11 +575,11 @@ private fun BoxScope.ControlsOverlayBody(
     }
     }
     // The format shown now, written on the picture (comes and goes with the other controls).
-    Text(scaleLabel.substringBefore('\u0000'), color = Color.White, fontSize = maxOf(13f * ks, 13f).sp, fontWeight = FontWeight.SemiBold,
+    if (!landTop) Text(scaleLabel.substringBefore('\u0000'), color = Color.White, fontSize = maxOf(13f * ks, 13f).sp, fontWeight = FontWeight.SemiBold,
         style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black, androidx.compose.ui.geometry.Offset(1f, 1f), 4f)),
         modifier = Modifier.align(Alignment.End).padding(horizontal = 12.dp))
     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-    AutoFitRow(Modifier.padding(horizontal = 8.dp), spacing = if (compact) 28.dp else 56.dp) {
+    AutoFitRow(Modifier.padding(horizontal = if (landTop) 96.dp else 8.dp), spacing = if (compact) 28.dp else if (landTop) 36.dp else 56.dp) {
         // Previous / next file of the folder (the list it was opened from).
         RoundBtn("⏮", 44) { player.prev(); onTouch() }
         RoundBtn("−10", 52) { player.seekBy(-10_000); onTouch() }
@@ -619,10 +604,10 @@ private fun BoxScope.ControlsOverlayBody(
         Text("⏮", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.prev() }.padding(8.dp))
         Text("⏭", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.next() }.padding(8.dp))
     }
-    if (!compact) Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+    if (!compact) Column(Modifier.fillMaxWidth().padding(horizontal = if (landB) 96.dp else 16.dp, vertical = 6.dp)) {
         SeekRow(p, Modifier)
-        if (landB) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { bottomItems() }
-        else androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        // Sideways: only the position bar here; format and Rotate are in the right column (17:06).
+        if (!landB) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)) { bottomItems() }
     } else androidx.compose.foundation.layout.FlowRow(Modifier.align(Alignment.End).padding(6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         FormatControl(scaleLabel, onScale)
@@ -631,6 +616,48 @@ private fun BoxScope.ControlsOverlayBody(
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
     }
+    }
+    // Sideways (17:06 / 17:07): the player buttons in two slim columns against the side edges, spread from under the top
+    // bar to above the position bar, all one size, shrunk together when the height is short. No Songs / Radio here.
+    val landS = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
+    if (landS && !compact) {
+        val left = listOf<Pair<String, () -> Unit>>("📂 Browse" to { onTouch(); openOrigin(nav, keepStack = true) })
+        val right = listOf<Triple<String, Boolean, () -> Unit>>(
+            Triple("Subs/Change", p.spuTracks.any { it.id >= 0 }) { onTouch(); SubChoiceUi.open = true },
+            Triple("Subs/Sync", false) { onTouch(); onPanel() },
+            Triple(syncLabel(p.audioDelayMs), false) { onTouch(); AudioSyncUi.open = true },
+            Triple("Hue/Sat", false) { onTouch(); onPicture() },
+            Triple("Subs/Format", false) { onTouch(); openSubtitleFormat(nav) },
+            Triple("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×", false) {
+                val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
+                val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
+                player.setRate(rates[(i + 1) % rates.size]); onTouch() },
+            Triple(scaleLabel.split('\u0000').let { if (it.getOrElse(1) { "" }.isEmpty()) it[0] else "${it[0]} → ${it[1]}" }, false) { onScale(); onTouch() },
+            Triple(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }, false) { App.instance.player.rotateVideo(); onTouch() },
+        )
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize().padding(top = 44.dp, bottom = 52.dp, start = 6.dp, end = 6.dp)) {
+            val n = right.size
+            val chipH = ((maxHeight.value - 6f * (n - 1)) / n).coerceIn(22f, 36f).dp
+            val font = (chipH.value * 0.4f).coerceIn(9f, 12f).sp
+            val w = 92.dp
+            Column(Modifier.align(Alignment.CenterStart).width(w), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.width(w)) { OutputPill(openOutput) }
+                left.forEach { (l, f) -> SideChip(l, false, chipH, font, w, f) }
+            }
+            Column(Modifier.align(Alignment.CenterEnd).width(w).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                right.forEach { (l, lit, f) -> SideChip(l, lit, chipH, font, w, f) }
+            }
+        }
+    }
+}
+
+/** A slim button of the sideways side columns: all the same size; [lit] highlighted. */
+@Composable
+private fun SideChip(text: String, lit: Boolean, h: androidx.compose.ui.unit.Dp, font: androidx.compose.ui.unit.TextUnit, w: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+    val a = accent()
+    Box(Modifier.width(w).height(h).clip(RoundedCornerShape(h / 2)).background(if (lit) a.copy(alpha = 0.3f) else Color(0x55000000))
+        .border(1.dp, if (lit) a else Color(0x88FFFFFF), RoundedCornerShape(h / 2)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Text(text, color = if (lit) a else Color.White, fontSize = font, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
     }
 }
 
@@ -1484,6 +1511,50 @@ private fun UnderButtons(btns: List<UBtn>, cell: UCell) {
                 .border(1.dp, if (b.lit) a else C.line, RoundedCornerShape(cell.h / 2))
                 .clickable(onClick = b.onClick), contentAlignment = Alignment.Center) {
                 Text(b.label, color = if (b.lit) a else C.text, fontSize = cell.font, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+        }
+    }
+}
+
+
+/** The sideways top bar's state: shown until [until]. */
+private object TopBarUi {
+    var until by androidx.compose.runtime.mutableLongStateOf(0L)
+    fun show() { until = System.currentTimeMillis() + 3000 }
+}
+
+/**
+ * Sideways top bar (2026-11-21 17:06): back, home, the title, lock, video settings, Shazam, background work, screen-on
+ * and exit, on a dark band that slides down over the picture when the top edge is touched or swiped down (or the
+ * controls are shown) and hides itself 3 s after the last touch — then only a thin handle shows at the top edge.
+ */
+@Composable
+private fun BoxScope.VideoTopBar(p: PlayerState, nav: Navigator, locked: Boolean, onLock: () -> Unit) {
+    var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val until = TopBarUi.until
+    LaunchedEffect(until) { now = System.currentTimeMillis(); if (until > now) { delay(until - now); now = System.currentTimeMillis() } }
+    val shown = until > now && !locked
+    // The top edge: a touch or a swipe down there brings the bar.
+    if (!shown && !locked) Box(Modifier.align(Alignment.TopCenter).fillMaxWidth().height(28.dp)
+        .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); TopBarUi.show() } }) {
+        Box(Modifier.align(Alignment.TopCenter).padding(top = 4.dp).width(44.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x88FFFFFF)))
+    }
+    androidx.compose.animation.AnimatedVisibility(shown, Modifier.align(Alignment.TopCenter).fillMaxWidth(),
+        enter = androidx.compose.animation.slideInVertically { -it }, exit = androidx.compose.animation.slideOutVertically { -it }) {
+        Box(Modifier.fillMaxWidth().background(Color(0xC0000000))
+            // Any touch on the bar keeps it a little longer.
+            .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial); TopBarUi.show() } }
+            .padding(horizontal = 8.dp, vertical = 2.dp)) {
+            FitRow(Modifier.fillMaxWidth(), minGap = 6.dp) {
+                SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
+                HomeButton(nav, Color.White)
+                MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 300.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
+                SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
+                SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
+                ShazamButton(Color.White)
+                BackgroundWorkButton()
+                ScreenOnSign(Color.White)
+                ExitButton(Color.White)
             }
         }
     }

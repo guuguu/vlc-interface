@@ -885,3 +885,15 @@
 - For every network location (16:59): each saved LAN and Internet location (and every one added later) has "+ Folder";
   locations "Found on your LAN" have it too, next to "Save as preset" — adding a folder there saves that location
   with the folder (when it needs a user name, Save as preset first). Not for UPnP media servers (no folder paths).
+
+## Video player sideways: top bar that hides itself, buttons in two side columns (requested 2026-11-21 17:03–17:07)
+- System buttons on top: back, home, the title, lock, video settings, Shazam, background work, screen-on, exit — on a
+  dark band that slides down over the picture when the top edge is touched or swiped down (or the controls are shown
+  with a tap) and hides itself 3 s after the last touch; hidden, only a thin handle shows at the top edge. It fits the
+  width (shrinks evenly when needed).
+- Player buttons in two slim columns against the side edges, all one size, shrinking together when the screen is
+  short: left — the output and 📂 Browse; right — Subs/Change (lit when the video has subtitles), Subs/Sync,
+  Audio/Sync, Hue/Sat, Subs/Format, speed, Fit → Fill, Rotate.
+- Songs and Radio are no longer on the sideways video screen (still in the upright header). The bottom button row is
+  gone sideways (its ⏮ ⏭ are in the middle, format and Rotate in the right column): only the position bar at the
+  bottom. The middle buttons and the position bar sit between the columns. Double tap in the middle: PiP.
