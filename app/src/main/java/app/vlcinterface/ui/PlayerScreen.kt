@@ -106,11 +106,11 @@ private object AudioSyncUi {
     var open by androidx.compose.runtime.mutableStateOf(false)
 }
 
-/** Label of the Audio sync button: the value when one is set ("Audio sync +0.2 s"). */
+/** Label of the Audio sync button: the value when one is set ("Audio sync 0.25 s"). */
 private fun syncLabel(ms: Long): String {
     if (ms == 0L) return "Audio sync"
-    val sign = if (ms > 0) "+" else "−"
-    return "Audio sync " + sign + String.format(java.util.Locale.US, "%.1f s", kotlin.math.abs(ms) / 1000f)
+    // Shown as how far the sound is pushed forward ("Audio sync 0.25 s").
+    return "Audio sync " + String.format(java.util.Locale.US, "%.2f s", -ms / 1000f)
 }
 
 fun Context.findActivity(): Activity? {
@@ -744,17 +744,19 @@ private fun PicturePanel(onBack: () -> Unit) {
 }
 
 /**
- * Audio sync for Bluetooth (2026-11-21 12:17): a slim bar at the bottom of the picture — a slider from −3.0 to +3.0 s
- * (0.1 s steps) with a small box showing the value in seconds ("0.0"), applied while dragging. Kept for the sound
- * device and this video together; other videos played on the same device during this session start from it.
+ * Audio sync for Bluetooth (2026-11-21 12:17 / 12:19). Over Bluetooth the sound only ever comes after the picture, so
+ * the slider starts at 0 and pushes the sound forward (earlier): 0.00 … 2.00 s in 0.01 s steps on a slider across the
+ * whole width for fine setting, with the value in a small box ("0.00 s"). Kept for the sound device and this video
+ * together; other videos played on the same device during this session start from it.
  */
 @Composable
 private fun BoxScope.AudioSyncBar(onClose: () -> Unit) {
     val player = App.instance.player
     val p by player.state.collectAsState()
-    var v by remember(p.item?.uri, player.currentOutputName) { mutableStateOf(p.audioDelayMs / 1000f) }
+    // Shown as "sound forward" (seconds ≥ 0); applied as a negative audio delay (sound earlier).
+    var v by remember(p.item?.uri, player.currentOutputName) { mutableStateOf((-p.audioDelayMs / 1000f).coerceIn(0f, 2f)) }
     val colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = Color(0x66FFFFFF))
-    fun fmt(x: Float) = (if (x > 0.04f) "+" else if (x < -0.04f) "−" else "") + "%.1f".format(java.util.Locale.US, kotlin.math.abs(x))
+    fun put(x: Float, save: Boolean) = player.setAudioSync(-(x * 1000).toLong(), save)
     Box(Modifier.matchParentSize().clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
         indication = null, onClick = onClose))
     Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xB30F1115))
@@ -763,22 +765,23 @@ private fun BoxScope.AudioSyncBar(onClose: () -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Audio sync · " + player.currentOutputName.ifEmpty { "this output" }, color = Color.White, fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Pill("Reset") { v = 0f; player.setAudioSync(0, true) }
+            // The small box with the value in seconds.
+            Box(Modifier.padding(horizontal = 8.dp).widthIn(min = 70.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1C1F24))
+                .border(1.dp, accent(), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+                Text(String.format(java.util.Locale.US, "%.2f s", v), color = accent(), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+            Pill("Reset") { v = 0f; put(0f, true) }
             SymButton(onClose) { Text("✕", color = Color.White, fontSize = 18.sp) }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("−3", color = Color(0xFFB8BCC4), fontSize = 12.sp)
-            Slider(v, { x -> v = Math.round(x * 10f) / 10f; player.setAudioSync((v * 1000).toLong(), false) },
-                onValueChangeFinished = { player.setAudioSync((v * 1000).toLong(), true) },
-                valueRange = -3f..3f, colors = colors, modifier = Modifier.weight(1f).height(32.dp).padding(horizontal = 6.dp))
-            Text("+3", color = Color(0xFFB8BCC4), fontSize = 12.sp)
-            // The small box with the value in seconds.
-            Box(Modifier.padding(start = 10.dp).widthIn(min = 64.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1C1F24))
-                .border(1.dp, accent(), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
-                Text(fmt(v) + " s", color = accent(), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            }
+        // Across the whole width: 2 s over the full screen width — about a millimetre per hundredth on a phone.
+        Slider(v, { x -> v = Math.round(x * 100f) / 100f; put(v, false) }, onValueChangeFinished = { put(v, true) },
+            valueRange = 0f..2f, colors = colors, modifier = Modifier.fillMaxWidth().height(36.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Text("0", color = Color(0xFFB8BCC4), fontSize = 11.sp)
+            Text("sound forward →", color = Color(0xFFB8BCC4), fontSize = 11.sp, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
+            Text("2.00 s", color = Color(0xFFB8BCC4), fontSize = 11.sp)
         }
-        Text("Sound late (lips first)? Move left (−). Kept for this video on " + player.currentOutputName.ifEmpty { "this output" } +
+        Text("Sound comes after the lips? Push it forward until they match. Kept for this video on " + player.currentOutputName.ifEmpty { "this output" } +
             "; other videos this session start from it." + player.audioSyncFrom.takeIf { it.isNotEmpty() }?.let { " Now: from $it." }.orEmpty(),
             color = Color(0xFFB8BCC4), fontSize = 11.sp)
     }

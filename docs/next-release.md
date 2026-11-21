@@ -592,10 +592,11 @@
 
 ## Video player: "Audio sync" button for Bluetooth (requested 2026-11-21 12:17)
 - New "Audio sync" button on the video player (top button row, sideways and upright, and under the video when it's
-  on top); it shows the value when one is set ("Audio sync +0.2 s").
-- It opens a slim bar at the bottom of the picture: "Audio sync · <sound device>", a slider from −3.0 to +3.0 s in
-  0.1 s steps, applied while dragging, and next to it a small box with the value in seconds ("0.0 s", "+0.2 s",
-  "−0.3 s"); Reset, ✕; a tap on the picture closes it. Hint: sound late (lips move first) → move left (−).
+  on top); it shows the value when one is set ("Audio sync 0.25 s").
+- It opens a slim bar at the bottom of the picture: "Audio sync · <sound device>" with the value in a small box
+  ("0.00 s"), Reset, ✕, and under it a slider across the whole width for fine setting (12:19): from 0 to 2.00 s in
+  0.01 s steps, pushing the sound forward (earlier) — over Bluetooth the sound only ever comes after the picture, so
+  it starts at 0 and only goes that way. Applied while dragging; a tap on the picture closes the bar.
 - Kept for that sound device and that video file together, and found again whenever that video plays on that
   device. Other videos played on the same device during the same session start from the last value set (a
   Bluetooth device's delay is usually the same), until one gets its own. Older offsets ("this file" / "this output"
