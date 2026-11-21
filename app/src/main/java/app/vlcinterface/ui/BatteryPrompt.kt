@@ -179,6 +179,44 @@ fun RgAskHost() {
 }
 
 
+/**
+ * End of an automatic (silent) folder ReplayGain scan: a short pop-up for 5 seconds — the folder, how many songs were
+ * scanned, and each song with its new track gain (requested 2026-11-21 12:01). Tap outside to close it sooner.
+ */
+@Composable
+fun RgAutoSummaryHost() {
+    val sum by app.vlcinterface.sources.RgScanner.autoDone.collectAsState()
+    val s = sum ?: return
+    androidx.compose.runtime.LaunchedEffect(s) { kotlinx.coroutines.delay(5_000); app.vlcinterface.sources.RgScanner.autoDone.value = null }
+    val ok = s.songs.count { it.second != null }
+    androidx.compose.ui.window.Dialog(onDismissRequest = { app.vlcinterface.sources.RgScanner.autoDone.value = null }) {
+        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).background(C.panel)
+            .border(1.dp, accent().copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+            .padding(horizontal = 18.dp, vertical = 14.dp)) {
+            Text("✓  ReplayGain added", color = accent(), fontSize = 17.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            Text(if (ok == s.songs.size) "All ${s.songs.size} song${if (s.songs.size == 1) "" else "s"} of \"${s.folder}\" were scanned."
+                 else "$ok of ${s.songs.size} songs of \"${s.folder}\" were scanned.", color = C.text, fontSize = 14.sp,
+                modifier = androidx.compose.ui.Modifier.padding(top = 4.dp, bottom = 8.dp))
+            val shown = s.songs.take(10)
+            shown.forEachIndexed { i, (t, g) ->
+                if (i > 0) Divider()
+                androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text(t, color = C.text, fontSize = 13.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = androidx.compose.ui.Modifier.weight(1f).padding(end = 10.dp))
+                    Text(g?.let { (if (it >= 0) "+" else "−") + "%.2f dB".format(java.util.Locale.US, kotlin.math.abs(it)) } ?: "not measured",
+                        color = if (g == null) C.bad else accent(), fontSize = 13.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                }
+            }
+            if (s.songs.size > shown.size) Text("… and ${s.songs.size - shown.size} more", color = C.muted, fontSize = 12.sp,
+                modifier = androidx.compose.ui.Modifier.padding(top = 4.dp))
+            Text("Track gain · kept in the app", color = C.muted, fontSize = 11.sp, modifier = androidx.compose.ui.Modifier.padding(top = 8.dp))
+        }
+    }
+}
+
+
 /** Low battery pop-ups: the 15 % warning, and "stopped" at 10 %. */
 @Composable
 fun LowBatteryHost() {

@@ -554,3 +554,15 @@
 - Folder details (shared style): Folder — name, place, source; Inside (with subfolders) — songs, videos, folders
   with files, total play time (counted when opened). Song / file details now also list artist, album, length and
   the file's place. "Share details…" opens Android's share sheet with the same text as the pop-up.
+
+## Automatic ReplayGain for folders (requested 2026-11-21 12:01–12:03, text helper)
+- Settings → Audio → ReplayGain: "Automatic ReplayGain for folders" (on by default).
+- When a song without any ReplayGain starts playing from the phone or from the network at home, every song of its
+  folder that has none is measured in the background — no question, no notification, no progress, no report.
+  Each gets its track gain, kept in the app (files unchanged); the playing song uses its value as soon as it's
+  measured. Songs that already have ReplayGain are left as they are. Once per folder while the app runs.
+- When the whole folder is done, a short pop-up for 5 seconds: "✓ ReplayGain added — All N songs of "<folder>" were
+  scanned", each song with its new gain (+2.31 dB / −4.10 dB, in the accent colour; "not measured" in red), up to
+  10 lines then "… and N more". Tap outside to close it sooner.
+- Kept as before (12:02 / 12:03): network songs reached through the VPN (away from home) — no automatic scan there
+  (slow); setting off: the "No ReplayGain — scan?" question for every folder.

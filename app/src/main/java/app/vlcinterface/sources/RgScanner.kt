@@ -135,7 +135,14 @@ object RgScanner {
 
     /** Scans asked for while one runs wait here and start one after the other. */
     private class Queued(val ctx: Context, val items: List<PlayItem>, val mode: RgMode, val target: RgTarget, val rescan: Boolean,
-                         val onlyWithoutRg: Boolean, val confirmTitle: String, val label: String)
+                         val onlyWithoutRg: Boolean, val confirmTitle: String, val label: String, val silent: Boolean = false)
+
+    /**
+     * End of a silent folder scan (automatic ReplayGain): the folder, and each scanned song with its new track gain
+     * (null = couldn't be measured). Shown for 5 s, then cleared.
+     */
+    data class AutoSummary(val folder: String, val songs: List<Pair<String, Float?>>)
+    val autoDone = MutableStateFlow<AutoSummary?>(null)
     private val queue = java.util.concurrent.ConcurrentLinkedDeque<Queued>()
     private var current: Queued? = null
     /** What waits in the queue (shown on the scan page), oldest first. */
@@ -159,7 +166,7 @@ object RgScanner {
         if (_state.value.running || app.vlcinterface.player.BackgroundWork.paused.value) return
         val q = queue.poll() ?: return
         queued.value = queue.map { it.label }
-        start(q.ctx, q.items, q.mode, q.target, q.rescan, q.onlyWithoutRg, q.confirmTitle)
+        start(q.ctx, q.items, q.mode, q.target, q.rescan, q.onlyWithoutRg, q.confirmTitle, q.silent)
     }
 
     /**
@@ -167,21 +174,23 @@ object RgScanner {
      * [confirmTitle]: when not empty, a confirmation pop-up says what was done when the scan ends.
      */
     fun start(ctx: Context, items: List<PlayItem>, mode: RgMode, target: RgTarget, rescanTagged: Boolean,
-              onlyWithoutRg: Boolean = false, confirmTitle: String = "") {
+              onlyWithoutRg: Boolean = false, confirmTitle: String = "", silent: Boolean = false) {
         if (app.vlcinterface.player.BatteryGuard.busyBlocked()) return     // battery 15 % or less: only playing
         val music = items.filter { it.isMusic && it.startMs < 0 }.distinctBy { it.uri }
         if (_state.value.running || app.vlcinterface.player.BackgroundWork.paused.value) {
             // Busy (or background work paused): queued, started when the scans before it are done.
             val label = confirmTitle.ifEmpty { if (music.size == 1) music[0].title else "${music.size} songs" }
-            queue.add(Queued(ctx, items, mode, target, rescanTagged, onlyWithoutRg, confirmTitle, label))
+            queue.add(Queued(ctx, items, mode, target, rescanTagged, onlyWithoutRg, confirmTitle, label, silent))
             queued.value = queue.map { it.label }
             return
         }
         val cueSkipped = items.count { it.isMusic && it.startMs >= 0 }
         current = Queued(ctx, items, mode, target, rescanTagged, onlyWithoutRg, confirmTitle,
-            confirmTitle.ifEmpty { if (music.size == 1) music[0].title else "${music.size} songs" })
+            confirmTitle.ifEmpty { if (music.size == 1) music[0].title else "${music.size} songs" }, silent)
+        // Which songs had no ReplayGain at all before (silent scans list only those in their summary).
+        val missing = if (silent) music.filter { RgStore.get(it.uri)?.any != true }.map { it.uri }.toSet() else emptySet()
         _state.value = RgScanState(running = true, total = music.size, phase = "Preparing", startedAt = System.currentTimeMillis())
-        RgScanService.start(ctx)
+        if (!silent) RgScanService.start(ctx)              // silent: no notification, no progress, no report
         job = scope.launch {
             val results = ArrayList<RgResult>()
             if (cueSkipped > 0) results += RgResult("$cueSkipped .cue tracks", "skipped — part of one big file, scan that file instead", false)
@@ -193,7 +202,14 @@ object RgScanner {
                 results += RgResult("Scan", "stopped: ${e.message}", false)
             } finally { dropCopies() }
             _state.value = _state.value.copy(running = false, finished = true, current = "", phase = "Done", results = results.toList(),
-                reportPending = results.any { !it.ok } || confirmTitle.isNotEmpty(), confirmTitle = confirmTitle)
+                reportPending = !silent && (results.any { !it.ok } || confirmTitle.isNotEmpty()), confirmTitle = if (silent) "" else confirmTitle)
+            if (silent) {
+                // Songs that got a value now, then those that couldn't be measured (songs with ReplayGain in the file
+                // were skipped and aren't listed).
+                val done = music.filter { it.uri in missing }.mapNotNull { m -> RgStore.get(m.uri)?.trackGain?.let { m.title to it } } +
+                    results.filter { !it.ok }.map { it.name to null }
+                if (done.isNotEmpty()) autoDone.value = AutoSummary(confirmTitle, done)
+            }
             // ReplayGain log: one line for the scan, one per file that had a problem.
             try {
                 val L = app.vlcinterface.data.ServerLog

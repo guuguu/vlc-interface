@@ -1360,6 +1360,22 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (!item.isMusic) return
         val key = item.folderKey.ifEmpty { item.uri.substringBeforeLast('/') }
         if (!rgAsked.add(key)) return
+        // Automatic ReplayGain (2026-11-21 12:01–12:03): phone songs and home-network songs — the whole folder is
+        // scanned silently (only songs without any ReplayGain, track gain kept in the app; no notification, no
+        // question), and a 5-second summary shows when it's done. Network songs reached through the VPN (away from
+        // home) keep the old behaviour: the question, since scanning over the VPN is slow.
+        val net = item.uri.contains("://") && !item.uri.startsWith("content://") && !item.uri.startsWith("file://")
+        val overVpn = net && try { android.net.Uri.parse(item.uri).host?.let { h -> app.vlcinterface.sources.VpnLink.routeHost(h) != h } == true } catch (_: Exception) { false }
+        if (store.current.settings.rgAutoFolder && !overVpn) {
+            bg.launch {
+                val folder = try { app.vlcinterface.sources.MusicLibrary.folderOf(context, item) } catch (_: Exception) { emptyList() }.ifEmpty { listOf(item) }
+                val name = item.folderKey.ifEmpty { android.net.Uri.decode(item.uri).substringBeforeLast('/') }.trimEnd('/').substringAfterLast('/')
+                    .ifEmpty { item.album.ifEmpty { "this folder" } }
+                app.vlcinterface.sources.RgScanner.start(context, folder.filter { it.isMusic }, app.vlcinterface.sources.RgMode.TRACK,
+                    app.vlcinterface.sources.RgTarget.APP, rescanTagged = false, onlyWithoutRg = true, confirmTitle = name, silent = true)
+            }
+            return
+        }
         if (app.vlcinterface.sources.RgScanner.state.value.running) return
         rgAsk.value = item
     }

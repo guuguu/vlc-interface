@@ -213,6 +213,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 SleepClosedHost()
                 FailAskHost()
                 RgAskHost()
+                RgAutoSummaryHost()
                 LowBatteryHost()
                 WifiLostHost()
                 MobileIdleHost()
