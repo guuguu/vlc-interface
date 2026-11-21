@@ -1673,6 +1673,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val item = s0.queue.getOrNull(i) ?: return
         if (pictureRecovered != item.uri) pictureRecovered = null      // a different video may be re-opened once again
         voutNow = 0                                                     // picture outputs are counted per item
+        flippedFor = ""                                                 // every open gets its load-time format flip
         session(item, emptyList())
         loadPictureForFile(item)
         val wanted = store.current.subStyle
@@ -2134,6 +2135,27 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
+    /** Another format for a moment, then the chosen one: makes libVLC size the picture again from scratch. */
+    private fun flipScale() {
+        val other = if (vlcScale == MediaPlayer.ScaleType.SURFACE_FILL) MediaPlayer.ScaleType.SURFACE_BEST_FIT else MediaPlayer.ScaleType.SURFACE_FILL
+        main.post { try { mp.setVideoScale(other) } catch (_: Throwable) {} }
+        main.postDelayed({
+            try { mp.setVideoScale(vlcScale); mp.updateVideoSurfaces() } catch (_: Throwable) {}
+            try { attachedLayout?.requestLayout() } catch (_: Throwable) {}
+        }, 150)
+    }
+
+    /** The video the load-time flip was done for (once per opened video, when its picture and size are known). */
+    private var flippedFor = ""
+
+    private fun flipOnLoad() {
+        val it0 = _state.value.item ?: return
+        if (it0.isMusic || it0.isRadio || voutNow <= 0 || _state.value.videoW <= 0 || attachedLayout == null) return
+        if (flippedFor == it0.uri) return
+        flippedFor = it0.uri
+        main.postDelayed({ if (_state.value.item?.uri == it0.uri) flipScale() }, 400)
+    }
+
     private fun verifySurface(gen: Int, tries: Int) {
         if (gen != verifyGen) return                                   // a newer change is being checked
         val layout = attachedLayout ?: return
@@ -2144,6 +2166,10 @@ class PlayerController(private val context: Context, private val store: Store) {
         val okW = kotlin.math.abs(sv.width - want.first) <= maxOf(3, want.first / 100)
         val okH = kotlin.math.abs(sv.height - want.second) <= maxOf(3, want.second / 100)
         if (okW && okH) return
+        // Still wrong after one re-apply: flip to another format and back, as cycling the format button does —
+        // the only thing that reliably made libVLC recompute the picture at load (21 Nov 20:31). Re-sending the
+        // same format is ignored by libVLC when it believes it already applied it.
+        if (tries >= 1) { flipScale(); main.postDelayed({ verifySurface(gen, tries + 1) }, 450); return }
         if (tries >= 6) {
             android.util.Log.w("PlayerController", "picture size still ${sv.width}x${sv.height}, wanted ${want.first}x${want.second} (${scale.name})")
             return
@@ -2449,7 +2475,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESSelected -> refreshTracks()
             MediaPlayer.Event.Vout -> {
                 val before = voutNow; voutNow = ev.voutCount
-                refreshTracks(); refreshSurface()
+                refreshTracks(); refreshSurface(); flipOnLoad()
                 // The picture went away while the video plays on (surface lost): bring it back.
                 if (before > 0 && voutNow == 0) checkPicture("picture output lost", 1_500)
             }
@@ -2623,7 +2649,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             videoW = dw, videoH = dh,
             length = if (mp.length > 0) mp.length else _state.value.length,
         )
-        if (sizeChanged) refreshSurface()
+        if (sizeChanged) { refreshSurface(); flipOnLoad() }
         restoreTracks()
         // Settings → Video "Automatic": learn from the video's encoding; re-open once the right way if needed.
         val it0 = _state.value.item

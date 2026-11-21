@@ -974,3 +974,6 @@
 - Now the place is worked out directly (the video's Fit shape across the full width, at most 2/3 of the screen) so the
   view has its real size from the start, and libVLC is told again (twice, 0.1 s and 0.6 s after) whenever that size
   changes — when the video's shape becomes known or the phone turns.
+
+# After 1.68.0
+- **Video picture small at load (upright)**: the picture now gets the right size when a video opens. Before, it was only right after you cycled the format button. Once the picture and the video size are known, the player flips to another format and back, just like cycling the button. The size self-check does the same flip if the picture is still wrong after one re-apply.
