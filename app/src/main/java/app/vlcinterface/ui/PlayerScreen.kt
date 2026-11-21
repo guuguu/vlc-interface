@@ -113,9 +113,8 @@ private object VideoQueueUi {
 
 /** Label of the Audio sync button: the value when one is set ("Audio sync 0.25 s"). */
 private fun syncLabel(ms: Long): String {
-    if (ms == 0L) return "Audio/sync"
-    // Shown as how far the sound is pushed forward ("Audio/sync 0.25 s"); labels as asked 2026-11-21 15:47.
-    return "Audio/sync " + String.format(java.util.Locale.US, "%.2f s", -ms / 1000f)
+    // Just the name, never the value (2026-11-21 15:48); the value is in the bar it opens.
+    return "Audio/sync"
 }
 
 fun Context.findActivity(): Activity? {
