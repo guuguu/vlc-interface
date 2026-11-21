@@ -788,5 +788,6 @@
 - Covers: subtitles downloaded from OpenSubtitles, files added with "Add subtitle file", shifted / restored copies,
   and the same-name subtitle next to a network (SMB / web) video — now loaded by the app (instead of libVLC finding it
   itself) so it's cleaned too.
-- Not covered: subtitle tracks inside the video file (MKV / MP4) — libVLC can only drop all their formatting (colours
-  together with italic and bold).
+- Subtitle tracks inside the video file (MKV / MP4) too (16:12, turned on): libVLC drops their colour codes together
+  with all their other formatting (italic, bold). This setting is the player's for every text subtitle (SRT-type), so
+  added SRT files show without italic / bold as well; SSA / ASS tracks inside a video keep their own look.

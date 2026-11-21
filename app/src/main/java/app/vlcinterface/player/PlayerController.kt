@@ -326,6 +326,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         val rel = (16f * 100f / style.sizePct.coerceIn(50, 200)).toInt().coerceIn(4, 40)
         o += "--freetype-rel-fontsize=$rel"
         if (style.bold) o += "--freetype-bold"
+        // Text subtitle tracks inside the video (2026-11-21 16:12): their colour codes dropped. libVLC can only drop all
+        // their formatting together (italic / bold too); SSA / ASS tracks keep their own look.
+        o += "--no-subsdec-formatting"
         // Border, shadow and box, each set on its own (2026-11-21 16:05).
         o += "--freetype-outline-thickness=${style.outlineWidth.coerceIn(0, 10)}"
         o += "--freetype-outline-color=${style.outlineColor}"
