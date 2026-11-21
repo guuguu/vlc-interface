@@ -168,8 +168,11 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
             activity?.requestedOrientation = defaultOrientation()
         }
     }
-    LaunchedEffect(controls, touchTick, panel) {
-        if (controls && panel == Panel.NONE) { delay(4000); if (p.isPlaying) controls = false }
+    // Format analysis mode: every control stays on screen (also in the photos).
+    val analysing by FormatCheck.mode.collectAsState()
+    LaunchedEffect(analysing) { if (analysing) controls = true }
+    LaunchedEffect(controls, touchTick, panel, analysing) {
+        if (controls && panel == Panel.NONE && !analysing) { delay(4000); if (p.isPlaying) controls = false }
     }
     LaunchedEffect(toast) { if (toast.isNotEmpty()) { delay(900); toast = "" } }
     // Music never uses the video player: hand over to the music screen (also when a queue moves on to a song).
@@ -218,7 +221,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 modifier = viewMod.align(Alignment.Center).onSizeChanged { player.refreshSurface() },
                 onRelease = { /* the same view is reused by the next layout; detached when the screen closes */ })
             if (!inPip) GestureLayer(
-                onTap = { controls = !controls; touchTick++ },
+                onTap = { if (!analysing) controls = !controls; touchTick++ },
                 onSeek = { fwd -> val s = st.settings.doubleTapSeekSec * 1000L; player.seekBy(if (fwd) s else -s); toast = if (fwd) "+${st.settings.doubleTapSeekSec} s" else "−${st.settings.doubleTapSeekSec} s" },
                 // Long press on the picture: the video's details (replaces the old "hold for 2× speed").
                 onHold = { on -> if (on) showDetails = true },
@@ -251,19 +254,26 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     fun startCheck() {
         val a = activity ?: return
         if (checking) return
-        checking = true; controls = false; panel = Panel.NONE
+        checking = true; controls = true; panel = Panel.NONE
         checkScope.launch {
             val where = try {
                 FormatCheck.run(a, scales, { i -> scaleIdx = i; player.setScale(scales[i].first) }, scaleIdx)
             } catch (_: Throwable) { null }
             checking = false
-            ShortNote.show(if (where != null) "Format check saved: $where" else "Format check could not be saved")
+            ShortNote.show(if (where != null) "Format analysis saved: $where — upload that zip" else "Format analysis could not be saved")
         }
     }
-    if (showDetails) VideoDetailsDialog(onCheck = { showDetails = false; startCheck() }) { showDetails = false }
+    if (showDetails) VideoDetailsDialog { showDetails = false }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         video(if (fullscreen) Modifier.fillMaxSize() else if (videoPortrait) Modifier.safeDrawingPadding().fillMaxWidth().fillMaxHeight(0.667f)
             else Modifier.safeDrawingPadding().fillMaxWidth().aspectRatio(ratio))
+        // Analysis mode, not running yet: the button that starts it (and ✕ to leave the mode). Kept off the photos.
+        if (analysing && !checking && !inPip) Row(Modifier.align(Alignment.Center).clip(RoundedCornerShape(14.dp)).background(Color(0xD0000000)),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("Analyse ${FormatCheck.VIDEOS} videos", color = accent(), fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clickable { startCheck() }.padding(horizontal = 14.dp, vertical = 10.dp))
+            Text("✕", color = Color.White, fontSize = 15.sp, modifier = Modifier.clickable { FormatCheck.mode.value = false }.padding(horizontal = 12.dp, vertical = 10.dp))
+        }
         if (checkNote.isNotEmpty()) Text(checkNote, color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.TopCenter)
             .padding(top = 40.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xB0000000)).padding(horizontal = 10.dp, vertical = 5.dp))
         if (inPip) {
@@ -1069,7 +1079,7 @@ private fun PortraitSync(which: Int, p: PlayerState, onSwitch: (Int) -> Unit, on
  * Tags, Playback), label on the left, value on the right; refreshed every 2 s; tap a line to copy it.
  */
 @Composable
-private fun VideoDetailsDialog(onCheck: () -> Unit = {}, onDone: () -> Unit) {
+private fun VideoDetailsDialog(onDone: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var secs by remember { mutableStateOf(App.instance.player.videoDetails()) }
     LaunchedEffect(Unit) { while (true) { delay(2000); secs = App.instance.player.videoDetails() } }
@@ -1083,11 +1093,6 @@ private fun VideoDetailsDialog(onCheck: () -> Unit = {}, onDone: () -> Unit) {
         text = {
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("Tap a line to copy it.", color = C.muted, fontSize = 12.sp)
-                // Format check: shows the video in every format, upright and sideways, takes a photo of each and
-                // notes the sizes — one zip in Download/vlc_interface to hand over when a format looks wrong.
-                if (secs.isNotEmpty()) Text("Check picture formats (photos + sizes)", color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(vertical = 6.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, accent(), RoundedCornerShape(12.dp))
-                        .clickable { onCheck() }.padding(horizontal = 12.dp, vertical = 8.dp))
                 if (secs.isEmpty()) Text("No video playing.", color = C.text)
                 secs.forEach { (title, rows) ->
                     Text(title, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))

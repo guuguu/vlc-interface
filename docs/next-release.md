@@ -431,16 +431,21 @@
   flag — read from the country code kept with the favourite (e.g. "· ES") — or, when it has none, the globe turned to
   where the station's server is (looked up once per server, Europe while looking / when nothing is found).
 
-## Video format check (requested 2026-11-21 03:02)
-- Long press on a playing video → Video details → "Check picture formats (photos + sizes)". The player hides its
-  controls and shows the video in every format (Fit, Fill, Crop, 16:9, 4:3, 1:1), first in the current orientation,
-  then turned the other way (the phone's orientation setting and the chosen format are put back afterwards). A small
-  note on top says the step (kept out of the photos).
-- For each step: a photo of the screen with the real video picture in its place (Android doesn't include the video
-  layer in ordinary screenshots), outlined: red = the video view, green = the video surface libVLC draws on, yellow =
-  where the picture really is (the non-black part); and the numbers: screen size, the three boxes with their
-  shapes, the surface's buffer size, libVLC's track size, pixel aspect, orientation flag, the file's own rotation,
-  the Rotate button, the app's picture size, the format chosen and the one given to libVLC, libVLC's aspect ratio
-  and zoom, the decoder; and the shape seen against the expected one (≈ 0 % for Fit / 1:1).
-- Saved as one zip in Download/vlc_interface (vlc-interface-format-check_<date_time>.zip: report.txt + 12 photos),
-  to hand over so wrong proportions can be fixed from facts.
+## Video format analysis (requested 2026-11-21 03:02, procedure 03:05)
+- Settings → Logs → "Video format analysis" → Start: analysis mode on. Every control of the video player stays on
+  screen (no auto-hide, a tap doesn't hide them) so the photos show the whole screen as used, and an
+  "Analyse 5 videos" button (with ✕ to leave the mode) sits in the middle of the video player.
+- You open the right folder and start the first video yourself, then press "Analyse 5 videos". On that video and
+  the next 4 of its list, one after the other: every format (Fit, Fill, Crop, 16:9, 4:3, 1:1) in the current
+  orientation, then the phone turned the other way and every format again; each step photographed and measured.
+  A small note on top says the step (kept out of the photos).
+- Each photo: the screen with the real video picture in its place (ordinary screenshots leave the video black),
+  outlined: red = the video view, green = the surface libVLC draws on, yellow = where the picture really is (the
+  non-black part). Numbers per step: screen size, the three boxes and their shapes, the surface's buffer size,
+  libVLC's track size, pixel aspect, orientation flag, the file's own rotation, the Rotate button, the app's picture
+  size, the format chosen / given to libVLC, libVLC's aspect ratio and zoom, the decoder; and the shape seen against
+  the expected one (≈ 0 % for Fit / 1:1).
+- At the end everything is packed into one zip in Download/vlc_interface
+  (vlc-interface-format-analysis_<date_time>.zip: report.txt + up to 60 photos) to upload, and the player is reset
+  (03:05): back to the first video at the spot it was, playing or paused as it was, each video's own format and the
+  phone's orientation setting as before; analysis mode turns itself off.

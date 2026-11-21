@@ -912,6 +912,16 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         }
                     }
                 }
+                // Video format analysis: turns the mode on; the rest happens on the video player.
+                val anal by app.vlcinterface.ui.FormatCheck.mode.collectAsState()
+                CardBox {
+                    ValueRow("Video format analysis", "Keeps every video control on screen and adds \"Analyse ${app.vlcinterface.ui.FormatCheck.VIDEOS} videos\" on the player. " +
+                        "Open the folder, start the first video, press it: each of ${app.vlcinterface.ui.FormatCheck.VIDEOS} videos is shown in every format, upright and " +
+                        "sideways, photographed and measured — one zip in Download/vlc_interface to upload", if (anal) "On" else "Start") {
+                        app.vlcinterface.ui.FormatCheck.mode.value = !anal
+                        ShortNote.show(if (!anal) "Analysis mode on: open the video folder, start the first video, then press \"Analyse ${app.vlcinterface.ui.FormatCheck.VIDEOS} videos\"" else "Analysis mode off")
+                    }
+                }
             }
             CardBox {
                 ValueRow("All errors", "Every failure from every log, newest first", "Open") { nav.go(Screen.LogView("errors")) }; Divider()
