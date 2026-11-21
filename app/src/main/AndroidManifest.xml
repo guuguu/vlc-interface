@@ -200,13 +200,5 @@
             android:name=".sources.RgScanService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
-            <!-- Logs and reports shared as files (2026-11-21 23:38): a log too long for a share message goes as a .txt file. -->
-        <provider
-            android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.share"
-            android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/share_paths" />
-        </provider>
     </application>
 </manifest>

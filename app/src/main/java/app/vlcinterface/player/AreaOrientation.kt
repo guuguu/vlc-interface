@@ -30,14 +30,6 @@ class AreaOrientationContext(base: Context) : ContextWrapper(base) {
 
     override fun getResources(): Resources = res
 
-    // libVLC creates its video surfaces with the layout inflater: a plain wrapper hands out the activity's inflater, so
-    // the surfaces were made with the activity's context (portrait) and this orientation was never seen (23:42). The
-    // inflater is cloned for this context, so every view libVLC inflates inside the video view reads it.
-    private var inflater: android.view.LayoutInflater? = null
-    override fun getSystemService(name: String): Any? {
-        if (name == Context.LAYOUT_INFLATER_SERVICE) {
-            return inflater ?: android.view.LayoutInflater.from(baseContext).cloneInContext(this).also { inflater = it }
-        }
-        return super.getSystemService(name)
-    }
+    // (1.72 also handed libVLC its own layout inflater here; removed in 1.73 while the start-up crash of 1.72 was
+    // found — the picture size is made right by the size check's backstop in PlayerController.)
 }

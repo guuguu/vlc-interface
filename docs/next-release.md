@@ -1154,3 +1154,10 @@
 - **Why 1.70's fix didn't take effect:** libVLC creates its video surfaces with the layout inflater, and the wrapper handed out the activity's own inflater. So the surfaces were made with the activity's context (portrait), and the shape-based orientation was never seen. The picture was still sized for a swapped area (608 × 342 in a 1080-wide place).
 - **Fixed:** the wrapper now gives its own inflater, so every view libVLC makes inside the video view reads the orientation that follows the view's shape.
 - **Backstop:** if the picture is still smaller than its format calls for in both directions after two re-applies, the app gives the surfaces that size itself, centred, and their frame the whole video view. Only that "drawn small" case is touched (Fill, Crop and the colour-filter display path are left alone). libVLC re-sizes only when its frame changes, so nothing jumps back and forth.
+
+# After 1.72.0
+
+## 1.72.0 crashed at start (reported 2026-11-21 23:48)
+- **The two 1.72 changes that can run as the app opens are removed,** so the start is the same as 1.71's (which started fine):
+  - The file-sharing component added to the manifest for log sharing. It checked out correct in the built APK, but it was the only new piece Android loads at start. Logs are now shared by saving the .txt into Download/vlc_interface (like "Collect error logs") and sharing that file; the selection and the app picker stay the same.
+  - The layout inflater handed to libVLC's video view. The upright picture size is made right by the size check's backstop instead, which stays.

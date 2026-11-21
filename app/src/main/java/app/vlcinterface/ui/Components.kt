@@ -1254,11 +1254,16 @@ fun detailsText(title: String, sections: List<Pair<String, List<Pair<String, Str
  * and nothing happened). Android's app picker opens; the text itself also goes in the message when it's short.
  */
 fun shareTextFile(ctx: android.content.Context, fileName: String, text: String, chooserTitle: String) {
+    // Saved in Download/vlc_interface (the app's own file there, like "Collect error logs") and shared from it — no file
+    // provider in the app (1.73). Android's app picker opens; short texts also go in the message.
     try {
-        val dir = java.io.File(ctx.cacheDir, "share").apply { mkdirs() }
-        dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000L }?.forEach { it.delete() }
-        val f = java.io.File(dir, fileName).apply { writeText(text) }
-        val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".share", f)
+        val cv = android.content.ContentValues().apply {
+            put(android.provider.MediaStore.Downloads.DISPLAY_NAME, fileName)
+            put(android.provider.MediaStore.Downloads.MIME_TYPE, "text/plain")
+            put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/vlc_interface")
+        }
+        val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw Exception("Download folder not available")
+        ctx.contentResolver.openOutputStream(uri)?.use { it.write(text.toByteArray()) } ?: throw Exception("can't write the file")
         val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
             .putExtra(android.content.Intent.EXTRA_SUBJECT, fileName)
             .putExtra(android.content.Intent.EXTRA_STREAM, uri)
