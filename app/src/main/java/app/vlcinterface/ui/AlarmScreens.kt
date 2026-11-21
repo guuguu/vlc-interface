@@ -146,7 +146,7 @@ fun AlarmRow(nav: Navigator, al: Alarm, k: Float, guard: (() -> Unit) -> Unit = 
         WideSwitch(al.on, height0 = (14 + 12 * (k - 0.5f) * 2).dp, holdMs = 1000L, tapNote = "Hold 1 s to switch this alarm") { on -> guard {
             Alarms.put(al.copy(on = on))
             val what = listOf(al.timeText, Alarm.daysText(al.days).takeIf { al.mode == "weekly" && al.days != 0 } ?: "", al.name).filter { it.isNotEmpty() }.joinToString(" ")
-            ShortNote.show(if (on) "$what will ring" else "$what won't ring")
+            if (on) AlarmSetNote.show(al.copy(on = true)) else ShortNote.show("$what won't ring")
         } }
     }
 }
@@ -198,7 +198,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     var deleted by remember(id) { mutableStateOf(false) }
     val latest by androidx.compose.runtime.rememberUpdatedState(a)
     val gone by androidx.compose.runtime.rememberUpdatedState(deleted)
-    androidx.compose.runtime.DisposableEffect(id) { onDispose { if (!gone && latest != start) Alarms.put(latest) } }
+    androidx.compose.runtime.DisposableEffect(id) { onDispose { if (!gone && latest != start) { Alarms.put(latest); if (latest.on) AlarmSetNote.show(latest) } } }
     var timeAsk by remember { mutableStateOf(false) }
     var dateAsk by remember { mutableStateOf(false) }
     var datesAsk by remember { mutableStateOf(false) }
@@ -1120,10 +1120,7 @@ private fun AlarmHistory(nav: Navigator) {
                         // The next time the clock shows its time: today if still ahead, else tomorrow.
                         val re = al.copy(on = true, used = 0L, date = "", dates = emptyList(), mode = "once")
                         Alarms.put(re)
-                        val at = app.vlcinterface.alarm.AlarmScheduler.nextTime(re)
-                        val today = java.util.Calendar.getInstance(Alarms.zone()).get(java.util.Calendar.DAY_OF_YEAR)
-                        val day = java.util.Calendar.getInstance(Alarms.zone()).apply { timeInMillis = at }.get(java.util.Calendar.DAY_OF_YEAR)
-                        ShortNote.show("${al.timeText} will ring " + if (day == today) "today" else "tomorrow")
+                        AlarmSetNote.show(re)
                     }
                 })
                 Text("✕", color = C.bad, fontSize = SYM, modifier = Modifier.clickable {
@@ -1134,3 +1131,52 @@ private fun AlarmHistory(nav: Navigator) {
     }
 }
 
+
+
+/** Short pop-up at the top of the page whenever an alarm is set: its time, the day it rings next and its sound. */
+object AlarmSetNote {
+    var alarm by mutableStateOf<Alarm?>(null)
+    var stamp by androidx.compose.runtime.mutableLongStateOf(0L)
+    fun show(a: Alarm) {
+        alarm = a
+        stamp = System.currentTimeMillis()
+    }
+}
+
+@Composable
+fun AlarmSetNoteHost(modifier: Modifier) {
+    val a = AlarmSetNote.alarm ?: return
+    val st = AlarmSetNote.stamp
+    val sec = app.vlcinterface.App.instance.store.state.collectAsState().value.settings.shortPopupSec.coerceAtLeast(4)
+    androidx.compose.runtime.LaunchedEffect(st) { kotlinx.coroutines.delay(sec * 1000L); if (AlarmSetNote.stamp == st) AlarmSetNote.alarm = null }
+    val z = Alarms.zone()
+    val at = app.vlcinterface.alarm.AlarmScheduler.nextTime(a)
+    val cal = java.util.Calendar.getInstance(z).apply { timeInMillis = at }
+    val now = java.util.Calendar.getInstance(z)
+    val dayFmt = java.text.SimpleDateFormat("EEE d MMM", java.util.Locale.getDefault()).apply { timeZone = z }
+    val rel = when {
+        at <= 0L -> ""
+        cal.get(java.util.Calendar.YEAR) == now.get(java.util.Calendar.YEAR) && cal.get(java.util.Calendar.DAY_OF_YEAR) == now.get(java.util.Calendar.DAY_OF_YEAR) -> "Today, "
+        else -> now.apply { add(java.util.Calendar.DAY_OF_YEAR, 1) }.let {
+            if (cal.get(java.util.Calendar.YEAR) == it.get(java.util.Calendar.YEAR) && cal.get(java.util.Calendar.DAY_OF_YEAR) == it.get(java.util.Calendar.DAY_OF_YEAR)) "Tomorrow, " else ""
+        }
+    }
+    val dateLine = if (at <= 0L) "No date left to ring" else rel + dayFmt.format(java.util.Date(at)) +
+        (if (a.mode == "weekly" && a.days != 0) " · " + Alarm.daysText(a.days) else if (a.mode == "dates" && a.dates.size > 1) " · ${a.dates.size} dates" else "")
+    val sound = when (a.source) {
+        "radio" -> "Radio" + (a.stationName.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: "")
+        "tone" -> "Alarm sound"
+        else -> "Phone music"
+    }
+    val acc = accent()
+    Box(modifier.padding(top = 56.dp, start = 20.dp, end = 20.dp).clip(RoundedCornerShape(18.dp))
+        .background(Color(0xF02A2E35)).border(1.dp, acc, RoundedCornerShape(18.dp))
+        .clickable { AlarmSetNote.alarm = null }.padding(horizontal = 18.dp, vertical = 10.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("⏰  Alarm set · ${a.timeText}" + (a.name.takeIf { it.isNotEmpty() }?.let { " · $it" } ?: ""), color = acc, fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(dateLine, color = C.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Sound: $sound", color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}

@@ -617,6 +617,11 @@
 - Switch on in History (12:47): the alarm is set for the next time the clock shows its time — today if that time
   is still ahead, otherwise tomorrow — as a one-time alarm (its old date / dates are dropped); a short note says
   "06:30 will ring today" / "… tomorrow".
+- Confirmation at the top of the page whenever an alarm is set (12:49): switched on in History, switched on in
+  front of the player, or saved on leaving the alarm page (when on). A short pop-up (the short pop-up time, at least
+  4 s; tap to close): "⏰ Alarm set · 06:30 · <name>", the day it rings next ("Today, Sat 21 Nov" / "Tomorrow, …" /
+  the date; weekly alarms add their days, specific dates how many), and "Sound: Radio · <station>" / "Phone music" /
+  "Alarm sound".
 - Alarms switched off by hand before ringing stay in front of the player as before.
 
 ## Open SHOUTcast / Icecast links (requested 2026-11-21 12:34)
