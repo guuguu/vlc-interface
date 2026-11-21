@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -1013,6 +1014,19 @@ private fun DownloadPanel(p: PlayerState, onBack: () -> Unit) {
 
 private val fonts = listOf("sans-serif" to "Roboto", "sans-serif-condensed" to "Condensed", "sans-serif-medium" to "Medium", "serif" to "Noto Serif", "monospace" to "Mono")
 private val colors = listOf(0xFFFFFF to "White", 0xFFE14D to "Yellow", 0xC9CCD2 to "Light grey", 0x5CE1E6 to "Cyan", 0x7BD88F to "Green")
+/** Colours for the subtitles' border and shadow. */
+private val EDGE_COLOURS = listOf(0x000000, 0x404040, 0x808080, 0xFFFFFF, 0x1E3A8A, 0x7F1D1D)
+
+/** A row of round colour swatches, the chosen one ringed. */
+@Composable
+private fun SubColours(list: List<Int>, selected: Int, onPick: (Int) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        list.forEach { c ->
+            Box(Modifier.size(34.dp).clip(CircleShape).background(Color(0xFF000000 or c.toLong()))
+                .border(if (selected == c) 3.dp else 1.dp, if (selected == c) accent() else C.line, CircleShape).clickable { onPick(c) })
+        }
+    }
+}
 
 @Composable
 private fun StylePanel(onBack: () -> Unit) {
@@ -1027,41 +1041,70 @@ private fun StylePanel(onBack: () -> Unit) {
             Grow()
             Pill("Reset") { set(SubStyle()) }
         }
-        // Live preview of the chosen look.
-        Box(Modifier.fillMaxWidth().height(70.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF2B3A4A)), contentAlignment = if (s.position == "top") Alignment.TopCenter else Alignment.BottomCenter) {
-            Text("Subtitle preview line", color = Color(0xFF000000 or s.color.toLong()), fontSize = (18 * s.sizePct / 100f).sp,
-                fontWeight = if (s.bold) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center,
-                fontFamily = when (s.font) { "serif" -> FontFamily.Serif; "monospace" -> FontFamily.Monospace; else -> FontFamily.SansSerif },
-                modifier = Modifier.padding(8.dp).then(if (s.edges == "box") Modifier.background(Color(0xA0000000)).padding(horizontal = 6.dp) else Modifier))
+        // Live preview of the chosen look (2026-11-21 16:05): a picture with the line at its height, border and shadow.
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF2B3A4A))) {
+            val fam = when (s.font) { "serif" -> FontFamily.Serif; "monospace" -> FontFamily.Monospace; else -> FontFamily.SansSerif }
+            val fs = (16 * s.sizePct / 100f).sp
+            val wt = if (s.bold) FontWeight.Bold else FontWeight.Medium
+            val line = "Subtitle preview line"
+            val up = maxHeight * (0.03f + 0.09f * (s.posStep - 1))
+            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = up).then(if (s.box) Modifier.background(Color(0xA0000000)).padding(horizontal = 6.dp) else Modifier)) {
+                if (s.shadowWidth > 0) {
+                    val d = s.shadowWidth * 0.6f
+                    val rad = Math.toRadians(s.shadowAngle.toDouble())
+                    Text(line, color = Color(0xFF000000 or s.shadowColor.toLong()).copy(alpha = (100 - s.shadowTransp) / 100f), fontSize = fs, fontWeight = wt, fontFamily = fam,
+                        modifier = Modifier.offset(x = (d * kotlin.math.cos(rad)).dp, y = (-d * kotlin.math.sin(rad)).dp))
+                }
+                if (s.outlineWidth > 0) Text(line, color = Color(0xFF000000 or s.outlineColor.toLong()), fontSize = fs, fontWeight = wt, fontFamily = fam,
+                    style = androidx.compose.ui.text.TextStyle(drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = s.outlineWidth * 1.6f,
+                        join = androidx.compose.ui.graphics.StrokeJoin.Round)))
+                Text(line, color = Color(0xFF000000 or s.color.toLong()), fontSize = fs, fontWeight = wt, fontFamily = fam)
+            }
         }
         Text("Font", color = C.muted, fontSize = 13.sp)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             fonts.forEach { (f, l) -> Pill(l, selected = s.font == f) { set(s.copy(font = f)) } }
         }
-        Text("Size ${s.sizePct}%", color = C.muted, fontSize = 13.sp)
+        // Font size.
+        Text("Font size · ${s.sizePct}%", color = C.muted, fontSize = 13.sp)
         Row(verticalAlignment = Alignment.CenterVertically) {
             Slider(s.sizePct.toFloat(), { set(s.copy(sizePct = it.toInt())) }, valueRange = 50f..200f, steps = 14, modifier = Modifier.weight(1f),
                 colors = SliderDefaults.colors(activeTrackColor = accent(), thumbColor = Color.White))
             Pill("Bold", selected = s.bold, modifier = Modifier.padding(start = 8.dp)) { set(s.copy(bold = !s.bold)) }
         }
-        Text("Colour", color = C.muted, fontSize = 13.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            colors.forEach { (c, _) ->
-                Box(Modifier.size(36.dp).clip(CircleShape).background(Color(0xFF000000 or c.toLong()))
-                    .border(if (s.color == c) 3.dp else 1.dp, if (s.color == c) accent() else C.line, CircleShape).clickable { set(s.copy(color = c)) })
+        // Font colour.
+        Text("Font colour", color = C.muted, fontSize = 13.sp)
+        SubColours(colors.map { it.first }, s.color) { set(s.copy(color = it)) }
+        // Font border: colour and width.
+        Text("Font border · width ${if (s.outlineWidth == 0) "none" else s.outlineWidth.toString()}", color = C.muted, fontSize = 13.sp)
+        SubColours(EDGE_COLOURS, s.outlineColor) { set(s.copy(outlineColor = it)) }
+        Slider(s.outlineWidth.toFloat(), { set(s.copy(outlineWidth = Math.round(it))) }, valueRange = 0f..10f, steps = 9,
+            colors = SliderDefaults.colors(activeTrackColor = accent(), thumbColor = Color.White))
+        // Font shadow: colour, width, direction, transparency.
+        Text("Font shadow · width ${if (s.shadowWidth == 0) "none" else s.shadowWidth.toString()}", color = C.muted, fontSize = 13.sp)
+        SubColours(EDGE_COLOURS, s.shadowColor) { set(s.copy(shadowColor = it)) }
+        Slider(s.shadowWidth.toFloat(), { set(s.copy(shadowWidth = Math.round(it))) }, valueRange = 0f..10f, steps = 9,
+            colors = SliderDefaults.colors(activeTrackColor = accent(), thumbColor = Color.White))
+        if (s.shadowWidth > 0) {
+            Text("Shadow direction", color = C.muted, fontSize = 13.sp)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(315 to "↘", 270 to "↓", 225 to "↙", 180 to "←", 135 to "↖", 90 to "↑", 45 to "↗", 0 to "→").forEach { (deg, l) ->
+                    Pill(l, selected = s.shadowAngle == deg) { set(s.copy(shadowAngle = deg)) }
+                }
             }
-        }
-        Text("Edges", color = C.muted, fontSize = 13.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("outline" to "Outline", "shadow" to "Shadow", "box" to "Dark box", "none" to "None").forEach { (k, l) -> Pill(l, selected = s.edges == k) { set(s.copy(edges = k)) } }
-        }
-        Text("Position · ${s.edgePct}% from edge", color = C.muted, fontSize = 13.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Pill("Bottom", selected = s.position == "bottom") { set(s.copy(position = "bottom")) }
-            Pill("Top", selected = s.position == "top") { set(s.copy(position = "top")) }
-            Slider(s.edgePct.toFloat(), { set(s.copy(edgePct = it.toInt())) }, valueRange = 0f..40f, modifier = Modifier.weight(1f).padding(start = 8.dp),
+            Text("Shadow transparency · ${s.shadowTransp}%", color = C.muted, fontSize = 13.sp)
+            Slider(s.shadowTransp.toFloat(), { set(s.copy(shadowTransp = (Math.round(it / 5f) * 5).coerceIn(0, 100))) }, valueRange = 0f..100f, steps = 19,
                 colors = SliderDefaults.colors(activeTrackColor = accent(), thumbColor = Color.White))
         }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Dark box behind the text", color = C.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            AppSwitch(s.box, { set(s.copy(box = it)) })
+        }
+        // Position on the picture: 10 steps from the bottom up.
+        Text("Position on the picture · ${s.posStep} of 10 (1 = bottom, 10 = top)", color = C.muted, fontSize = 13.sp)
+        Slider(s.posStep.toFloat(), { set(s.copy(posStep = Math.round(it).coerceIn(1, 10))) }, valueRange = 1f..10f, steps = 8,
+            colors = SliderDefaults.colors(activeTrackColor = accent(), thumbColor = Color.White))
+        Text("Long lines are split by the player to the picture's width; every line stays on the picture.", color = C.muted, fontSize = 12.sp)
         Pill("Apply to video", filled = true) { App.instance.player.applyStyle() }
         Text("Applies to all videos. The video reloads for a moment at the same position. Styled (ASS) subtitles keep their own look.", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
     }

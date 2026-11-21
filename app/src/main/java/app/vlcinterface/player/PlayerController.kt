@@ -326,15 +326,24 @@ class PlayerController(private val context: Context, private val store: Store) {
         val rel = (16f * 100f / style.sizePct.coerceIn(50, 200)).toInt().coerceIn(4, 40)
         o += "--freetype-rel-fontsize=$rel"
         if (style.bold) o += "--freetype-bold"
-        when (style.edges) {
-            "outline" -> { o += "--freetype-outline-thickness=4"; o += "--freetype-shadow-opacity=0" }
-            "shadow" -> { o += "--freetype-outline-thickness=0"; o += "--freetype-shadow-opacity=200" }
-            "box" -> { o += "--freetype-outline-thickness=0"; o += "--freetype-background-opacity=160"; o += "--freetype-background-color=0" }
-            else -> { o += "--freetype-outline-thickness=0"; o += "--freetype-shadow-opacity=0" }
-        }
+        // Border, shadow and box, each set on its own (2026-11-21 16:05).
+        o += "--freetype-outline-thickness=${style.outlineWidth.coerceIn(0, 10)}"
+        o += "--freetype-outline-color=${style.outlineColor}"
+        o += "--freetype-outline-opacity=255"
+        if (style.shadowWidth > 0) {
+            o += "--freetype-shadow-color=${style.shadowColor}"
+            o += "--freetype-shadow-opacity=${(255 * (100 - style.shadowTransp.coerceIn(0, 100)) / 100)}"
+            // libVLC: angle in degrees (0 = right, counter-clockwise), distance as a part of the font size.
+            o += "--freetype-shadow-angle=${style.shadowAngle.toFloat()}"
+            o += "--freetype-shadow-distance=${String.format(java.util.Locale.US, "%.2f", style.shadowWidth.coerceIn(0, 10) * 0.02f)}"
+        } else o += "--freetype-shadow-opacity=0"
+        if (style.box) { o += "--freetype-background-opacity=160"; o += "--freetype-background-color=0" }
+        else o += "--freetype-background-opacity=0"
+        // Height in 10 steps: 1 = bottom … 10 = about 81 % up the picture. Long lines are wrapped by libVLC to the
+        // picture's width and the whole block (all its lines) is kept inside the picture.
         val dm = context.resources.displayMetrics
         val h = dm.heightPixels.coerceAtMost(dm.widthPixels)
-        val margin = if (style.position == "top") (h * (88 - style.edgePct) / 100) else (h * style.edgePct / 100)
+        val margin = (h * 0.02f + h * 0.09f * (style.posStep.coerceIn(1, 10) - 1)).toInt()
         o += "--sub-margin=$margin"
         return o
     }

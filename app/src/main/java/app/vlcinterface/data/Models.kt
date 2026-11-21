@@ -100,19 +100,49 @@ data class SubStyle(
     val sizePct: Int = 100,
     val bold: Boolean = false,
     val color: Int = 0xFFFFFF,
-    val edges: String = "outline", // outline, shadow, box, none
-    val position: String = "bottom", // bottom, top
+    /** Old look choice (outline / shadow / box / none): only read to start the new settings from it. */
+    val edges: String = "outline",
+    val position: String = "bottom",
     val edgePct: Int = 8,
+    /** Border round the letters (2026-11-21 16:05): colour (RGB) and width 0 (none) … 10. */
+    val outlineColor: Int = 0x000000,
+    val outlineWidth: Int = 4,
+    /** Shadow: colour, width (how far it falls, 0 = none … 10), direction (degrees: 0 right, 90 up, 270 down …),
+     *  transparency 0 (solid) … 100 % (invisible). */
+    val shadowColor: Int = 0x000000,
+    val shadowWidth: Int = 0,
+    val shadowAngle: Int = 315,
+    val shadowTransp: Int = 30,
+    /** Dark box behind the text. */
+    val box: Boolean = false,
+    /** Height on the picture: 1 = at the bottom … 10 = near the top, in 10 equal steps. */
+    val posStep: Int = 1,
 ) {
     fun toJson(): JSONObject = JSONObject().put("font", font).put("sizePct", sizePct).put("bold", bold)
         .put("color", color).put("edges", edges).put("position", position).put("edgePct", edgePct)
+        .put("outlineColor", outlineColor).put("outlineWidth", outlineWidth).put("shadowColor", shadowColor)
+        .put("shadowWidth", shadowWidth).put("shadowAngle", shadowAngle).put("shadowTransp", shadowTransp)
+        .put("box", box).put("posStep", posStep).put("v2", true)
 
     companion object {
-        fun fromJson(o: JSONObject?) = if (o == null) SubStyle() else SubStyle(
-            o.optString("font", "sans-serif"), o.optInt("sizePct", 100), o.optBoolean("bold"),
-            o.optInt("color", 0xFFFFFF), o.optString("edges", "outline"),
-            o.optString("position", "bottom"), o.optInt("edgePct", 8)
-        )
+        fun fromJson(o: JSONObject?): SubStyle {
+            if (o == null) return SubStyle()
+            val edges = o.optString("edges", "outline")
+            val position = o.optString("position", "bottom")
+            val edgePct = o.optInt("edgePct", 8)
+            val v2 = o.optBoolean("v2", false)
+            // Saved before the detailed settings: started from the old choice.
+            val oldStep = if (position == "top") 10 else (edgePct / 9 + 1).coerceIn(1, 10)
+            return SubStyle(
+                o.optString("font", "sans-serif"), o.optInt("sizePct", 100), o.optBoolean("bold"),
+                o.optInt("color", 0xFFFFFF), edges, position, edgePct,
+                o.optInt("outlineColor", 0x000000), if (v2) o.optInt("outlineWidth", 4) else if (edges == "outline") 4 else 0,
+                o.optInt("shadowColor", 0x000000), if (v2) o.optInt("shadowWidth", 0) else if (edges == "shadow") 3 else 0,
+                o.optInt("shadowAngle", 315), o.optInt("shadowTransp", 30),
+                if (v2) o.optBoolean("box", false) else edges == "box",
+                if (v2) o.optInt("posStep", 1).coerceIn(1, 10) else oldStep,
+            )
+        }
     }
 }
 

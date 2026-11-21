@@ -762,3 +762,18 @@
 - Used for: the song / radio player header (both upright rows and the sideways row), the video player header (both
   rows), the video player's sideways top row (was scrolling sideways), the play row under the upright video. The song
   player's control buttons already shrank this way; the button groups under the video wrap onto more lines.
+
+## Subtitle look: full settings (requested 2026-11-21 16:05)
+- Video player → Subs/Sync → "Aa Style" now has, each with a live preview (a picture with the line drawn at its
+  height, with border and shadow):
+  - Font (as before) and Font size 50–200 % (+ Bold);
+  - Font colour (white, yellow, light grey, cyan, green);
+  - Font border: colour (black, dark grey, grey, white, dark blue, dark red) and width 0 (none) … 10;
+  - Font shadow: colour (same choices), width 0 (none) … 10 (how far it falls), direction (8 arrows ↘ ↓ ↙ ← ↖ ↑ ↗ →)
+    and transparency 0–100 %;
+  - Dark box behind the text (switch);
+  - Position on the picture in 10 steps, 1 = bottom … 10 = near the top.
+- Long subtitle lines: libVLC already splits them to the picture's width and keeps every line of the block on the
+  picture (the block grows upward from the chosen height).
+- "Apply to video" as before (the video reopens at the same spot). Settings saved before keep their look (outline →
+  border 4, shadow → shadow 3, dark box → box, old position → nearest step). Export / import carries them.
