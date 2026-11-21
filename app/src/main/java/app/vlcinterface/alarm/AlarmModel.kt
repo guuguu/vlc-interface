@@ -43,6 +43,10 @@ data class Alarm(
     val localFallback: Boolean = true,
     /** When a one-time alarm rang (or its last date passed): it's then only in the alarm history (0 = not used up). */
     val used: Long = 0L,
+    /** Vibrate while ringing, for this alarm (wins over the alarm clock settings); null = as in those settings. */
+    val vibrate: Boolean? = null,
+    /** Light blinking for this alarm: "off" / "notif" / "flash" (wins over the alarm clock settings); null = as in those settings. */
+    val led: String? = null,
 ) {
     /** Used up: rang once (or its dates are over) and not switched on again — shown in History, not in front of the player. */
     val inHistory: Boolean get() = used > 0L && !on
@@ -51,6 +55,7 @@ data class Alarm(
         .put("days", days).put("date", date).put("mode", mode).put("dates", JSONArray(dates)).put("source", source).put("playlistId", playlistId).put("stationUrl", stationUrl).put("stationName", stationName).put("fallbackUrl", fallbackUrl).put("fallbackName", fallbackName)
         .put("volStart", volStart).put("volTarget", volTarget).put("fadeSec", fadeSec).put("maxSnoozes", maxSnoozes)
         .put("stopAfterMin", stopAfterMin).put("output", output).put("localFallback", localFallback).put("used", used)
+        .apply { vibrate?.let { put("vibrate", it) }; led?.let { put("led", it) } }
 
     val timeText: String get() = "%02d:%02d".format(hour, minute)
 
@@ -61,7 +66,9 @@ data class Alarm(
             o.optJSONArray("dates")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(), o.optString("source", "local").let { if (it == "radio" || it == "tone") it else "local" }, o.optString("playlistId"),
             o.optString("stationUrl"), o.optString("stationName"), o.optString("fallbackUrl"), o.optString("fallbackName"), o.optInt("volStart", 10), o.optInt("volTarget", 60),
             o.optInt("fadeSec", 60), o.optInt("maxSnoozes", 3), o.optInt("stopAfterMin", 30), o.optString("output"),
-            o.optBoolean("localFallback", true), o.optLong("used", 0L))
+            o.optBoolean("localFallback", true), o.optLong("used", 0L),
+            if (o.has("vibrate")) o.optBoolean("vibrate", true) else null,
+            o.optString("led").takeIf { it in listOf("off", "notif", "flash") })
 
         private val DAY = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
         /** Days, with the date when there is one ("Thu 4 Dec" / "Mon–Fri from 4 Dec"). */

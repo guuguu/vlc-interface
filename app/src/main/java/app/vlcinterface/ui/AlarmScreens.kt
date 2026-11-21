@@ -322,6 +322,12 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                 if (a.volTarget > maxL || a.volStart > maxL) Text("Capped at $maxL % (maximum level in the alarm clock settings)", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp))
                 Label("Fade-in time")
                 Choices(listOf(0, 30, 60, 120, 300, 600).map { minText(it) to it }, a.fadeSec) { a = a.copy(fadeSec = it) }
+                Divider()
+                // This alarm's own choice wins over the alarm clock settings' Vibrate (kept with the alarm).
+                HToggleRow("Vibrate (this alarm)", "", a.vibrate ?: Alarms.current.global.vibrate) { a = a.copy(vibrate = it) }
+                Divider()
+                Label("Light blinking (this alarm)")
+                Choices(listOf("Off" to "off", "Notification light" to "notif", "Flash light" to "flash"), a.led ?: Alarms.current.global.led) { a = a.copy(led = it) }
             }
             SectionTitle("Snooze and stop")
             CardBox {
@@ -439,8 +445,8 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
                 Divider()
                 HValueRow("Music folder", "Phone music played by the alarms (with its subfolders)" + if (g.localRoot.isEmpty()) " — not chosen, the current one is used" else "", musicRootText(g)) { rootAsk = true }
                 Divider()
-                HToggleRow("Vibrate", "", g.vibrate) { set(g.copy(vibrate = it)) }; Divider()
-                Label("Light blinking")
+                HToggleRow("Vibrate (default)", "", g.vibrate) { set(g.copy(vibrate = it)) }; Divider()
+                Label("Light blinking (default)")
                 Choices(listOf("Off" to "off", "Notification light" to "notif", "Flash light" to "flash"), g.led) { set(g.copy(led = it)) }
                 Divider()
                 Label("Crescendo", "How the volume rises from start to target")
@@ -663,8 +669,10 @@ private val HELP: Map<String, String> = mapOf(
     "City" to "The clock, the alarm times and the weather follow this city, also when the phone's time zone isn't automatic. Not chosen: the phone's time zone.",
     "Weather on the clock" to "A small icon (sunny, cloudy, rainy, storm) with the city's short name and time zone, refreshed every 30 min from Open-Meteo.",
     "Maximum level" to "No alarm ever goes above this volume: not the target, not the ring after the wake check, not the alarm sound.",
-    "Vibrate" to "The phone vibrates while the alarm rings.",
-    "Light blinking" to "Notification light (phones that have one) or the camera's flash light blinking while the alarm rings.",
+    "Vibrate (default)" to "The phone vibrates while an alarm rings — for alarms that have no Vibrate choice of their own. An alarm's own Vibrate (on its page, under Volume) always wins.",
+    "Vibrate (this alarm)" to "Vibrate while this alarm rings. Kept with this alarm and used instead of the alarm clock settings' Vibrate.",
+    "Light blinking (default)" to "Notification light (phones that have one) or the camera's flash light blinking while an alarm rings — for alarms that have no light choice of their own. An alarm's own choice (on its page, under Volume) always wins.",
+    "Light blinking (this alarm)" to "Notification light (phones that have one) or the camera's flash light blinking while this alarm rings. Kept with this alarm and used instead of the alarm clock settings' choice.",
     "Crescendo" to "How the volume rises: steady, gentle (slow at first) or quick (fast at first).",
     "Snooze buttons" to "The times of the 3 snooze buttons on the ringing screen.",
     "Button 1" to "Snooze time of the first button.", "Button 2" to "Snooze time of the second button.", "Button 3" to "Snooze time of the third button.",

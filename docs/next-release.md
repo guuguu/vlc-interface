@@ -646,3 +646,11 @@
 ## Full-screen visualisation: "Double tap to exit" (requested 2026-11-21 12:42)
 - Opening the visualisation full screen shows a short pop-up in the middle, in big letters on two rows: "To exit back to application, / double tap anywhere." (12:44)
   (dark rounded box, fades away after about 2.5 s). A double tap anywhere closes the full screen, as before.
+
+## Vibration and lights per alarm (requested 2026-11-21 12:50 / 12:51)
+- Each alarm's page, under Volume: "Vibrate (this alarm)" (switch) and "Light blinking (this alarm)" (Off /
+  Notification light / Flash light). Kept with the alarm and used instead of the alarm clock settings when it rings.
+- Alarm clock settings → Ringing: renamed "Vibrate (default)" and "Light blinking (default)" — used only by alarms
+  that have no choice of their own (alarms from before this version, until changed on their page). A new alarm
+  starts from the last alarm set, these two included.
+- Text helpers on both (hold the setting).
