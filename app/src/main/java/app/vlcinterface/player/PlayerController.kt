@@ -2162,12 +2162,33 @@ class PlayerController(private val context: Context, private val store: Store) {
         val v = own ?: sess ?: old ?: 0L
         audioSyncFrom = when { own != null -> "this video on this device"; sess != null -> "this session"; old != null -> "saved earlier"; else -> "" }
         setAudioDelay(v)
+        // Carried over from the session (2026-11-21 12:21): if the video runs fine with it — not changed after 30 s of
+        // playing, or played to its end before that — the value is kept for this video on this device too.
+        if (own == null && sess != null) {
+            adoptSync = Triple(item.uri, currentOutputName, v)
+            main.postDelayed({ adoptSessionSync() }, 30_000)
+        } else adoptSync = null
+    }
+
+    /** The session value a video started with, waiting to be kept for it: uri, device, value. */
+    @Volatile private var adoptSync: Triple<String, String, Long>? = null
+
+    /** Keeps the session value for the video that ran fine with it (same video, same device, value not changed). */
+    private fun adoptSessionSync() {
+        val (uri, dev, v) = adoptSync ?: return
+        val s = _state.value
+        if (s.item?.uri != uri || currentOutputName != dev || s.audioDelayMs != v) { if (s.item?.uri != uri) adoptSync = null; return }
+        adoptSync = null
+        val key = "dev:$dev|file:$uri"
+        if (store.current.audioOffsets[key] == null) store.update { st -> st.copy(audioOffsets = st.audioOffsets + (key to v)) }
+        audioSyncFrom = "this video on this device"
     }
 
     /** Sets the sync of the playing video and keeps it for this device + this video, and for this session. */
     fun setAudioSync(ms: Long, save: Boolean) {
         val item = _state.value.item ?: return
         setAudioDelay(ms)
+        adoptSync = null                                   // changed by hand: its own value is saved below
         if (!save) return
         sessionSync[currentOutputName] = ms
         audioSyncFrom = "this video on this device"
@@ -2368,7 +2389,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 // go on with the next one instead of halting the queue.
                 if (!endHandled && !stopping && s.item != null && !s.item.isRadio) handleEnd(s)
             }
-            MediaPlayer.Event.EndReached -> handleEnd(s)
+            MediaPlayer.Event.EndReached -> { adoptSessionSync(); handleEnd(s) }
             MediaPlayer.Event.TimeChanged -> { lastTick = System.currentTimeMillis(); _state.value = s.copy(time = ev.timeChanged) }
             MediaPlayer.Event.LengthChanged -> _state.value = s.copy(length = ev.lengthChanged)
             MediaPlayer.Event.Buffering -> _state.value = s.copy(buffering = ev.buffering)

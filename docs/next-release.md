@@ -602,3 +602,5 @@
   Bluetooth device's delay is usually the same), until one gets its own. Older offsets ("this file" / "this output"
   from Audio & subs → Sync sound) are used when there's nothing newer.
 - Changing the sound device while a video plays (Bluetooth connects / disconnects) puts on that device's value at once.
+- A video that started from the session's value and runs fine with it (12:21) — not changed after 30 s of playing,
+  or played to its end before that — keeps that value as its own for that device, like one set by hand.
