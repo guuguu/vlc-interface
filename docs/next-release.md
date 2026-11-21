@@ -430,3 +430,17 @@
   longer adds height; the row spacing follows Look → vertical spacing), and in front of each station its country's
   flag — read from the country code kept with the favourite (e.g. "· ES") — or, when it has none, the globe turned to
   where the station's server is (looked up once per server, Europe while looking / when nothing is found).
+
+## Video format check (requested 2026-11-21 03:02)
+- Long press on a playing video → Video details → "Check picture formats (photos + sizes)". The player hides its
+  controls and shows the video in every format (Fit, Fill, Crop, 16:9, 4:3, 1:1), first in the current orientation,
+  then turned the other way (the phone's orientation setting and the chosen format are put back afterwards). A small
+  note on top says the step (kept out of the photos).
+- For each step: a photo of the screen with the real video picture in its place (Android doesn't include the video
+  layer in ordinary screenshots), outlined: red = the video view, green = the video surface libVLC draws on, yellow =
+  where the picture really is (the non-black part); and the numbers: screen size, the three boxes with their
+  shapes, the surface's buffer size, libVLC's track size, pixel aspect, orientation flag, the file's own rotation,
+  the Rotate button, the app's picture size, the format chosen and the one given to libVLC, libVLC's aspect ratio
+  and zoom, the decoder; and the shape seen against the expected one (≈ 0 % for Fit / 1:1).
+- Saved as one zip in Download/vlc_interface (vlc-interface-format-check_<date_time>.zip: report.txt + 12 photos),
+  to hand over so wrong proportions can be fixed from facts.

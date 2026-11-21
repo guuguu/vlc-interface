@@ -244,10 +244,28 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
 
     // The video is always drawn from this one place, so its view is never moved or recreated when the
     // phone rotates or PiP starts (moving it made the picture disappear): only its size and position change.
-    if (showDetails) VideoDetailsDialog { showDetails = false }
+    // Video format check (from the details pop-up): every format, upright and sideways, photographed and measured.
+    val checkNote by FormatCheck.running.collectAsState()
+    val checkScope = rememberCoroutineScope()
+    var checking by remember { mutableStateOf(false) }
+    fun startCheck() {
+        val a = activity ?: return
+        if (checking) return
+        checking = true; controls = false; panel = Panel.NONE
+        checkScope.launch {
+            val where = try {
+                FormatCheck.run(a, scales, { i -> scaleIdx = i; player.setScale(scales[i].first) }, scaleIdx)
+            } catch (_: Throwable) { null }
+            checking = false
+            ShortNote.show(if (where != null) "Format check saved: $where" else "Format check could not be saved")
+        }
+    }
+    if (showDetails) VideoDetailsDialog(onCheck = { showDetails = false; startCheck() }) { showDetails = false }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         video(if (fullscreen) Modifier.fillMaxSize() else if (videoPortrait) Modifier.safeDrawingPadding().fillMaxWidth().fillMaxHeight(0.667f)
             else Modifier.safeDrawingPadding().fillMaxWidth().aspectRatio(ratio))
+        if (checkNote.isNotEmpty()) Text(checkNote, color = Color.White, fontSize = 13.sp, modifier = Modifier.align(Alignment.TopCenter)
+            .padding(top = 40.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xB0000000)).padding(horizontal = 10.dp, vertical = 5.dp))
         if (inPip) {
             // Minimised (picture-in-picture): thin progress bar along the bottom (not for live radio/streams).
             if (p.length > 0) Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(3.dp).background(Color(0x55FFFFFF))) {
@@ -1051,7 +1069,7 @@ private fun PortraitSync(which: Int, p: PlayerState, onSwitch: (Int) -> Unit, on
  * Tags, Playback), label on the left, value on the right; refreshed every 2 s; tap a line to copy it.
  */
 @Composable
-private fun VideoDetailsDialog(onDone: () -> Unit) {
+private fun VideoDetailsDialog(onCheck: () -> Unit = {}, onDone: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     var secs by remember { mutableStateOf(App.instance.player.videoDetails()) }
     LaunchedEffect(Unit) { while (true) { delay(2000); secs = App.instance.player.videoDetails() } }
@@ -1065,6 +1083,11 @@ private fun VideoDetailsDialog(onDone: () -> Unit) {
         text = {
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("Tap a line to copy it.", color = C.muted, fontSize = 12.sp)
+                // Format check: shows the video in every format, upright and sideways, takes a photo of each and
+                // notes the sizes — one zip in Download/vlc_interface to hand over when a format looks wrong.
+                if (secs.isNotEmpty()) Text("Check picture formats (photos + sizes)", color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(vertical = 6.dp).clip(RoundedCornerShape(12.dp)).border(1.dp, accent(), RoundedCornerShape(12.dp))
+                        .clickable { onCheck() }.padding(horizontal = 12.dp, vertical = 8.dp))
                 if (secs.isEmpty()) Text("No video playing.", color = C.text)
                 secs.forEach { (title, rows) ->
                     Text(title, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))

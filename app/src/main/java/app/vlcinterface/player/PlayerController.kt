@@ -2382,6 +2382,34 @@ class PlayerController(private val context: Context, private val store: Store) {
      * What the playing video uses now (for Settings → Video): decoder, deinterlacing and its encoding, or null when
      * no video is playing.
      */
+    /** Video format check: the video view in use (null when no video player is open). */
+    val videoLayout: VLCVideoLayout? get() = attachedLayout
+
+    /** Video format check: everything that decides the picture's size and shape, as label → value. */
+    fun formatDiag(): List<Pair<String, String>> {
+        val out = ArrayList<Pair<String, String>>()
+        val s = _state.value
+        out += "File" to (s.item?.title ?: "-")
+        val vt = try { mp.currentVideoTrack } catch (_: Throwable) { null }
+        if (vt != null) {
+            out += "libVLC track size" to "${vt.width} × ${vt.height}"
+            out += "Pixel aspect (SAR)" to "${vt.sarNum}:${vt.sarDen}"
+            out += "libVLC orientation flag" to "${vt.orientation} (0 TopLeft … 4 LeftTop, 5 LeftBottom, 6 RightTop, 7 RightBottom)"
+            val dw = if (vt.sarNum > 0 && vt.sarDen > 0) vt.width.toDouble() * vt.sarNum / vt.sarDen else vt.width.toDouble()
+            out += "Track aspect (SAR applied, not turned)" to (if (vt.height > 0) "%.4f".format(java.util.Locale.US, dw / vt.height) else "-")
+        } else out += "libVLC track" to "none"
+        out += "File rotation (Android reader)" to (fileRot?.toString() ?: "unknown")
+        out += "Rotate button" to "$videoRot°"
+        out += "App picture size (videoW × videoH)" to "${s.videoW} × ${s.videoH}" +
+            if (s.videoW > 0 && s.videoH > 0) " (aspect %.4f)".format(java.util.Locale.US, s.videoW.toDouble() / s.videoH) else ""
+        out += "Format chosen" to scale.name
+        out += "Format given to libVLC" to vlcScale.name
+        out += "libVLC aspect ratio" to (try { mp.aspectRatio ?: "(none)" } catch (_: Throwable) { "?" })
+        out += "libVLC scale" to (try { "%.4f".format(java.util.Locale.US, mp.scale) } catch (_: Throwable) { "?" })
+        out += "Decoder" to decoderNow
+        return out
+    }
+
     data class VideoNow(val software: Boolean, val deinterlace: Boolean, val codec: String, val w: Int, val h: Int)
     fun videoNow(): VideoNow? {
         val it0 = _state.value.item ?: return null
