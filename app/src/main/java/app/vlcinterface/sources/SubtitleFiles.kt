@@ -66,14 +66,27 @@ object SubtitleFiles {
         return src to Urls.parent(item.uri)
     }
 
+    /**
+     * A name for a downloaded subtitle that's free next to the video (2026-11-21 16:33): the video's name, else with the
+     * language ("Movie.es.srt"), else numbered ("Movie.es.2.srt" …) — an existing subtitle is never overwritten.
+     */
+    suspend fun freeName(item: PlayItem, ext: String, lang: String): String {
+        val first = nameFor(item, ext)
+        if (!existsNextToVideo(item, first)) return first
+        val base = first.substringBeforeLast('.'); val e = ext.lowercase(); val l = lang.lowercase().ifEmpty { "sub" }
+        if (!existsNextToVideo(item, "$base.$l.$e")) return "$base.$l.$e"
+        for (n in 2..20) if (!existsNextToVideo(item, "$base.$l.$n.$e")) return "$base.$l.$n.$e"
+        return "$base.$l.${System.currentTimeMillis() / 1000}.$e"
+    }
+
     suspend fun existsNextToVideo(item: PlayItem, name: String): Boolean {
         val (src, folder) = target(item) ?: return false
         return NasWriter.exists(src, folder, name)
     }
 
     /** Saves a downloaded subtitle under the video's name, next to the video when possible, always with a local working copy. */
-    suspend fun saveDownloaded(ctx: Context, item: PlayItem, bytes: ByteArray, ext: String): Pair<SubRef, String> = withContext(Dispatchers.IO) {
-        val name = nameFor(item, ext)
+    suspend fun saveDownloaded(ctx: Context, item: PlayItem, bytes: ByteArray, ext: String, name0: String? = null): Pair<SubRef, String> = withContext(Dispatchers.IO) {
+        val name = name0 ?: nameFor(item, ext)
         val local = File(dir(ctx, "subtitles/" + hash(item.uri)), name)
         local.writeBytes(bytes)
         // Remembered as downloaded by the app (OpenSubtitles): only these are deleted when the video is gone.

@@ -771,7 +771,7 @@ private fun SidePanel(landscape: Boolean, onClose: () -> Unit, onBack: (() -> Un
 @Composable
 private fun PanelContent(panel: Panel, p: PlayerState, nav: Navigator, onPanel: (Panel) -> Unit) {
     when (panel) {
-        Panel.DOWNLOAD -> DownloadPanel(p) { onPanel(Panel.TRACKS) }
+        Panel.DOWNLOAD -> DownloadPanel(p, onDone = { onPanel(Panel.NONE) }) { onPanel(Panel.TRACKS) }
         Panel.STYLE -> TracksPanel(p, nav, onPanel)
         Panel.PICTURE -> PicturePanel { onPanel(Panel.TRACKS) }
         else -> TracksPanel(p, nav, onPanel)
@@ -951,7 +951,7 @@ private fun TrackRow(name: String, selected: Boolean, onClick: () -> Unit) {
 // ---------------- Subtitle download ----------------
 
 @Composable
-private fun DownloadPanel(p: PlayerState, onBack: () -> Unit) {
+private fun DownloadPanel(p: PlayerState, onDone: () -> Unit = {}, onBack: () -> Unit) {
     val ctx = LocalContext.current
     val st by App.instance.store.state.collectAsState()
     val item = p.item ?: return
@@ -975,6 +975,24 @@ private fun DownloadPanel(p: PlayerState, onBack: () -> Unit) {
     }
     LaunchedEffect(Unit) { if (os.configured) search() else status = "Add your OpenSubtitles API key, username and password in Settings to download subtitles." }
 
+    // Choosing a subtitle (2026-11-21 16:33) does everything else by itself: downloads it, saves it next to the video
+    // under a free name (never overwriting one there; in the app when the video's folder can't be written), loads it
+    // into the player with the app's subtitle format, shows it, saves it as this video's subtitles and closes the panel.
+    fun use(r: SubResult) {
+        scope.launch {
+            status = "Downloading…"
+            os.download(r).onSuccess { (bytes, ext) ->
+                val name = SubtitleFiles.freeName(item, ext, r.language)
+                val (ref, where) = SubtitleFiles.saveDownloaded(ctx, item, bytes, ext, name)
+                val pl = App.instance.player
+                if (pl.styleChanged()) pl.applyStyle()
+                pl.addSubtitleFile(Uri.fromFile(ref.local), keep = true)
+                ShortNote.show("Subtitles on (${r.language.uppercase()}) · $where")
+                onDone()
+            }.onFailure { status = it.message ?: "Download failed" }
+        }
+    }
+
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -994,7 +1012,8 @@ private fun DownloadPanel(p: PlayerState, onBack: () -> Unit) {
         if (status.isNotEmpty()) Text(status, color = C.muted, fontSize = 13.sp)
         results?.forEachIndexed { ri, r ->
             Row(Modifier.fillMaxWidth().then(if (ri < reqs.size) Modifier.bringIntoViewRequester(reqs[ri]) else Modifier)
-                .clip(RoundedCornerShape(10.dp)).background(if (ri == at) accent().copy(alpha = 0.25f) else C.card).padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                .clip(RoundedCornerShape(10.dp)).background(if (ri == at) accent().copy(alpha = 0.25f) else C.card).clickable { use(r) }
+                .padding(start = 10.dp, end = 6.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(r.match, color = if (r.hashMatch) C.ok else C.muted, fontSize = 11.sp, fontWeight = FontWeight.Bold,
                     modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(if (r.hashMatch) Color(0xFF1E3A27) else Color(0xFF2A2F38)).padding(horizontal = 6.dp, vertical = 3.dp))
                 Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
@@ -1002,22 +1021,10 @@ private fun DownloadPanel(p: PlayerState, onBack: () -> Unit) {
                     Text("${r.language.uppercase()} · ${r.format} · ${r.downloads} downloads" + (if (r.rating > 0) " · rated ${"%.1f".format(r.rating)}" else "") +
                         (if (!r.hashMatch) " · may need sync" else "") + (if (r.hearingImpaired) " · HI" else ""), color = C.muted, fontSize = 12.sp)
                 }
-                Pill("Use", filled = true) {
-                    scope.launch {
-                        status = "Downloading…"
-                        os.download(r).onSuccess { (bytes, ext) ->
-                            val name = SubtitleFiles.nameFor(item, ext)
-                            if (SubtitleFiles.existsNextToVideo(item, name)) { pending = Triple(bytes, ext, name); status = "" }
-                            else {
-                                val (ref, where) = SubtitleFiles.saveDownloaded(ctx, item, bytes, ext)
-                                App.instance.player.addSubtitleFile(Uri.fromFile(ref.local)); status = where; onBack()
-                            }
-                        }.onFailure { status = it.message ?: "Download failed" }
-                    }
-                }
+                Pill("Use", filled = true) { use(r) }
             }
         }
-        Text("Saved with the video's name next to the video when possible; fine-tune timing with Sync.", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
+        Text("Tap a subtitle: it's saved next to the video (never over another one), put on and kept for this video. Fine-tune timing with Sync.", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
     }
     pending?.let { (bytes, ext, name) ->
         AlertDialog(

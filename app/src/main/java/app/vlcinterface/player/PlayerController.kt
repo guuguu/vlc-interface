@@ -2034,15 +2034,20 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (audioRestored && spuRestored) tracksRestored = true
     }
 
-    fun addSubtitleFile(uri: Uri) {
+    fun addSubtitleFile(uri: Uri, keep: Boolean = false) {
         // Colour codes taken out (a cleaned copy; the original file is never changed); the original if it can't be read.
         val st = store.current.subStyle
+        val before = _state.value.spuTracks.map { it.id }.toSet()
         bg.launch {
             val use = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 app.vlcinterface.sources.SubColors.cleanedCopy(context, uri, st.color, st.outlineColor)
             } ?: uri
             mp.addSlave(IMedia.Slave.Type.Subtitle, use, true)
-            main.postDelayed({ refreshTracks() }, 800)
+            main.postDelayed({
+                refreshTracks()
+                // [keep]: the new track is shown and saved silently as this video's subtitles.
+                if (keep) _state.value.spuTracks.filter { it.id >= 0 && it.id !in before }.maxByOrNull { it.id }?.let { selectSpu(it.id) }
+            }, 800)
         }
     }
 

@@ -824,3 +824,12 @@
   height (tall videos: exactly 2/3); it stays in place. Everything else (title, play buttons, button groups, Up next)
   is ordered under it and scrolls in the remaining area.
 - The "Bigger / Smaller" button is removed (no longer needed).
+
+## Downloading subtitles: one tap does everything (requested 2026-11-21 16:33)
+- Subs/Sync → Download subtitles: tapping a result (the row or its "Use") does the rest by itself — no questions:
+  - downloads it and saves it next to the video under a free name: the video's name, else with the language
+    ("Movie.es.srt"), else numbered ("Movie.es.2.srt") — an existing subtitle is never overwritten (the "Replace?"
+    question is gone); kept in the app when the video's folder can't be written;
+  - loads it into the player with the app's subtitle settings (Subtitle format, colour codes filtered), shows it
+    and saves it silently as this video's subtitles (used again next time);
+  - closes the panel back to the video, with a short note "Subtitles on (ES) · Saved next to the video as …".
