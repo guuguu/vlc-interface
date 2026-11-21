@@ -1598,7 +1598,7 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
             StationMenu(item, songMenu, "song") { songMenu = false }
         }
         if (artist.isNotEmpty()) FitText(artist, color = C.muted, fontSize = (15 * tk).sp, minSize = 12.sp, lineHeight = (18 * tk).sp, textAlign = TextAlign.Center, modifier = song)
-        val details = listOfNotNull((fav?.meta ?: LastStationMeta.of(item.uri)).ifEmpty { null }, p.rgInfo.ifEmpty { null },
+        val details = listOfNotNull(stationMetaShort(fav?.meta ?: LastStationMeta.of(item.uri)).ifEmpty { null }, p.rgInfo.ifEmpty { null },
             if (p.sleepUntil > 0) "Sleep ${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min" else null)
         if (details.isNotEmpty()) FitText(details.joinToString(" · "), color = accent(), fontSize = 12.sp, minSize = 10.sp, lineHeight = 14.sp, textAlign = TextAlign.Center, modifier = station.padding(horizontal = 4.dp, vertical = 3.dp))
         if (p.error.isNotEmpty()) Text(p.error, color = C.bad, fontSize = 13.sp, textAlign = TextAlign.Center, maxLines = 3, overflow = TextOverflow.Ellipsis)
@@ -1798,7 +1798,7 @@ fun StationSearch() {
                     StationFlag(r)
                     Column(Modifier.weight(1f)) {
                         MarqueeText(r.name, C.text, Modifier.fillMaxWidth(), fontSize = 14.sp, lineHeight = 16.sp, list = "radioFind")
-                        if (r.meta.isNotEmpty()) Text(r.meta, color = if (r.isFlac) C.bad.copy(alpha = 0.8f) else C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (r.meta.isNotEmpty()) Text(stationMetaShort(r.meta), color = if (r.isFlac) C.bad.copy(alpha = 0.8f) else C.muted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Text(if (fav) "★" else "☆", color = accent(), fontSize = 20.sp, lineHeight = 20.sp, modifier = Modifier.clickable {
                         toggleFavourite(r.name, r.url, r.meta, r.favicon)
@@ -1979,9 +1979,18 @@ fun stationCountry(meta: String): String =
     meta.split(" · ").map { it.trim() }.lastOrNull { Regex("^[A-Z]{2}$").matches(it) } ?: ""
 
 fun stationQuality(meta: String): String =
-    Regex("""(\d{2,4})\s*kbps\s*([A-Za-z0-9+]*)""", RegexOption.IGNORE_CASE).find(meta)?.let { m ->
-        listOf(m.groupValues[1] + " kbps", m.groupValues[2].uppercase()).filter { it.isNotBlank() }.joinToString(" ")
-    } ?: Regex("""\b(MP3|AAC\+?|OGG|OPUS|FLAC)\b""", RegexOption.IGNORE_CASE).find(meta)?.value?.uppercase() ?: ""
+    // Only the bitrate value followed by k ("1500k"), no codec name (2026-11-21 11:50).
+    Regex("""(\d{2,4})\s*kbps""", RegexOption.IGNORE_CASE).find(meta)?.let { it.groupValues[1] + "k" } ?: ""
+
+/**
+ * A station's details as shown in the radio lists and the radio player: "1500 kbps OGG" → "1500k" (no codec names,
+ * 11:50); other parts (style, country) stay.
+ */
+fun stationMetaShort(meta: String): String =
+    meta.split(" · ").map { part ->
+        Regex("""(\d{2,4})\s*kbps(\s+[A-Za-z0-9+]+)?""", RegexOption.IGNORE_CASE).replace(part) { it.groupValues[1] + "k" }.trim()
+    }.filter { it.isNotEmpty() && !Regex("""^(MP3|AAC\+?|AACP|HE-AAC|OGG|OPUS|FLAC|VORBIS|WMA)$""", RegexOption.IGNORE_CASE).matches(it) }
+        .joinToString(" · ")
 
 
 /**

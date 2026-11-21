@@ -830,7 +830,7 @@ fun StationRow(name: String, meta: String, fav: Boolean, onFav: () -> Unit, onLo
     Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).combinedClickable(onClick = onPlay, onLongClick = onLong).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             MarqueeText(name, C.text, Modifier.fillMaxWidth(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = list)
-            if (meta.isNotEmpty()) Text(meta, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (meta.isNotEmpty()) Text(stationMetaShort(meta), color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         SymButton(onFav) { SymIcon(Icons.Filled.Star, if (fav) "Remove from favourites" else "Add to favourites", tint = if (fav) accent() else C.muted) }
         SymButton(onPlay) { SymIcon(Icons.Filled.PlayArrow, "Play $name", tint = accent()) }

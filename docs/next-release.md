@@ -525,3 +525,8 @@
 - Header line of the player notification (11:47 / 11:48): next to the orange ▶ square, what plays and the time
   left — "Pink Floyd · 3 min left" (artist, else album), "RadioBlues-Flac · Live", "Video · 12 min left";
   refreshed once a minute. In the shade and on the lock screen (the status bar can only show the symbol).
+
+## Station bitrate shown as "1500k" (requested 2026-11-21 11:50)
+- Radio lists and the radio player show the bitrate as the value followed by k ("1500k", "128k") and no codec name
+  any more (no OGG / MP3 / AAC / FLAC …): favourites, Find stations results, Library → Radio, the radio player's
+  details line. Other parts of the details (style, country) stay. Station details pop-ups keep the full data.
