@@ -253,7 +253,12 @@ object SubtitleFiles {
     /** Where the browser starts and how far up it may go: (source or null for the phone, start folder, top folder). */
     fun browseStart(item: PlayItem, phonePath: String?): Triple<Source?, String, String>? {
         val src = sourceOf(item)
-        if (src != null && (item.uri.startsWith("smb://") || item.uri.startsWith("http"))) return Triple(src, Urls.parent(item.uri), Urls.forSource(src))
+        if (src != null && (item.uri.startsWith("smb://") || item.uri.startsWith("http"))) {
+            // Up as far as the share itself (smb://host/share/), not only the location's saved path (21:20); web: the site.
+            val u = item.uri; val hostEnd = u.indexOf('/', u.indexOf("://") + 3).let { if (it < 0) u.length else it }
+            val top = if (u.startsWith("smb://")) u.substring(0, hostEnd) + "/" + u.substring(hostEnd).trim('/').substringBefore('/') + "/" else u.substring(0, hostEnd) + "/"
+            return Triple(src, Urls.parent(item.uri), top)
+        }
         val folder = phonePath?.let { File(it).parentFile } ?: return null
         val top = listOf("/storage/emulated/0", "/sdcard").firstOrNull { folder.path.startsWith(it) }
             ?: folder.path.split('/').take(3).joinToString("/")          // a card: /storage/XXXX-XXXX

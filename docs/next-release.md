@@ -1041,7 +1041,7 @@
 ## Subtitle file from the movie's folder, browsed in the app (requested 2026-11-21 21:17)
 - "From file" (Subs/Sync → Audio & subtitles) and a new "📂 Browse the video's folder…" at the bottom of the Subs/Change pop-up open the app's own browser. Android's file picker is no longer used there.
 - **Where it starts:** the movie's own folder (network: SMB / web; phone: the file's folder).
-- **Moving around:** a tap on a folder goes in, ‹ goes up, as far as the top of that network location or phone storage.
+- **Moving around:** a tap on a folder goes in. A clear "⬆ Up one level · <folder>" row at the top goes up from the movie's folder and further (21:20): on the network as far as the share itself (not only the location's saved path), on the phone as far as the top of its storage. Inside an archive the same row reads "⬆ Back to <folder>".
 - **What it lists:** folders, subtitle files (.srt .ass .ssa .vtt .sub) and .zip archives. An archive opens to the subtitles inside it.
 - **Matching first:** files that belong to the video (its name or episode code) come first after the folders, in the accent colour.
 - **Picking a file:** it's loaded (colour codes taken out), put on, and saved silently as this video's subtitles. "Subtitles on: …" shows briefly, and it goes back to the video. Cancel goes back to where it was opened from.

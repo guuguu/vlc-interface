@@ -1661,12 +1661,19 @@ fun SubtitleBrowseDialog(onPicked: () -> Unit = {}, onDone: () -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (start == null) { Text("This video's folder can't be read from the app (no file path).", color = C.muted, fontSize = 13.sp); return@Column }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (zipFiles != null || canUp) Text("‹", color = accent(), fontSize = 24.sp, modifier = Modifier.clickable {
+                val shown = zipFiles?.first ?: android.net.Uri.decode(where.substringAfter("://").substringAfter('/', where)).trimEnd('/').ifEmpty { "/" }
+                Text(shown, color = C.muted, fontSize = 12.sp, maxLines = 2)
+                // Up one level from the movie's folder (and further), clearly shown (21:20); out of an archive: back to its folder.
+                if (zipFiles != null || canUp) {
+                    val parentName = if (zipFiles != null) android.net.Uri.decode(where.trimEnd('/').substringAfterLast('/'))
+                        else android.net.Uri.decode(where.trimEnd('/').substringBeforeLast('/').trimEnd('/').substringAfterLast('/')).ifEmpty { "/" }
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card2).clickable {
                         if (zipFiles != null) zipFiles = null else where = where.trimEnd('/').substringBeforeLast('/') + if (start.first != null) "/" else ""
-                    }.padding(end = 12.dp))
-                    val shown = zipFiles?.first ?: android.net.Uri.decode(where.substringAfter("://").substringAfter('/', where)).trimEnd('/').ifEmpty { "/" }
-                    Text(shown, color = C.muted, fontSize = 12.sp, maxLines = 2)
+                    }.padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("⬆", color = accent(), fontSize = 16.sp, modifier = Modifier.padding(end = 10.dp))
+                        Text(if (zipFiles != null) "Back to $parentName" else "Up one level · $parentName", color = accent(), fontSize = 14.sp, maxLines = 1,
+                            overflow = TextOverflow.Ellipsis)
+                    }
                 }
                 Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) {
                     val zf = zipFiles
