@@ -2197,6 +2197,32 @@ class PlayerController(private val context: Context, private val store: Store) {
         val okW = kotlin.math.abs(sv.width - want.first) <= maxOf(3, want.first / 100)
         val okH = kotlin.math.abs(sv.height - want.second) <= maxOf(3, want.second / 100)
         if (okW && okH) return
+        // Backstop (23:42): still not the size the format calls for after two re-applies → the surfaces are given that size
+        // here, centred in the video view. libVLC re-sizes only when its frame changes, and this doesn't change the frame,
+        // so there is no back-and-forth.
+        if (tries >= 2 && sv.width < want.first * 0.9 && sv.height < want.second * 0.9) {   // the "drawn small" case only
+            try {
+                // The surfaces' own frame back to the whole video view, if libVLC had shrunk it.
+                (sv.parent as? android.view.View)?.takeIf { it !== layout }?.let { f ->
+                    val flp = f.layoutParams
+                    if (flp != null && (flp.width != android.view.ViewGroup.LayoutParams.MATCH_PARENT || flp.height != android.view.ViewGroup.LayoutParams.MATCH_PARENT)) {
+                        flp.width = android.view.ViewGroup.LayoutParams.MATCH_PARENT; flp.height = android.view.ViewGroup.LayoutParams.MATCH_PARENT; f.layoutParams = flp
+                    }
+                }
+                val all = ArrayList<android.view.SurfaceView>()
+                fun walk(v: android.view.View) { if (v is android.view.SurfaceView) all += v; if (v is android.view.ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i)) }
+                walk(layout)
+                all.forEach { v ->
+                    val lp = v.layoutParams ?: return@forEach
+                    if (lp.width != want.first || lp.height != want.second) {
+                        lp.width = want.first; lp.height = want.second
+                        if (lp is android.widget.FrameLayout.LayoutParams) lp.gravity = android.view.Gravity.CENTER
+                        v.layoutParams = lp
+                    }
+                }
+                android.util.Log.i("PlayerController", "picture sized by the app: ${want.first}x${want.second} (libVLC gave ${sv.width}x${sv.height})")
+            } catch (_: Throwable) {}
+        }
         if (tries >= 6) {
             android.util.Log.w("PlayerController", "picture size still ${sv.width}x${sv.height}, wanted ${want.first}x${want.second} (${scale.name})")
             return

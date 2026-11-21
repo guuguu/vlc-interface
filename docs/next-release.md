@@ -1149,3 +1149,8 @@
 - **Save to NAS:** it saved, but the window closed at once and its "Saved" line with it, so it looked like nothing happened. Now a short note says "Saved to NAS: <file>". It saves what the page shows (Errors only followed).
 - **Empty log:** worked. Its question said "Only this server's log is cleared" on every log; now "Only this log is cleared."
 - **Errors only:** worked, unchanged.
+
+## Upright video still drawn small (screenshot 2026-11-21 23:42, 1.71.0 — "fix it final")
+- **Why 1.70's fix didn't take effect:** libVLC creates its video surfaces with the layout inflater, and the wrapper handed out the activity's own inflater. So the surfaces were made with the activity's context (portrait), and the shape-based orientation was never seen. The picture was still sized for a swapped area (608 × 342 in a 1080-wide place).
+- **Fixed:** the wrapper now gives its own inflater, so every view libVLC makes inside the video view reads the orientation that follows the view's shape.
+- **Backstop:** if the picture is still smaller than its format calls for in both directions after two re-applies, the app gives the surfaces that size itself, centred, and their frame the whole video view. Only that "drawn small" case is touched (Fill, Crop and the colour-filter display path are left alone). libVLC re-sizes only when its frame changes, so nothing jumps back and forth.
