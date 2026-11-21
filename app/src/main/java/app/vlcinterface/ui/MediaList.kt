@@ -304,7 +304,11 @@ fun MediaList(
                             onQuickPlaylist = { quickTarget = itemsOfDir(r.e) },
                             onRemove = { blackDir = r.e },
                             onSelect = { toggle(r.e) },
-                            onRgScan = if (App.instance.store.current.settings.libraryKind == "audio") ({ rgTarget = itemsOfDir(r.e) }) else null) }
+                            onRgScan = if (App.instance.store.current.settings.libraryKind == "audio") ({ rgTarget = itemsOfDir(r.e) }) else null,
+                            onPlay = { scope.launch { itemsOfDir(r.e)().takeIf { it.isNotEmpty() }?.let { l ->
+                                App.instance.player.playQueue(l, 0, app.vlcinterface.player.Origin("folder", source?.id ?: "", r.e.uri, r.e.name))
+                                nav.go(if (l.first().isMusic) Screen.Music else Screen.Player) } } },
+                            folderInfo = FolderInfo(r.e.name, Uri.decode(r.e.uri).substringAfter("://"), source?.name ?: "Phone"), collect = itemsOfDir(r.e)) }
                     }
                     // Long-press an album title: ReplayGain scan of that whole album.
                     is Row0.Header -> Row(Modifier.fillMaxWidth().combinedClickable(onClick = {}, onLongClick = {
@@ -388,14 +392,22 @@ fun EntryMenu(
     onSelect: (() -> Unit)? = null, onRgScan: (() -> Unit)? = null, onInfo: (() -> Unit)? = null,
     onQuickPlaylist: (() -> Unit)? = null,
     onRemove: (() -> Unit)? = null,
+    onPlay: (() -> Unit)? = null,
+    folderInfo: FolderInfo? = null, collect: (suspend () -> List<PlayItem>)? = null,
 ) {
     SDropdownMenu(expanded = true, onDismissRequest = onDismiss) {
+        // Same choices as every media item (2026-11-21 11:56): play, queues, playlist, ReplayGain, details, share.
+        if (onPlay != null) SMenuItem(text = { Text(if (isDir) "▶  Play all now" else "▶  Play now") }, onClick = { onPlay(); onDismiss() })
         if (onSelect != null) SMenuItem(text = { Text("Select…") }, onClick = { onSelect(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Play all next" else "Play next") }, onClick = { onPlayNext(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Add all to queue" else "Add to queue") }, onClick = { onQueue(); onDismiss() })
         SMenuItem(text = { Text(if (isDir) "Add all to playlist…" else "Add to playlist…") }, onClick = { onAddPlaylist(); onDismiss() })
         if (onQuickPlaylist != null) SMenuItem(text = { Text("New playlist from this folder & play…") }, onClick = { onQuickPlaylist(); onDismiss() })
-        if (onInfo != null) SMenuItem(text = { Text("Tags & ReplayGain…") }, onClick = { onInfo(); onDismiss() })
+        if (onInfo != null) SMenuItem(text = { Text("Details…") }, onClick = { onInfo(); onDismiss() })
+        if (folderInfo != null && collect != null) {
+            SMenuItem(text = { Text("Details…") }, onClick = { FileDialogs.folder = folderInfo to collect; onDismiss() })
+            SMenuItem(text = { Text("Share details…") }, onClick = { FileDialogs.shareFolder = folderInfo to collect; onDismiss() })
+        }
         if (onRgScan != null) SMenuItem(text = { Text(if (isDir) "ReplayGain scan (with subfolders)…" else "ReplayGain scan…") }, onClick = { onRgScan(); onDismiss() })
         if (onRemove != null) SMenuItem(text = { Text(if (isDir) "Remove folder from lists (never re-added)" else "Remove from lists (never re-added)", color = C.bad) },
             onClick = { onRemove(); onDismiss() })

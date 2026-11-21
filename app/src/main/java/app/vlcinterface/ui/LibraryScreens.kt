@@ -392,7 +392,11 @@ fun InternalTab(nav: Navigator) {
                             onAddPlaylist = { addFolder = f },
                             onRgScan = if (st.settings.libraryKind == "audio") ({ rgFolder = f }) else null,
                             onDelete = null,   // deleting files: only from Settings → Delete a file
-                            onRemove = { blackFolder = f })
+                            onRemove = { blackFolder = f },
+                            onPlay = { scope.launch { ofKind(MusicLibrary.collectLocal(ctx, f, true)).takeIf { it.isNotEmpty() }?.let { l ->
+                                App.instance.player.playQueue(l, 0, app.vlcinterface.player.Origin("local", title = f.name, localFolderId = f.id))
+                                nav.go(if (l.first().isMusic) Screen.Music else Screen.Player) } } },
+                            folderInfo = FolderInfo(f.name, f.relativePath, "Phone"), collect = { ofKind(MusicLibrary.collectLocal(ctx, f, true)) })
                     }
                     SymButton({
                         scope.launch {

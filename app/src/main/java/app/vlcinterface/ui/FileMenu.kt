@@ -44,7 +44,7 @@ class FileMenuExtras(
 
 /**
  * The same long-press menu for a song or video on every page (folders, Songs list, playlists, queue, Up next):
- * Play now, Play next, Add to queue, Add to playlist…, Open song folder, Tags & ReplayGain…, ReplayGain scan…,
+ * Play now, Play next, Add to queue, Add to playlist…, Open song folder, Details…, Share details…, ReplayGain scan…,
  * plus what the page allows (Select, Move up / down, Remove from this list, Delete file).
  */
 @Composable
@@ -67,7 +67,8 @@ fun FileMenu(nav: Navigator, item: PlayItem, expanded: Boolean, onDismiss: () ->
         x.onMoveUp?.let { f -> SMenuItem({ Text("Move up") }, { close(f) }) }
         x.onMoveDown?.let { f -> SMenuItem({ Text("Move down") }, { close(f) }) }
         if (!item.isRadio) SMenuItem({ Text("Open song folder") }, { close { openItemFolder(nav, item) } })
-        if (!item.isRadio) SMenuItem({ Text("Tags & ReplayGain…") }, { close { FileDialogs.info = item } })
+        if (!item.isRadio) SMenuItem({ Text("Details…") }, { close { FileDialogs.info = item } })
+        if (!item.isRadio) SMenuItem({ Text("Share details…") }, { close { FileDialogs.share = item } })
         if (item.isMusic) SMenuItem({ Text("ReplayGain scan…") }, { close { FileDialogs.rg = item } })
         x.onRemove?.let { f -> SMenuItem({ Text(x.removeLabel, color = C.bad) }, { close(f) }) }
         x.onDelete?.let { f -> SMenuItem({ Text("Delete file…", color = C.bad) }, { close(f) }) }
@@ -82,6 +83,28 @@ object FileDialogs {
     var addTo by mutableStateOf<List<PlayItem>?>(null)
     var rg by mutableStateOf<PlayItem?>(null)
     var info by mutableStateOf<PlayItem?>(null)
+    /** File whose details are being shared (read, then Android's share sheet). */
+    var share by mutableStateOf<PlayItem?>(null)
+    /** Folder details pop-up: title and how to collect the folder's items. */
+    var folder by mutableStateOf<Pair<FolderInfo, suspend () -> List<PlayItem>>?>(null)
+    /** Folder whose details are being shared. */
+    var shareFolder by mutableStateOf<Pair<FolderInfo, suspend () -> List<PlayItem>>?>(null)
+}
+
+/** What a folder's details start from: its name, where it is, which source. */
+class FolderInfo(val name: String, val place: String, val source: String)
+
+/** Folder details: name, place, source, then what's inside (counted through its subfolders). */
+fun folderDetails(f: FolderInfo, items: List<PlayItem>?): Pair<String, List<Pair<String, List<Pair<String, String>>>>> {
+    val head = listOfNotNull("Name" to f.name, f.place.takeIf { it.isNotBlank() }?.let { "Place" to it }, f.source.takeIf { it.isNotBlank() }?.let { "Source" to it })
+    val inside = if (items == null) listOf("Files" to "counting…") else {
+        val songs = items.count { it.isMusic }; val videos = items.count { !it.isMusic && !it.isRadio }
+        val total = items.sumOf { it.durationMs.coerceAtLeast(0) }
+        val folders = items.map { it.folderKey.ifEmpty { it.uri.substringBeforeLast('/') } }.distinct().size
+        listOfNotNull("Songs" to "$songs", "Videos" to "$videos", "Folders with files" to "$folders",
+            if (total > 0) "Total play time" to fmtTime(total) else null)
+    }
+    return "Folder details · ${f.name}" to listOf("Folder" to head, "Inside (with subfolders)" to inside)
 }
 
 /** Shows the windows asked for from file menus (placed once, at the app's root). */
@@ -90,6 +113,29 @@ fun FileDialogsHost(nav: Navigator) {
     FileDialogs.addTo?.let { l -> AddToPlaylistDialog({ l }) { FileDialogs.addTo = null } }
     FileDialogs.rg?.let { it0 -> RgScanDialog(nav, { listOf(it0) }) { FileDialogs.rg = null } }
     FileDialogs.info?.let { it0 -> TagInfoDialog(it0) { FileDialogs.info = null } }
+    val ctx = LocalContext.current
+    FileDialogs.share?.let { it0 ->
+        androidx.compose.runtime.LaunchedEffect(it0) {
+            val info = try { app.vlcinterface.sources.MediaInfo.read(ctx.applicationContext, it0) } catch (_: Exception) { null }
+            val (t, secs, note) = itemDetails(it0, info)
+            FileDialogs.share = null
+            shareDetails(ctx, t, detailsText(t, secs, note))
+        }
+    }
+    FileDialogs.folder?.let { (f, collect) ->
+        var items by remember(f) { mutableStateOf<List<PlayItem>?>(null) }
+        androidx.compose.runtime.LaunchedEffect(f) { items = try { collect() } catch (_: Exception) { emptyList() } }
+        val (t, secs) = folderDetails(f, items)
+        DetailsDialog(t, secs) { FileDialogs.folder = null }
+    }
+    FileDialogs.shareFolder?.let { (f, collect) ->
+        androidx.compose.runtime.LaunchedEffect(f) {
+            val items = try { collect() } catch (_: Exception) { emptyList() }
+            val (t, secs) = folderDetails(f, items)
+            FileDialogs.shareFolder = null
+            shareDetails(ctx, t, detailsText(t, secs))
+        }
+    }
 }
 
 /** Files taken out of the Library lists (folders, Songs list) with "Remove from this list" — never deleted. */

@@ -203,22 +203,21 @@ fun RgScanScreen(nav: Navigator) {
     }
 }
 
-/** "Tags & ReplayGain" for one audio or video file. */
-@Composable
-fun TagInfoDialog(item: PlayItem, onDismiss: () -> Unit) {
-    val ctx = LocalContext.current
-    var info by remember { mutableStateOf<app.vlcinterface.sources.MediaInfo.Info?>(null) }
-    LaunchedEffect(item.uri) { info = app.vlcinterface.sources.MediaInfo.read(ctx.applicationContext, item) }
-    // Same style as every details pop-up (DetailsDialog): sections, label left / value right, tap to copy, Copy all.
-    val i = info
+/** Details of one song or video file: title, sections, note — for the pop-up and for sharing. */
+fun itemDetails(item: PlayItem, i: app.vlcinterface.sources.MediaInfo.Info?): Triple<String, List<Pair<String, List<Pair<String, String>>>>, String> {
     fun g(v: Float?) = v?.let { "%+.2f dB".format(java.util.Locale.US, it) } ?: "—"
     fun pk(v: Float?) = v?.let { "%.6f".format(java.util.Locale.US, it) } ?: "—"
     fun rg(r: app.vlcinterface.sources.Rg?) = if (r == null || !r.any) listOf("Values" to "none")
         else listOf("Track gain" to g(r.trackGain), "Track peak" to pk(r.trackPeak), "Album gain" to g(r.albumGain), "Album peak" to pk(r.albumPeak))
+    val file = listOfNotNull("Name" to item.title,
+        item.artist.takeIf { it.isNotBlank() }?.let { "Artist" to it }, item.album.takeIf { it.isNotBlank() }?.let { "Album" to it },
+        if (item.durationMs > 0) "Length" to fmtTime(item.durationMs) else null,
+        "Place" to Uri.decode(item.uri).substringAfter("://").let { if (it.length > 160) "…" + it.takeLast(160) else it },
+        if (i != null && i.error.isNotEmpty()) "Tags" to "could not be read: ${i.error}" else null)
     val secs = when {
-        i == null -> listOf("File" to listOf("Name" to item.title, "Tags" to "reading the file…"))
+        i == null -> listOf("File" to file + ("Tags" to "reading the file…"))
         else -> buildList {
-            add("File" to listOfNotNull("Name" to item.title, if (i.error.isNotEmpty()) "Tags" to "could not be read: ${i.error}" else null))
+            add("File" to file)
             add("Tag records" to i.tags.toList())
             if (item.isMusic) {
                 add("ReplayGain in the file" to rg(i.fileRg))
@@ -231,7 +230,17 @@ fun TagInfoDialog(item: PlayItem, onDismiss: () -> Unit) {
         i.fileRg?.any == true -> "The player uses the values in the file."
         else -> "No ReplayGain values: this file plays unchanged. Long-press → ReplayGain scan to measure it."
     }
-    DetailsDialog(if (item.isMusic) "Song details" else "File details", secs, note = note, onDone = onDismiss)
+    return Triple(if (item.isMusic) "Song details · ${item.title}" else "File details · ${item.title}", secs, note)
+}
+
+/** Details of one audio or video file (tags and ReplayGain), in the shared details style. */
+@Composable
+fun TagInfoDialog(item: PlayItem, onDismiss: () -> Unit) {
+    val ctx = LocalContext.current
+    var info by remember { mutableStateOf<app.vlcinterface.sources.MediaInfo.Info?>(null) }
+    LaunchedEffect(item.uri) { info = app.vlcinterface.sources.MediaInfo.read(ctx.applicationContext, item) }
+    val (title, secs, note) = itemDetails(item, info)
+    DetailsDialog(title, secs, note = note, onDone = onDismiss)
 }
 
 /**

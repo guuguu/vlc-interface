@@ -1167,11 +1167,7 @@ fun DetailsDialog(title: String, sections: List<Pair<String, List<Pair<String, S
         ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText(title, text))
         android.widget.Toast.makeText(ctx, "$what copied", android.widget.Toast.LENGTH_SHORT).show()
     }
-    fun report() = buildString {
-        append(title).append("\n\n")
-        sections.forEach { (t, rows) -> append(t).append('\n'); rows.forEach { (k, v) -> append("  ").append(k).append(": ").append(v).append('\n') }; append('\n') }
-        if (note.isNotEmpty()) append(note).append('\n')
-    }
+    fun report() = detailsText(title, sections, note)
     androidx.compose.material3.AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
         title = { Text(title, color = C.text) },
         text = {
@@ -1195,15 +1191,29 @@ fun DetailsDialog(title: String, sections: List<Pair<String, List<Pair<String, S
         dismissButton = {
             Row {
                 // Share (2026-11-21 11:53): Android's share sheet with everything as text (message, mail, notes…).
-                STextButton({
-                    try {
-                        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
-                            .putExtra(android.content.Intent.EXTRA_SUBJECT, title).putExtra(android.content.Intent.EXTRA_TEXT, report())
-                        ctx.startActivity(android.content.Intent.createChooser(send, "Share $title").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                    } catch (_: Exception) { copy(report(), "Details") }
-                }) { Text("Share") }
+                STextButton({ shareDetails(ctx, title, report()) }) { Text("Share") }
                 STextButton({ copy(report(), "Details") }) { Text("Copy all") }
             }
         },
     )
 }
+
+/** Details as plain text (title, sections with "  label: value" lines, note): Copy all and Share. */
+fun detailsText(title: String, sections: List<Pair<String, List<Pair<String, String>>>>, note: String = ""): String = buildString {
+    append(title).append("\n\n")
+    sections.forEach { (t, rows) -> if (rows.isNotEmpty()) { append(t).append('\n'); rows.forEach { (k, v) -> append("  ").append(k).append(": ").append(v).append('\n') }; append('\n') } }
+    if (note.isNotEmpty()) append(note).append('\n')
+}
+
+/** Android's share sheet with [text] (subject [title]); copied instead if nothing can share. */
+fun shareDetails(ctx: android.content.Context, title: String, text: String) {
+    try {
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(android.content.Intent.EXTRA_SUBJECT, title).putExtra(android.content.Intent.EXTRA_TEXT, text)
+        ctx.startActivity(android.content.Intent.createChooser(send, "Share $title").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+    } catch (_: Exception) {
+        ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText(title, text))
+        android.widget.Toast.makeText(ctx, "Details copied", android.widget.Toast.LENGTH_SHORT).show()
+    }
+}
+

@@ -543,3 +543,14 @@
   - Playing video (long press): Video details, unchanged look, now the shared one.
 - Share (11:53): every details pop-up also has "Share" — Android's share sheet with all the details as text (to a
   message, mail, notes, another app); next to "Copy all" and "Close".
+
+## The same menu on every media item in Browse and the Libraries (requested 2026-11-21 11:56)
+- Songs and videos (phone and network folders, Library → Songs, playlists, queue, Up next): ▶ Play now, Play next,
+  Add to queue, Add to playlist…, Details… (was "Tags & ReplayGain…"), Share details…, ReplayGain scan… (songs), and
+  what was already there (Select, Move up / down, Open song folder, Remove from lists, Delete file).
+- Folders (phone folders in Library, folders in phone / network browsing): now also "▶ Play all now", "Details…"
+  and "Share details…" next to Play all next, Add all to queue, Add all to playlist…, New playlist from this folder,
+  ReplayGain scan (with subfolders, audio library), Select, Remove folder from lists.
+- Folder details (shared style): Folder — name, place, source; Inside (with subfolders) — songs, videos, folders
+  with files, total play time (counted when opened). Song / file details now also list artist, album, length and
+  the file's place. "Share details…" opens Android's share sheet with the same text as the pop-up.
