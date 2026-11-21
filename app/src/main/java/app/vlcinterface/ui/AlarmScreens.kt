@@ -84,21 +84,34 @@ fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
     val issues = remember(resumeTick()) { alarmIssues(ctxH) }
     val list = d.alarms.filter { it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID }.sortedBy { it.hour * 60 + it.minute }
     val warn = issues.isNotEmpty() && list.any { it.on }
+    // Permissions missing (typically right after a new install, 2026-11-21 11:41): the alarm area is red and any touch
+    // on it (an alarm, its switch, + Add, ⚙, ⚠) first shows a pop-up with a link to each setting to fix; "Later" goes
+    // on with what was touched. Fixed meanwhile (checked again on coming back to the app): it just goes on.
+    val bad = issues.isNotEmpty()
+    var gate by remember { mutableStateOf<(() -> Unit)?>(null) }
+    fun guard(act: () -> Unit) { if (alarmIssues(ctxH).isNotEmpty()) gate = act else act() }
+    val pendingAct = gate
+    if (pendingAct != null) {
+        if (issues.isEmpty()) androidx.compose.runtime.LaunchedEffect(pendingAct) { gate = null; pendingAct() }
+        else AlarmPermissionDialog(issues, onLater = { gate = null; pendingAct() }, onClose = { gate = null })
+    }
+    val redBg = Color(0x40E53935)
     if (compact) {
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
-            if (warn) Text("⚠", color = C.bad, fontSize = SYM, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(4.dp))
+        FlowRow(Modifier.fillMaxWidth().then(if (bad) Modifier.clip(RoundedCornerShape(10.dp)).background(redBg).border(1.dp, C.bad, RoundedCornerShape(10.dp)).padding(4.dp) else Modifier), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
+            if (warn || bad) Text("⚠", color = C.bad, fontSize = SYM, modifier = Modifier.clickable { guard { nav.go(Screen.AlarmSettings) } }.padding(4.dp))
             list.forEach { al ->
                 Text(al.timeText, color = if (al.on) C.text else C.muted, fontSize = 13.sp, fontWeight = if (al.on) FontWeight.SemiBold else FontWeight.Normal,
-                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF)).clickable { nav.go(Screen.AlarmEdit(al.id)) }.padding(horizontal = 8.dp, vertical = (3 * sg()).dp))
+                    modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF)).clickable { guard { nav.go(Screen.AlarmEdit(al.id)) } }.padding(horizontal = 8.dp, vertical = (3 * sg()).dp))
             }
-            Text("+", color = accent(), fontSize = SYM, modifier = Modifier.clickable { nav.go(Screen.AlarmEdit("")) }.padding(horizontal = 6.dp, vertical = (2 * sg()).dp))
-            Text("⚙", color = C.text, fontSize = SYM, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(horizontal = 6.dp, vertical = (2 * sg()).dp))
+            Text("+", color = accent(), fontSize = SYM, modifier = Modifier.clickable { guard { nav.go(Screen.AlarmEdit("")) } }.padding(horizontal = 6.dp, vertical = (2 * sg()).dp))
+            Text("⚙", color = C.text, fontSize = SYM, modifier = Modifier.clickable { guard { nav.go(Screen.AlarmSettings) } }.padding(horizontal = 6.dp, vertical = (2 * sg()).dp))
         }
         return
     }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Color(0x14FFFFFF))) {
-        if (warn) Text("⚠  Alarms may not ring: " + issues.joinToString(" · ") { it.title } + "  ›", color = C.bad, fontSize = 13.sp,
-            modifier = Modifier.fillMaxWidth().clickable { nav.go(Screen.AlarmSettings) }.padding(12.dp))
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (bad) redBg else Color(0x14FFFFFF))
+        .then(if (bad) Modifier.border(1.dp, C.bad, RoundedCornerShape(12.dp)) else Modifier)) {
+        if (bad) Text("⚠  Alarms may not ring: " + issues.joinToString(" · ") { it.title } + "  ›", color = C.bad, fontSize = 13.sp,
+            modifier = Modifier.fillMaxWidth().clickable { gate = { nav.go(Screen.AlarmSettings) } }.padding(12.dp))
         // Row height from Look → "Alarm rows under the clock" (50 % = half the old 56 dp rows); every alarm listed,
         // the list scrolls on its own when they don't all fit.
         val k = App.instance.store.state.collectAsState().value.settings.alarmRowPct.coerceIn(50, 100) / 100f
@@ -106,20 +119,20 @@ fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
         val maxRows = 5
         val listScroll = rememberScrollState()
         Column(Modifier.fillMaxWidth().heightIn(max = (rowH + 1.dp) * maxRows).verticalScroll(listScroll)) {
-            list.forEach { al -> AlarmRow(nav, al, k); Divider() }
+            list.forEach { al -> AlarmRow(nav, al, k, guard = { a -> guard(a) }); Divider() }
         }
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("+  Add alarm", color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f).clickable { nav.go(Screen.AlarmEdit("")) }.padding(12.dp))
-            Text("⚙", color = C.text, fontSize = SYM, modifier = Modifier.clickable { nav.go(Screen.AlarmSettings) }.padding(12.dp))
+                modifier = Modifier.weight(1f).clickable { guard { nav.go(Screen.AlarmEdit("")) } }.padding(12.dp))
+            Text("⚙", color = C.text, fontSize = SYM, modifier = Modifier.clickable { guard { nav.go(Screen.AlarmSettings) } }.padding(12.dp))
         }
     }
 }
 
 /** One alarm row: time, name / when, and a wide switch; switching it confirms with a short note. Height scaled by [k]. */
 @Composable
-fun AlarmRow(nav: Navigator, al: Alarm, k: Float) {
-    Row(Modifier.fillMaxWidth().height((56 * k).dp).clickable { nav.go(Screen.AlarmEdit(al.id)) }.padding(horizontal = 12.dp),
+fun AlarmRow(nav: Navigator, al: Alarm, k: Float, guard: (() -> Unit) -> Unit = { it() }) {
+    Row(Modifier.fillMaxWidth().height((56 * k).dp).clickable { guard { nav.go(Screen.AlarmEdit(al.id)) } }.padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Text(al.timeText, color = if (al.on) C.text else C.muted, fontSize = (12 + 8 * (k - 0.5f) * 2).sp, fontWeight = FontWeight.SemiBold)
         Column(Modifier.weight(1f).padding(start = 10.dp)) {
@@ -129,11 +142,11 @@ fun AlarmRow(nav: Navigator, al: Alarm, k: Float) {
             } else Text(listOf(al.name, Alarm.whenText(al)).filter { it.isNotEmpty() }.joinToString(" · "), color = C.muted,
                 fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        WideSwitch(al.on, height0 = (14 + 12 * (k - 0.5f) * 2).dp, holdMs = 1000L, tapNote = "Hold 1 s to switch this alarm") { on ->
+        WideSwitch(al.on, height0 = (14 + 12 * (k - 0.5f) * 2).dp, holdMs = 1000L, tapNote = "Hold 1 s to switch this alarm") { on -> guard {
             Alarms.put(al.copy(on = on))
             val what = listOf(al.timeText, Alarm.daysText(al.days).takeIf { al.mode == "weekly" && al.days != 0 } ?: "", al.name).filter { it.isNotEmpty() }.joinToString(" ")
             ShortNote.show(if (on) "$what will ring" else "$what won't ring")
-        }
+        } }
     }
 }
 
@@ -859,6 +872,34 @@ fun alarmIssues(ctx: android.content.Context): List<AlarmIssue> {
     if (ctx.getSystemService(android.app.ActivityManager::class.java).isBackgroundRestricted) out += AlarmIssue("Battery: Restricted", "Android may block the app at alarm time") {
         open(it, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)) }
     return out
+}
+
+/**
+ * Pop-up when the alarms lack a permission (e.g. after a new install): each missing one with a button that opens its
+ * Android setting; "Later" goes on with what was touched, ✕ / outside closes it.
+ */
+@Composable
+fun AlarmPermissionDialog(issues: List<AlarmIssue>, onLater: () -> Unit, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    AlertDialog(onDismissRequest = onClose, containerColor = C.panel,
+        title = { Text("⚠  Alarms need permissions", color = C.bad) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
+                Text("Android hasn't given the app everything an alarm needs to ring on time (usual after a new install). Open each setting below, allow it, then come back.",
+                    color = C.text, fontSize = 14.sp)
+                issues.forEach { i ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(i.title, color = C.bad, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                            Text(i.text, color = C.muted, fontSize = 12.sp)
+                        }
+                        Pill("Open setting") { i.fix(ctx) }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton(onLater) { Text("Later", color = accent()) } },
+        dismissButton = { STextButton(onClose) { Text("Close") } })
 }
 
 /** Bumps every time the app comes back to the front (permissions may have changed in Android's settings). */

@@ -505,3 +505,12 @@
 - The helper pop-up that opens when a slider is held still now appears only the first time for each slider; after
   that, holding the slider still does nothing more until the app is restarted. A long press on the setting's text
   still opens its helper whenever wanted.
+
+## Alarms without their permissions: red area and a pop-up (requested 2026-11-21 11:41)
+- When Android hasn't given the alarms what they need (usual right after a new install): exact alarms, notifications,
+  full-screen alarm (Android 14+), battery not "Restricted" — the alarm area under the clock is red (red tint and
+  border, also the small sideways chips) with "⚠ Alarms may not ring: …" on top, whether or not an alarm is on.
+- Any touch on the alarms there (an alarm, its switch, + Add alarm, ⚙, ⚠) first shows "Alarms need permissions":
+  each missing permission with "Open setting" (straight to that Android setting); "Later" goes on with what was
+  touched, Close cancels. Checked again each time you come back to the app: once everything is allowed the area is
+  back to normal and touches act at once (a touch waiting behind the pop-up then just goes on).
