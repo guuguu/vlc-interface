@@ -837,5 +837,6 @@
 ## "Subs/Change" button: load / change the video's subtitles (requested 2026-11-21 16:36)
 - New button "Subs/Change" on the video player (first in the Subs/Sync row upright, next to Subs/Sync sideways): opens
   the same subtitle pop-up as when a video opens — Off and every subtitle of the video (inside the file, plus any
-  downloaded or added), the one on marked ●. A tap puts that one on, saves it silently for this video and closes the
+  downloaded or added), the one in use highlighted (16:37: accent-tinted band with an accent edge, bold, ● and
+  "in use"). A tap puts that one on, saves it silently for this video and closes the
   pop-up. With none: it says so and offers only Off.

@@ -1413,9 +1413,14 @@ private fun SubtitleChoiceDialog(p: PlayerState, onPick: (Int) -> Unit, onDismis
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
                 (listOf(Track(-1, "Off")) + tracks).forEach { t ->
                     val on = if (t.id < 0) p.spuTrack < 0 else t.id == p.spuTrack
-                    Row(Modifier.fillMaxWidth().clickable { onPick(t.id) }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // The one in use highlighted (16:37): accent-tinted band with an accent edge.
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp).clip(RoundedCornerShape(12.dp))
+                        .then(if (on) Modifier.background(accent().copy(alpha = 0.22f)).border(1.dp, accent(), RoundedCornerShape(12.dp)) else Modifier)
+                        .clickable { onPick(t.id) }.padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(if (on) "●" else "○", color = if (on) accent() else C.muted, fontSize = 16.sp, modifier = Modifier.width(28.dp))
-                        Text(t.name, color = if (on) accent() else C.text, fontSize = 16.sp, maxLines = 2)
+                        Text(t.name, color = if (on) accent() else C.text, fontSize = 16.sp, maxLines = 2, fontWeight = if (on) FontWeight.Bold else FontWeight.Normal,
+                            modifier = Modifier.weight(1f))
+                        if (on) Text("in use", color = accent(), fontSize = 12.sp)
                     }
                 }
             }
