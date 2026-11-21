@@ -355,3 +355,15 @@
   most; the zip is written as a hidden "pending" file and only appears when complete — if anything goes wrong
   (even the app closing mid-way) no broken zip is left. Crashes themselves are always kept (crash log and Android's
   exit records), so the next export still contains them.
+
+## For 1.58.0 — from the 1.57.0 error log (uploaded 2026-11-21 02:11)
+- The 3 crashes in the log (00:44, 01:16, 01:30) are the ReplayGain-report crash already fixed in 1.57.0.
+- Video with sound but no picture: between 01:59 and 02:01 libVLC repeatedly logged "can't get Video Surface" /
+  "video output creation failed" / "BufferQueue has been abandoned" (Samsung A56, WhatsApp videos, shuffle). The
+  picture output is made once, when a video starts; when the video view was not ready yet (video player screen
+  still opening, e.g. after a song in the same list) or its surface was taken away while playing, the video went on
+  with sound only. Now: when the video starts, when its view is attached / back on screen, and when the picture
+  output disappears while the video plays, the app checks that a picture exists; if not, the video is re-opened at
+  the same spot (once per video) and a note is written to the Logs ("VOUT").
+- That case no longer marks the file as "hardware can't decode it" (it was a missing picture, not a decoder fault),
+  so such files aren't pushed to software decoding for good.

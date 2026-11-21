@@ -1617,6 +1617,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
         val s0 = _state.value
         val item = s0.queue.getOrNull(i) ?: return
+        if (pictureRecovered != item.uri) pictureRecovered = null      // a different video may be re-opened once again
         session(item, emptyList())
         loadPictureForFile(item)
         val wanted = store.current.subStyle
@@ -2047,6 +2048,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         attachedLayout = layout
         mp.attachViews(layout, null, true, false)
         refreshSurface()
+        checkPicture("view attached")
     }
 
     /** Fresh surfaces for the same view (after it was off screen). */
@@ -2055,7 +2057,30 @@ class PlayerController(private val context: Context, private val store: Store) {
         main.post {
             try { mp.detachViews(); mp.attachViews(layout, null, true, false) } catch (_: Throwable) {}
             refreshSurface()
+            checkPicture("view back on screen")
         }
+    }
+
+    // ---------- picture recovery ----------
+    // libVLC makes the picture output once, when the video starts. If the video view isn't there at that moment
+    // (the video player screen still opening, e.g. after a song in the same list) or its surface is taken away while
+    // playing, libVLC logs "can't get Video Surface" and the video goes on with sound only. The picture is then
+    // brought back by re-opening the video at the same spot, once per video.
+    private var pictureRecovered: String? = null
+    private var voutNow = 0
+
+    private fun checkPicture(why: String, delayMs: Long = 700) {
+        main.postDelayed({
+            val s = _state.value; val item = s.item ?: return@postDelayed
+            if (item.isMusic || item.isRadio || attachedLayout == null || stopping || endHandled) return@postDelayed
+            val count = try { mp.voutCount } catch (_: Throwable) { voutNow }
+            if (count > 0 || !(mp.isPlaying || s.buffering < 100f)) return@postDelayed
+            if (pictureRecovered == item.uri) return@postDelayed
+            pictureRecovered = item.uri
+            android.util.Log.w("PlayerController", "video without picture ($why): re-opening at the same spot")
+            ServerLog.log("video", "play", "VOUT", "", false, "Picture missing ($why) for ${item.title}: re-opened at the same spot")
+            reloadVideo()
+        }, delayMs)
     }
 
     fun detach(layout: VLCVideoLayout) {
@@ -2178,6 +2203,8 @@ class PlayerController(private val context: Context, private val store: Store) {
             MediaPlayer.Event.Playing -> {
                 _state.value = s.copy(isPlaying = true, error = "", ended = false, buffering = 100f, userPaused = false)
                 failsInRow = 0
+                // A video that started without its picture (no view / no surface at that moment) is re-opened once.
+                if (s.item != null && !s.item.isMusic && !s.item.isRadio) checkPicture("video started", 1_500)
                 if (startPaused) { startPaused = false; NativeAudio.appVolume(appVolume * fadeK); pause() }   // "Load": ready, not playing
                 // Every (re)start of playback — also resuming a paused video — re-applies the sound settings,
                 // so volume / preamp / balance always act at once, not only after some other action.
@@ -2211,7 +2238,12 @@ class PlayerController(private val context: Context, private val store: Store) {
             MediaPlayer.Event.LengthChanged -> _state.value = s.copy(length = ev.lengthChanged)
             MediaPlayer.Event.Buffering -> _state.value = s.copy(buffering = ev.buffering)
             MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESSelected -> refreshTracks()
-            MediaPlayer.Event.Vout -> { refreshTracks(); refreshSurface() }
+            MediaPlayer.Event.Vout -> {
+                val before = voutNow; voutNow = ev.voutCount
+                refreshTracks(); refreshSurface()
+                // The picture went away while the video plays on (surface lost): bring it back.
+                if (before > 0 && voutNow == 0) checkPicture("picture output lost")
+            }
             MediaPlayer.Event.EncounteredError -> {
                 val item = s.item
                 // libVLC can't open some SMB servers (SMB1-only): retry once through the in-app bridge.
@@ -2243,7 +2275,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                         try { old?.close() } catch (_: Exception) {}
                         main.postDelayed({ stopping = false }, 500)
                     }
-                } else if (item != null && !item.isMusic && !item.isRadio && VideoAuto.manualDecoder(item.uri).ifEmpty { store.current.settings.videoDecoder } == "auto" &&
+                } else if (item != null && !item.isMusic && !item.isRadio && attachedLayout != null && VideoAuto.manualDecoder(item.uri).ifEmpty { store.current.settings.videoDecoder } == "auto" &&
                     !VideoAuto.software(item.uri) && VideoAuto.mayReopen(item.uri)) {
                     // Hardware decoder failed on this video: once more with the software decoder (kept for this file).
                     VideoAuto.markSoftware(item.uri)
