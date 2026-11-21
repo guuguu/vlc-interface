@@ -357,10 +357,14 @@ object RgScanner {
         if (mode == RgMode.ALBUMS_BY_FOLDERS) items.forEach { tagKey[it.uri] = "folder:" + physicalFolder(ctx, it) }
         val groups = items.groupBy { tagKey[it.uri] ?: groupKey(it, mode) }.values.toList()
         val albumMode = mode != RgMode.TRACK
-        // Phone files: one Android confirmation for all of them, before anything is written.
+        // Phone files: with "All files access" (granted once) they're written straight away, no question (22:55).
+        // Without it: a scan started from a menu asks Android once for all of them; the automatic scan never asks —
+        // the values are kept in the app.
         if (target == RgTarget.FILES) {
             val phone = items.filter { it.uri.startsWith("content://") }.map { it.uri }
-            if (phone.isNotEmpty()) {
+            if (phone.isNotEmpty() && allFilesAccess()) phoneAllowed = true
+            else if (phone.isNotEmpty() && current?.silent == true) phoneAllowed = false
+            else if (phone.isNotEmpty()) {
                 val d = kotlinx.coroutines.CompletableDeferred<Boolean>(); phoneGrant = d
                 update { s -> s.copy(phase = "Waiting for Android's permission to change ${phone.size} phone files", needsPhonePermission = phone) }
                 val ok = d.await()
@@ -497,6 +501,17 @@ object RgScanner {
     }
 
     @Volatile private var phoneAllowed = false
+
+    /** Android's "All files access" for this app (granted once in its settings): phone files written without asking. */
+    fun allFilesAccess(): Boolean = android.os.Build.VERSION.SDK_INT >= 30 && try { android.os.Environment.isExternalStorageManager() } catch (_: Throwable) { false }
+
+    /** A phone file's real path when it can be written directly (All files access granted). */
+    private fun writablePath(ctx: Context, item: PlayItem): String? {
+        if (!allFilesAccess()) return null
+        val p = try { app.vlcinterface.sources.PhysicalPath.of(ctx, item) } catch (_: Exception) { null } ?: return null
+        val f = File(p)
+        return if (p.startsWith("/") && f.isFile && f.canWrite() && (f.parentFile?.canWrite() == true)) p else null
+    }
 
     // ---------- decoding ----------
 
@@ -760,6 +775,13 @@ object RgScanner {
             !ParallelFetch.matchesRemote(item, u, orig, progress = { d, t -> if (t > 0) update { s -> s.copy(current = item.title, phase = "Checking the copy against the server ${d * 100 / t}%") } }))
             throw IllegalStateException("the copy read from the server didn't match it — nothing changed")
         when {
+            // Phone file with "All files access": written through its real path (no Android question), then Android's media
+            // library is told it changed.
+            u.startsWith("content://") && writablePath(ctx, item) != null -> {
+                val f = File(writablePath(ctx, item)!!)
+                val t = File(f.parentFile, f.name + ".rgtmp"); tmp.copyTo(t, true); if (!t.renameTo(f)) { f.delete(); t.renameTo(f) }
+                try { android.media.MediaScannerConnection.scanFile(ctx, arrayOf(f.path), null, null) } catch (_: Exception) {}
+            }
             u.startsWith("content://") -> ctx.contentResolver.openOutputStream(Uri.parse(u), "wt")!!.use { o -> tmp.inputStream().use { copy(it, o, "Saving", tmp.length()) } }
             u.startsWith("file://") || u.startsWith("/") -> {
                 val f = File(if (u.startsWith("/")) u else Uri.parse(u).path!!)

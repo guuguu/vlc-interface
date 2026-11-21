@@ -1121,6 +1121,10 @@
 - **Now (22:53 / 22:54):** the automatic scan writes ReplayGain per song (track gain) into the files' tags, on the NAS and on the phone.
   - Album gain is left to the manual "ReplayGain scan…" (the user saves album ReplayGain himself). The 1.70 change to album gain is reverted.
   - The song playing gets its tags 1.5 s after the player moves on or stops (a file can't be changed while it plays).
-  - Phone files: Android asks once per folder for permission to change them. Declined, or a read-only NAS share: the values are kept in the app.
+  - Phone files (22:55, "don't ask, just write"):
+    - New in Settings → Audio → ReplayGain: "Write tags to phone files without asking" → Allow. It opens Android's "All files access" page for the app; you grant it once.
+    - From then on the tags are written straight into the phone files, through their real path, with no question at all: automatic and menu scans alike. Android's media library is told the file changed.
+    - Until it's allowed, the automatic scan never asks: phone values stay in the app. A menu scan still asks Android once for its files.
+    - A read-only NAS share keeps the values in the app.
   - Songs the automatic scan measured before, with values only in the app, are measured again once and written.
   - The setting's line and helper say so.

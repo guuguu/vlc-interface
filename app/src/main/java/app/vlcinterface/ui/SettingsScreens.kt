@@ -1288,6 +1288,24 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
         // 2026-11-21 12:01: a song without ReplayGain → its whole folder scanned silently, 5 s summary at the end.
         ToggleRow("Automatic ReplayGain for folders", "Phone and home-network songs: a song without it → its whole folder is scanned silently (track gain per song, written into the files' tags); through the VPN you're asked instead",
             s.rgAutoFolder) { set(s.copy(rgAutoFolder = it)) }
+        Divider()
+        // Phone files written without asking (22:55): Android's "All files access", granted once (re-checked every 2 s).
+        run {
+            val ctxA = androidx.compose.ui.platform.LocalContext.current
+            var allowed by remember { mutableStateOf(app.vlcinterface.sources.RgScanner.allFilesAccess()) }
+            LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(2000); allowed = app.vlcinterface.sources.RgScanner.allFilesAccess() } }
+            ValueRow("Write tags to phone files without asking",
+                if (allowed) "Allowed — ReplayGain is written into phone music files directly, no question (automatic and menu scans)"
+                else "Not allowed yet — tap once to allow it in Android (\"All files access\" for this app). Until then the automatic scan keeps phone values in the app",
+                if (allowed) "Allowed" else "Allow") {
+                try {
+                    ctxA.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        android.net.Uri.parse("package:" + ctxA.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+                } catch (_: Exception) {
+                    try { ctxA.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+                }
+            }
+        }
     }
 }
 
