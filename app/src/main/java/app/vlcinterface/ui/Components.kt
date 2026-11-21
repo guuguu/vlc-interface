@@ -1351,14 +1351,16 @@ fun DigitField(value: String, label: String, maxLen: Int, modifier: Modifier = M
 
 
 /**
- * Page title (2026-11-21 18:04): one fixed size everywhere — the same on every page and header, whatever the Button
- * size, the settings Text size or a page's own scaling (22 dp-sized letters, bold).
+ * Page title (2026-11-21 18:04): one size everywhere — the same on every page and header, whatever the Button size,
+ * the settings Text size or a page's own scaling (22 dp letters, bold × Settings → "Page titles size").
  */
 @Composable
 fun PageTitle(text: String, modifier: Modifier = Modifier, maxLines: Int = 2) {
     val d = androidx.compose.ui.platform.LocalDensity.current
     val real = androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics.density
-    val sp = 22f * real / (d.density * d.fontScale)
+    // Same size on every page; set with Settings → "Page titles size" (18:05).
+    val pct = app.vlcinterface.App.instance.store.state.collectAsState().value.settings.pageTitlePct / 100f
+    val sp = 22f * pct * real / (d.density * d.fontScale)
     Text(text, color = C.text, fontSize = sp.sp, lineHeight = (sp * 1.2f).sp, fontWeight = FontWeight.Bold, maxLines = maxLines,
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = modifier)
 }

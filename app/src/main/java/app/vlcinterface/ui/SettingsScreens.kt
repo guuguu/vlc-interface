@@ -138,6 +138,17 @@ fun SettingsScreen(nav: Navigator) {
                         onHoldStill = { if (helpersOnM) sizeHelp = true })
                 }
             }
+            // Page titles size (18:05): one size for every page title in the app.
+            CardBox {
+                Column(Modifier.explain("Page titles size").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Page titles size", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("${s.pageTitlePct} %", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(pageTitlePct = 100)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.pageTitlePct.toFloat(), { v -> set(s.copy(pageTitlePct = (Math.round(v / 5f) * 5).coerceIn(60, 180))) }, valueRange = 60f..180f)
+                }
+            }
             var gapHelp by remember { mutableStateOf(false) }
             CardBox {
                 Column(Modifier.explain("Vertical spacing").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {

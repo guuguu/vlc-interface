@@ -964,3 +964,5 @@
 - One fixed title size (18:04): every page title (common header, Library, Playlists, wizard, Help, Sound output) is
   the same size everywhere — 22 dp letters, bold — not changed by the Button size, the settings Text size or a page's
   own scaling (were 17–28 sp and scaled with those settings).
+- "Page titles size" (18:05): main Settings page, under Text size — 60–180 % (default 100 % = 22 dp letters, Reset);
+  every page title in the app follows it together (still the same size on every page).
