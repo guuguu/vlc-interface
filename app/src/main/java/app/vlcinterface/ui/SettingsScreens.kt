@@ -37,6 +37,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -175,6 +177,9 @@ fun SettingsGroupScreen(nav: Navigator, id: String) {
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
         BackHeader(SETTINGS_GROUPS.toMap()[id] ?: "Settings", nav)
+        // Opened at a section (e.g. the video player's "Subs/Format" → Video → Subtitle format): scrolled to it.
+        val anchorY = SettingsAnchor.y
+        LaunchedEffect(anchorY) { if (SettingsAnchor.want != null && anchorY >= 0) { scroll.animateScrollTo(anchorY); SettingsAnchor.want = null; SettingsAnchor.y = -1 } }
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             SettingsGroupBody(nav, id)
             Box(Modifier.height(24.dp))
@@ -280,6 +285,9 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                 }
             }
+            // Subtitle format (2026-11-21 16:21): look of the subtitles, with a preview shaped like the video.
+            SectionTitle("Subtitle format", Modifier.onGloballyPositioned { if (SettingsAnchor.want == "subformat") SettingsAnchor.y = it.positionInParent().y.toInt() })
+            CardBox { SubtitleFormatSettings() }
             SectionTitle("Subtitles")
             CardBox {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
@@ -1348,3 +1356,10 @@ fun ScrollSpeedCard(title: String, what: String, key: String) {
     }
 }
 
+
+
+/** A section to scroll to when a settings page opens (set by the button that opens it). */
+object SettingsAnchor {
+    var want: String? = null
+    var y by androidx.compose.runtime.mutableIntStateOf(-1)
+}

@@ -1920,6 +1920,9 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     /** Applies a new subtitle style / ReplayGain setting; restarts the current item at the same position. */
+    /** The subtitle format in Settings differs from the one the engine runs with. */
+    fun styleChanged(): Boolean = styleInUse != null && store.current.subStyle != styleInUse
+
     fun applyStyle() {
         val s = _state.value
         if (s.item == null) { recreateEngine(store.current.subStyle); return }

@@ -800,3 +800,16 @@
   subtitle style changes). Only for videos (not songs or radio).
 - The choice is saved silently for that video (16:17): next time it opens — also after restarting the app — that
   subtitle (or Off) is put on by itself and the pop-up doesn't appear. Changing it later in Subs/Sync saves the new one.
+
+## Subtitle format in Settings → Video, with a proportional preview (requested 2026-11-21 16:21)
+- The subtitle look moved to Settings → Video → new section "Subtitle format" (above Subtitles): font, font size +
+  Bold, font colour, border colour / width, shadow colour / width / direction / transparency, dark box, position in
+  10 steps, Reset.
+- Preview at the top of the section: a picture shaped like the video playing (16:9 when none; upright videos drawn
+  upright), with a two-row sample subtitle drawn in proportion to it as the player draws it — font size, border,
+  shadow distance and height on the picture all scaled to the preview.
+- Video player: a "Subs/Format" button (with Subs/Sync, Audio/Sync, Hue/Sat — upright under the picture and
+  sideways) and "Aa Style" inside Subs/Sync both open Settings → Video scrolled straight to Subtitle format; Back
+  returns to the video.
+- Saved at once. When you go back to the player, a playing video takes the new format on by itself (it reopens at the
+  same spot for a moment) — no "Apply" button any more.

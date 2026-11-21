@@ -196,6 +196,9 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     // Music never uses the video player: hand over to the music screen (also when a queue moves on to a song).
     LaunchedEffect(p.item?.uri, p.item?.startMs) { if (p.item?.isMusic == true || p.item?.isRadio == true) nav.replace(Screen.Music) }
 
+    // Subtitle format changed in Settings (16:21): the playing video takes it on when the player is back on screen.
+    LaunchedEffect(st.subStyle) { if (p.item != null && !p.item!!.isMusic && !p.item!!.isRadio && player.styleChanged()) player.applyStyle() }
+
     // A video with subtitle tracks inside it (2026-11-21 16:14): a pop-up to choose which one to use, once per video
     // opened (not again when the same video reopens at the same spot); a tap on a choice sets it and closes the pop-up.
     var subAsk by remember { mutableStateOf(false) }
@@ -347,7 +350,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 Panel.PICTURE -> PictureBar(onClose = { panel = Panel.NONE })
                 Panel.TRACKS, Panel.DOWNLOAD, Panel.STYLE -> SidePanel(landscape, onClose = { panel = Panel.NONE },
                     onBack = { panel = if (panel == Panel.TRACKS) Panel.NONE else Panel.TRACKS }) {
-                    PanelContent(panel, p, onPanel = { panel = it })
+                    PanelContent(panel, p, nav, onPanel = { panel = it })
                 }
                 Panel.SYNC_SUB, Panel.SYNC_AUDIO -> OverlaySync(panel == Panel.SYNC_SUB, p, st.settings.syncPanelOpacity) { panel = Panel.TRACKS }
                 else -> {}
@@ -377,7 +380,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                                             color = C.text, fontSize = (17 * btnScale()).sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
                                         SymButton({ panel = Panel.NONE }) { Text("✕", color = C.text) }
                                     }
-                                    PanelContent(panel, p, onPanel = { panel = it })
+                                    PanelContent(panel, p, nav, onPanel = { panel = it })
                                 }
                                 else -> PortraitIdle(p, nav, showList = !videoPortrait, onPanel = { panel = Panel.TRACKS }, onOutput = openOutput, onPicture = { panel = Panel.PICTURE },
                                     scaleLabel = scales[scaleIdx].second + "\u0000" + scales[(scaleIdx + 1) % scales.size].second,
@@ -553,6 +556,7 @@ private fun BoxScope.ControlsOverlayBody(
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
             OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             OverlayChip("Hue/Sat") { onTouch(); onPicture() }
+            OverlayChip("Subs/Format") { onTouch(); openSubtitleFormat(nav) }
             speedChip()
             OverlayChip("Songs") { PlayerSwitch.go(nav, "songs") }
             OverlayChip("Radio") { PlayerSwitch.go(nav, "radio") }
@@ -575,6 +579,7 @@ private fun BoxScope.ControlsOverlayBody(
             OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             // Dedicated button: hue & saturation, straight to the sliders.
             OverlayChip("Hue/Sat") { onTouch(); onPicture() }
+            OverlayChip("Subs/Format") { onTouch(); openSubtitleFormat(nav) }
             speedChip()
         }
     }
@@ -690,6 +695,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             Pill("Subs/Sync") { onPanel() }
             Pill(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true }
             Pill("Hue/Sat") { onPicture() }
+            Pill("Subs/Format") { openSubtitleFormat(nav) }
             Pill("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
                 val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
                 val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
@@ -761,12 +767,12 @@ private fun SidePanel(landscape: Boolean, onClose: () -> Unit, onBack: (() -> Un
 }
 
 @Composable
-private fun PanelContent(panel: Panel, p: PlayerState, onPanel: (Panel) -> Unit) {
+private fun PanelContent(panel: Panel, p: PlayerState, nav: Navigator, onPanel: (Panel) -> Unit) {
     when (panel) {
         Panel.DOWNLOAD -> DownloadPanel(p) { onPanel(Panel.TRACKS) }
-        Panel.STYLE -> StylePanel { onPanel(Panel.TRACKS) }
+        Panel.STYLE -> TracksPanel(p, nav, onPanel)
         Panel.PICTURE -> PicturePanel { onPanel(Panel.TRACKS) }
-        else -> TracksPanel(p, onPanel)
+        else -> TracksPanel(p, nav, onPanel)
     }
 }
 
@@ -901,7 +907,7 @@ private fun BoxScope.PictureBar(onClose: () -> Unit) {
 }
 
 @Composable
-private fun TracksPanel(p: PlayerState, onPanel: (Panel) -> Unit) {
+private fun TracksPanel(p: PlayerState, nav: Navigator, onPanel: (Panel) -> Unit) {
     val player = App.instance.player
     val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) player.addSubtitleFile(uri) }
     val scroll = rememberScrollState()
@@ -916,7 +922,7 @@ private fun TracksPanel(p: PlayerState, onPanel: (Panel) -> Unit) {
         }
         Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             SectionTitle("Subtitles", Modifier.weight(1f))
-            Pill("Aa Style") { onPanel(Panel.STYLE) }
+            Pill("Aa Style") { openSubtitleFormat(nav) }
         }
         p.spuTracks.forEach { t -> TrackRow(if (t.id < 0) "Off" else t.name, t.id == p.spuTrack) { player.selectSpu(t.id) } }
         FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1046,39 +1052,59 @@ private fun SubColours(list: List<Int>, selected: Int, onPick: (Int) -> Unit) {
     }
 }
 
+/**
+ * Subtitle format (2026-11-21 16:21): Settings → Video → "Subtitle format", also opened by the video player's
+ * "Subs format" button. Saved at once; the playing video takes it on when you go back to it.
+ */
 @Composable
-private fun StylePanel(onBack: () -> Unit) {
+fun SubtitleFormatSettings() {
     val store = App.instance.store
     val st by store.state.collectAsState()
     val s = st.subStyle
     fun set(n: SubStyle) = store.update { it.copy(subStyle = n) }
-    val scroll = rememberScrollState()
-    Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("‹ Back", color = accent(), modifier = Modifier.clickable(onClick = onBack).padding(8.dp))
-            Grow()
+            Text("Text subtitles (SRT, VTT…; styled ASS ones keep their own look)", color = C.muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
             Pill("Reset") { set(SubStyle()) }
         }
-        // Live preview of the chosen look (2026-11-21 16:05): a picture with the line at its height, border and shadow.
-        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF2B3A4A))) {
-            val fam = when (s.font) { "serif" -> FontFamily.Serif; "monospace" -> FontFamily.Monospace; else -> FontFamily.SansSerif }
-            val fs = (16 * s.sizePct / 100f).sp
-            val wt = if (s.bold) FontWeight.Bold else FontWeight.Medium
-            val line = "Subtitle preview line"
-            val up = maxHeight * (0.03f + 0.09f * (s.posStep - 1))
-            Box(Modifier.align(Alignment.BottomCenter).padding(bottom = up).then(if (s.box) Modifier.background(Color(0xA0000000)).padding(horizontal = 6.dp) else Modifier)) {
-                if (s.shadowWidth > 0) {
-                    val d = s.shadowWidth * 0.6f
-                    val rad = Math.toRadians(s.shadowAngle.toDouble())
-                    Text(line, color = Color(0xFF000000 or s.shadowColor.toLong()).copy(alpha = (100 - s.shadowTransp) / 100f), fontSize = fs, fontWeight = wt, fontFamily = fam,
-                        modifier = Modifier.offset(x = (d * kotlin.math.cos(rad)).dp, y = (-d * kotlin.math.sin(rad)).dp))
+        // Preview (2026-11-21 16:21): a picture shaped like the video playing (16:9 when none), with the subtitle drawn
+        // in proportion to it as the player draws it — font size, border, shadow and height all scaled with the picture.
+        val ps = App.instance.player.state.collectAsState().value
+        val aspect = (if (ps.videoW > 0 && ps.videoH > 0) ps.videoW.toFloat() / ps.videoH else 16f / 9f).coerceIn(0.4f, 3f)
+        val conf = androidx.compose.ui.platform.LocalConfiguration.current
+        val scrMin = minOf(conf.screenWidthDp, conf.screenHeightDp).toFloat(); val scrMax = maxOf(conf.screenWidthDp, conf.screenHeightDp).toFloat()
+        // Height of the picture when it plays sideways (full screen): the subtitle margin is counted in screen pixels.
+        val playH = minOf(scrMin, scrMax / aspect)
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val pw = if (aspect >= 1f) maxWidth else maxWidth * 0.6f
+            val ph = pw / aspect
+            Box(Modifier.align(Alignment.Center).width(pw).height(ph).clip(RoundedCornerShape(6.dp))
+                .background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color(0xFF3A5068), Color(0xFF1E2A36), Color(0xFF2E3B2A))))) {
+                val dens = androidx.compose.ui.platform.LocalDensity.current
+                val rel = (16f * 100f / s.sizePct.coerceIn(50, 200)).toInt().coerceIn(4, 40)
+                val fontDp = ph / rel
+                val fs = with(dens) { fontDp.toSp() }
+                val fam = when (s.font) { "serif" -> FontFamily.Serif; "monospace" -> FontFamily.Monospace; else -> FontFamily.SansSerif }
+                val wt = if (s.bold) FontWeight.Bold else FontWeight.Medium
+                val line = "Subtitle preview line\non two rows"
+                val up = ph * ((0.02f + 0.09f * (s.posStep - 1)) * scrMin / playH).coerceAtMost(0.85f)
+                Box(Modifier.align(Alignment.BottomCenter).padding(bottom = up).then(if (s.box) Modifier.background(Color(0xA0000000)).padding(horizontal = fontDp * 0.3f) else Modifier)) {
+                    if (s.shadowWidth > 0) {
+                        val d = fontDp * (s.shadowWidth * 0.02f)
+                        val rad = Math.toRadians(s.shadowAngle.toDouble())
+                        Text(line, color = Color(0xFF000000 or s.shadowColor.toLong()).copy(alpha = (100 - s.shadowTransp) / 100f), fontSize = fs, fontWeight = wt, fontFamily = fam,
+                            textAlign = TextAlign.Center, lineHeight = fs * 1.15f,
+                            modifier = Modifier.offset(x = d * kotlin.math.cos(rad).toFloat(), y = -d * kotlin.math.sin(rad).toFloat()))
+                    }
+                    if (s.outlineWidth > 0) Text(line, color = Color(0xFF000000 or s.outlineColor.toLong()), fontSize = fs, fontWeight = wt, fontFamily = fam,
+                        textAlign = TextAlign.Center, lineHeight = fs * 1.15f,
+                        style = androidx.compose.ui.text.TextStyle(drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(
+                            width = with(dens) { (fontDp * s.outlineWidth * 0.05f).toPx() }, join = androidx.compose.ui.graphics.StrokeJoin.Round)))
+                    Text(line, color = Color(0xFF000000 or s.color.toLong()), fontSize = fs, fontWeight = wt, fontFamily = fam, textAlign = TextAlign.Center, lineHeight = fs * 1.15f)
                 }
-                if (s.outlineWidth > 0) Text(line, color = Color(0xFF000000 or s.outlineColor.toLong()), fontSize = fs, fontWeight = wt, fontFamily = fam,
-                    style = androidx.compose.ui.text.TextStyle(drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(width = s.outlineWidth * 1.6f,
-                        join = androidx.compose.ui.graphics.StrokeJoin.Round)))
-                Text(line, color = Color(0xFF000000 or s.color.toLong()), fontSize = fs, fontWeight = wt, fontFamily = fam)
             }
         }
+        Text(if (ps.videoW > 0) "Preview shaped like the video playing (${ps.videoW}×${ps.videoH})" else "Preview of a 16:9 video", color = C.muted, fontSize = 12.sp)
         Text("Font", color = C.muted, fontSize = 13.sp)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             fonts.forEach { (f, l) -> Pill(l, selected = s.font == f) { set(s.copy(font = f)) } }
@@ -1123,8 +1149,8 @@ private fun StylePanel(onBack: () -> Unit) {
         Slider(s.posStep.toFloat(), { set(s.copy(posStep = Math.round(it).coerceIn(1, 10))) }, valueRange = 1f..10f, steps = 8,
             colors = SliderDefaults.colors(activeTrackColor = accent(), thumbColor = Color.White))
         Text("Long lines are split by the player to the picture's width; every line stays on the picture.", color = C.muted, fontSize = 12.sp)
-        Pill("Apply to video", filled = true) { App.instance.player.applyStyle() }
-        Text("Applies to all videos. The video reloads for a moment at the same position. Styled (ASS) subtitles keep their own look.", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(bottom = 12.dp))
+        Text("Applies to all videos; a playing video takes it on when you go back to the player (it reopens at the same spot for a moment).",
+            color = C.muted, fontSize = 12.sp)
     }
 }
 
@@ -1378,4 +1404,11 @@ private fun SubtitleChoiceDialog(p: PlayerState, onPick: (Int) -> Unit, onDismis
             }
         }
     }
+}
+
+
+/** Opens Settings → Video at its "Subtitle format" section (the video player's buttons). */
+fun openSubtitleFormat(nav: Navigator) {
+    SettingsAnchor.want = "subformat"
+    nav.go(Screen.SettingsGroup("video"))
 }
