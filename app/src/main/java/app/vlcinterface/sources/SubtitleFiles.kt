@@ -119,6 +119,60 @@ object SubtitleFiles {
         SubRef(local, src, folder, name).also { refs[item.uri] = it }
     }
 
+    /**
+     * Subtitles one folder level down (2026-11-21 21:11: films whose subtitles sit in a subfolder that can't be browsed
+     * by hand, e.g. "Movie/Subs/2_English.srt"). In each subfolder of the video's folder, a subtitle file is taken when
+     * its name starts with the video's name, or when the subfolder itself is a subtitle folder (Subs, Subtitles, Sub,
+     * Subtitulos …) or is named after the video — there every subtitle file counts. At most 12 subfolders and 24 files
+     * (500 KB each); copied into the app (for the player and for sync saving back into the file).
+     * Network videos (SMB / web) and phone videos with a real file path.
+     */
+    private val subRefs = HashMap<String, List<SubRef>>()
+    private val SUB_EXT = setOf("srt", "ass", "ssa", "vtt", "sub")
+    private val SUB_DIR = Regex("""(?i)^(subs?|subtitles?|subtitulos?|sottotitoli|untertitel|legendas?|sous[- ]?titres?|subtitrari)$""")
+
+    suspend fun findInSubfolders(ctx: Context, item: PlayItem, phonePath: String?): List<SubRef> = withContext(Dispatchers.IO) {
+        subRefs[item.uri]?.let { return@withContext it }
+        val base = Uri.decode(item.uri.substringAfterLast('/')).substringBeforeLast('.')
+        fun norm(x: String) = x.lowercase().replace(Regex("""[\s._\-]+"""), " ").trim()
+        val nb = norm(base)
+        fun wanted(dirName: String, fileName: String): Boolean {
+            if (fileName.ext() !in SUB_EXT) return false
+            val d = Uri.decode(dirName).trimEnd('/')
+            return SUB_DIR.matches(d) || norm(d) == nb || norm(Uri.decode(fileName).substringBeforeLast('.')).startsWith(nb)
+        }
+        val out = ArrayList<SubRef>()
+        val store = dir(ctx, "subtitles/" + hash(item.uri) + "/sub")
+        try {
+            val src = sourceOf(item)
+            if (src != null && (item.uri.startsWith("smb://") || item.uri.startsWith("http"))) {
+                val list = Browse.listAll(src, Urls.parent(item.uri), "subtitles").getOrNull() ?: emptyList()
+                for (d in list.filter { it.isDir }.take(12)) {
+                    if (out.size >= 24) break
+                    val files = Browse.listAll(src, d.uri, "subtitles").getOrNull() ?: continue
+                    for (f in files.filter { !it.isDir && wanted(d.name, it.name) && (it.size <= 0 || it.size <= 500_000) }) {
+                        if (out.size >= 24) break
+                        val bytes = read(src, f.uri) ?: continue
+                        val name = Uri.decode(f.name)
+                        // The copy is named "<subfolder> - <file>" so two "English.srt" in different subfolders don't clash.
+                        val local = File(store, (Uri.decode(d.name).trimEnd('/') + " - " + name).replace('/', '_')).apply { writeBytes(bytes) }
+                        out += SubRef(local, src, d.uri, name)
+                    }
+                }
+            } else if (phonePath != null) {
+                val folder = File(phonePath).parentFile
+                folder?.listFiles()?.filter { it.isDirectory }?.take(12)?.forEach { d ->
+                    // libVLC already loads files in Subs / Subtitles whose name contains the video's: not added twice.
+                    d.listFiles()?.filter { it.isFile && wanted(d.name, it.name) && it.length() <= 500_000 &&
+                        !(SUB_DIR.matches(d.name) && norm(it.name.substringBeforeLast('.')).contains(nb)) }?.forEach { f ->
+                        if (out.size < 24) out += SubRef(f, null, "", f.name)
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        out.also { subRefs[item.uri] = it }
+    }
+
     private fun read(src: Source, uri: String): ByteArray? = try {
         when {
             uri.startsWith("smb://") -> SmbFile(VpnLink.route(Uri.decode(uri)), SmbProbe.fileContext(src.smbVersion, src.user, src.password, src.domain)).openInputStream().use { it.readBytes() }

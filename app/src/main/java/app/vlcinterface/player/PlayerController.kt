@@ -1884,6 +1884,14 @@ class PlayerController(private val context: Context, private val store: Store) {
                 if (ref != null && _state.value.item?.uri == item.uri) addSubtitleFile(Uri.fromFile(ref.local))
             }
         }
+        // Subtitles one subfolder level down (2026-11-21 21:11, e.g. "Movie/Subs/2_English.srt"): added as choices in the
+        // subtitle pop-up and Subs/Change (not switched on by themselves). Network videos and phone videos with a path.
+        if (isVideo) bg.launch {
+            val pp = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { if (netVideo) null else phonePath(item) }
+            val found = try { app.vlcinterface.sources.SubtitleFiles.findInSubfolders(context, item, pp) } catch (_: Exception) { emptyList() }
+            for (r in found) { if (_state.value.item?.uri != item.uri) break; addSubtitleFile(Uri.fromFile(r.local), select = false) }
+            if (found.isNotEmpty()) android.util.Log.i("PlayerController", "${found.size} subtitle file(s) in subfolders of ${item.title}: " + found.joinToString { it.remoteName })
+        }
         if (deintOn) {
             media.addOption(":deinterlace=-1"); media.addOption(":deinterlace-mode=yadif2x")   // full motion (every field), best quality
             media.addOption(":no-mediacodec-dr")
@@ -2050,7 +2058,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (audioRestored && spuRestored) tracksRestored = true
     }
 
-    fun addSubtitleFile(uri: Uri, keep: Boolean = false) {
+    /** [select] false: only added as a choice (subtitles found in subfolders), not switched on. */
+    fun addSubtitleFile(uri: Uri, keep: Boolean = false, select: Boolean = true) {
         // Colour codes taken out (a cleaned copy; the original file is never changed); the original if it can't be read.
         val st = store.current.subStyle
         val before = _state.value.spuTracks.map { it.id }.toSet()
@@ -2058,7 +2067,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             val use = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 app.vlcinterface.sources.SubColors.cleanedCopy(context, uri, st.color, st.outlineColor)
             } ?: uri
-            mp.addSlave(IMedia.Slave.Type.Subtitle, use, true)
+            mp.addSlave(IMedia.Slave.Type.Subtitle, use, select || keep)
             main.postDelayed({
                 refreshTracks()
                 // [keep]: the new track is shown and saved silently as this video's subtitles.

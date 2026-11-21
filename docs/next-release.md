@@ -1020,3 +1020,14 @@
 - **What changed:** swiping right or pulling down at the top now goes back to that player. It used to stop on the main Settings page first. Back and the red ✕ already went to the player.
 - **Checked, already direct:** the song / radio player's menus and pop-ups (sleep timer, Jump to, speed, song menu, Play next pick) close straight to the player.
 - **Left as it is:** the Sound output sheet stays open after a device is picked. It also holds that device's volume, preamp and balance.
+
+## Subtitles found in subfolders (requested 2026-11-21 21:11)
+- When a video opens, the folders one level under the video's folder are checked for subtitle files (.srt, .ass, .ssa, .vtt, .sub). This covers subtitles in a subfolder that can't be browsed by hand, e.g. "Movie/Subs/2_English.srt".
+- **Taken:** a file whose name starts with the video's name, or any subtitle file in a subtitle folder ("Subs", "Subtitles", "Sub", "Subtitulos", "Sottotitoli", "Untertitel", "Legendas", "Sous-titres", "Subtitrari") or in a folder named after the video.
+- **Limits:** at most 12 subfolders and 24 files.
+- **Where:** network videos (SMB / web) and phone videos.
+  - On the phone, libVLC already loads Subs / Subtitles files containing the video's name; those aren't added twice.
+- **How they're used:**
+  - They're copied into the app, colour codes taken out like every subtitle file, and added as choices. They appear in the subtitle pop-up when the video opens and in Subs/Change.
+  - They aren't switched on by themselves; the same-name file next to the video still is.
+  - The pop-up now waits up to 12 s for subtitles (network subfolders take a moment), and subtitles arriving later appear in it while it's open.

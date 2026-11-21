@@ -211,8 +211,9 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         if (item.isRadio || item.isMusic || item.uri in SubAskOnce.asked) return@LaunchedEffect
         // A choice already saved for this video (16:17): used silently, no pop-up.
         if (app.vlcinterface.player.VideoAuto.int(item.uri, "sId") != null) return@LaunchedEffect
-        // The tracks arrive while the file opens: wait for them a few seconds.
-        repeat(16) {
+        // The tracks arrive while the file opens: wait for them a few seconds (12 s: subtitles found in subfolders of
+        // a network folder take a moment to list and copy, 21:11). Tracks arriving later appear in the open pop-up.
+        repeat(24) {
             if (player.state.value.item?.uri != item.uri) return@LaunchedEffect
             if (player.state.value.spuTracks.any { it.id >= 0 }) { delay(600); SubAskOnce.asked += item.uri; SubChoiceUi.open = true; return@LaunchedEffect }
             delay(500)
