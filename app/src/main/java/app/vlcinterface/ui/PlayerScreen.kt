@@ -699,6 +699,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         // The buttons under the picture (16:41): all the same size, linked across their rows (the widest label sets the
         // width for every one), wrapped in centred rows; when even one doesn't fit the width, all shrink together.
         val parts = scaleLabel.split('\u0000')
+        // Each line of buttons is one item in Look → "Order of the player rows" (16:46): Subs line and Picture line.
         val soundBtns = listOf(
             UBtn("Subs/Change", p.spuTracks.any { it.id >= 0 }) { SubChoiceUi.open = true },   // lit: the video has subtitles (16:38)
             UBtn("Subs/Sync") { onPanel() },
@@ -717,8 +718,9 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             UBtn(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() },
         )
         val cell = underCell((soundBtns + fileBtns + formatBtns).map { it.label })
-        // Sound & picture.
-        val rowSound: @Composable () -> Unit = { UnderButtons(soundBtns, cell) }
+        // Subtitles and sound sync; picture, subtitle format and speed.
+        val rowSubs: @Composable () -> Unit = { UnderButtons(soundBtns.take(3), cell) }
+        val rowPicture: @Composable () -> Unit = { UnderButtons(soundBtns.drop(3), cell) }
         // Files.
         val rowFiles: @Composable () -> Unit = { UnderButtons(fileBtns, cell) }
         // Picture format and orientation.
@@ -748,7 +750,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         }
         // In the order set in Look → "Order of the player rows" → Video.
         for (id in videoRowOrder(st.settings)) when (id) {
-            "title" -> rowTitle(); "playing" -> rowPlaying(); "sound" -> rowSound(); "files" -> rowFiles(); "format" -> rowFormat(); "upnext" -> rowUpNext()
+            "title" -> rowTitle(); "playing" -> rowPlaying(); "subs" -> rowSubs(); "picture" -> rowPicture(); "files" -> rowFiles(); "format" -> rowFormat(); "upnext" -> rowUpNext()
         }
     }
 }
@@ -1457,17 +1459,20 @@ private fun underCell(labels: List<String>): UCell {
     val widest = labels.maxOfOrNull { l ->
         with(dens) { tm.measure(l, androidx.compose.ui.text.TextStyle(fontSize = font.sp, fontWeight = FontWeight.SemiBold)).size.width.toDp().value }
     } ?: 60f
+    // Up to 3 buttons on one line (16:46): the width never passes a third of the room.
     val w = widest + 28f
-    return if (w <= room) UCell(w.dp, (40f * k).coerceIn(36f, 56f).dp, font.sp)
+    val most = (room - 16f) / 3f
+    return if (w <= most) UCell(w.dp, (40f * k).coerceIn(36f, 56f).dp, font.sp)
+    else if (most >= 60f) { val f = most / w; UCell(most.dp, (40f * k).coerceIn(36f, 56f).dp, (font * f).coerceAtLeast(9f).sp) }
     else { val f = room / w; UCell(room.dp, ((40f * k).coerceIn(36f, 56f) * maxOf(f, 0.8f)).dp, (font * f).coerceAtLeast(9f).sp) }
 }
 
-/** A group of same-size buttons, wrapped in rows centred across the page. */
+/** One line of same-size buttons, centred across the page. */
 @Composable
 private fun UnderButtons(btns: List<UBtn>, cell: UCell) {
     val a = accent()
-    androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // One fixed line of buttons, centred (each line is an item to reorder in Look).
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
         btns.forEach { b ->
             Box(Modifier.width(cell.w).height(cell.h).clip(RoundedCornerShape(cell.h / 2))
                 .background(if (b.lit) a.copy(alpha = 0.18f) else Color.Transparent)

@@ -851,8 +851,11 @@
   together, text included. Highlighted buttons (Subs/Change with subtitles) keep the accent look.
 - The format button now reads "Fit → Fill" (without "Format:") to keep the shared width small.
 
-## Reordering: the button lines only (2026-11-21 16:44)
-- The reorder list for the video player (Look → "Order of the player rows" → Video) moves whole lines only — Title,
-  Play buttons, the line Subs/Change · Subs/Sync · Audio/Sync · Hue/Sat · Subs/Format · speed, Browse, the line
-  Format · Rotate, Up next. The buttons inside a line keep their fixed order (the per-button lists of 16:43 were
-  taken back out).
+## Reordering: the button lines only (2026-11-21 16:44 / 16:46)
+- Each line of buttons under the upright video is one item in Look → "Order of the player rows" → Video:
+  Title · Play buttons · "Subs/Change, Subs/Sync, Audio/Sync" · "Hue/Sat, Subs/Format, speed" · Browse ·
+  "Format, Rotate" · Up next — dragged like the other rows. The buttons inside a line keep their fixed order (the
+  per-button lists of 16:43 were taken back out).
+- Lines are fixed (at most 3 buttons, never wrapping), centred; all buttons the same size, at most a third of the
+  width each — they shrink together, text included, when that's needed. An order saved before keeps its place
+  (the old single line becomes the two lines).
