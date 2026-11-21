@@ -258,7 +258,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     val syncPanelOpen = panel == Panel.SYNC_SUB || panel == Panel.SYNC_AUDIO
     // Tall video upright: upper two thirds, buttons in the lower third — unless "Full screen" (double tap in the middle toggles).
     val tallFull = st.settings.videoTallFull
-    val fullscreen = inPip || landscape || (videoPortrait && tallFull)
+    // Upright (15:32): always the picture on top with everything else below it (a tall video's "Bigger" gives it more room).
+    val fullscreen = inPip || landscape
     val syncBelowVideo = !fullscreen
     val ratio = (if (p.videoW > 0 && p.videoH > 0) p.videoW.toFloat() / p.videoH else 16f / 9f).coerceIn(1f, 3f)
 
@@ -287,11 +288,13 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     val dens = androidx.compose.ui.platform.LocalDensity.current
     var headerHpx by remember { mutableIntStateOf(0) }
     val headerDp = if (headerOn) with(dens) { headerHpx.toDp() } else 0.dp
+    // Upright: the picture's place under the header, measured from the layout below, so the video fills exactly it.
+    var videoHpx by remember { mutableIntStateOf(0) }
+    val videoDp = with(dens) { videoHpx.toDp() }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         video(if (fullscreen && !headerOn) Modifier.fillMaxSize()
             else if (fullscreen) Modifier.safeDrawingPadding().padding(top = headerDp).fillMaxSize()
-            else if (videoPortrait) Modifier.safeDrawingPadding().padding(top = headerDp).fillMaxWidth().fillMaxHeight(0.667f)
-            else Modifier.safeDrawingPadding().padding(top = headerDp).fillMaxWidth().aspectRatio(ratio))
+            else Modifier.safeDrawingPadding().padding(top = headerDp).fillMaxWidth().height(videoDp))
         if (headerOn) VideoHeader(nav, locked, openOutput, onLock = { locked = !locked },
             Modifier.align(Alignment.TopCenter).safeDrawingPadding().onSizeChanged { headerHpx = it.height })
         // Analysis mode, not running yet: the button that starts it (and ✕ to leave the mode). Kept off the photos.
@@ -333,16 +336,17 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
             // Phone upright with a widescreen video: video on top, everything else below it.
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 Box(Modifier.fillMaxWidth().height(headerDp))
-                Box(Modifier.fillMaxWidth().then(if (videoPortrait) Modifier.fillMaxHeight(0.667f) else Modifier.aspectRatio(ratio))) {
-                    if (controls && panel == Panel.NONE) ControlsOverlay(p, nav, openOutput, locked, scales[scaleIdx].second + "\u0000" + scales[(scaleIdx + 1) % scales.size].second,
-                        onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS }, onPicture = { panel = Panel.PICTURE },
-                        onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first) },
-                        onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ }, compact = true)
+                // Tall video: two thirds of the room, or more with "Bigger"; wide video: its own shape.
+                val vMod = if (videoPortrait) Modifier.fillMaxHeight(if (tallFull) 0.82f else 0.62f) else Modifier.aspectRatio(ratio)
+                Box(Modifier.fillMaxWidth().then(vMod).onSizeChanged { videoHpx = it.height }) {
+                    // On the picture upright: only the position bar (comes and goes with a tap); everything else is below.
+                    if (controls && panel == Panel.NONE && !locked) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0x77000000))) {
+                        SeekRow(p, Modifier.padding(horizontal = 12.dp, vertical = 2.dp))
+                    }
                     if (AudioSyncUi.open) AudioSyncBar { AudioSyncUi.open = false }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth().background(C.bg)) {
                     Column(Modifier.fillMaxSize()) {
-                        SeekRow(p, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             when {
                                 syncPanelOpen && syncBelowVideo -> PortraitSync(if (panel == Panel.SYNC_SUB) 0 else 1, p, onSwitch = { panel = if (it == 0) Panel.SYNC_SUB else Panel.SYNC_AUDIO }) { panel = Panel.TRACKS }
@@ -355,7 +359,10 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                                     }
                                     PanelContent(panel, p, onPanel = { panel = it })
                                 }
-                                else -> PortraitIdle(p, nav, showList = !videoPortrait, onPanel = { panel = Panel.TRACKS }, onOutput = openOutput, onPicture = { panel = Panel.PICTURE })
+                                else -> PortraitIdle(p, nav, showList = !videoPortrait, onPanel = { panel = Panel.TRACKS }, onOutput = openOutput, onPicture = { panel = Panel.PICTURE },
+                                    scaleLabel = scales[scaleIdx].second + "\u0000" + scales[(scaleIdx + 1) % scales.size].second,
+                                    onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first); toast = scales[scaleIdx].second },
+                                    onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() })
                             }
                         }
                     }
@@ -640,17 +647,28 @@ private fun RoundBtn(text: String, sizeDp: Int, onClick: () -> Unit) {
 }
 
 @Composable
-private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPanel: () -> Unit, onOutput: () -> Unit, onPicture: () -> Unit = {}) {
+private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPanel: () -> Unit, onOutput: () -> Unit, onPicture: () -> Unit = {},
+                         scaleLabel: String = "", onScale: () -> Unit = {}, onRotate: () -> Unit = {}, onPip: () -> Unit = {}) {
     val player = App.instance.player
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val tallVid = p.videoH > p.videoW && p.videoW > 0
+    // Upright (15:32): every control of the video under the picture, in groups — title, playing, sound & picture,
+    // files, picture format; the picture itself only carries the position bar.
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         MarqueeText(p.item?.title ?: "", C.text, Modifier.fillMaxWidth(), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, list = "player")
-        // Under the video (upright): play / pause, panels, speed, the other two players and the output — moved here
-        // from over the picture so the buttons on the video never overlap.
-        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill(if (p.isPlaying) "Pause" else "Play", filled = true) { player.togglePause() }
+        // Playing: previous / −10 / play-pause / +10 / next, centred.
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            UnderBtn("⏮") { player.prev() }
+            UnderBtn("−10") { player.seekBy(-10_000) }
+            Box(Modifier.size(60.dp).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
+                Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+            }
+            UnderBtn("+10") { player.seekBy(10_000) }
+            UnderBtn("⏭") { player.next() }
+        }
+        Divider()
+        // Sound & picture.
+        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("Audio & subs") { onPanel() }
-            Pill("📂 Browse") { openOrigin(nav, keepStack = true) }
-            Pill("☰ Queue " + (p.queue.size - p.index - 1).coerceAtLeast(0)) { VideoQueueUi.open = true }
             Pill(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true }
             Pill("Hue & sat") { onPicture() }
             Pill("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
@@ -659,12 +677,27 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                 player.setRate(rates[(i + 1) % rates.size])
             }
         }
+        // Files.
+        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Pill("📂 Browse") { openOrigin(nav, keepStack = true) }
+            Pill("☰ Queue " + (p.queue.size - p.index - 1).coerceAtLeast(0)) { VideoQueueUi.open = true }
+        }
+        // Picture format and orientation.
+        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val parts = scaleLabel.split('\u0000')
+            Pill(if (parts.getOrElse(1) { "" }.isEmpty()) parts[0] else "Format: ${parts[0]} → ${parts[1]}") { onScale() }
+            Pill(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() }
+            if (tallVid) Pill(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Bigger") {
+                App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) } }
+            Pill("🔄 Turn") { onRotate() }
+            Pill("PiP") { onPip() }
+        }
         // Wide video upright: the video collection in its own scrolling box, like the song player's "Up next".
         val next = if (p.index >= 0) p.queue.drop(p.index + 1) else emptyList()
         if (showList && next.isNotEmpty()) {
             var upMenu by remember { mutableIntStateOf(-1) }
             SectionTitle("Up next")
-            Column(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.card)
+            Column(Modifier.heightIn(max = 320.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.card)
                 .border(1.dp, accent().copy(alpha = 0.3f), RoundedCornerShape(14.dp)).verticalScroll(rememberScrollState())) {
                 next.forEachIndexed { i, n ->
                     if (i > 0) Divider()
@@ -1240,5 +1273,14 @@ private fun VideoHeader(nav: Navigator, locked: Boolean, openOutput: () -> Unit,
                 Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { OutputPill(openOutput) }
             }
         }
+    }
+}
+
+
+/** Round button under the upright video (previous, −10, +10, next). */
+@Composable
+private fun UnderBtn(text: String, onClick: () -> Unit) {
+    Box(Modifier.size(46.dp).clip(CircleShape).background(C.card).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Text(text, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
     }
 }

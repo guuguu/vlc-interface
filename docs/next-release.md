@@ -710,3 +710,16 @@
   Always shown (doesn't hide with the controls); locked, it shows only the lock to unlock.
 - These buttons are taken off the picture upright (top symbol row, output, Songs, Radio) and out of the button row
   under the video; the picture starts under the header. Sideways stays as it was (one row over the picture).
+
+## Video player upright: only the position bar on the picture, everything else below it (requested 2026-11-21 15:32)
+- Upright, the picture carries only the position bar (time, bar, time left — shows / hides with a tap); every other
+  button is under the picture, in groups:
+  1. the title;
+  2. ⏮  −10  ▶ / ❚❚ (big, accent)  +10  ⏭, centred;
+  3. Audio & subs · Audio sync · Hue & sat · speed;
+  4. 📂 Browse · ☰ Queue N;
+  5. Format: <now> → <next> · Rotate · Bigger / Smaller (tall videos) · 🔄 Turn · PiP;
+  then Up next for wide videos. The area scrolls when it doesn't fit.
+- Upright is always picture on top, controls below (header bar above): tall videos take about 60 % of the room,
+  "Bigger" (or a double tap in the middle of the picture) about 80 %; wide videos keep their own shape. Sideways
+  unchanged.
