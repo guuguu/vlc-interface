@@ -798,3 +798,5 @@
   pop-up — no buttons; a tap outside keeps what's set.
 - Once per video while the app runs: not again when the same video reopens at the same spot (format, decoder,
   subtitle style changes). Only for videos (not songs or radio).
+- The choice is saved silently for that video (16:17): next time it opens — also after restarting the app — that
+  subtitle (or Off) is put on by itself and the pop-up doesn't appear. Changing it later in Subs/Sync saves the new one.

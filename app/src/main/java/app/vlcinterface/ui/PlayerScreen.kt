@@ -202,6 +202,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     LaunchedEffect(p.item?.uri) {
         val item = p.item ?: return@LaunchedEffect
         if (item.isRadio || item.isMusic || item.uri in SubAskOnce.asked) return@LaunchedEffect
+        // A choice already saved for this video (16:17): used silently, no pop-up.
+        if (app.vlcinterface.player.VideoAuto.int(item.uri, "sId") != null) return@LaunchedEffect
         // The tracks arrive while the file opens: wait for them a few seconds.
         repeat(16) {
             if (player.state.value.item?.uri != item.uri) return@LaunchedEffect
