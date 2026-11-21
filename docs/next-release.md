@@ -915,3 +915,6 @@
 - Double tap on the bar: a "Jump to time" box like a cassette — hh : mm : ss in three boxes (numbers only, 2 digits
   each); a box left empty counts as 0 ("" : 12 : "" = 00:12:00). Jump (or Go on the keyboard) goes there (at most the
   video's end); the time entered is kept and shown again next time. The video's length is shown under it.
+- Typed with the app's own small digit pad (17:26) — 1–9, ⌫, 0, → — inside the box; Android's keyboard never opens.
+  Tap hh / mm / ss to choose the box (highlighted); two digits fill a box and the next one is chosen; the first digit
+  typed in a box replaces what was there; → goes to the next box.

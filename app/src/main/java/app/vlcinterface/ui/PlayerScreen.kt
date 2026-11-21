@@ -725,7 +725,6 @@ private fun JumpToTimeDialog(lengthMs: Long, onDone: () -> Unit) {
     var hh by remember { mutableStateOf(last[0]) }
     var mm by remember { mutableStateOf(last[1]) }
     var ss by remember { mutableStateOf(last[2]) }
-    fun digits(v: String) = v.filter { it.isDigit() }.take(2)
     fun go() {
         val h = hh.toIntOrNull() ?: 0; val m = mm.toIntOrNull() ?: 0; val sec = ss.toIntOrNull() ?: 0
         KeptChoice.put("video.jumpTo", "%02d:%02d:%02d".format(h, m, sec))
@@ -737,22 +736,44 @@ private fun JumpToTimeDialog(lengthMs: Long, onDone: () -> Unit) {
         title = { Text("Jump to time", color = C.text) },
         text = {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                // The cassette: hh : mm : ss.
+                // The cassette: hh : mm : ss (17:26: typed with the app's own small digit pad; Android's keyboard stays hidden).
+                var at by remember { mutableIntStateOf(0) }
+                var fresh by remember { mutableStateOf(true) }       // the first digit typed in a box replaces what was there
+                val vals = listOf(hh, mm, ss)
+                fun setVal(i: Int, v: String) { when (i) { 0 -> hh = v; 1 -> mm = v; else -> ss = v } }
                 Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF111316)).border(1.dp, accent(), RoundedCornerShape(12.dp))
                     .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    val setters: List<(String) -> Unit> = listOf({ v -> hh = digits(v) }, { v -> mm = digits(v) }, { v -> ss = digits(v) })
-                    listOf("hh" to hh, "mm" to mm, "ss" to ss)
-                        .forEachIndexed { i, (ph, v) -> val set = setters[i]
-                            if (i > 0) Text(":", color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                            androidx.compose.foundation.text.BasicTextField(v, set, singleLine = true,
-                                textStyle = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                                    imeAction = if (i == 2) androidx.compose.ui.text.input.ImeAction.Go else androidx.compose.ui.text.input.ImeAction.Next),
-                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { go() }),
-                                cursorBrush = androidx.compose.ui.graphics.SolidColor(accent()),
-                                modifier = Modifier.width(52.dp).padding(vertical = 4.dp),
-                                decorationBox = { inner -> Box(contentAlignment = Alignment.Center) { if (v.isEmpty()) Text(ph, color = C.muted, fontSize = 22.sp); inner() } })
+                    listOf("hh", "mm", "ss").forEachIndexed { i, ph ->
+                        if (i > 0) Text(":", color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                        Box(Modifier.width(52.dp).clip(RoundedCornerShape(8.dp)).background(if (i == at) accent().copy(alpha = 0.25f) else Color.Transparent)
+                            .clickable { at = i; fresh = true }.padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+                            if (vals[i].isEmpty()) Text(ph, color = C.muted, fontSize = 22.sp)
+                            else Text(vals[i], color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                         }
+                    }
+                }
+                // Digit pad: 1–9, ⌫ 0 →; two digits fill a box and the next one is chosen.
+                Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("⌫", "0", "→")).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            row.forEach { k ->
+                                Box(Modifier.size(width = 64.dp, height = 44.dp).clip(RoundedCornerShape(10.dp)).background(C.card)
+                                    .clickable {
+                                        when (k) {
+                                            "⌫" -> { setVal(at, vals[at].dropLast(1)); fresh = false }
+                                            "→" -> { at = (at + 1) % 3; fresh = true }
+                                            else -> {
+                                                val nv = (if (fresh) "" else vals[at]) + k
+                                                setVal(at, nv.takeLast(2)); fresh = false
+                                                if (nv.length >= 2 && at < 2) { at++; fresh = true }
+                                            }
+                                        }
+                                    }, contentAlignment = Alignment.Center) {
+                                    Text(k, color = if (k == "→") accent() else C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                                }
+                            }
+                        }
+                    }
                 }
                 Text(if (lengthMs > 0) "Video length ${fmtTime(lengthMs)} · empty boxes count as 0" else "Empty boxes count as 0",
                     color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
