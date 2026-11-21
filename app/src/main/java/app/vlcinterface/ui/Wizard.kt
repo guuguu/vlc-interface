@@ -176,17 +176,19 @@ fun WizardScreen(nav: Navigator, page: Int) {
         // Fixed header: never scrolls with the page.
         Scaled {
             Column(Modifier.fillMaxWidth().background(C.card)) {
+                // Title on its own row (17:57): the buttons on the first row, "Setup · N of M" and the page title under it.
                 Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = (6 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                     HeaderPill("‹", false) { if (page > 0) goTo(page - 1) else nav.back() }
-                    Column(Modifier.weight(1f).padding(start = 4.dp)) {
-                        Text("Setup · ${page + 1} of ${W.pages.size}", color = C.muted, fontSize = 12.sp)
-                        Text(pg.title, color = C.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 1)
-                    }
+                    Box(Modifier.weight(1f))
                     HeaderPill("Help", false) { HelpGuide.history.clear(); HelpGuide.pos = -1; nav.go(Screen.Help(pg.help)) }
                     if (pg.id != "summary") HeaderPill("Skip", false) { skipNote = true }
                     HeaderPill(if (pg.id == "summary") "Finish" else "Next", true) {
                         val m = check(); if (m.isEmpty()) next() else missing = m
                     }
+                }
+                Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, bottom = (6 * sg()).dp)) {
+                    Text("Setup · ${page + 1} of ${W.pages.size}", color = C.muted, fontSize = 12.sp)
+                    Text(pg.title, color = C.text, fontSize = 17.sp, fontWeight = FontWeight.Bold, maxLines = 2)
                 }
                 Box(Modifier.fillMaxWidth().height(2.dp).background(accent()))
             }

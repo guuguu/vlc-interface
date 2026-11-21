@@ -153,12 +153,16 @@ fun HelpScreen(nav: Navigator, start: String) {
     val scroll = rememberScrollState(); androidx.compose.runtime.LaunchedEffect(g.pos) { scroll.scrollTo(0) }
     Column(Modifier.fillMaxSize().background(C.bg)) {
         Scaled {
-            Row(Modifier.fillMaxWidth().background(C.card).padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                HeadBtn("✕") { nav.back() }
-                HeadBtn("◀", g.pos > 0) { g.pos-- }
-                HeadBtn("▶", g.pos < g.history.lastIndex) { g.pos++ }
-                Text("Help", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                if (cid.isNotEmpty()) Text("Contents", color = accent(), fontSize = 14.sp, modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { g.open("") }.padding(10.dp))
+            // Title on its own row (17:57).
+            Column(Modifier.fillMaxWidth().background(C.card).padding(horizontal = 6.dp, vertical = 6.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    HeadBtn("✕") { nav.back() }
+                    HeadBtn("◀", g.pos > 0) { g.pos-- }
+                    HeadBtn("▶", g.pos < g.history.lastIndex) { g.pos++ }
+                    Box(Modifier.weight(1f))
+                    if (cid.isNotEmpty()) Text("Contents", color = accent(), fontSize = 14.sp, modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { g.open("") }.padding(10.dp))
+                }
+                Text("Help", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp, bottom = 2.dp))
             }
         }
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

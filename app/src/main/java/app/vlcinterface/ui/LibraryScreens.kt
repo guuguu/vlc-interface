@@ -105,19 +105,24 @@ fun HomeButton(nav: Navigator, tint: Color = C.text) {
 @Composable
 fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Composable () -> Unit = {}, gear: Boolean = title != "Settings",
                actions: @Composable () -> Unit = {}) = Scaled {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        SymButton(onClick = { nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
-        HomeButton(nav)
-        afterHome()
-        Column(Modifier.weight(1f).padding(start = 4.dp)) {
-            Text(title, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    // The page title on its own row (2026-11-21 17:57): symbols on the first row (back, home … on the left; the page's
+    // own symbols and the gear / red ✕ on the right), the title (and its line under it) on the second, full width.
+    Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            SymButton(onClick = { nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
+            HomeButton(nav)
+            afterHome()
+            Spacer(Modifier.weight(1f))
+            actions()
+            // Settings pages: a red ✕ straight back to the player (main page when no player is open) instead of the gear.
+            if (LocalSettingsClose.current) CloseToPlayerButton(nav)
+            // Settings symbol on every other page: opens the main Settings page.
+            else if (gear) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
+        }
+        Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, bottom = 2.dp)) {
+            Text(title, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        actions()
-        // Settings pages: a red ✕ straight back to the player (main page when no player is open) instead of the gear.
-        if (LocalSettingsClose.current) CloseToPlayerButton(nav)
-        // Settings symbol on every other page: opens the main Settings page.
-        else if (gear) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
     }
 }
 

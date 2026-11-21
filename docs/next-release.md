@@ -945,3 +945,11 @@
   scale with the width (18–34 sp). Sideways the time side takes ~45 % of the width and the pad the rest, full height;
   upright the pad gets the height left under the title, time, length line and buttons. The other digit pads keep
   ~220 dp for their pop-up's title, field and buttons and share the rest the same way.
+
+## Page titles on their own row (requested 2026-11-21 17:57)
+- Every page header: the symbols on the first row (back, home, … on the left; the page's own buttons and the gear /
+  red ✕ on the right), the page title (and the line under it) on its own row below, full width, up to two lines —
+  never squeezed between buttons. All pages with the common header (Settings and its pages, Library pages, folders,
+  queue, playlists, alarm pages …), the setup wizard (buttons, then "Setup · N of M" and the page title), the Help
+  guide and the Sound output sheet.
+- Not changed: the video player full screen (and the players, whose title is in the page itself).
