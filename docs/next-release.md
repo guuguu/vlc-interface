@@ -412,3 +412,15 @@
   - Settings file unreadable: before defaults are used (and saved over it), it is kept aside as
     state.json.bad-<time> so libraries, playlists and settings can be recovered; noted in the Logs.
   - projectM: out of memory when creating a picture is handled (no crash).
+
+# After 1.59.0
+
+## Video proportions in every format (reported 2026-11-21 02:56)
+- Wrong width / height proportions: sideways only Crop was right, upright only Fit. The app shaped the video box
+  itself (from the size and rotation it worked out) and had libVLC stretch the picture into it; whenever the app's
+  idea of the shape differed from the picture libVLC really shows (its own rotation, pixel aspect, the box size at
+  the moment it measured), the picture was squeezed.
+- Now libVLC sizes the picture itself in every format, as it always did for Crop: the video view covers the whole
+  area and the picture is fitted with its real proportions — Fit (whole picture, to the edges), Fill (whole area,
+  stretched on purpose), Crop (whole area, edges cut), 16:9 and 4:3 (that shape), 1:1 (own shape, grown to the edges
+  like Fit). Small videos still grow to the edges.

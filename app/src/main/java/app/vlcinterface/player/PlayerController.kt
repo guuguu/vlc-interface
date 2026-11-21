@@ -2005,8 +2005,13 @@ class PlayerController(private val context: Context, private val store: Store) {
      * enlarged until an edge is reached); libVLC then only stretches the picture over its whole view.
      * Crop is the exception: the view keeps the whole area and libVLC zooms in.
      */
+    // libVLC sizes the picture itself in every format (as Crop always did): it knows the picture's real shape after
+    // its own rotation and pixel aspect, and fits it to the video view's size at that moment. The app only stretching
+    // a box of its own computed shape (Fill inside it) gave wrong proportions whenever the two disagreed — in
+    // landscape for every format but Crop. 1:1 grows to the edges like Fit (libVLC's "original size" would leave
+    // small videos small).
     private val vlcScale: MediaPlayer.ScaleType
-        get() = if (scale == MediaPlayer.ScaleType.SURFACE_FIT_SCREEN) MediaPlayer.ScaleType.SURFACE_FIT_SCREEN else MediaPlayer.ScaleType.SURFACE_FILL
+        get() = if (scale == MediaPlayer.ScaleType.SURFACE_ORIGINAL) MediaPlayer.ScaleType.SURFACE_BEST_FIT else scale
 
     fun setScale(s: MediaPlayer.ScaleType) {
         scale = s; mp.setVideoScale(vlcScale); refreshSurface()
