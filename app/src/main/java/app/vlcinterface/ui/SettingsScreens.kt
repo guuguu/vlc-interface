@@ -492,14 +492,6 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     // Drag (≡ or long press) to reorder (11:28). A list only for ordering has no ✕ (11:32).
                     DragOrderList(rowAll, { (if (rowsMode == "video") VIDEO_ROW_NAMES[it] else PLAYER_ROW_NAMES[it]) ?: it }, onOrder = { l -> saveRows(l) })
                     STextButton({ saveRows(emptyList()) }) { Text("Reset order", color = accent()) }
-                    // Video: the order of the buttons inside each button row (16:43), dragged like the rows.
-                    if (rowsMode == "video") {
-                        Text("Buttons in the row \"Subs/Change … speed\"", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
-                        DragOrderList(orderOf(s.videoBtnSound, VIDEO_SOUND_BTNS), { VIDEO_BTN_NAMES[it] ?: it }, onOrder = { l -> set(s.copy(videoBtnSound = l)) })
-                        Text("Buttons in the row \"Format, Rotate\"", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 8.dp))
-                        DragOrderList(orderOf(s.videoBtnFormat, VIDEO_FORMAT_BTNS), { VIDEO_BTN_NAMES[it] ?: it }, onOrder = { l -> set(s.copy(videoBtnFormat = l)) })
-                        STextButton({ set(s.copy(videoBtnSound = emptyList(), videoBtnFormat = emptyList())) }) { Text("Reset button order", color = accent()) }
-                    }
                     // Gap between the player's rows.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Player rows spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Player rows spacing"))
