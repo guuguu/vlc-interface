@@ -1298,15 +1298,19 @@ class QueueDrag {
 @Composable
 fun DigitPad(onKey: (String) -> Unit, lastKey: String = "✓", modifier: Modifier = Modifier) {
     // Keys shrink when the phone is sideways (short screen), so the pad and its pop-up stay on screen (17:53).
+    // Sizes worked out from the screen (17:55): its pop-up keeps ~220 dp for the title, the field and the buttons; the
+    // rest of the height (and the pop-up's width) is shared by the 3 × 4 keys, their text scaling with them.
     val conf = androidx.compose.ui.platform.LocalConfiguration.current
-    val keyH = (if (conf.screenWidthDp > conf.screenHeightDp) (conf.screenHeightDp - 200) / 4f - 6f else 44f).coerceIn(26f, 44f)
+    val keyH = ((conf.screenHeightDp - 64f - 220f - 18f) / 4f).coerceIn(26f, 56f)
+    val keyW = ((minOf(conf.screenWidthDp.toFloat(), 420f) - 96f - 12f) / 3f).coerceIn(44f, 88f)
+    val keyFont = (minOf(keyW, keyH) * 0.42f).coerceIn(12f, 24f)
     Column(modifier, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
         listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("⌫", "0", lastKey)).forEach { row ->
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
                 row.forEach { k ->
-                    Box(Modifier.size(width = 64.dp, height = keyH.dp).clip(RoundedCornerShape(10.dp)).background(C.card).clickable { onKey(k) },
+                    Box(Modifier.size(width = keyW.dp, height = keyH.dp).clip(RoundedCornerShape(10.dp)).background(C.card).clickable { onKey(k) },
                         contentAlignment = Alignment.Center) {
-                        Text(k, color = if (k == lastKey) accent() else C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                        Text(k, color = if (k == lastKey) accent() else C.text, fontSize = keyFont.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

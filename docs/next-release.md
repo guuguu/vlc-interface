@@ -940,3 +940,8 @@
   and Cancel / Jump on the left and the digit pad on the right; upright one under the other. Keys shrink with the
   room so everything is always on screen. The other digit pads (song Jump to, sleep, minutes, port) shrink their keys
   sideways too.
+- Sizes worked out from the screen's size (17:55), upright and sideways, on any resolution: the room left for the pad
+  is split into 3 × 4 keys (width 44–96 dp, height 28–64 dp), the keys' text is ~42 % of a key, and the time's digits
+  scale with the width (18–34 sp). Sideways the time side takes ~45 % of the width and the pad the rest, full height;
+  upright the pad gets the height left under the title, time, length line and buttons. The other digit pads keep
+  ~220 dp for their pop-up's title, field and buttons and share the rest the same way.

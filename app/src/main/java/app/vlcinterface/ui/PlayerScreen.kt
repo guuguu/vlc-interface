@@ -749,19 +749,31 @@ private fun JumpToTimeDialog(lengthMs: Long, onDone: () -> Unit) {
             }
         }
     }
+    // Sizes worked out from the screen (17:55): the room left for the pad is split into 3 × 4 keys, the time's digits and
+    // the pad's text scale with them — on any resolution, upright or sideways, the whole box is on screen.
     val conf = LocalConfiguration.current
     val land = conf.screenWidthDp > conf.screenHeightDp
-    val keyH = (if (land) ((conf.screenHeightDp - 96) / 4f - 6f) else 44f).coerceIn(30f, 48f)
+    val sw = conf.screenWidthDp.toFloat(); val sh = conf.screenHeightDp.toFloat()
+    val gap = 6f
+    // Sideways: left part (title, time, buttons) takes ~45 % of the width; the pad the rest, the full height.
+    // Upright: the pad gets the height left under the title, the time, the length line and the buttons (~200 dp).
+    val padW = if (land) (sw - 64f) * 0.55f else sw - 64f
+    val padH = if (land) sh - 72f else sh - 64f - 200f
+    val keyW = ((padW - 2 * gap) / 3f).coerceIn(44f, 96f)
+    val keyH = ((padH - 3 * gap) / 4f).coerceIn(28f, 64f)
+    val keyFont = (minOf(keyW, keyH) * 0.42f).coerceIn(13f, 26f)
+    val digitFont = (minOf(if (land) (sw - 64f) * 0.45f else sw - 64f, 320f) / 11f).coerceIn(18f, 34f)
+    val leftW = if (land) ((sw - 64f) * 0.45f - 20f).coerceAtLeast(180f) else 0f
     androidx.compose.ui.window.Dialog(onDismissRequest = onDone, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
         val cassette: @Composable () -> Unit = {
             Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF111316)).border(1.dp, accent(), RoundedCornerShape(12.dp))
                 .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 listOf("hh", "mm", "ss").forEachIndexed { i, ph ->
-                    if (i > 0) Text(":", color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                    Box(Modifier.width(52.dp).clip(RoundedCornerShape(8.dp)).background(if (i == at) accent().copy(alpha = 0.25f) else Color.Transparent)
+                    if (i > 0) Text(":", color = C.text, fontSize = digitFont.sp, fontWeight = FontWeight.Bold)
+                    Box(Modifier.width((digitFont * 2f).dp).clip(RoundedCornerShape(8.dp)).background(if (i == at) accent().copy(alpha = 0.25f) else Color.Transparent)
                         .clickable { at = i; fresh = true }.padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-                        if (vals[i].isEmpty()) Text(ph, color = C.muted, fontSize = 22.sp)
-                        else Text(vals[i], color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                        if (vals[i].isEmpty()) Text(ph, color = C.muted, fontSize = (digitFont * 0.85f).sp)
+                        else Text(vals[i], color = C.text, fontSize = digitFont.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -781,9 +793,9 @@ private fun JumpToTimeDialog(lengthMs: Long, onDone: () -> Unit) {
                 listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("⌫", "0", "→")).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         row.forEach { k ->
-                            Box(Modifier.size(width = 64.dp, height = keyH.dp).clip(RoundedCornerShape(10.dp)).background(C.card).clickable { key(k) },
+                            Box(Modifier.size(width = keyW.dp, height = keyH.dp).clip(RoundedCornerShape(10.dp)).background(C.card).clickable { key(k) },
                                 contentAlignment = Alignment.Center) {
-                                Text(k, color = if (k == "→") accent() else C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                                Text(k, color = if (k == "→") accent() else C.text, fontSize = keyFont.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -792,7 +804,7 @@ private fun JumpToTimeDialog(lengthMs: Long, onDone: () -> Unit) {
         }
         Box(Modifier.clip(RoundedCornerShape(20.dp)).background(C.panel).padding(16.dp)) {
             if (land) Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.width(230.dp)) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.width(leftW.dp)) {
                     Text("Jump to time", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     cassette(); info(); buttons()
                 }
