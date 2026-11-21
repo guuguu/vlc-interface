@@ -897,3 +897,12 @@
 - Songs and Radio are no longer on the sideways video screen (still in the upright header). The bottom button row is
   gone sideways (its ⏮ ⏭ are in the middle, format and Rotate in the right column): only the position bar at the
   bottom. The middle buttons and the position bar sit between the columns. Double tap in the middle: PiP.
+
+## On screen buttons size; side columns against the edges, buttons one on another (requested 2026-11-21 17:13)
+- Sideways: both columns sit against the side edges with the same small padding; their buttons are stacked one on
+  another (touching, rounded only at the column's top and bottom), all the same size; the output is the first button
+  of the left column (its name, a tap opens the output choice). Both centred on the height.
+- Settings → Video → new section "On-screen buttons": "On screen buttons size" 60–160 % (default 100 %, Reset) — makes
+  the video player's buttons bigger or smaller together: the side columns sideways and the buttons under the picture
+  upright. Never larger than the screen allows: the columns' buttons share the height equally at most, so they never
+  overlap or leave the screen; long labels are cut with "…" when a button gets narrow.

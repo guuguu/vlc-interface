@@ -638,29 +638,38 @@ private fun BoxScope.ControlsOverlayBody(
             Triple("Hue/Sat", false) { onTouch(); onPicture() },
             Triple("Subs/Format", false) { onTouch(); openSubtitleFormat(nav) },
         )
-        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize().padding(top = 44.dp, bottom = 52.dp, start = 6.dp, end = 6.dp)) {
+        // Both columns against the side edges with the same small padding, buttons one on another (touching), all one
+        // size: set by Video → "On screen buttons size", never taller than the height shared equally allows.
+        val pct = App.instance.store.state.collectAsState().value.settings.videoBtnPct / 100f
+        val outName = App.instance.output.devices.collectAsState().value.firstOrNull { it.active }?.name ?: "Output"
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize().padding(top = 40.dp, bottom = 44.dp, start = 4.dp, end = 4.dp)) {
             val n = maxOf(right.size, left.size + 1)
-            val chipH = ((maxHeight.value - 6f * (n - 1)) / n).coerceIn(22f, 36f).dp
-            val font = (chipH.value * 0.4f).coerceIn(9f, 12f).sp
-            val w = 92.dp
-            Column(Modifier.align(Alignment.CenterStart).width(w), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(Modifier.width(w)) { OutputPill(openOutput) }
-                left.forEach { (l, lit, f) -> SideChip(l, lit, chipH, font, w, f) }
+            val chipH = minOf(34f * pct, maxHeight.value / n).dp
+            val k = chipH.value / 34f
+            val font = (12f * k).coerceAtLeast(8f).sp
+            val w = (96f * maxOf(k, 0.6f)).dp
+            Column(Modifier.align(Alignment.CenterStart).width(w)) {
+                SideChip("🔈 $outName", false, chipH, font, w, openOutput, first = true, last = false)
+                left.forEachIndexed { i, (l, lit, f) -> SideChip(l, lit, chipH, font, w, f, first = false, last = i == left.lastIndex) }
             }
-            Column(Modifier.align(Alignment.CenterEnd).width(w), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                right.forEach { (l, lit, f) -> SideChip(l, lit, chipH, font, w, f) }
+            Column(Modifier.align(Alignment.CenterEnd).width(w)) {
+                right.forEachIndexed { i, (l, lit, f) -> SideChip(l, lit, chipH, font, w, f, first = i == 0, last = i == right.lastIndex) }
             }
         }
     }
 }
 
-/** A slim button of the sideways side columns: all the same size; [lit] highlighted. */
+/** A button of the sideways side columns: all the same size, stacked one on another (rounded only at a column's ends). */
 @Composable
-private fun SideChip(text: String, lit: Boolean, h: androidx.compose.ui.unit.Dp, font: androidx.compose.ui.unit.TextUnit, w: androidx.compose.ui.unit.Dp, onClick: () -> Unit) {
+private fun SideChip(text: String, lit: Boolean, h: androidx.compose.ui.unit.Dp, font: androidx.compose.ui.unit.TextUnit, w: androidx.compose.ui.unit.Dp,
+                     onClick: () -> Unit, first: Boolean = true, last: Boolean = true) {
     val a = accent()
-    Box(Modifier.width(w).height(h).clip(RoundedCornerShape(h / 2)).background(if (lit) a.copy(alpha = 0.3f) else Color(0x55000000))
-        .border(1.dp, if (lit) a else Color(0x88FFFFFF), RoundedCornerShape(h / 2)).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Text(text, color = if (lit) a else Color.White, fontSize = font, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
+    val r = 10.dp
+    val shape = RoundedCornerShape(topStart = if (first) r else 0.dp, topEnd = if (first) r else 0.dp, bottomStart = if (last) r else 0.dp, bottomEnd = if (last) r else 0.dp)
+    Box(Modifier.width(w).height(h).clip(shape).background(if (lit) a.copy(alpha = 0.3f) else Color(0x66000000))
+        .border(0.5.dp, if (lit) a else Color(0x88FFFFFF), shape).clickable(onClick = onClick).padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+        Text(text, color = if (lit) a else Color.White, fontSize = font, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false,
+            overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -1488,18 +1497,18 @@ private fun underCell(labels: List<String>): UCell {
     val tm = androidx.compose.ui.text.rememberTextMeasurer()
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val conf = LocalConfiguration.current
-    val k = btnScale()
+    val k = btnScale() * App.instance.store.state.collectAsState().value.settings.videoBtnPct / 100f   // + On screen buttons size
     val room = (conf.screenWidthDp - 32).toFloat()          // the page's width less its side padding
-    val font = (14f * k).coerceIn(12f, 20f)
+    val font = (14f * k).coerceIn(9f, 22f)
     val widest = labels.maxOfOrNull { l ->
         with(dens) { tm.measure(l, androidx.compose.ui.text.TextStyle(fontSize = font.sp, fontWeight = FontWeight.SemiBold)).size.width.toDp().value }
     } ?: 60f
     // Up to 3 buttons on one line (16:46): the width never passes a third of the room.
     val w = widest + 28f
     val most = (room - 16f) / 3f
-    return if (w <= most) UCell(w.dp, (40f * k).coerceIn(36f, 56f).dp, font.sp)
-    else if (most >= 60f) { val f = most / w; UCell(most.dp, (40f * k).coerceIn(36f, 56f).dp, (font * f).coerceAtLeast(9f).sp) }
-    else { val f = room / w; UCell(room.dp, ((40f * k).coerceIn(36f, 56f) * maxOf(f, 0.8f)).dp, (font * f).coerceAtLeast(9f).sp) }
+    return if (w <= most) UCell(w.dp, (40f * k).coerceIn(28f, 64f).dp, font.sp)
+    else if (most >= 60f) { val f = most / w; UCell(most.dp, (40f * k).coerceIn(28f, 64f).dp, (font * f).coerceAtLeast(9f).sp) }
+    else { val f = room / w; UCell(room.dp, ((40f * k).coerceIn(28f, 64f) * maxOf(f, 0.8f)).dp, (font * f).coerceAtLeast(9f).sp) }
 }
 
 /** One line of same-size buttons, centred across the page. */

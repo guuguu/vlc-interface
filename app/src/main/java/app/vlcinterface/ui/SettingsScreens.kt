@@ -226,6 +226,21 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 "video" -> {
             SectionTitle("Horizontal autoscroll")
             ScrollSpeedCard("Video lists autoscroll", "Long video names in the phone and network folder lists", "videos")
+            // On-screen buttons size (2026-11-21 17:13): the video player's buttons (side columns sideways, under the
+            // picture upright) — bigger or smaller together, always against the edges and touching each other.
+            SectionTitle("On-screen buttons")
+            CardBox {
+                Column(Modifier.explain("On screen buttons size").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("On screen buttons size", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        Text("${s.videoBtnPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(videoBtnPct = 100)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.videoBtnPct.toFloat(), { v -> set(s.copy(videoBtnPct = (Math.round(v / 5f) * 5).coerceIn(60, 160))) }, valueRange = 60f..160f)
+                    Text("The video player's buttons; never larger than the screen allows (they stay apart from each other and inside the edges).",
+                        color = C.muted, fontSize = 12.sp)
+                }
+            }
             SectionTitle("Picture")
             run {
                 var vHelp by remember { mutableStateOf("") }
