@@ -556,8 +556,10 @@ fun ThinSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier 
                steps: Int = 0, onValueChangeFinished: (() -> Unit)? = null, enabled: Boolean = true, onHoldStill: (() -> Unit)? = null) {
     val a = accent()
     val colors = SliderDefaults.colors(thumbColor = a, activeTrackColor = a, inactiveTrackColor = C.line, activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent)
-    // Helper pop-up only when the finger stays down without moving (never while the slider is being moved).
-    val hold by androidx.compose.runtime.rememberUpdatedState(onHoldStill)
+    // Helper pop-up only when the finger stays down without moving (never while the slider is being moved), and only
+    // once per slider until the app is restarted (2026-11-21 11:39): after that, holding it still just holds it.
+    val helpKey = androidx.compose.runtime.currentCompositeKeyHash
+    val hold by androidx.compose.runtime.rememberUpdatedState(onHoldStill?.let { h -> { if (SliderHelpOnce.shown.add(helpKey)) h() } })
     val holdMod = if (onHoldStill == null) Modifier else Modifier.pointerInput(Unit) {
         awaitEachGesture {
             val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
@@ -579,6 +581,9 @@ fun ThinSlider(value: Float, onValueChange: (Float) -> Unit, modifier: Modifier 
             drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) },
         valueRange = valueRange)
 }
+
+/** Sliders whose helper has already popped up in this run of the app (cleared only by restarting the app). */
+object SliderHelpOnce { val shown: MutableSet<Int> = java.util.Collections.synchronizedSet(HashSet()) }
 
 /** Two-handle version (frequency range…). */
 @Composable

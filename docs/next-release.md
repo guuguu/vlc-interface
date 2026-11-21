@@ -500,3 +500,8 @@
   (starts from the old Songs list setting), "Folder lists autoscroll"; Video → "Video lists autoscroll"; Look →
   "Up next autoscroll" (the old Look slider), "Player titles autoscroll". Text helper on a long press or a still
   hold on the slider.
+
+## Slider helpers once per session (requested 2026-11-21 11:39)
+- The helper pop-up that opens when a slider is held still now appears only the first time for each slider; after
+  that, holding the slider still does nothing more until the app is restarted. A long press on the setting's text
+  still opens its helper whenever wanted.
