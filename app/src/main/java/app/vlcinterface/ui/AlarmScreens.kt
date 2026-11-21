@@ -400,8 +400,9 @@ fun AlarmSettingsScreen(nav: Navigator) {
 fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
     val d by Alarms.state.collectAsState()
     val g = d.global
-    // Alarm system switched off (Settings): this page keeps only the button that switches it on again.
-    if (!g.systemOn) { AlarmSystemButton(); return }
+    // Alarm system switched off (Settings): this page keeps the button that switches it on again and the clock's
+    // own settings (clock aspect, screen saver, city and weather); every alarm setting is hidden.
+    if (!g.systemOn) AlarmSystemButton()
     fun set(n: AlarmGlobal) = Alarms.setGlobal(n)
     val ctx = LocalContext.current
     val locAsk = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
@@ -416,8 +417,10 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
     if (calAsk) CalendarPickDialog { calAsk = false }
     if (soundAsk) AlarmSoundDialog { soundAsk = false }
     if (rootAsk) RootFolderDialog { rootAsk = false }
-            SectionTitle("Alarm health")
-            HealthCard()
+            if (g.systemOn) {
+                SectionTitle("Alarm health")
+                HealthCard()
+            }
             Text("Tip: double tap or long-press any setting for an explanation", color = C.muted, fontSize = 13.sp)
             SectionTitle("Display")
             CardBox {
@@ -442,6 +445,7 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
                     if (wHelp) HelperDialog("Weather shows", HELP["Weather shows"] ?: "") { wHelp = false }
                 }
             }
+            if (!g.systemOn) return
             SectionTitle("Ringing")
             CardBox {
                 SliderRow("Maximum level", g.maxLevel.toFloat(), 10f..100f, "${g.maxLevel} %") { set(g.copy(maxLevel = it.toInt())) }
@@ -1226,8 +1230,8 @@ private fun FlashColours(selected: Int, onPick: (Int) -> Unit) {
  * The whole alarm system on / off (2026-11-21 14:18): a big button on the main Settings page (and, while it's off, the
  * only thing on the Alarm clock page and the wizard's alarm page).
  * Off (after a confirmation): a ringing / snoozed alarm ends, nothing is set with Android any more, no next-alarm
- * notification or calendar events, and every alarm display and option is hidden (clock button, clock and alarms in the
- * player, alarm settings, alarm permissions in the wizard). The alarms are kept.
+ * notification or calendar events, and every alarm display and option is hidden (alarms under the clock, alarm
+ * settings, alarm permissions in the wizard). The clock stays (14:32). The alarms are kept.
  * On: everything comes back, every alarm is set again, and the permissions the alarms need are asked for.
  */
 @Composable
@@ -1254,14 +1258,14 @@ fun AlarmSystemButton() {
                 Text(if (on) "⏻  Turn off the alarm system" else "⏻  Turn on the alarm system", color = if (on) C.bad else Color(0xFF1A0E05),
                     fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             }
-            Text(if (on) "Alarms, the clock in the player and every alarm option are on."
-                else "The alarm system is off: nothing rings, and the clock, the alarms and their options are hidden. Your alarms are kept — turn it on to bring everything back.",
+            Text(if (on) "Alarms and every alarm option are on. The clock isn't affected."
+                else "The alarm system is off: nothing rings, the alarms and their options are hidden. The clock stays. Your alarms are kept — turn it on to bring everything back.",
                 color = C.muted, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
     }
     if (confirm) AlertDialog(onDismissRequest = { confirm = false }, containerColor = C.panel,
         title = { Text("Turn off the alarm system?", color = C.text) },
-        text = { Text("No alarm will ring. A ringing or snoozed alarm ends now. The clock and the alarms in the player, the alarm settings and the alarm permissions are hidden everywhere. Your alarms and settings are kept for when you turn it on again.", color = C.text, fontSize = 14.sp) },
+        text = { Text("No alarm will ring. A ringing or snoozed alarm ends now. The alarms under the clock, the alarm settings and the alarm permissions are hidden everywhere; the clock, its look, city and weather stay. Your alarms and settings are kept for when you turn it on again.", color = C.text, fontSize = 14.sp) },
         confirmButton = { STextButton({ confirm = false; Alarms.setSystem(ctx, false); ShortNote.show("Alarm system off") }) { Text("Turn off", color = C.bad) } },
         dismissButton = { STextButton({ confirm = false }) { Text("Cancel") } })
     // Turned on: what the alarms still need from Android, with Grant buttons.

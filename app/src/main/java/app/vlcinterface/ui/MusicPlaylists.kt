@@ -174,7 +174,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     // out of view it's taken away (the page doesn't move) and stays away while you act — any scroll or touch restarts
     // Look → "Clock hidden for" / "Cover hidden for" — and never comes back while a menu, pop-up or settings window is open.
     val setsP = App.instance.store.state.collectAsState().value.settings
-    val clockTop = app.vlcinterface.alarm.Alarms.state.collectAsState().value.let { it.showClock && it.global.systemOn }
+    val clockTop = app.vlcinterface.alarm.Alarms.state.collectAsState().value.showClock
     val topSec = if (clockTop) setsP.clockHideSec else setsP.coverHideSec
     // Look switches "Hide the clock / album picture while scrolling": off = the clock stays pinned above the page,
     // the picture simply scrolls with the page; neither is ever taken away.
@@ -256,7 +256,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         // Upright: one scrolling page. Sideways: the same page split in two under the track / ReplayGain line —
         // picture and titles on the left, controls and the rest on the right, each scrolling on its own.
         // Clock shown: pinned at the top (upright, the page scrolls under it) or alone on the left half (sideways).
-        val clockShown = app.vlcinterface.alarm.Alarms.state.collectAsState().value.let { it.showClock && it.global.systemOn }
+        val clockShown = app.vlcinterface.alarm.Alarms.state.collectAsState().value.showClock
         val pinnedClock: @Composable (Modifier) -> Unit = { mod ->
             val asp = app.vlcinterface.alarm.Alarms.state.collectAsState().value.aspect
             androidx.compose.foundation.layout.BoxWithConstraints(mod, contentAlignment = Alignment.Center) {
@@ -276,8 +276,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Radio: the announced song's album picture (temporary radio pictures), else the station's logo.
             // Clock button pressed: the clock and the alarms in the picture's place, whatever the player does.
             val alarmData = app.vlcinterface.alarm.Alarms.state.collectAsState().value
-            // Alarm system off (Settings): no clock and no alarms in the player.
-            val clockOn = alarmData.showClock && alarmData.global.systemOn
+            val clockOn = alarmData.showClock
             // Settings → Visualisation: always the visualisation in the picture's place (songs / radio / both).
             val visAlways = VisCover.on || setsP.visInsteadCover.let { it == "both" || (it == "radio" && item.isRadio) || (it == "songs" && !item.isRadio) }
             val pic: @Composable (Int) -> Unit = { sz ->
@@ -301,7 +300,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             else if (landscape) androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 pic((minOf(maxWidth, maxHeight).value.toInt() - 8).coerceAtLeast(48))
             } else Box(Modifier.keepWhenHidden(topHidden).onSizeChanged { topHpx = it.height }) { pic(coverSize) }
-            if (clockOn) AlarmMiniList(nav, compact = false)
+            // Alarm system off (Settings): the clock stays, its alarms are hidden.
+            if (clockOn && alarmData.global.systemOn) AlarmMiniList(nav, compact = false)
             if (coverPick) CoverPicker(coverItem,
                 onNone = { coverPick = false; coverNote = "Looking for the picture online…"; coverRetry++ },
                 onDone = { note, changed ->
@@ -379,7 +379,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Clock button on the left in its own column, an equal empty column on the right: the player buttons stay
             // centred, and they get only the width in between (shrunk if needed), so nothing overlaps on any screen.
             Row(Modifier.fillMaxWidth().onGloballyPositioned { ctlBottom = it.boundsInRoot().bottom }, verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) { if (app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.systemOn) ClockToggleButton(30); VisButton(nav, 30) }
+            Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) { ClockToggleButton(30); VisButton(nav, 30) }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             AutoFitRow(spacing = 12.dp) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {

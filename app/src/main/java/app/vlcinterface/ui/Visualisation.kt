@@ -155,7 +155,7 @@ fun VisButton(nav: Navigator, size: Int = 30) {
     val st = Alarms.state.collectAsState().value
     val cols = visColours(st.vis)
     val a = accent()
-    val clockShown = st.showClock && st.global.systemOn
+    val clockShown = st.showClock
     val lit = VisCover.on && !clockShown
     Box(Modifier.size(size.dp).liteShadow(CircleShape).clip(CircleShape).background(if (lit) a.copy(alpha = 0.25f) else Color(0x24FFFFFF))
         .border(1.dp, if (lit) a else Color.Transparent, CircleShape)
