@@ -850,3 +850,9 @@
 - Sizes follow the Button size setting; when the widest button wouldn't fit across the screen, all of them shrink
   together, text included. Highlighted buttons (Subs/Change with subtitles) keep the accent look.
 - The format button now reads "Fit → Fill" (without "Format:") to keep the shared width small.
+
+## Reordering: the button lines only (2026-11-21 16:44)
+- The reorder list for the video player (Look → "Order of the player rows" → Video) moves whole lines only — Title,
+  Play buttons, the line Subs/Change · Subs/Sync · Audio/Sync · Hue/Sat · Subs/Format · speed, Browse, the line
+  Format · Rotate, Up next. The buttons inside a line keep their fixed order (the per-button lists of 16:43 were
+  taken back out).

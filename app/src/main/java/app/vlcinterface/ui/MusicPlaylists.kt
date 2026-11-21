@@ -2183,7 +2183,7 @@ fun playerRowOrderAll(s: app.vlcinterface.data.Settings, radio: Boolean): List<S
 
 /** Video player upright: the rows under the picture (2026-11-21 15:42), in Look → "Order of the player rows" → Video. */
 val PLAYER_VIDEO_ROWS = listOf("title", "playing", "sound", "files", "format", "upnext")
-val VIDEO_ROW_NAMES = mapOf("title" to "Title", "playing" to "Play buttons (⏮ −10 ▶ +10 ⏭)", "sound" to "Subs/Sync, Audio/Sync, Hue/Sat, speed",
+val VIDEO_ROW_NAMES = mapOf("title" to "Title", "playing" to "Play buttons (⏮ −10 ▶ +10 ⏭)", "sound" to "Subs/Change, Subs/Sync, Audio/Sync, Hue/Sat, Subs/Format, speed",
     "files" to "Browse", "format" to "Format, Rotate", "upnext" to "Up next")
 
 fun videoRowOrder(s: app.vlcinterface.data.Settings): List<String> {
