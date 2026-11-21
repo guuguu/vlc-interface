@@ -101,6 +101,18 @@ import androidx.compose.ui.layout.onSizeChanged
 
 private enum class Panel { NONE, TRACKS, DOWNLOAD, STYLE, SYNC_SUB, SYNC_AUDIO, PICTURE }
 
+/** The "Audio sync" bar is open (from its button on the video player). */
+private object AudioSyncUi {
+    var open by androidx.compose.runtime.mutableStateOf(false)
+}
+
+/** Label of the Audio sync button: the value when one is set ("Audio sync +0.2 s"). */
+private fun syncLabel(ms: Long): String {
+    if (ms == 0L) return "Audio sync"
+    val sign = if (ms > 0) "+" else "−"
+    return "Audio sync " + sign + String.format(java.util.Locale.US, "%.1f s", kotlin.math.abs(ms) / 1000f)
+}
+
 fun Context.findActivity(): Activity? {
     var c = this
     while (c is ContextWrapper) { if (c is Activity) return c; c = c.baseContext }
@@ -289,6 +301,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS }, onPicture = { panel = Panel.PICTURE },
                 onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first); toast = scales[scaleIdx].second },
                 onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ })
+            if (AudioSyncUi.open) AudioSyncBar { AudioSyncUi.open = false }
             when (panel) {
                 // Hue & saturation over the full-screen picture: a slim bar at the bottom, nothing darkened,
                 // so most of the picture stays visible and shows the real effect.
@@ -308,6 +321,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                         onLock = { locked = !locked }, onPanel = { panel = Panel.TRACKS }, onPicture = { panel = Panel.PICTURE },
                         onScale = { scaleIdx = (scaleIdx + 1) % scales.size; player.setScale(scales[scaleIdx].first) },
                         onRotate = { rotate(activity, landscape) }, onPip = { MainActivity.instance?.enterPip() }, onTouch = { touchTick++ }, compact = true)
+                    if (AudioSyncUi.open) AudioSyncBar { AudioSyncUi.open = false }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth().background(C.bg)) {
                     Column(Modifier.fillMaxSize()) {
@@ -487,6 +501,7 @@ private fun BoxScope.ControlsOverlayBody(
             MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 220.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
             OutputPill(openOutput)
             OverlayChip("Audio & subs") { onTouch(); onPanel() }
+            OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             OverlayChip("Hue & sat") { onTouch(); onPicture() }
             speedChip()
             OverlayChip("Songs") { PlayerSwitch.go(nav, "songs") }
@@ -516,6 +531,7 @@ private fun BoxScope.ControlsOverlayBody(
         if (!compact) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             OutputPill(openOutput)
             OverlayChip("Audio & subs") { onTouch(); onPanel() }
+            OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             // Dedicated button: hue & saturation, straight to the sliders.
             OverlayChip("Hue & sat") { onTouch(); onPicture() }
             speedChip()
@@ -620,6 +636,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill(if (p.isPlaying) "Pause" else "Play", filled = true) { player.togglePause() }
             Pill("Audio & subs") { onPanel() }
+            Pill(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true }
             Pill("Hue & sat") { onPicture() }
             Pill("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
                 val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
@@ -723,6 +740,47 @@ private fun PicturePanel(onBack: () -> Unit) {
         Text("0° and 100 % = original colours. The first change reopens the video at the same spot for a moment. " +
             "Back to the original colours when you close the video player. Music and radio are not affected.", color = C.muted, fontSize = 12.sp)
         Box(Modifier.height(12.dp))
+    }
+}
+
+/**
+ * Audio sync for Bluetooth (2026-11-21 12:17): a slim bar at the bottom of the picture — a slider from −3.0 to +3.0 s
+ * (0.1 s steps) with a small box showing the value in seconds ("0.0"), applied while dragging. Kept for the sound
+ * device and this video together; other videos played on the same device during this session start from it.
+ */
+@Composable
+private fun BoxScope.AudioSyncBar(onClose: () -> Unit) {
+    val player = App.instance.player
+    val p by player.state.collectAsState()
+    var v by remember(p.item?.uri, player.currentOutputName) { mutableStateOf(p.audioDelayMs / 1000f) }
+    val colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = Color(0x66FFFFFF))
+    fun fmt(x: Float) = (if (x > 0.04f) "+" else if (x < -0.04f) "−" else "") + "%.1f".format(java.util.Locale.US, kotlin.math.abs(x))
+    Box(Modifier.matchParentSize().clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
+        indication = null, onClick = onClose))
+    Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0xB30F1115))
+        .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
+        .safeDrawingPadding().padding(horizontal = 12.dp, vertical = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Audio sync · " + player.currentOutputName.ifEmpty { "this output" }, color = Color.White, fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            Pill("Reset") { v = 0f; player.setAudioSync(0, true) }
+            SymButton(onClose) { Text("✕", color = Color.White, fontSize = 18.sp) }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("−3", color = Color(0xFFB8BCC4), fontSize = 12.sp)
+            Slider(v, { x -> v = Math.round(x * 10f) / 10f; player.setAudioSync((v * 1000).toLong(), false) },
+                onValueChangeFinished = { player.setAudioSync((v * 1000).toLong(), true) },
+                valueRange = -3f..3f, colors = colors, modifier = Modifier.weight(1f).height(32.dp).padding(horizontal = 6.dp))
+            Text("+3", color = Color(0xFFB8BCC4), fontSize = 12.sp)
+            // The small box with the value in seconds.
+            Box(Modifier.padding(start = 10.dp).widthIn(min = 64.dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1C1F24))
+                .border(1.dp, accent(), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+                Text(fmt(v) + " s", color = accent(), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+        Text("Sound late (lips first)? Move left (−). Kept for this video on " + player.currentOutputName.ifEmpty { "this output" } +
+            "; other videos this session start from it." + player.audioSyncFrom.takeIf { it.isNotEmpty() }?.let { " Now: from $it." }.orEmpty(),
+            color = Color(0xFFB8BCC4), fontSize = 11.sp)
     }
 }
 

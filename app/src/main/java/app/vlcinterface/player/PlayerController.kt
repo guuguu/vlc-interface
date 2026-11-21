@@ -2134,9 +2134,45 @@ class PlayerController(private val context: Context, private val store: Store) {
         val item = _state.value.item ?: return
         val st = store.current
         val spu = st.subOffsets["file:${item.uri}"] ?: st.subOffsets["folder:${item.folderKey}"] ?: 0L
-        val aud = st.audioOffsets["file:${item.uri}"] ?: st.audioOffsets["device:$currentOutputName"] ?: 0L
         if (spu != 0L) setSpuDelay(spu)
+        if (!item.isMusic && !item.isRadio) { applyAudioSync(); return }
+        val aud = st.audioOffsets["file:${item.uri}"] ?: st.audioOffsets["device:$currentOutputName"] ?: 0L
         if (aud != 0L) setAudioDelay(aud)
+    }
+
+    // ---------- video audio sync (Bluetooth), 2026-11-21 12:17 ----------
+    // Kept for the sound device AND the video file together ("dev:<device>|file:<uri>"), found again when that video
+    // plays on that device. Other videos played on the same device during this run of the app start from the last
+    // value set (the device's delay is usually the same), until one of them gets its own.
+    private val sessionSync = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    private fun syncKey(uri: String) = "dev:$currentOutputName|file:$uri"
+
+    /** Where the video's sync value comes from: "this video on <device>", "this session", "saved earlier", "". */
+    var audioSyncFrom: String = ""
+        private set
+
+    /** Puts the right sync value on the playing video (start, or the sound device changed). */
+    fun applyAudioSync() {
+        val item = _state.value.item ?: return
+        if (item.isMusic || item.isRadio) return
+        val st = store.current
+        val own = st.audioOffsets[syncKey(item.uri)]
+        val sess = sessionSync[currentOutputName]
+        val old = st.audioOffsets["file:${item.uri}"] ?: st.audioOffsets["device:$currentOutputName"]
+        val v = own ?: sess ?: old ?: 0L
+        audioSyncFrom = when { own != null -> "this video on this device"; sess != null -> "this session"; old != null -> "saved earlier"; else -> "" }
+        setAudioDelay(v)
+    }
+
+    /** Sets the sync of the playing video and keeps it for this device + this video, and for this session. */
+    fun setAudioSync(ms: Long, save: Boolean) {
+        val item = _state.value.item ?: return
+        setAudioDelay(ms)
+        if (!save) return
+        sessionSync[currentOutputName] = ms
+        audioSyncFrom = "this video on this device"
+        val key = syncKey(item.uri)
+        store.update { st -> st.copy(audioOffsets = st.audioOffsets + (key to ms)) }
     }
 
     // ---------- views ----------

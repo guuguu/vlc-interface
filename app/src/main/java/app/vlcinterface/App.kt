@@ -80,6 +80,8 @@ class App : Application() {
         }
         output.onActiveChanged = { before, after, picked ->
             player.currentOutputName = after?.name ?: ""
+            // Video playing: the audio sync kept for the new device (and this video) is put on at once.
+            try { player.applyAudioSync() } catch (_: Exception) {}
             val now = System.currentTimeMillis()
             // An output that went away: its volumes kept, to put back if it returns within 30 min (Bluetooth stack
             // restarting, a short drop) instead of falling back to the defaults.
