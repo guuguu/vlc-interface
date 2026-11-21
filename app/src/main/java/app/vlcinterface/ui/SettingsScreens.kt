@@ -950,6 +950,27 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         }
                     }
                 }
+                // Sound check (2026-11-21 22:28): measures what happens to the playing song on this phone.
+                run {
+                    var scStep by remember { mutableStateOf("") }
+                    var scReport by remember { mutableStateOf<app.vlcinterface.player.SoundCheck.Report?>(null) }
+                    CardBox {
+                        Column(Modifier.explain("Sound check")) {
+                            ValueRow("Sound check", if (scStep.isNotEmpty()) scStep else
+                                "While a song plays: 10 s of what libVLC gives the app's sound engine and what the engine sends to Android are " +
+                                "compared with the same passage decoded by Android's own decoder — decoding, processing, rate conversion, output, Bluetooth",
+                                if (scStep.isNotEmpty()) "…" else "Start") {
+                                if (scStep.isEmpty()) scopeL.launch {
+                                    scStep = "Starting…"
+                                    scReport = try { app.vlcinterface.player.SoundCheck.run(ctxL) { scStep = it } }
+                                        catch (e: Exception) { app.vlcinterface.player.SoundCheck.Report("Sound check", listOf("Sound check" to listOf("Result" to "failed: ${e.message ?: e.javaClass.simpleName}")), "") }
+                                    scStep = ""
+                                }
+                            }
+                        }
+                    }
+                    scReport?.let { r -> DetailsDialog(r.title, r.sections, note = r.note) { scReport = null } }
+                }
                 // Video format analysis: turns the mode on; the rest happens on the video player.
                 val anal by app.vlcinterface.ui.FormatCheck.mode.collectAsState()
                 CardBox {

@@ -32,6 +32,16 @@ object NativeAudio {
     private external fun setDevice(id: Int)
     private external fun setAppVolume(v: Float)
     private external fun setTrebleBand(type: Int, hz: Float, width: Float)
+    private external fun captureStart(seconds: Int): Boolean
+    private external fun captureInfo(out: LongArray)
+    private external fun captureRead(input: ShortArray, output: FloatArray)
+    /** Sound check: capture [seconds] of the engine's input (from libVLC) and output (to Android). */
+    fun capture(seconds: Int): Boolean = active && try { captureStart(seconds) } catch (_: Throwable) { false }
+    /** [armed, input frames, output frames, limiter frames, src rate, device rate, eq on, treble on, gainL, gainR, app vol, libVLC vol (×1e6)] */
+    fun captureState(): LongArray? = try { LongArray(12).also { captureInfo(it) } } catch (_: Throwable) { null }
+    fun captureTake(inFrames: Int, outFrames: Int): Pair<ShortArray, FloatArray>? = try {
+        val a = ShortArray(inFrames * 2); val b = FloatArray(outFrames * 2); captureRead(a, b); a to b
+    } catch (_: Throwable) { null }
     /** Treble band shape: shelf (0) or peak (1), frequency, slope or Q (Settings → Audio → Treble band). */
     fun trebleBand(peak: Boolean, hz: Float, width: Float) { if (active) try { setTrebleBand(if (peak) 1 else 0, hz, width) } catch (_: Throwable) {} }
     private external fun setDeep(on: Boolean)

@@ -29,6 +29,14 @@ object SettingHelp {
             "'Unrestricted' tells Android to leave the app running. The app only works in the background while it plays, records or prepares an alarm, so the cost is small.\n\n" +
             "Tap it to open Android's battery page for the app.",
         // ---------------------------------------------------------------- Audio
+        "Sound check" to "Measures what really happens to the song playing, on this phone, instead of guessing. Start it while a song plays; " +
+            "it takes about 15 s.\n\n" +
+            "Decoding: 10 s of what libVLC hands the app's sound engine are compared, sample by sample, with the same passage " +
+            "decoded by Android's own decoder. 'Identical' means the file arrives exactly as it is.\n\n" +
+            "Sound engine: what the engine sends to Android is compared with what it received — bit-identical, only a level change " +
+            "(ReplayGain, preamp, volume), or more (tone, treble, limiter); and whether the sample rate is converted, and by whom.\n\n" +
+            "Output: the output, the stream's rate and format, the Bluetooth codec and link rate, Bluetooth quality mode, the phone " +
+            "volume. Share or copy the result to compare with other players.",
         "Treble band" to "The one filter the Treble slider on the players drives (double tap the Treble slider to come here).\n\n" +
             "Shelf: everything above the frequency is raised (Treble +) or lowered (Treble −) — like an amplifier's treble knob. " +
             "Peak: only a band around the frequency is raised or lowered — one band of a parametric equalizer.\n\n" +

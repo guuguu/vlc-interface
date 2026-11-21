@@ -1090,3 +1090,23 @@
   - libVLC now always sends the file's own rate, and the app converts it in its sound engine with the windowed-sinc converter. Measured with a 44.1 kHz file on a 48 kHz output, at 1, 10 and 16 kHz: aliasing and noise ≈ 90 dB under the music, which is the 16-bit floor of the file itself.
   - Anything libVLC still converts (its own output, the fallback) uses soxr, as VLC's own Android app does. The engine still starts if soxr were missing.
 - **Checked and fine:** time-stretch at normal speed passes the sound through untouched (VLC's source); the app's processing at neutral is bit-perfect; the visualisation never touches the sound.
+
+## Sound check (requested 2026-11-21 22:28)
+- **Where:** Settings → Logs → "Sound check" → Start, while a song plays. It takes about 15 s and shows a report in the shared details style (copy / share). Text helper on a hold.
+- **What it does:** it measures, on the phone itself, what happens to the song playing.
+  - It captures 10 s of what libVLC hands the app's sound engine, and of what the engine writes to Android (a capture tap in the engine; nothing is changed).
+  - It decodes the same passage of the file a second, independent way, with Android's own decoder (phone, SMB and web files).
+- **Decoding (libVLC vs Android):**
+  - the file's rate, channels and format;
+  - the passage lined up and compared sample by sample: identical, identical except ±1 rounding, or different (how much, how often, level under the music);
+  - whether libVLC converted the rate before the engine;
+  - whether the file has more than 16 bits (libVLC hands 16-bit to the app's output).
+- **App's sound engine:**
+  - the digital level left / right (ReplayGain, preamps, balance, app and libVLC volume);
+  - whether tone and treble are on, and how often the limiter acted;
+  - rate conversion (none, or in the app from → to);
+  - out vs in: bit-identical (1.4 ms later), only a level change, or more.
+- **Output:**
+  - the output and the stream to Android (rate, 32-bit float, AAudio with no audio session);
+  - the Bluetooth codec and link rate, Bluetooth quality mode on / off, whether Android converts to the link's rate;
+  - the phone volume, and a note on per-app phone sound effects.

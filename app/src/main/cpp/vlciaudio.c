@@ -15,6 +15,7 @@
 #include <dlfcn.h>
 #include <math.h>
 #include <stdint.h>
+#include <stdlib.h>
 #if defined(__x86_64__) || defined(__i386__)
 #include <xmmintrin.h>
 #endif
@@ -22,6 +23,7 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
@@ -505,6 +507,15 @@ static unsigned resample(const float *in, unsigned n) {
     return o;
 }
 
+/* ---------- Sound check (2026-11-21 22:28): what libVLC hands the engine and what the engine writes to Android ---------- */
+static int16_t *g_capIn;     static long g_capInN, g_capInMax;     /* frames (L,R) */
+static float   *g_capOut;    static long g_capOutN, g_capOutMax;
+static bool g_capArmed;
+static long g_capLimFrames;   /* frames where the limiter lowered the level */
+static long g_capInfo[8];     /* src rate, device rate, eq on, treble on, gainL×1e6, gainR×1e6, app volume×1e6, libVLC volume×1e6 */
+
+static void cap_free(void) { free(g_capIn); free(g_capOut); g_capIn = NULL; g_capOut = NULL; g_capInN = g_capOutN = g_capInMax = g_capOutMax = 0; g_capArmed = false; }
+
 /* libVLC's audio thread feeding our output: raised once to Android's "urgent audio" priority (-19), the level
  * the system's own audio threads use, so other work on the phone doesn't make the sound stutter. */
 static __thread int t_prio_done = 0;
@@ -572,6 +583,15 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
     unsigned pcmStart = atomic_load(&g_pcmW);
     if (specOn) spec_update((float)(g_src ? g_src : g_rate));
     bands_update();
+    if (g_capArmed && g_capIn) {
+        if (g_capInN == 0) {
+            g_capInfo[0] = g_src ? g_src : g_rate; g_capInfo[1] = g_rate; g_capInfo[2] = g_eqActive; g_capInfo[3] = g_trebleActive;
+            g_capInfo[4] = (long)(gl * 1e6f); g_capInfo[5] = (long)(gr * 1e6f);
+            g_capInfo[6] = (long)(atomic_load(&g_appVol) * 1e6f); g_capInfo[7] = (long)(atomic_load(&g_vol) * 1e6f);
+        }
+        long take = (long)count; if (take > g_capInMax - g_capInN) take = g_capInMax - g_capInN;
+        if (take > 0) { memcpy(g_capIn + g_capInN * 2, samples, (size_t)take * 4); g_capInN += take; }
+    }
     while (done < count) {
         unsigned n = count - done; if (n > 4096) n = 4096;
         for (unsigned i = 0; i < n; i++) {
@@ -586,6 +606,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
             float k = (float)(done + i);
             float l = x * (sl + dl * k), r = y * (sr + dr * k);
             limit2(&l, &r, rel);                              /* only acts on overs */
+            if (g_capArmed && g_lg < 1.f) g_capLimFrames++;
             buf[i * 2] = l; buf[i * 2 + 1] = r;
             float al = fabsf(l), ar = fabsf(r);
             if (al > pl) pl = al;
@@ -593,6 +614,11 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
         }
         const float *outp = buf; int32_t outN = (int32_t)n;
         if (g_src && g_src != g_rate) { outN = (int32_t)resample(buf, n); outp = g_rsOut; }
+        if (g_capArmed && g_capOut && outN > 0) {
+            long take = outN; if (take > g_capOutMax - g_capOutN) take = g_capOutMax - g_capOutN;
+            if (take > 0) { memcpy(g_capOut + g_capOutN * 2, outp, (size_t)take * 8); g_capOutN += take; }
+            if (g_capOutN >= g_capOutMax && g_capInN >= g_capInMax) g_capArmed = false;     /* full: done */
+        }
         int32_t w = outN > 0 ? AAudioStream_write(g_stream, outp, outN, 1000000000LL) : 0;
         atomic_store(&st_lastWrite, w);
         if (w < 0) { atomic_store(&g_disconnected, true); break; }
@@ -926,4 +952,45 @@ Java_app_vlcinterface_player_NativeAudio_setTrebleBand(JNIEnv *env, jobject thiz
     atomic_store(&g_trebleHz, hz);
     atomic_store(&g_trebleW, width);
     atomic_fetch_add(&g_trebleGen, 1);
+}
+
+/* Sound check: arm a capture of [seconds] of the engine's input and output (from the next buffer on). */
+JNIEXPORT jboolean JNICALL
+Java_app_vlcinterface_player_NativeAudio_captureStart(JNIEnv *env, jobject thiz, jint seconds) {
+    (void)env; (void)thiz;
+    pthread_mutex_lock(&g_lock);
+    cap_free();
+    long src = g_src ? g_src : (g_rate ? g_rate : 48000), dst = g_rate ? g_rate : 48000;
+    g_capInMax = src * seconds; g_capOutMax = dst * seconds + 8192;
+    g_capIn = malloc((size_t)g_capInMax * 4); g_capOut = malloc((size_t)g_capOutMax * 8);
+    g_capLimFrames = 0;
+    bool ok = g_capIn && g_capOut;
+    if (!ok) cap_free(); else g_capArmed = true;
+    pthread_mutex_unlock(&g_lock);
+    return ok;
+}
+
+/* [armed, input frames, output frames, limiter frames, src rate, device rate, eq on, treble on, gainL, gainR, app vol, libVLC vol (×1e6)] */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_captureInfo(JNIEnv *env, jobject thiz, jlongArray out) {
+    (void)thiz;
+    jlong v[12];
+    pthread_mutex_lock(&g_lock);
+    v[0] = g_capArmed; v[1] = g_capInN; v[2] = g_capOutN; v[3] = g_capLimFrames;
+    for (int i = 0; i < 8; i++) v[4 + i] = g_capInfo[i];
+    pthread_mutex_unlock(&g_lock);
+    (*env)->SetLongArrayRegion(env, out, 0, 12, v);
+}
+
+/* Copies the capture out (interleaved stereo) and frees it. */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_captureRead(JNIEnv *env, jobject thiz, jshortArray in, jfloatArray out) {
+    (void)thiz;
+    pthread_mutex_lock(&g_lock);
+    g_capArmed = false;
+    jsize ni = (*env)->GetArrayLength(env, in), no = (*env)->GetArrayLength(env, out);
+    if (g_capIn) (*env)->SetShortArrayRegion(env, in, 0, ni < g_capInN * 2 ? ni : (jsize)(g_capInN * 2), g_capIn);
+    if (g_capOut) (*env)->SetFloatArrayRegion(env, out, 0, no < g_capOutN * 2 ? no : (jsize)(g_capOutN * 2), g_capOut);
+    cap_free();
+    pthread_mutex_unlock(&g_lock);
 }
