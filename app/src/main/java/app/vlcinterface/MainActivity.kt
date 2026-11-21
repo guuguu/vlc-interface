@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.lifecycleScope
+import app.vlcinterface.data.CrashLog
+import kotlinx.coroutines.launch
 import app.vlcinterface.player.PlayItem
 import app.vlcinterface.ui.AppRoot
 import app.vlcinterface.ui.Navigator
@@ -113,6 +116,17 @@ class MainActivity : ComponentActivity() {
         }
         if (i?.action == Intent.ACTION_VIEW) {
             val data = i.data ?: return
+            // SHOUTcast / Icecast links (.pls, .m3u, .xspf or a bare stream URL): play as a radio station.
+            if (app.vlcinterface.sources.StreamLinks.isRadioLink(data, i.type)) {
+                val mime = i.type
+                i.data = null
+                lifecycleScope.launch(CrashLog.guard) {
+                    val st = app.vlcinterface.sources.StreamLinks.resolve(this@MainActivity, data, mime)
+                    App.instance.player.playStation(st.name, st.url)
+                    if (nav.top !is Screen.Music) nav.go(Screen.Music)
+                }
+                return
+            }
             val name = app.vlcinterface.sources.fileNameOf(this, data.toString())
             val item = PlayItem(data.toString(), name.ifEmpty { data.lastPathSegment ?: "Video" }, fileName = name)
             App.instance.player.play(item)

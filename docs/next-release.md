@@ -615,3 +615,13 @@
   was set for, "Rang <day, time>"; a tap opens the alarm. Each has a switch — on sets it again for its next time
   (a passed date is dropped) and it goes back in front of the player, "06:30 will ring" — and a red ✕ that deletes it.
 - Alarms switched off by hand before ringing stay in front of the player as before.
+
+## Open SHOUTcast / Icecast links (requested 2026-11-21 12:34)
+- The app is offered in Android's "Open with" for radio links from other apps (browser, mail, chat, file manager):
+  - links marked as SHOUTcast / Icecast playlists by their type — audio/x-scpls (.pls), audio/x-mpegurl (.m3u),
+    application/xspf+xml (.xspf) and the other names these go by;
+  - links marked as live audio streams (audio/mpeg, aac/aacp, ogg, opus, flac) over http / https;
+  - links whose name ends in .pls / .m3u / .xspf, even when the site doesn't mark them;
+  - icy:// links, and .pls / .m3u / .xspf files opened from the phone.
+- A playlist is read and its first stream is played in the radio player, named by the playlist's title
+  (else the server name). A bare stream plays directly. Normal song / video files open as before.

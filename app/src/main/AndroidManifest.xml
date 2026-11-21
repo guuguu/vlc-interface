@@ -63,6 +63,83 @@
                 <data android:scheme="file" android:mimeType="video/*" />
                 <data android:scheme="content" android:mimeType="audio/*" />
             </intent-filter>
+            <!-- SHOUTcast / Icecast: links marked as radio playlists or streams (by type) open in the radio player. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" android:mimeType="audio/x-scpls" />
+                <data android:scheme="https" android:mimeType="audio/x-scpls" />
+                <data android:scheme="content" android:mimeType="audio/x-scpls" />
+                <data android:scheme="file" android:mimeType="audio/x-scpls" />
+                <data android:scheme="http" android:mimeType="audio/scpls" />
+                <data android:scheme="https" android:mimeType="audio/scpls" />
+                <data android:scheme="content" android:mimeType="audio/scpls" />
+                <data android:scheme="file" android:mimeType="audio/scpls" />
+                <data android:scheme="http" android:mimeType="application/pls+xml" />
+                <data android:scheme="https" android:mimeType="application/pls+xml" />
+                <data android:scheme="content" android:mimeType="application/pls+xml" />
+                <data android:scheme="file" android:mimeType="application/pls+xml" />
+                <data android:scheme="http" android:mimeType="audio/x-mpegurl" />
+                <data android:scheme="https" android:mimeType="audio/x-mpegurl" />
+                <data android:scheme="content" android:mimeType="audio/x-mpegurl" />
+                <data android:scheme="file" android:mimeType="audio/x-mpegurl" />
+                <data android:scheme="http" android:mimeType="audio/mpegurl" />
+                <data android:scheme="https" android:mimeType="audio/mpegurl" />
+                <data android:scheme="content" android:mimeType="audio/mpegurl" />
+                <data android:scheme="file" android:mimeType="audio/mpegurl" />
+                <data android:scheme="http" android:mimeType="application/x-mpegurl" />
+                <data android:scheme="https" android:mimeType="application/x-mpegurl" />
+                <data android:scheme="content" android:mimeType="application/x-mpegurl" />
+                <data android:scheme="file" android:mimeType="application/x-mpegurl" />
+                <data android:scheme="http" android:mimeType="application/xspf+xml" />
+                <data android:scheme="https" android:mimeType="application/xspf+xml" />
+                <data android:scheme="content" android:mimeType="application/xspf+xml" />
+                <data android:scheme="file" android:mimeType="application/xspf+xml" />
+                <data android:scheme="http" android:mimeType="audio/mpeg" />
+                <data android:scheme="https" android:mimeType="audio/mpeg" />
+                <data android:scheme="http" android:mimeType="audio/aac" />
+                <data android:scheme="https" android:mimeType="audio/aac" />
+                <data android:scheme="http" android:mimeType="audio/aacp" />
+                <data android:scheme="https" android:mimeType="audio/aacp" />
+                <data android:scheme="http" android:mimeType="audio/ogg" />
+                <data android:scheme="https" android:mimeType="audio/ogg" />
+                <data android:scheme="http" android:mimeType="audio/opus" />
+                <data android:scheme="https" android:mimeType="audio/opus" />
+                <data android:scheme="http" android:mimeType="audio/flac" />
+                <data android:scheme="https" android:mimeType="audio/flac" />
+            </intent-filter>
+            <!-- SHOUTcast / Icecast: links ending in .pls / .m3u / .xspf. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="http" />
+                <data android:scheme="https" />
+                <data android:host="*" />
+                <data android:pathPattern=".*\\.pls" />
+                <data android:pathPattern=".*\\..*\\.pls" />
+                <data android:pathPattern=".*\\..*\\..*\\.pls" />
+                <data android:pathPattern=".*\\.PLS" />
+                <data android:pathPattern=".*\\..*\\.PLS" />
+                <data android:pathPattern=".*\\..*\\..*\\.PLS" />
+                <data android:pathPattern=".*\\.m3u" />
+                <data android:pathPattern=".*\\..*\\.m3u" />
+                <data android:pathPattern=".*\\..*\\..*\\.m3u" />
+                <data android:pathPattern=".*\\.M3U" />
+                <data android:pathPattern=".*\\..*\\.M3U" />
+                <data android:pathPattern=".*\\..*\\..*\\.M3U" />
+                <data android:pathPattern=".*\\.xspf" />
+                <data android:pathPattern=".*\\..*\\.xspf" />
+                <data android:pathPattern=".*\\..*\\..*\\.xspf" />
+            </intent-filter>
+            <!-- SHOUTcast icy:// links. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="icy" />
+            </intent-filter>
         </activity>
 
         <!-- Target of notification / lock-screen taps: does nothing while the phone is locked. -->
