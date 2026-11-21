@@ -88,12 +88,16 @@ import kotlinx.coroutines.withTimeoutOrNull
 @Composable
 fun LibraryHeader(title: String, openOutput: () -> Unit, nav: Navigator? = null, actions: @Composable () -> Unit = {}) = Scaled {
     val canBack = nav != null && nav.stack.size > 1
-    Row(Modifier.fillMaxWidth().padding(start = if (canBack) 4.dp else 20.dp, end = 12.dp, top = 12.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (canBack) BackButton(nav!!)
-        Text(title, color = C.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-        OutputPill(openOutput)
-        actions()
-        if (nav != null) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
+    // Title on its own row (17:59, it was squeezed to one letter per line): the buttons on the first row — fitting the
+    // width, shrunk evenly when they don't — and "Library" / "Playlists" under them.
+    Column(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 6.dp)) {
+        FitRow(Modifier.fillMaxWidth(), minGap = 4.dp) {
+            if (canBack) BackButton(nav!!)
+            OutputPill(openOutput)
+            actions()
+            if (nav != null) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
+        }
+        Text(title, color = C.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(start = 16.dp, top = 2.dp))
     }
 }
 

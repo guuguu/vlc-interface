@@ -953,3 +953,6 @@
   queue, playlists, alarm pages …), the setup wizard (buttons, then "Setup · N of M" and the page title), the Help
   guide and the Sound output sheet.
 - Not changed: the video player full screen (and the players, whose title is in the page itself).
+- Library and Playlists pages (17:59, screenshot: "Library" squeezed to one letter per line): their buttons on the
+  first row (back, output, home, +, ▶ player, exit, ⋮, gear — fitting the width, shrunk evenly when they don't), the
+  big title on its own row under them.
