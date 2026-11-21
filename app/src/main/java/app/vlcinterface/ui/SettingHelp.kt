@@ -29,6 +29,13 @@ object SettingHelp {
             "'Unrestricted' tells Android to leave the app running. The app only works in the background while it plays, records or prepares an alarm, so the cost is small.\n\n" +
             "Tap it to open Android's battery page for the app.",
         // ---------------------------------------------------------------- Audio
+        "Treble band" to "The one filter the Treble slider on the players drives (double tap the Treble slider to come here).\n\n" +
+            "Shelf: everything above the frequency is raised (Treble +) or lowered (Treble −) — like an amplifier's treble knob. " +
+            "Peak: only a band around the frequency is raised or lowered — one band of a parametric equalizer.\n\n" +
+            "Frequency 1–16 kHz (type it, slide it, or drag on the curve). Width: the shelf's slope (smaller = gentler rise) or " +
+            "the peak's Q (smaller = wider band). At slider end: how many dB the slider's ±5 means.\n\n" +
+            "The curve shows the result: solid line Treble +5, dashed −5. One setting for all songs and stations; each song's own " +
+            "Treble value works on top of it. Works with the app's own sound output. Default: Shelf, 4000 Hz, slope 0.6, ±10 dB.",
         "Loudness, Treble and Preamp sliders" to "Shows three sliders on the audio and radio players: Loudness (more bass and treble at low volume, like a hi-fi's loudness button), Treble, and Preamp (overall gain before the volume).\n\n" +
             "Off: the sliders are hidden, but their last values still apply. Loudness fades away by itself as the volume goes up, so loud listening is never boomy.\n\n" +
             "Each output (speaker, headphones, Bluetooth) keeps its own values. Default: shown.",

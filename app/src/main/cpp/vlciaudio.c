@@ -388,6 +388,12 @@ static void eq_update(void) {
  * The ten bands above stay for loudness. Glides like the bands.
  */
 static _Atomic float g_trebleTarget;
+/* The band itself, set in Settings → Audio → Treble band (21:50): 0 = high shelf, 1 = peak (bell); frequency; shelf
+   slope or peak Q. A change remakes the filter at once. */
+static _Atomic int g_trebleType = 0;
+static _Atomic float g_trebleHz = 4000.f, g_trebleW = 0.6f;
+static _Atomic int g_trebleGen = 1;
+static int g_trebleGenUsed = 0;
 static float g_trebleCur, g_trebleUsed = 99.f;
 static bq_t g_ts;
 static float g_tz[2][2];
@@ -398,18 +404,27 @@ static void treble_update(void) {
     if (fabsf(t - c) < 0.02f) c = t;
     g_trebleCur = c;
     if (g_eqRateChanged) memset(g_tz, 0, sizeof g_tz);
-    if (g_eqRateChanged || fabsf(c - g_trebleUsed) > 0.001f) {
-        float fs = (float)(g_src ? g_src : g_rate), f0 = 4000.f, S = 0.6f;
+    int gen = atomic_load(&g_trebleGen);
+    if (g_eqRateChanged || gen != g_trebleGenUsed || fabsf(c - g_trebleUsed) > 0.001f) {
+        float fs = (float)(g_src ? g_src : g_rate), f0 = atomic_load(&g_trebleHz), W = atomic_load(&g_trebleW);
         if (f0 > fs * 0.45f) f0 = fs * 0.45f;
         float A = powf(10.f, c / 40.f), w0 = 2.f * (float)M_PI * f0 / fs, cw = cosf(w0);
-        float al = sinf(w0) / 2.f * sqrtf((A + 1.f / A) * (1.f / S - 1.f) + 2.f), sA = 2.f * sqrtf(A) * al;
-        float a0 = (A + 1.f) - (A - 1.f) * cw + sA;
-        g_ts.b0 = A * ((A + 1.f) + (A - 1.f) * cw + sA) / a0;
-        g_ts.b1 = -2.f * A * ((A - 1.f) + (A + 1.f) * cw) / a0;
-        g_ts.b2 = A * ((A + 1.f) + (A - 1.f) * cw - sA) / a0;
-        g_ts.a1 = 2.f * ((A - 1.f) - (A + 1.f) * cw) / a0;
-        g_ts.a2 = ((A + 1.f) - (A - 1.f) * cw - sA) / a0;
-        g_trebleUsed = c;
+        if (atomic_load(&g_trebleType) == 1) {
+            /* Peak (bell) at f0, width Q = W. */
+            float al = sinf(w0) / (2.f * W), a0 = 1.f + al / A;
+            g_ts.b0 = (1.f + al * A) / a0; g_ts.b1 = -2.f * cw / a0; g_ts.b2 = (1.f - al * A) / a0;
+            g_ts.a1 = -2.f * cw / a0; g_ts.a2 = (1.f - al / A) / a0;
+        } else {
+            /* High shelf, corner f0, slope S = W. */
+            float al = sinf(w0) / 2.f * sqrtf((A + 1.f / A) * (1.f / W - 1.f) + 2.f), sA = 2.f * sqrtf(A) * al;
+            float a0 = (A + 1.f) - (A - 1.f) * cw + sA;
+            g_ts.b0 = A * ((A + 1.f) + (A - 1.f) * cw + sA) / a0;
+            g_ts.b1 = -2.f * A * ((A - 1.f) + (A + 1.f) * cw) / a0;
+            g_ts.b2 = A * ((A + 1.f) + (A - 1.f) * cw - sA) / a0;
+            g_ts.a1 = 2.f * ((A - 1.f) - (A + 1.f) * cw) / a0;
+            g_ts.a2 = ((A + 1.f) - (A - 1.f) * cw - sA) / a0;
+        }
+        g_trebleUsed = c; g_trebleGenUsed = gen;
     }
     bool on = fabsf(c) > 0.001f;
     if (!on && g_trebleActive) memset(g_tz, 0, sizeof g_tz);
@@ -894,4 +909,18 @@ JNIEXPORT void JNICALL
 Java_app_vlcinterface_player_NativeAudio_setPreferredRate(JNIEnv *env, jobject thiz, jint hz) {
     (void)env; (void)thiz;
     atomic_store(&g_prefRate, (hz >= 8000 && hz <= 192000) ? hz : 0);
+}
+
+/* Treble band shape (Settings → Audio → Treble band): type 0 shelf / 1 peak, frequency Hz, slope or Q. */
+JNIEXPORT void JNICALL
+Java_app_vlcinterface_player_NativeAudio_setTrebleBand(JNIEnv *env, jobject thiz, jint type, jfloat hz, jfloat width) {
+    (void)env; (void)thiz;
+    if (hz < 500.f) hz = 500.f;
+    if (hz > 20000.f) hz = 20000.f;
+    if (width < 0.1f) width = 0.1f;
+    if (type == 0 && width > 1.f) width = 1.f;
+    atomic_store(&g_trebleType, type == 1 ? 1 : 0);
+    atomic_store(&g_trebleHz, hz);
+    atomic_store(&g_trebleW, width);
+    atomic_fetch_add(&g_trebleGen, 1);
 }

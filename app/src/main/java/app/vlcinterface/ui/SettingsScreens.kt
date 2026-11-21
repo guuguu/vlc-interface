@@ -38,6 +38,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -1239,6 +1242,7 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
             set(s.copy(toneSliders = on)); App.instance.player.applySoundChain()
         }
     }
+    TrebleBandBox(s, set)
     // Own categories (they were headings inside the Sound box): sound engine, per output device, ReplayGain.
     DeviceSoundList()
     SectionTitle("ReplayGain")
@@ -1263,6 +1267,113 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
         // 2026-11-21 12:01: a song without ReplayGain → its whole folder scanned silently, 5 s summary at the end.
         ToggleRow("Automatic ReplayGain for folders", "Phone and home-network songs: a song without it → its whole folder is scanned silently; through the VPN you're asked instead",
             s.rgAutoFolder) { set(s.copy(rgAutoFolder = it)) }
+    }
+}
+
+/** Response in dB of the treble band at [hz] for a gain of [db] (the same filter the sound engine uses, 48 kHz). */
+private fun trebleDb(f: Double, peak: Boolean, f0: Double, w: Double, db: Double): Double {
+    val fs = 48000.0
+    val a = Math.pow(10.0, db / 40.0); val w0 = 2 * Math.PI * minOf(f0, fs * 0.45) / fs; val cw = Math.cos(w0); val sw = Math.sin(w0)
+    val b: DoubleArray; val d: DoubleArray
+    if (peak) {
+        val al = sw / (2 * w)
+        b = doubleArrayOf(1 + al * a, -2 * cw, 1 - al * a); d = doubleArrayOf(1 + al / a, -2 * cw, 1 - al / a)
+    } else {
+        val al = sw / 2 * Math.sqrt((a + 1 / a) * (1 / w - 1) + 2); val sa = 2 * Math.sqrt(a) * al
+        b = doubleArrayOf(a * ((a + 1) + (a - 1) * cw + sa), -2 * a * ((a - 1) + (a + 1) * cw), a * ((a + 1) + (a - 1) * cw - sa))
+        d = doubleArrayOf((a + 1) - (a - 1) * cw + sa, 2 * ((a - 1) - (a + 1) * cw), (a + 1) - (a - 1) * cw - sa)
+    }
+    val om = 2 * Math.PI * f / fs
+    fun mag(c: DoubleArray): Double {
+        val re = c[0] + c[1] * Math.cos(om) + c[2] * Math.cos(2 * om); val im = -(c[1] * Math.sin(om) + c[2] * Math.sin(2 * om))
+        return Math.sqrt(re * re + im * im)
+    }
+    return 20 * Math.log10(mag(b) / mag(d))
+}
+
+/**
+ * Treble band (2026-11-21 21:50): the one filter the Treble slider drives — Shelf (lifts everything above the
+ * frequency) or Peak (one bell band), its frequency, width (shelf slope / peak Q) and how much the slider's ends mean.
+ * The curve is drawn from the values set (solid: Treble +5, dashed: −5); dragging on it sets the frequency.
+ * Opened from the players with a double tap on the Treble slider.
+ */
+@Composable
+private fun TrebleBandBox(s: Settings, set: (Settings) -> Unit) {
+    fun put(n: Settings) { set(n); App.instance.player.applySoundChain() }
+    val peak = s.trebleType == "peak"
+    val width = if (peak) s.trebleQ else s.trebleSlope
+    SectionTitle("Treble band", Modifier.onGloballyPositioned { if (SettingsAnchor.want == "trebleband") SettingsAnchor.y = it.positionInParent().y.toInt() })
+    CardBox {
+        Column(Modifier.explain("Treble band").padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+            // The response curve, from the values set.
+            val a = accent(); val grid = C.line; val muted = C.muted
+            val fMin = 50.0; val fMax = 20000.0
+            fun xOf(f: Double, w: Float) = (Math.log(f / fMin) / Math.log(fMax / fMin) * w).toFloat()
+            fun fOf(x: Float, w: Float) = fMin * Math.pow(fMax / fMin, (x / w).toDouble().coerceIn(0.0, 1.0))
+            val range = maxOf(6f, s.trebleMaxDb + 2f)
+            val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
+            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF0D0F13))
+                .pointerInput(s.trebleType) {
+                    fun setX(x: Float) {
+                        val hz = (Math.round(fOf(x, size.width.toFloat()) / 100.0) * 100).toInt().coerceIn(1000, 16000)
+                        if (hz != App.instance.store.current.settings.trebleHz) put(App.instance.store.current.settings.copy(trebleHz = hz))
+                    }
+                    detectDragGestures(onDragStart = { o -> setX(o.x) }) { ch, _ -> ch.consume(); setX(ch.position.x) }
+                }) {
+                val w = size.width; val h = size.height; val pad = 14f
+                fun yOf(db: Double) = (h / 2 - (db / range * (h / 2 - pad))).toFloat()
+                drawLine(grid, androidx.compose.ui.geometry.Offset(0f, h / 2), androidx.compose.ui.geometry.Offset(w, h / 2), 1f)
+                listOf(100.0, 1000.0, 4000.0, 12000.0).forEach { f ->
+                    val x = xOf(f, w)
+                    drawLine(grid.copy(alpha = 0.5f), androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, h), 1f)
+                    drawText(textMeasurer, if (f >= 1000) "${(f / 1000).toInt()}k" else "${f.toInt()}", androidx.compose.ui.geometry.Offset(x + 3f, h - 16f),
+                        androidx.compose.ui.text.TextStyle(color = muted, fontSize = 9.sp))
+                }
+                for ((sign, dashed) in listOf(1.0 to false, -1.0 to true)) {
+                    val path = androidx.compose.ui.graphics.Path()
+                    for (i in 0..120) {
+                        val f = fMin * Math.pow(fMax / fMin, i / 120.0)
+                        val y = yOf(trebleDb(f, peak, s.trebleHz.toDouble(), width.toDouble(), sign * s.trebleMaxDb))
+                        if (i == 0) path.moveTo(0f, y) else path.lineTo(xOf(f, w), y)
+                    }
+                    drawPath(path, if (dashed) a.copy(alpha = 0.5f) else a, style = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = if (dashed) 2f else 5f, pathEffect = if (dashed) androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f)) else null))
+                }
+                // The dot: the frequency, on the +5 curve.
+                val fx = xOf(s.trebleHz.toDouble(), w)
+                drawCircle(a, 12f, androidx.compose.ui.geometry.Offset(fx, yOf(trebleDb(s.trebleHz.toDouble(), peak, s.trebleHz.toDouble(), width.toDouble(), s.trebleMaxDb.toDouble()))))
+            }
+            Text("Solid: Treble +5 · dashed: −5 · drag on the curve to set the frequency", color = C.muted, fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
+                Pill("Shelf", selected = !peak) { put(s.copy(trebleType = "shelf")) }
+                Pill("Peak", selected = peak) { put(s.copy(trebleType = "peak")) }
+                Box(Modifier.weight(1f))
+                STextButton({ put(s.copy(trebleType = "shelf", trebleHz = 4000, trebleSlope = 0.6f, trebleQ = 1.0f, trebleMaxDb = 10f)) }) { Text("Reset") }
+            }
+            Text(if (peak) "Peak: one band around the frequency is raised or lowered." else "Shelf: everything above the frequency is raised or lowered.",
+                color = C.muted, fontSize = 12.sp)
+            // Frequency: typed with the app's digit pad, or slid (log scale 1–16 kHz).
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Frequency", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                DigitField(s.trebleHz.toString(), "Hz", 5, Modifier.width(110.dp)) { v -> v.toIntOrNull()?.let { if (it in 1000..16000) put(s.copy(trebleHz = it)) } }
+            }
+            ThinSlider((Math.log(s.trebleHz / 1000.0) / Math.log(16.0)).toFloat(), { v ->
+                val hz = (Math.round(1000.0 * Math.pow(16.0, v.toDouble()) / 100.0) * 100).toInt().coerceIn(1000, 16000); put(s.copy(trebleHz = hz))
+            }, valueRange = 0f..1f)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(if (peak) "Width (Q)" else "Width (slope)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                Text("%.1f".format(java.util.Locale.US, width), color = accent(), fontWeight = FontWeight.SemiBold)
+            }
+            if (peak) ThinSlider(s.trebleQ, { v -> put(s.copy(trebleQ = Math.round(v * 10) / 10f)) }, valueRange = 0.3f..4f)
+            else ThinSlider(s.trebleSlope, { v -> put(s.copy(trebleSlope = Math.round(v * 20) / 20f)) }, valueRange = 0.3f..1f)
+            Text(if (peak) "Smaller = wider band, larger = narrower band." else "Smaller = gentler rise, 1.0 = steepest.", color = C.muted, fontSize = 12.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("At slider end (±5)", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                Text("±%.0f dB".format(java.util.Locale.US, s.trebleMaxDb), color = accent(), fontWeight = FontWeight.SemiBold)
+            }
+            ThinSlider(s.trebleMaxDb, { v -> put(s.copy(trebleMaxDb = Math.round(v).toFloat())) }, valueRange = 4f..15f)
+            Text("With the app's own sound output (libVLC's output keeps the plain treble).", color = C.muted, fontSize = 12.sp)
+        }
     }
 }
 

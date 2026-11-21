@@ -140,6 +140,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     val item = p.item
     if (item == null) { LaunchedEffect(Unit) { nav.back() }; return }
     LaunchedEffect(item.uri) { if (!item.isMusic && !item.isRadio) nav.replace(Screen.Player) }
+    // Double tap on the Treble slider: Settings → Audio scrolled to the Treble band; Back returns here (21:50).
+    LaunchedEffect(TrebleBandNav.want) { if (TrebleBandNav.want) { TrebleBandNav.want = false; SettingsAnchor.want = "trebleband"; nav.go(Screen.SettingsGroup("audio")) } }
     var sleepMenu by remember { mutableStateOf(false) }
     var jump by remember { mutableStateOf(false) }
     var playNextPick by remember { mutableStateOf(false) }
@@ -1838,6 +1840,11 @@ fun StationSearch() {
  * Loudness and treble: reset to 0 (no processing) on the left, recall (this song's own saved values) on the right.
  * Values changed during a song are kept with it; songs without their own values use the last ones.
  */
+/** A double tap on the Treble slider asks the player screen to open Settings → Audio at the Treble band. */
+object TrebleBandNav {
+    var want by mutableStateOf(false)
+}
+
 @Composable
 private fun ToneSliders() {
     val player = App.instance.player
@@ -1854,7 +1861,7 @@ private fun ToneSliders() {
         onDispose { owner.lifecycle.removeObserver(obs) }
     }
     @Composable
-    fun row(label: String, v: Float, range: ClosedFloatingPointRange<Float>, recall: Boolean = true, onSet: (Float, Boolean) -> Unit) {
+    fun row(label: String, v: Float, range: ClosedFloatingPointRange<Float>, recall: Boolean = true, onDoubleTap: (() -> Unit)? = null, onSet: (Float, Boolean) -> Unit) {
         fun set(x: Float, done: Boolean) { touched = System.nanoTime(); onSet(x, done) }
         // Short tap on anything locked in this row: "Long press to unlock" for 3 s.
         val hintNow = remember { mutableStateOf(0L) }
@@ -1887,6 +1894,10 @@ private fun ToneSliders() {
                     }
                 }
                 val setNow by rememberUpdatedState<(Float, Boolean) -> Unit> { x, d -> set(x, d) }
+                // Double tap (21:50, Treble: its band settings): the time of the last short tap and the value before it.
+                val lastTap = remember { longArrayOf(0L) }
+                val beforeTap = remember { floatArrayOf(0f) }
+                val dbl by rememberUpdatedState(onDoubleTap)
                 fun valueAt(x: Float, w: Int): Float {
                     val f = ((x - inset) / (w - 2 * inset)).coerceIn(0f, 1f)
                     return Math.round((range.start + f * (range.endInclusive - range.start)) * 2) / 2f
@@ -1906,20 +1917,41 @@ private fun ToneSliders() {
                                 }
                                 tap
                             }
-                            if (ended != null) { if (ended) hintNow.value = System.nanoTime(); return@awaitEachGesture }
+                            if (ended != null) {
+                                if (ended) {
+                                    val now = System.currentTimeMillis()
+                                    if (dbl != null && now - lastTap[0] < 350) { lastTap[0] = 0L; hintNow.value = 0L; dbl?.invoke() }
+                                    else { lastTap[0] = now; hintNow.value = System.nanoTime() }
+                                }
+                                return@awaitEachGesture
+                            }
                             open = true
                         }
                         touched = System.nanoTime()
+                        val before = vNow
+                        val t0 = System.currentTimeMillis()
+                        var moved = false
                         var last = valueAt(down.position.x, size.width)
                         setNow(last, false)
                         while (true) {
                             val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id } ?: break
                             if (!c.pressed) break
                             c.consume()
+                            if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
                             val nv = valueAt(c.position.x, size.width)
                             if (nv != last) { last = nv; setNow(nv, false) }
                         }
-                        setNow(last, true)
+                        val now = System.currentTimeMillis()
+                        val tap = !moved && now - t0 < 300
+                        if (tap && dbl != null && now - lastTap[0] < 350) {
+                            // Second tap: the value goes back to what it was before the first tap, then the band settings.
+                            lastTap[0] = 0L
+                            setNow(beforeTap[0], true)
+                            dbl?.invoke()
+                        } else {
+                            if (tap) { lastTap[0] = now; beforeTap[0] = before } else lastTap[0] = 0L
+                            setNow(last, true)
+                        }
                     }
                 }) {
                     // Thin slider drawn here: 4 dp track, 16 dp round knob (the standard slider is much thicker).
@@ -1961,7 +1993,8 @@ private fun ToneSliders() {
         // Auto loudness on: the label also shows how much is used at the phone's current volume.
         row(if (p.loudEffDb != p.loudDb && p.loudDb > 0f) "Loudness (auto %.1f)".format(java.util.Locale.US, p.loudEffDb) else "Loudness",
             p.loudDb, 0f..15f) { x, done -> player.setTone(x, p.trebleDb, done) }
-        row("Treble", p.trebleDb, -5f..5f) { x, done -> player.setTone(p.loudDb, x, done) }
+        // Double tap: Settings → Audio → Treble band (the filter this slider drives), 21:50.
+        row("Treble", p.trebleDb, -5f..5f, onDoubleTap = { TrebleBandNav.want = true }) { x, done -> player.setTone(p.loudDb, x, done) }
         // Pre-amp per song / station (−12…+12 dB): for ones too loud or too quiet (on top of ReplayGain for songs).
         row("Preamp", p.radioPreDb, -12f..12f, recall = false) { x, done -> player.setRadioPre(x, done) }
     }

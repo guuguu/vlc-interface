@@ -48,8 +48,6 @@ data class Origin(
 const val NO_RG_DB = 0f
 /** Loudness and treble act 30 % deeper than their slider values (same logic, stronger effect). */
 const val TONE_DEPTH = 1.3f
-/** Treble shelf (app output): dB per slider step (±5 steps → ±10 dB). */
-const val TREBLE_DB_PER_STEP = 2f
 /** Songs without ReplayGain reached over the VPN: 6 dB lower (not scanned there). */
 const val VPN_NO_RG_DB = -6f     // no ReplayGain: played as it is (no preamp either); the scan question handles it
 
@@ -446,7 +444,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         val l = if (on) autoLoudness(s.loudDb) else 0f; val t = if (on) s.trebleDb else 0f
         if (l != s.loudEffDb) _state.value = _state.value.copy(loudEffDb = l)
         val bands = if (l == 0f) FloatArray(10) else toneGains(l, 0f)
-        return bands + floatArrayOf(t * TREBLE_DB_PER_STEP)
+        val set = store.current.settings
+        NativeAudio.trebleBand(set.trebleType == "peak", set.trebleHz.toFloat(), if (set.trebleType == "peak") set.trebleQ else set.trebleSlope)
+        return bands + floatArrayOf(t * set.trebleMaxDb / 5f)
     }
 
     /** Band gains (10 bands, all ≤ 0 dB) for loudness [l] and treble [t]. */

@@ -31,6 +31,9 @@ object NativeAudio {
     private external fun reroute()
     private external fun setDevice(id: Int)
     private external fun setAppVolume(v: Float)
+    private external fun setTrebleBand(type: Int, hz: Float, width: Float)
+    /** Treble band shape: shelf (0) or peak (1), frequency, slope or Q (Settings → Audio → Treble band). */
+    fun trebleBand(peak: Boolean, hz: Float, width: Float) { if (active) try { setTrebleBand(if (peak) 1 else 0, hz, width) } catch (_: Throwable) {} }
     private external fun setDeep(on: Boolean)
     private external fun setPreferredRate(hz: Int)
 

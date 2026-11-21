@@ -1062,3 +1062,17 @@
   - It glides when moved, like the other tone controls. Loudness keeps its ten bands.
   - Treble no longer moves the Preamp, since the mids' level doesn't change.
 - **libVLC's own output** (fallback) keeps the previous band treble.
+
+## Treble band: parametric settings box (requested 2026-11-21 21:50 / 21:51, mock-up approved, helper yes)
+- **Where:** Settings → Audio, new section "Treble band": the one filter the players' Treble slider drives.
+  - Double tap the Treble slider in the song / radio player to open it, scrolled there. Back returns to the player. A double tap doesn't change the slider's value, and it also works while the sliders are locked.
+- **The curve** is drawn from the values set: solid for Treble +5, dashed for −5, with a dot at the frequency. Dragging on the curve sets the frequency.
+- **The settings:**
+  - Shelf / Peak: Shelf raises or lowers everything above the frequency, like an amplifier's treble knob. Peak raises or lowers one bell band around it.
+  - Frequency: 1000–16000 Hz. Type it with the app's digit pad, slide it (log scale), or drag on the curve.
+  - Width: the shelf's slope (0.3–1.0, smaller = gentler) or the peak's Q (0.3–4, smaller = wider band).
+  - At slider end (±5): ±4 to ±15 dB.
+  - Reset: Shelf, 4000 Hz, slope 0.6, ±10 dB (the 21:45 treble).
+- **Scope:** one setting for all songs and stations; each song's own Treble value works on top. It applies at once. Saved with the settings and in export / import.
+- **Helper:** hold the section for its text.
+- **Output:** app's own sound output only (libVLC's output keeps the plain treble).
