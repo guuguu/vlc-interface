@@ -1009,10 +1009,11 @@
 
 ## Subtitle / sound operations go straight back to the video (requested 2026-11-21 21:06)
 - Done on subtitle Sync or Sync sound (sideways and upright) closes to the video; it used to stop on "Audio & subtitles" first.
-- Same everywhere else in that panel:
-  - Back from Download subtitles, Picture colour and Audio & subtitles goes straight to the video.
-  - A subtitle file picked with "From file" is loaded, put on and the panel closes.
-  - Choosing an audio or subtitle track in the panel sets it and closes, like Subs/Change.
+- A subtitle file picked with "From file" is loaded, put on, and the panel closes.
+- Picture colour's back arrow goes to the video (it's opened from Hue/Sat, there's no step before it).
+- Kept as steps, for going back and forth (21:09):
+  - The back arrow from Download subtitles still goes to Audio & subtitles, and from there to the video.
+  - Choosing tracks in Audio & subtitles keeps the panel open, so tracks can be tried one after another. Subs/Change still closes on a pick.
 
 ## Settings pages opened from a player go back to the player (requested 2026-11-21 21:08)
 - **Which pages:** a settings page opened straight from a player — the video ⚙, Subs/Format and Aa Style, the song / radio ⚙, a long press on the visualisation.
