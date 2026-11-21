@@ -677,8 +677,11 @@ static int cb_setup(void **opaque, char *format, unsigned *rate, unsigned *chann
             g_src = 48000;
             if (!open_stream()) { pthread_mutex_unlock(&g_lock); atomic_store(&st_setupRes, -1); return -1; }
         }
-        *rate = g_rate; /* device may have picked another rate: libVLC resamples to it */
-        g_src = g_rate;
+        /* The device may give another rate (44.1 kHz file on a 48 kHz output): libVLC keeps sending the file's rate and
+           the app converts it here (windowed sinc, mirror tones ~100 dB down). Before (until 1.69), libVLC was asked to
+           convert, and on Android it picks its old "bandlimited" / "ugly" resampler by itself (soxr is never chosen
+           unless named): a fine hiss in the highs, heard against foobar2000 on the same file (2026-11-21 22:12). */
+        *rate = g_src;
         g_eqRateChanged = true;
     }
     atomic_store(&st_rate, g_rate);

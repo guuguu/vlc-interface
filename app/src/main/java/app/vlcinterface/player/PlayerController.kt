@@ -170,7 +170,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         // the subtitle look left out, and the reason is written to the Logs.
         libVlc = try { LibVLC(context, buildOptions(style)) } catch (e: Throwable) {
             try { app.vlcinterface.data.ServerLog.log("player", "error", "libVLC", "", false, "Engine options refused: ${e.message ?: e.javaClass.simpleName} — started without the subtitle look", "", System.currentTimeMillis()) } catch (_: Throwable) {}
-            LibVLC(context, ArrayList(buildOptions(style).filterNot { it.startsWith("--freetype-") || it.startsWith("--sub-") || it.startsWith("--no-sub") }))
+            LibVLC(context, ArrayList(buildOptions(style).filterNot { it.startsWith("--freetype-") || it.startsWith("--sub-") || it.startsWith("--no-sub") || it.startsWith("--audio-resampler") }))
         }
         styleInUse = style
         rgInUse = rgSignature()
@@ -297,6 +297,14 @@ class PlayerController(private val context: Context, private val store: Store) {
         val s = store.current.settings
         val o = arrayListOf(
             "--audio-time-stretch",
+            // Any rate conversion libVLC does (its own output, or a stream it must convert): soxr at high quality, as VLC's
+            // own Android app does. libVLC never picks soxr by itself (priority 0) and fell back to its old "bandlimited" /
+            // "ugly" resamplers (aliasing hiss). ",any" keeps the engine starting if soxr were missing (2026-11-21 22:12).
+            "--audio-resampler=soxr,any",
+            // Any rate conversion libVLC does (its own output, or a stream it must convert): soxr at high quality, as VLC's
+            // own Android app does. libVLC never picks soxr by itself (priority 0) and fell back to its old "bandlimited" /
+            // "ugly" resamplers (aliasing hiss). ",any" keeps the engine starting if soxr were missing (2026-11-21 22:12).
+            "--audio-resampler=soxr,any",
             "--network-caching=1500",
             "--http-reconnect",
             // Video picture quality:

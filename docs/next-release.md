@@ -1082,3 +1082,10 @@
   - It follows volume changes at once.
   - The box draws a third, white curve: Treble +5 as it is at the volume now. The line under the slider says how much is left ("Now at 60 %: 60 % of the correction").
   - Reset sets it Off.
+
+## Hiss against foobar2000 on the same FLAC: rate conversion (reported 2026-11-21 22:10–22:12, same phone, all controls at 0)
+- **Cause:** when the phone's output doesn't open at the file's rate (a 44.1 kHz FLAC on a 48 kHz output, common on phones), the app asked libVLC to convert. libVLC never picks its good converters (soxr, speex) by itself; their priority is 0, checked in VLC 3.0's source. On Android it used its old "bandlimited" or "ugly" converter, which adds aliasing in the highs, heard as a fine hiss and a less clear sound. foobar2000 converts with a proper resampler.
+- **Fixed:**
+  - libVLC now always sends the file's own rate, and the app converts it in its sound engine with the windowed-sinc converter. Measured with a 44.1 kHz file on a 48 kHz output, at 1, 10 and 16 kHz: aliasing and noise ≈ 90 dB under the music, which is the 16-bit floor of the file itself.
+  - Anything libVLC still converts (its own output, the fallback) uses soxr, as VLC's own Android app does. The engine still starts if soxr were missing.
+- **Checked and fine:** time-stretch at normal speed passes the sound through untouched (VLC's source); the app's processing at neutral is bit-perfect; the visualisation never touches the sound.
