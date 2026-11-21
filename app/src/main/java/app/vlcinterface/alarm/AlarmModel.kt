@@ -41,11 +41,16 @@ data class Alarm(
     val output: String = "",
     /** Network songs not reachable: phone songs instead (then the alarm tone). */
     val localFallback: Boolean = true,
+    /** When a one-time alarm rang (or its last date passed): it's then only in the alarm history (0 = not used up). */
+    val used: Long = 0L,
 ) {
+    /** Used up: rang once (or its dates are over) and not switched on again — shown in History, not in front of the player. */
+    val inHistory: Boolean get() = used > 0L && !on
+
     fun toJson(): JSONObject = JSONObject().put("id", id).put("on", on).put("name", name).put("hour", hour).put("minute", minute)
         .put("days", days).put("date", date).put("mode", mode).put("dates", JSONArray(dates)).put("source", source).put("playlistId", playlistId).put("stationUrl", stationUrl).put("stationName", stationName).put("fallbackUrl", fallbackUrl).put("fallbackName", fallbackName)
         .put("volStart", volStart).put("volTarget", volTarget).put("fadeSec", fadeSec).put("maxSnoozes", maxSnoozes)
-        .put("stopAfterMin", stopAfterMin).put("output", output).put("localFallback", localFallback)
+        .put("stopAfterMin", stopAfterMin).put("output", output).put("localFallback", localFallback).put("used", used)
 
     val timeText: String get() = "%02d:%02d".format(hour, minute)
 
@@ -56,7 +61,7 @@ data class Alarm(
             o.optJSONArray("dates")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(), o.optString("source", "local").let { if (it == "radio" || it == "tone") it else "local" }, o.optString("playlistId"),
             o.optString("stationUrl"), o.optString("stationName"), o.optString("fallbackUrl"), o.optString("fallbackName"), o.optInt("volStart", 10), o.optInt("volTarget", 60),
             o.optInt("fadeSec", 60), o.optInt("maxSnoozes", 3), o.optInt("stopAfterMin", 30), o.optString("output"),
-            o.optBoolean("localFallback", true))
+            o.optBoolean("localFallback", true), o.optLong("used", 0L))
 
         private val DAY = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
         /** Days, with the date when there is one ("Thu 4 Dec" / "Mon–Fri from 4 Dec"). */

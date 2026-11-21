@@ -604,3 +604,13 @@
 - Changing the sound device while a video plays (Bluetooth connects / disconnects) puts on that device's value at once.
 - A video that started from the session's value and runs fine with it (12:21) — not changed after 30 s of playing,
   or played to its end before that — keeps that value as its own for that device, like one set by hand.
+
+# After 1.62.0
+
+## Alarm history (requested 2026-11-21 12:30)
+- One-time alarms that already rang (and "specific dates" alarms whose last date has passed) are no longer shown in
+  the alarm area in front of the player.
+- They're listed in Alarm settings → new section "History" (under Alarm health), newest first: time, name and when it
+  was set for, "Rang <day, time>"; a tap opens the alarm. Each has a switch — on sets it again for its next time
+  (a passed date is dropped) and it goes back in front of the player, "06:30 will ring" — and a red ✕ that deletes it.
+- Alarms switched off by hand before ringing stay in front of the player as before.

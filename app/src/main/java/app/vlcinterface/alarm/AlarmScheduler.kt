@@ -77,9 +77,9 @@ object AlarmScheduler {
             "weekly" -> return
             "dates" -> {
                 val left = a.dates.filter { (atDate(it, a) ?: 0L) > now + 60_000 }
-                Alarms.put(a.copy(dates = left, on = left.isNotEmpty() && a.on))
+                Alarms.put(a.copy(dates = left, on = left.isNotEmpty() && a.on, used = if (left.isEmpty()) now else 0L))
             }
-            else -> Alarms.put(a.copy(on = false))
+            else -> Alarms.put(a.copy(on = false, used = now))     // one-time: into the alarm history
         }
     }
 
