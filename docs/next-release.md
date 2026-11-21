@@ -842,3 +842,11 @@
   pop-up. With none: it says so and offers only Off.
 - The "Subs/Change" button is highlighted in the accent colour (tinted, with an accent edge) while the playing video
   has subtitles of its own (16:38); plain when it has none.
+
+## Buttons under the video: one size, centred rows (requested 2026-11-21 16:41)
+- Every button under the upright video (Subs/Change, Subs/Sync, Audio/Sync, Hue/Sat, Subs/Format, speed, Browse,
+  format, Rotate) has the same width and height — linked across their rows: the longest label sets the width for all.
+- Each group wraps into rows centred across the page (as many per row as fit).
+- Sizes follow the Button size setting; when the widest button wouldn't fit across the screen, all of them shrink
+  together, text included. Highlighted buttons (Subs/Change with subtitles) keep the accent look.
+- The format button now reads "Fit → Fill" (without "Format:") to keep the shared width small.

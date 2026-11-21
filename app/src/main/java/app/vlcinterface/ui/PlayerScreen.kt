@@ -696,36 +696,33 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             UnderBtn("⏭") { player.next() }
         }
         }
-        // Sound & picture.
-        val rowSound: @Composable () -> Unit = {
-        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Highlighted while the video has subtitles of its own (16:38).
-            Pill("Subs/Change", selected = p.spuTracks.any { it.id >= 0 }) { SubChoiceUi.open = true }
-            Pill("Subs/Sync") { onPanel() }
-            Pill(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true }
-            Pill("Hue/Sat") { onPicture() }
-            Pill("Subs/Format") { openSubtitleFormat(nav) }
-            Pill("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
+        // The buttons under the picture (16:41): all the same size, linked across their rows (the widest label sets the
+        // width for every one), wrapped in centred rows; when even one doesn't fit the width, all shrink together.
+        val parts = scaleLabel.split('\u0000')
+        val soundBtns = listOf(
+            UBtn("Subs/Change", p.spuTracks.any { it.id >= 0 }) { SubChoiceUi.open = true },   // lit: the video has subtitles (16:38)
+            UBtn("Subs/Sync") { onPanel() },
+            UBtn(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true },
+            UBtn("Hue/Sat") { onPicture() },
+            UBtn("Subs/Format") { openSubtitleFormat(nav) },
+            UBtn("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
                 val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
                 val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
                 player.setRate(rates[(i + 1) % rates.size])
-            }
-        }
-        }
+            },
+        )
+        val fileBtns = listOf(UBtn("📂 Browse") { openOrigin(nav, keepStack = true) })
+        val formatBtns = listOf(
+            UBtn(if (parts.getOrElse(1) { "" }.isEmpty()) parts[0] else "${parts[0]} → ${parts[1]}") { onScale() },
+            UBtn(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() },
+        )
+        val cell = underCell((soundBtns + fileBtns + formatBtns).map { it.label })
+        // Sound & picture.
+        val rowSound: @Composable () -> Unit = { UnderButtons(soundBtns, cell) }
         // Files.
-        val rowFiles: @Composable () -> Unit = {
-        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill("📂 Browse") { openOrigin(nav, keepStack = true) }
-        }
-        }
+        val rowFiles: @Composable () -> Unit = { UnderButtons(fileBtns, cell) }
         // Picture format and orientation.
-        val rowFormat: @Composable () -> Unit = {
-        androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            val parts = scaleLabel.split('\u0000')
-            Pill(if (parts.getOrElse(1) { "" }.isEmpty()) parts[0] else "Format: ${parts[0]} → ${parts[1]}") { onScale() }
-            Pill(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() }
-        }
-        }
+        val rowFormat: @Composable () -> Unit = { UnderButtons(formatBtns, cell) }
         val rowUpNext: @Composable () -> Unit = {
         // Up next (15:36): exactly like the song player's — "Up next" with "Queue › time left" (opens the whole queue),
         // then the next files (as many as Look → "Up next" count), numbered, gliding names, length; long press: menu.
@@ -1436,4 +1433,48 @@ private fun SubtitleChoiceDialog(p: PlayerState, onPick: (Int) -> Unit, onDismis
 fun openSubtitleFormat(nav: Navigator) {
     SettingsAnchor.want = "subformat"
     nav.go(Screen.SettingsGroup("video"))
+}
+
+
+/** One button under the upright video: its label, highlighted or not, what it does. */
+private class UBtn(val label: String, val lit: Boolean = false, val onClick: () -> Unit)
+
+/** The shared size of the buttons under the video: width, height and text size. */
+private class UCell(val w: androidx.compose.ui.unit.Dp, val h: androidx.compose.ui.unit.Dp, val font: androidx.compose.ui.unit.TextUnit)
+
+/**
+ * One size for every button under the video: wide enough for the longest label (+ padding); when that is wider than
+ * the room across, every button shrinks to the room and their text with it.
+ */
+@Composable
+private fun underCell(labels: List<String>): UCell {
+    val tm = androidx.compose.ui.text.rememberTextMeasurer()
+    val dens = androidx.compose.ui.platform.LocalDensity.current
+    val conf = LocalConfiguration.current
+    val k = btnScale()
+    val room = (conf.screenWidthDp - 32).toFloat()          // the page's width less its side padding
+    val font = (14f * k).coerceIn(12f, 20f)
+    val widest = labels.maxOfOrNull { l ->
+        with(dens) { tm.measure(l, androidx.compose.ui.text.TextStyle(fontSize = font.sp, fontWeight = FontWeight.SemiBold)).size.width.toDp().value }
+    } ?: 60f
+    val w = widest + 28f
+    return if (w <= room) UCell(w.dp, (40f * k).coerceIn(36f, 56f).dp, font.sp)
+    else { val f = room / w; UCell(room.dp, ((40f * k).coerceIn(36f, 56f) * maxOf(f, 0.8f)).dp, (font * f).coerceAtLeast(9f).sp) }
+}
+
+/** A group of same-size buttons, wrapped in rows centred across the page. */
+@Composable
+private fun UnderButtons(btns: List<UBtn>, cell: UCell) {
+    val a = accent()
+    androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        btns.forEach { b ->
+            Box(Modifier.width(cell.w).height(cell.h).clip(RoundedCornerShape(cell.h / 2))
+                .background(if (b.lit) a.copy(alpha = 0.18f) else Color.Transparent)
+                .border(1.dp, if (b.lit) a else C.line, RoundedCornerShape(cell.h / 2))
+                .clickable(onClick = b.onClick), contentAlignment = Alignment.Center) {
+                Text(b.label, color = if (b.lit) a else C.text, fontSize = cell.font, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+        }
+    }
 }
