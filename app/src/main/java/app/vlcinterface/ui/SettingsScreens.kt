@@ -904,8 +904,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 val ctxL = androidx.compose.ui.platform.LocalContext.current
                 val scopeL = androidx.compose.runtime.rememberCoroutineScope()
                 CardBox {
-                    // Straight into the phone's Download folder (Download/vlc interface), no file picker.
-                    ValueRow("Collect error logs", "One zip with only the errors (every log's failures, system errors, crashes) and phone details, no passwords — saved straight to Download/vlc interface", "Save") {
+                    // Straight into the phone's Download folder (Download/vlc_interface), no file picker.
+                    ValueRow("Collect error logs", "One zip with only the errors (every log's failures, system errors, crashes) and phone details, no passwords — saved straight to Download/vlc_interface", "Save") {
                         scopeL.launch {
                             val where = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { app.vlcinterface.data.LogPack.saveToDownloads(ctxL) }
                             ShortNote.show(if (where != null) "Saved: $where" else "Could not save the logs")

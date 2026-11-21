@@ -23,17 +23,17 @@ import java.util.zip.ZipOutputStream
 object LogPack {
     private val ts = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
 
-    /** Saved straight into the phone's Download folder (Download/vlc interface); returns where, or null. */
+    /** Saved straight into the phone's Download folder (Download/vlc_interface); returns where, or null. */
     fun saveToDownloads(ctx: Context): String? = try {
         val name = fileName()
         val cv = android.content.ContentValues().apply {
             put(android.provider.MediaStore.Downloads.DISPLAY_NAME, name)
             put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/zip")
-            put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/vlc interface")
+            put(android.provider.MediaStore.Downloads.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS + "/vlc_interface")
         }
         val uri = ctx.contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, cv) ?: throw Exception("no place")
         ctx.contentResolver.openOutputStream(uri)?.use { write(ctx, it) }
-        "Download/vlc interface/$name"
+        "Download/vlc_interface/$name"
     } catch (_: Exception) { null }
 
     fun fileName(): String = "vlc-interface-errors_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".zip"
