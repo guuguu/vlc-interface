@@ -871,3 +871,8 @@
 - "Save" next to "Up next" (video player and song player): saves the whole queue as a new playlist; the name proposed
   is the series ("The Office") or where it was played from, and can be changed. The Queue page keeps its
   "Save as playlist".
+
+## Queue: drag to reorder (requested 2026-11-21 16:51)
+- Queue page and the "Up next" boxes (song player and video player): each entry has a ≡ handle — hold it and drag up
+  or down; every half row passed moves it one place in the queue, the row lifted and following the finger. Tap and
+  long press (menu) work as before. In Up next an entry can't be moved above the one playing.

@@ -564,9 +564,14 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); 
 
                     SaveQueueButton(); QueueTimeLeft(item) { nav.go(Screen.Queue) } }
-                next.forEachIndexed { i, n ->
-                    Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
-                        .padding(vertical = if (landscape) 5.dp else 8.dp)) {
+                val upDrag = remember { QueueDrag() }
+                next.forEachIndexed { i, n -> androidx.compose.runtime.key(n.uri) {
+                    Row(Modifier.then(upDrag.row(n.uri)).fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
+                        .padding(vertical = if (landscape) 5.dp else 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // ≡: drag up / down to move it in the queue (16:51).
+                        Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(upDrag.handle(n.uri,
+                            { player.state.value.queue.indexOfFirst { it.uri == n.uri } }, { player.state.value.queue.size }) { a, d ->
+                                if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(end = 6.dp))
                         // Order number: fixed, outside the gliding text (which is clipped a little after it).
                         Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
                         Box(Modifier.width(6.dp))
@@ -582,7 +587,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                             onMoveDown = if (p.index + 2 + i < p.queue.size) ({ player.moveInQueue(p.index + 1 + i, 1) }) else null,
                             removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
                     }
-                }
+                } }
             }
             }
             for (id in ids) when (id) {
@@ -867,12 +872,17 @@ fun QueueScreen(nav: Navigator) {
         val st by App.instance.store.state.collectAsState()
         OrderSwitch(st.settings.shuffle, Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) { player.setShuffle(it) }
         val state = rememberLazyListState(initialFirstVisibleItemIndex = (p.index - 2).coerceAtLeast(0))
+        val qDrag = remember { QueueDrag() }
         LazyColumn(Modifier.weight(1f).scrollbar(state).padding(horizontal = 16.dp), state = state) {
             if (p.queue.size > 20) stickyHeader { JumpToBox(state, p.queue.map { listOf(it.title, it.artist).joinToString(" ") }, offset = 1) }
-            itemsIndexed(p.queue) { i, q ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
+            itemsIndexed(p.queue, key = { _, q -> q.uri }) { i, q ->
+                Row(Modifier.then(qDrag.row(q.uri)).fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp)).background(C.bg)
                     .background(if (i == p.index) accent().copy(alpha = 0.12f) else Color.Transparent)
                     .combinedClickable(onClick = { player.jumpTo(i) }, onLongClick = { qMenu = i }).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // ≡: drag up / down to move it, one place per half row (16:51).
+                    Text("≡", color = C.muted, fontSize = 20.sp, modifier = Modifier.then(qDrag.handle(q.uri,
+                        { player.state.value.queue.indexOfFirst { it.uri == q.uri } }, { player.state.value.queue.size }) { a, d -> player.moveInQueue(a, d) })
+                        .padding(horizontal = 6.dp, vertical = 10.dp))
                     Text("${i + 1}", color = if (i == p.index) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
                     Column(Modifier.weight(1f)) {
                         MarqueeText(q.title, if (i == p.index) accent() else C.text, Modifier.fillMaxWidth(), fontSize = 16.sp, list = "upnext")

@@ -733,9 +733,14 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         if (next.isNotEmpty() && cur != null) Column(Modifier.fillMaxWidth()) {
             var upMenu by remember { mutableIntStateOf(-1) }
             Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); SaveQueueButton(); QueueTimeLeft(cur) { nav.go(Screen.Queue) } }
-            next.forEachIndexed { i, n ->
-                Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
-                    .padding(vertical = 8.dp)) {
+            val upDrag = remember { QueueDrag() }
+            next.forEachIndexed { i, n -> androidx.compose.runtime.key(n.uri) {
+                Row(Modifier.then(upDrag.row(n.uri)).fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
+                    .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // ≡: drag up / down to move it in the queue (16:51).
+                    Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(upDrag.handle(n.uri,
+                        { player.state.value.queue.indexOfFirst { it.uri == n.uri } }, { player.state.value.queue.size }) { a, d ->
+                            if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(end = 6.dp))
                     Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
                     Box(Modifier.width(6.dp))
                     MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 8.dp), fontSize = 15.sp, list = "upnext")
@@ -745,7 +750,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                         onMoveDown = if (p.index + 2 + i < p.queue.size) ({ player.moveInQueue(p.index + 1 + i, 1) }) else null,
                         removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
                 }
-            }
+            } }
         }
         }
         // In the order set in Look → "Order of the player rows" → Video.

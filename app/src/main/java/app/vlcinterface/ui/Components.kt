@@ -1256,3 +1256,36 @@ fun shareDetails(ctx: android.content.Context, title: String, text: String) {
     }
 }
 
+
+
+/**
+ * Drag to move a queue entry one place at a time (2026-11-21 16:51): hold the ≡ handle and drag; each half row
+ * passed moves it one position up or down in the queue, the row following the finger.
+ */
+class QueueDrag {
+    var key by androidx.compose.runtime.mutableStateOf<String?>(null)
+    var dy by androidx.compose.runtime.mutableFloatStateOf(0f)
+    var rowH by androidx.compose.runtime.mutableIntStateOf(1)
+
+    /** The row: lifted and following the finger while it's the one dragged. */
+    fun row(k: String): Modifier = Modifier.zIndex(if (key == k) 1f else 0f)
+        .graphicsLayer { if (key == k) { translationY = dy; shadowElevation = 12f } }
+        .onGloballyPositioned { if (key == k) rowH = it.size.height }
+        .background(if (key == k) C.card else Color.Transparent)
+
+    /** The ≡ handle of the row with queue key [k]; [indexOf] finds its place now, [move] moves it (+1 / -1). */
+    fun handle(k: String, indexOf: () -> Int, size: () -> Int, move: (Int, Int) -> Unit): Modifier = Modifier.pointerInput(k) {
+        detectDragGestures(
+            onDragStart = { key = k; dy = 0f },
+            onDragEnd = { key = null; dy = 0f },
+            onDragCancel = { key = null; dy = 0f },
+        ) { ch, d ->
+            ch.consume()
+            dy += d.y
+            val h = rowH.coerceAtLeast(1).toFloat()
+            var i = indexOf()
+            while (dy > h / 2 && i in 0 until size() - 1) { move(i, 1); i++; dy -= h }
+            while (dy < -h / 2 && i > 0) { move(i, -1); i--; dy += h }
+        }
+    }
+}
