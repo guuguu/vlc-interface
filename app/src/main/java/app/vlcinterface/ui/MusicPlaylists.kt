@@ -179,7 +179,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     // Look switches "Hide the clock / album picture while scrolling": off = the clock stays pinned above the page,
     // the picture simply scrolls with the page; neither is ever taken away.
     // (The album picture only when it's the first row of the page.)
-    val topAuto = if (clockTop) setsP.clockAutoHide else setsP.coverAutoHide && playerRowOrder(setsP, item.isRadio).first() == "picture"
+    val topAuto = if (clockTop) setsP.clockAutoHide else setsP.coverAutoHide && playerRowOrder(setsP, item.isRadio).firstOrNull() == "picture"
     var lastAct by remember { mutableLongStateOf(0L) }
     var topHidden by remember { mutableStateOf(false) }
     var topHpx by remember { mutableIntStateOf(0) }
@@ -2191,11 +2191,21 @@ val PLAYER_ROW_NAMES = mapOf("picture" to "Picture / clock", "title" to "Title",
     "buttons" to "Buttons", "tone" to "Tone sliders", "from" to "Playing from", "playnext" to "Play next…",
     "extra" to "Extra buttons", "upnext" to "Up next / stations")
 
+/** The rows shown on the player, in their order (rows removed with ✕ in Look left out; the play buttons always stay). */
 fun playerRowOrder(s: app.vlcinterface.data.Settings, radio: Boolean): List<String> {
+    val hidden = (if (radio) s.rowHiddenRadio else s.rowHiddenSong).filter { it !in PLAYER_ROWS_KEPT }
+    return playerRowOrderAll(s, radio).filter { it !in hidden }
+}
+
+/** Every row of that player in its order, removed ones included (for Look). */
+fun playerRowOrderAll(s: app.vlcinterface.data.Settings, radio: Boolean): List<String> {
     val def = if (radio) PLAYER_RADIO_ROWS else PLAYER_SONG_ROWS
     val saved = (if (radio) s.rowOrderRadio else s.rowOrderSong).filter { it in def }
     return saved + def.filter { it !in saved }
 }
+
+/** Rows that can't be removed: without them the player can't be used. */
+val PLAYER_ROWS_KEPT = setOf("buttons")
 
 
 /** Flag emoji of a two-letter country code ("FR" → 🇫🇷); 🌐 when unknown. */

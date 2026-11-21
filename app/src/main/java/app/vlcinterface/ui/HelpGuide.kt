@@ -105,7 +105,7 @@ object HelpGuide {
         Chapter("look", "Look", listOf(
             "Colours and sizes" to "Accent colour (and a separate radio colour), button size, menu opacity, spacing and text size, pop-up opacity, " +
                 "scroll bar width, shadows on player buttons.",
-            "Settings order" to "The order of the links on the main Settings page is chosen on the Look page (▲ ▼, Reset order).",
+            "Settings order" to "The order of the links on the main Settings page is chosen on the Look page: drag a link by its ≡ (or long-press it) to move it, ✕ removes it from the page, + brings it back, Reset order puts everything back.",
         )),
         Chapter("alarm", "Alarm clock", listOf(
             "Alarms" to "Alarms ring once, on chosen weekdays or on specific dates. Each wakes you with phone music, a radio station (with a fallback) " +

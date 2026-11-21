@@ -40,6 +40,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
@@ -1052,4 +1054,95 @@ fun rememberKept(key: String, def: String): androidx.compose.runtime.MutableStat
         androidx.compose.runtime.snapshotFlow { st.value }.collect { KeptChoice.put(key, it) }
     }
     return st
+}
+
+/**
+ * A list put in order by dragging (requested 2026-11-21 11:28): hold the ≡ handle (or long-press the row) and drag the
+ * row up or down — the others make room as it passes; let go to keep the new order. ✕ removes an item (when
+ * [onRemove] is given and [canRemove] allows it); removed items are listed under it with "+" to bring them back.
+ */
+@Composable
+fun DragOrderList(
+    items: List<String>,
+    name: (String) -> String,
+    onOrder: (List<String>) -> Unit,
+    removed: List<String> = emptyList(),
+    onRemove: ((String) -> Unit)? = null,
+    onRestore: ((String) -> Unit)? = null,
+    canRemove: (String) -> Boolean = { true },
+    modifier: Modifier = Modifier,
+) {
+    // Local copy while dragging, so the rows move live; taken from [items] again when not dragging.
+    val ord = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    var dragging by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    var offset by androidx.compose.runtime.remember { androidx.compose.runtime.mutableFloatStateOf(0f) }
+    val heights = androidx.compose.runtime.remember { HashMap<String, Int>() }
+    if (dragging == null && ord.toList() != items) { ord.clear(); ord.addAll(items) }
+    val currentItems by androidx.compose.runtime.rememberUpdatedState(items)
+    val currentOnOrder by androidx.compose.runtime.rememberUpdatedState(onOrder)
+
+    fun dragBy(dy: Float) {
+        val id = dragging ?: return
+        offset += dy
+        val i = ord.indexOf(id); if (i < 0) return
+        // Passed half of the neighbour's height: swap with it and carry the rest of the offset over.
+        if (offset > 0 && i < ord.lastIndex) {
+            val h = heights[ord[i + 1]] ?: return
+            if (offset > h / 2f) { ord.removeAt(i); ord.add(i + 1, id); offset -= h }
+        } else if (offset < 0 && i > 0) {
+            val h = heights[ord[i - 1]] ?: return
+            if (-offset > h / 2f) { ord.removeAt(i); ord.add(i - 1, id); offset += h }
+        }
+    }
+    fun start(id: String) { dragging = id; offset = 0f }
+    fun end() {
+        val changed = ord.toList() != currentItems
+        val newOrder = ord.toList()
+        dragging = null; offset = 0f
+        if (changed) currentOnOrder(newOrder)
+    }
+
+    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF))) {
+        ord.forEach { id ->
+            androidx.compose.runtime.key(id) {
+                val isDrag = dragging == id
+                Row(
+                    Modifier.fillMaxWidth()
+                        .zIndex(if (isDrag) 1f else 0f)
+                        .graphicsLayer { translationY = if (isDrag) offset else 0f; shadowElevation = if (isDrag) 8f else 0f }
+                        .background(if (isDrag) Color(0xFF2A3038) else Color.Transparent)
+                        .onGloballyPositioned { heights[id] = it.size.height }
+                        .pointerInput(id) {
+                            androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress(
+                                onDragStart = { start(id) }, onDragEnd = { end() }, onDragCancel = { end() },
+                                onDrag = { ch, d -> ch.consume(); dragBy(d.y) })
+                        }
+                        .padding(vertical = (2 * sg()).dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // ≡ handle: drags at once (no long press needed).
+                    Text("≡", color = if (isDrag) accent() else C.muted, fontSize = 22.sp, lineHeight = 22.sp,
+                        modifier = Modifier.pointerInput(id) {
+                            androidx.compose.foundation.gestures.detectDragGestures(
+                                onDragStart = { start(id) }, onDragEnd = { end() }, onDragCancel = { end() },
+                                onDrag = { ch, d -> ch.consume(); dragBy(d.y) })
+                        }.padding(horizontal = 14.dp, vertical = 8.dp))
+                    Text(name(id), color = C.text, fontSize = 14.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f))
+                    if (onRemove != null && canRemove(id))
+                        Text("✕", color = C.bad, fontSize = SYM, modifier = Modifier.clickable { onRemove(id) }.padding(horizontal = 14.dp, vertical = 8.dp))
+                    else if (onRemove != null) Spacer(Modifier.width(44.dp))
+                }
+            }
+        }
+        if (removed.isNotEmpty() && onRestore != null) {
+            Text("Removed — tap to bring back", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 8.dp, bottom = 2.dp))
+            removed.forEach { id ->
+                Row(Modifier.fillMaxWidth().clickable { onRestore(id) }.padding(vertical = (2 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("+", color = WIZ_GREEN, fontSize = 20.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                    Text(name(id), color = C.muted, fontSize = 14.sp, maxLines = 1, modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
 }

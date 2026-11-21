@@ -68,6 +68,9 @@ private val GROUP_HINTS = mapOf("audio" to "Start volume, preamp, ReplayGain, so
     "logs" to "Errors, servers, indexing, crashes, caches", "folders" to "Search the phone, SD card and Downloads for music and videos")
 
 /** The main Settings page's links, in the chosen order (new groups added at the end). */
+/** Settings links that can't be removed: Look holds the list that brings removed links back. */
+val SETTINGS_KEPT = setOf("look")
+
 fun orderedGroups(order: List<String>): List<Pair<String, String>> {
     val byId = SETTINGS_GROUPS.toMap()
     return (order.filter { it in byId } + SETTINGS_GROUPS.map { it.first }.filter { it !in order }).map { it to byId.getValue(it) }
@@ -112,7 +115,7 @@ fun SettingsScreen(nav: Navigator) {
         BackHeader("Settings", nav, version)
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             CardBox {
-                orderedGroups(s.settingsOrder).forEachIndexed { i, (id, name) ->
+                orderedGroups(s.settingsOrder).filter { it.first !in s.settingsHidden || it.first in SETTINGS_KEPT }.forEachIndexed { i, (id, name) ->
                     if (i > 0) Divider()
                     SettingsLink(name, GROUP_HINTS[id] ?: "") { openSettingsGroup(nav, id) }
                 }
@@ -472,7 +475,9 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
                         listOf("song" to "Songs", "radio" to "Radio", "both" to "Both").forEach { (m, l) -> Pill(l, selected = rowsMode == m, filled = rowsMode == m) { rowsMode = m } }
                     }
-                    val rowOrd = playerRowOrder(s, rowsMode == "radio")
+                    val rowRadio = rowsMode == "radio"
+                    val rowAll = playerRowOrderAll(s, rowRadio)
+                    val rowHid = (if (rowRadio) s.rowHiddenRadio else s.rowHiddenSong).filter { it in rowAll && it !in PLAYER_ROWS_KEPT }
                     fun saveRows(l: List<String>) {
                         set(when (rowsMode) {
                             "radio" -> s.copy(rowOrderRadio = l)
@@ -481,18 +486,20 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         })
                         if (helpersOn) lookHelp = "Order of the player rows"
                     }
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color(0x14FFFFFF))) {
-                        rowOrd.forEachIndexed { i, id ->
-                            Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text(PLAYER_ROW_NAMES[id] ?: id, color = C.text, fontSize = 14.sp, maxLines = 1, modifier = Modifier.weight(1f))
-                                STextButton({ if (i > 0) saveRows(rowOrd.toMutableList().also { java.util.Collections.swap(it, i, i - 1) }) }, enabled = i > 0) {
-                                    Text("▲", fontSize = SYM, color = if (i > 0) WIZ_GREEN else SYM_OFF) }
-                                STextButton({ if (i < rowOrd.lastIndex) saveRows(rowOrd.toMutableList().also { java.util.Collections.swap(it, i, i + 1) }) }, enabled = i < rowOrd.lastIndex) {
-                                    Text("▼", fontSize = SYM, color = if (i < rowOrd.lastIndex) WIZ_GREEN else SYM_OFF) }
-                            }
-                        }
+                    fun saveHidden(h: List<String>) {
+                        set(when (rowsMode) {
+                            "radio" -> s.copy(rowHiddenRadio = h)
+                            "both" -> s.copy(rowHiddenSong = h, rowHiddenRadio = h.filter { it in PLAYER_RADIO_ROWS })
+                            else -> s.copy(rowHiddenSong = h)
+                        })
+                        if (helpersOn) lookHelp = "Order of the player rows"
                     }
-                    STextButton({ saveRows(emptyList()) }) { Text("Reset order", color = accent()) }
+                    // Drag (≡ or long press) to reorder, ✕ to remove a row from the player, + to bring it back (11:28).
+                    DragOrderList(rowAll.filter { it !in rowHid }, { PLAYER_ROW_NAMES[it] ?: it },
+                        onOrder = { l -> saveRows(l + rowHid) },
+                        removed = rowHid, onRemove = { id -> saveHidden(rowHid + id) }, onRestore = { id -> saveHidden(rowHid - id) },
+                        canRemove = { it !in PLAYER_ROWS_KEPT })
+                    STextButton({ saveRows(emptyList()); saveHidden(emptyList()) }) { Text("Reset order", color = accent()) }
                     // Gap between the player's rows.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Player rows spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Player rows spacing"))
@@ -729,16 +736,14 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             SectionTitle("Order of the Settings links")
             CardBox {
                 val order = orderedGroups(s.settingsOrder).map { it.first }
-                order.forEachIndexed { i, gid ->
-                    if (i > 0) Divider()
-                    Row(Modifier.fillMaxWidth().explain("Order of the Settings links").padding(horizontal = 16.dp, vertical = (4 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(SETTINGS_GROUPS.toMap()[gid] ?: gid, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                        STextButton({ if (i > 0) set(s.copy(settingsOrder = order.toMutableList().also { java.util.Collections.swap(it, i, i - 1) })) }, enabled = i > 0) { Text("▲", fontSize = SYM, color = if (i > 0) WIZ_GREEN else SYM_OFF) }
-                        STextButton({ if (i < order.lastIndex) set(s.copy(settingsOrder = order.toMutableList().also { java.util.Collections.swap(it, i, i + 1) })) }, enabled = i < order.lastIndex) { Text("▼", fontSize = SYM, color = if (i < order.lastIndex) WIZ_GREEN else SYM_OFF) }
-                    }
-                }
+                val hid = s.settingsHidden.filter { it in order && it !in SETTINGS_KEPT }
+                // Drag (≡ or long press) to reorder, ✕ to remove a link from the Settings page, + to bring it back (11:28).
+                DragOrderList(order.filter { it !in hid }, { SETTINGS_GROUPS.toMap()[it] ?: it },
+                    onOrder = { l -> set(s.copy(settingsOrder = l + hid)) },
+                    removed = hid, onRemove = { id -> set(s.copy(settingsHidden = hid + id)) }, onRestore = { id -> set(s.copy(settingsHidden = hid - id)) },
+                    canRemove = { it !in SETTINGS_KEPT }, modifier = Modifier.explain("Order of the Settings links"))
                 Divider()
-                ValueRow("Reset order", "Back to the original order", "Reset") { set(s.copy(settingsOrder = emptyList())) }
+                ValueRow("Reset order", "Back to the original order, removed links back", "Reset") { set(s.copy(settingsOrder = emptyList(), settingsHidden = emptyList())) }
             }
                 }
                 "library" -> {
