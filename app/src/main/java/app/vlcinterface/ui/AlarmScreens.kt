@@ -856,21 +856,28 @@ private fun AlarmSoundDialog(onDone: () -> Unit) {
 
 // ---------------------------------------------------------------- alarm health
 
-class AlarmIssue(val title: String, val text: String, val fix: (android.content.Context) -> Unit)
+class AlarmIssue(val title: String, val text: String, val kind: String = "", val fix: (android.content.Context) -> Unit)
 
 /** What could stop an alarm from ringing, each with its fix. */
 fun alarmIssues(ctx: android.content.Context): List<AlarmIssue> {
     val out = ArrayList<AlarmIssue>()
-    fun open(c: android.content.Context, i: Intent) = try { c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+    // Each fix opens the Android page where exactly that permission is granted for this app (2026-11-21 11:42); if a
+    // phone doesn't have that page, the next closest one, ending with the app's own info page.
+    fun open(c: android.content.Context, vararg tries: Intent) {
+        for (i in tries) { try { c.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return } catch (_: Exception) {} }
+    }
     val pkg = Uri.parse("package:" + ctx.packageName)
-    if (!AlarmScheduler.canExact(ctx)) out += AlarmIssue("Exact alarms", "Not allowed: alarms may be late") { open(it, Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg)) }
+    val details = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)
+    if (!AlarmScheduler.canExact(ctx)) out += AlarmIssue("Exact alarms", "Not allowed: alarms may be late", "exact") {
+        open(it, Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, pkg), details) }
     val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
-    if (!nm.areNotificationsEnabled()) out += AlarmIssue("Notifications", "Off: no ringing screen, no snooze buttons") {
-        open(it, Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, it.packageName)) }
-    if (Build.VERSION.SDK_INT >= 34 && !nm.canUseFullScreenIntent()) out += AlarmIssue("Full-screen alarm", "Not allowed: only a notification") {
-        open(it, Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg)) }
-    if (ctx.getSystemService(android.app.ActivityManager::class.java).isBackgroundRestricted) out += AlarmIssue("Battery: Restricted", "Android may block the app at alarm time") {
-        open(it, Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pkg)) }
+    if (!nm.areNotificationsEnabled()) out += AlarmIssue("Notifications", "Off: no ringing screen, no snooze buttons", "notif") {
+        open(it, Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, it.packageName), details) }
+    if (Build.VERSION.SDK_INT >= 34 && !nm.canUseFullScreenIntent()) out += AlarmIssue("Full-screen alarm", "Not allowed: only a notification", "fullscreen") {
+        open(it, Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, pkg), details) }
+    if (ctx.getSystemService(android.app.ActivityManager::class.java).isBackgroundRestricted) out += AlarmIssue("Battery: Restricted", "Android may block the app at alarm time", "battery") {
+        // The app's battery page (Unrestricted / Optimised / Restricted); not every phone has a direct link to it.
+        open(it, Intent("android.settings.VIEW_ADVANCED_POWER_USAGE_DETAIL", pkg), Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS), details) }
     return out
 }
 
@@ -878,14 +885,35 @@ fun alarmIssues(ctx: android.content.Context): List<AlarmIssue> {
  * Pop-up when the alarms lack a permission (e.g. after a new install): each missing one with a button that opens its
  * Android setting; "Later" goes on with what was touched, ✕ / outside closes it.
  */
+/**
+ * Opens what grants one alarm permission. Notifications on Android 13+: Android's own "Allow notifications?" request
+ * first; when Android won't ask any more (refused before), the app's notification switch page.
+ */
+@Composable
+fun rememberIssueOpener(): (AlarmIssue) -> Unit {
+    val ctx = LocalContext.current
+    var notifIssue by remember { mutableStateOf<AlarmIssue?>(null) }
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { ok ->
+        val i = notifIssue; notifIssue = null
+        if (!ok) i?.fix?.invoke(ctx)
+    }
+    return { i ->
+        if (i.kind == "notif" && Build.VERSION.SDK_INT >= 33 &&
+            ctx.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            notifIssue = i
+            try { ask.launch(android.Manifest.permission.POST_NOTIFICATIONS) } catch (_: Exception) { notifIssue = null; i.fix(ctx) }
+        } else i.fix(ctx)
+    }
+}
+
 @Composable
 fun AlarmPermissionDialog(issues: List<AlarmIssue>, onLater: () -> Unit, onClose: () -> Unit) {
-    val ctx = LocalContext.current
+    val openIssue = rememberIssueOpener()
     AlertDialog(onDismissRequest = onClose, containerColor = C.panel,
         title = { Text("⚠  Alarms need permissions", color = C.bad) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
-                Text("Android hasn't given the app everything an alarm needs to ring on time (usual after a new install). Open each setting below, allow it, then come back.",
+                Text("Android hasn't given the app everything an alarm needs to ring on time (usual after a new install). Tap Grant: Android's page for that permission opens — allow it, then come back.",
                     color = C.text, fontSize = 14.sp)
                 issues.forEach { i ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -893,7 +921,7 @@ fun AlarmPermissionDialog(issues: List<AlarmIssue>, onLater: () -> Unit, onClose
                             Text(i.title, color = C.bad, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                             Text(i.text, color = C.muted, fontSize = 12.sp)
                         }
-                        Pill("Open setting") { i.fix(ctx) }
+                        Pill("Grant") { openIssue(i) }
                     }
                 }
             }
@@ -919,6 +947,7 @@ fun resumeTick(): Int {
 private fun HealthCard() {
     val ctx = LocalContext.current
     val issues = remember(resumeTick()) { alarmIssues(ctx) }
+    val openIssue = rememberIssueOpener()
     var testNote by remember { mutableStateOf("") }
     CardBox {
         if (issues.isEmpty()) Text("✓  Everything Android needs for the alarms is allowed", color = C.ok, fontSize = 14.sp,
@@ -929,7 +958,7 @@ private fun HealthCard() {
                     Text("⚠  " + i.title, color = C.bad, fontSize = 15.sp)
                     Text(i.text, color = C.muted, fontSize = 13.sp)
                 }
-                Pill("Fix") { i.fix(ctx) }
+                Pill("Grant") { openIssue(i) }
             }
             Divider()
         }

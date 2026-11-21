@@ -511,6 +511,10 @@
   full-screen alarm (Android 14+), battery not "Restricted" — the alarm area under the clock is red (red tint and
   border, also the small sideways chips) with "⚠ Alarms may not ring: …" on top, whether or not an alarm is on.
 - Any touch on the alarms there (an alarm, its switch, + Add alarm, ⚙, ⚠) first shows "Alarms need permissions":
-  each missing permission with "Open setting" (straight to that Android setting); "Later" goes on with what was
+  each missing permission with "Grant", which opens the Android page where exactly that permission is granted for
+  the app (11:42): Exact alarms → "Alarms & reminders" for the app; Notifications → Android's own "Allow
+  notifications?" request (13+), or the app's notification switch when Android won't ask again / on Android 12;
+  Full-screen alarm → "Full-screen notifications" for the app; Battery: Restricted → the app's battery page (or the
+  closest page the phone has, last the app's info page). Same "Grant" buttons in Alarm settings → alarm health; "Later" goes on with what was
   touched, Close cancels. Checked again each time you come back to the app: once everything is allowed the area is
   back to normal and touches act at once (a touch waiting behind the pop-up then just goes on).
