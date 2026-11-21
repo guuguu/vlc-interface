@@ -621,30 +621,33 @@ private fun BoxScope.ControlsOverlayBody(
     // bar to above the position bar, all one size, shrunk together when the height is short. No Songs / Radio here.
     val landS = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
     if (landS && !compact) {
-        val left = listOf<Pair<String, () -> Unit>>("📂 Browse" to { onTouch(); openOrigin(nav, keepStack = true) })
+        // Left (17:10): the output, Browse, the format, Rotate, speed. Right: the subtitle, sound and picture buttons.
+        val left = listOf<Triple<String, Boolean, () -> Unit>>(
+            Triple("📂 Browse", false) { onTouch(); openOrigin(nav, keepStack = true) },
+            Triple(scaleLabel.split('\u0000').let { if (it.getOrElse(1) { "" }.isEmpty()) it[0] else "${it[0]} → ${it[1]}" }, false) { onScale(); onTouch() },
+            Triple(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }, false) { App.instance.player.rotateVideo(); onTouch() },
+            Triple("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×", false) {
+                val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
+                val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
+                player.setRate(rates[(i + 1) % rates.size]); onTouch() },
+        )
         val right = listOf<Triple<String, Boolean, () -> Unit>>(
             Triple("Subs/Change", p.spuTracks.any { it.id >= 0 }) { onTouch(); SubChoiceUi.open = true },
             Triple("Subs/Sync", false) { onTouch(); onPanel() },
             Triple(syncLabel(p.audioDelayMs), false) { onTouch(); AudioSyncUi.open = true },
             Triple("Hue/Sat", false) { onTouch(); onPicture() },
             Triple("Subs/Format", false) { onTouch(); openSubtitleFormat(nav) },
-            Triple("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×", false) {
-                val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
-                val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
-                player.setRate(rates[(i + 1) % rates.size]); onTouch() },
-            Triple(scaleLabel.split('\u0000').let { if (it.getOrElse(1) { "" }.isEmpty()) it[0] else "${it[0]} → ${it[1]}" }, false) { onScale(); onTouch() },
-            Triple(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }, false) { App.instance.player.rotateVideo(); onTouch() },
         )
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize().padding(top = 44.dp, bottom = 52.dp, start = 6.dp, end = 6.dp)) {
-            val n = right.size
+            val n = maxOf(right.size, left.size + 1)
             val chipH = ((maxHeight.value - 6f * (n - 1)) / n).coerceIn(22f, 36f).dp
             val font = (chipH.value * 0.4f).coerceIn(9f, 12f).sp
             val w = 92.dp
             Column(Modifier.align(Alignment.CenterStart).width(w), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box(Modifier.width(w)) { OutputPill(openOutput) }
-                left.forEach { (l, f) -> SideChip(l, false, chipH, font, w, f) }
+                left.forEach { (l, lit, f) -> SideChip(l, lit, chipH, font, w, f) }
             }
-            Column(Modifier.align(Alignment.CenterEnd).width(w).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+            Column(Modifier.align(Alignment.CenterEnd).width(w), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 right.forEach { (l, lit, f) -> SideChip(l, lit, chipH, font, w, f) }
             }
         }

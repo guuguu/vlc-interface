@@ -892,8 +892,8 @@
   with a tap) and hides itself 3 s after the last touch; hidden, only a thin handle shows at the top edge. It fits the
   width (shrinks evenly when needed).
 - Player buttons in two slim columns against the side edges, all one size, shrinking together when the screen is
-  short: left — the output and 📂 Browse; right — Subs/Change (lit when the video has subtitles), Subs/Sync,
-  Audio/Sync, Hue/Sat, Subs/Format, speed, Fit → Fill, Rotate.
+  short: left — the output, 📂 Browse, Fit → Fill, Rotate, speed (moved left 17:10); right — Subs/Change (lit when
+  the video has subtitles), Subs/Sync, Audio/Sync, Hue/Sat, Subs/Format. Both columns centred on the height.
 - Songs and Radio are no longer on the sideways video screen (still in the upright header). The bottom button row is
   gone sideways (its ⏮ ⏭ are in the middle, format and Rotate in the right column): only the position bar at the
   bottom. The middle buttons and the position bar sit between the columns. Double tap in the middle: PiP.
