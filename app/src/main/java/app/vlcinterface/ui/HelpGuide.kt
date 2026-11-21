@@ -155,7 +155,7 @@ fun HelpScreen(nav: Navigator, start: String) {
         Scaled {
             // Title on its own row (17:57).
             Column(Modifier.fillMaxWidth().background(C.card).padding(horizontal = 6.dp, vertical = 6.dp)) {
-                Text("Help", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp, top = 2.dp))
+                PageTitle("Help", Modifier.padding(start = 12.dp, top = 2.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     HeadBtn("✕") { nav.back() }
                     HeadBtn("◀", g.pos > 0) { g.pos-- }

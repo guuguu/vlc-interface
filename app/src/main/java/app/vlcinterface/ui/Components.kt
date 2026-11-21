@@ -1348,3 +1348,17 @@ fun DigitField(value: String, label: String, maxLen: Int, modifier: Modifier = M
         }, modifier = Modifier.padding(top = 8.dp).align(Alignment.CenterHorizontally))
     }
 }
+
+
+/**
+ * Page title (2026-11-21 18:04): one fixed size everywhere — the same on every page and header, whatever the Button
+ * size, the settings Text size or a page's own scaling (22 dp-sized letters, bold).
+ */
+@Composable
+fun PageTitle(text: String, modifier: Modifier = Modifier, maxLines: Int = 2) {
+    val d = androidx.compose.ui.platform.LocalDensity.current
+    val real = androidx.compose.ui.platform.LocalContext.current.resources.displayMetrics.density
+    val sp = 22f * real / (d.density * d.fontScale)
+    Text(text, color = C.text, fontSize = sp.sp, lineHeight = (sp * 1.2f).sp, fontWeight = FontWeight.Bold, maxLines = maxLines,
+        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = modifier)
+}

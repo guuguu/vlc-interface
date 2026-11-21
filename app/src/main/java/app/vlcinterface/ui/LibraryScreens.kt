@@ -92,7 +92,7 @@ fun LibraryHeader(title: String, openOutput: () -> Unit, nav: Navigator? = null,
     // width, shrunk evenly when they don't — and "Library" / "Playlists" under them.
     // 18:00: the title on the first row, the buttons on the row under it (the whole app does the same).
     Column(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 6.dp)) {
-        Text(title, color = C.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(start = 16.dp, bottom = 2.dp))
+        PageTitle(title, Modifier.padding(start = 16.dp, bottom = 2.dp), maxLines = 1)
         FitRow(Modifier.fillMaxWidth(), minGap = 4.dp) {
             if (canBack) BackButton(nav!!)
             OutputPill(openOutput)
@@ -114,8 +114,7 @@ fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Comp
     // width on top, then the symbols (back, home … on the left; the page's own and the gear / red ✕ on the right).
     Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp)) {
         // Only the title above the buttons (18:03); its small line goes under the button row.
-        Text(title, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 2.dp))
+        PageTitle(title, Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 2.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             SymButton(onClick = { nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
             HomeButton(nav)

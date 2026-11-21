@@ -55,7 +55,7 @@ fun OutputSheet(onDismiss: () -> Unit) {
         val scroll = rememberScrollState()
         Column(Modifier.scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 16.dp).navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // Title on its own row (17:57).
-            Text("Sound output", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 8.dp))
+            PageTitle("Sound output", Modifier.padding(start = 8.dp))
             SymButton(onDismiss) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
             CardBox {
                 devices.forEach { d ->

@@ -961,3 +961,6 @@
   title, then ‹ Help Skip Next), the Help guide and the Sound output sheet.
 - Only the title above the buttons (18:03): a page's small line (e.g. "Subtitles, decoding…", a folder's path,
   "Setup · N of M") moves under the button row.
+- One fixed title size (18:04): every page title (common header, Library, Playlists, wizard, Help, Sound output) is
+  the same size everywhere — 22 dp letters, bold — not changed by the Button size, the settings Text size or a page's
+  own scaling (were 17–28 sp and scaled with those settings).
