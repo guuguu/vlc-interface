@@ -745,3 +745,8 @@
 ## Video player: 🔄 turn button removed (requested 2026-11-21 15:49)
 - The 🔄 button that turned the phone's screen between upright and sideways is gone (upright, sideways, and from the
   Format row): the phone's own auto-rotate does it. "Rotate" (turns only the film's picture) stays.
+
+## Video player: PiP by double tap in the middle (requested 2026-11-21 15:50)
+- The PiP button is removed (upright and sideways). A double tap in the middle third of the picture now opens
+  picture-in-picture; double taps on the left / right thirds still seek back / forward. (For tall videos upright the
+  middle double tap used to switch Bigger / Smaller — that's now only the "Bigger / Smaller" button.)

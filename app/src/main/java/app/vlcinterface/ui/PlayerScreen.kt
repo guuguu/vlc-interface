@@ -245,7 +245,9 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 onVolume = { total -> if (st.settings.volumeSwipe) toast = "Volume ${volDrag.update(total)}%" },
                 onBrightness = { d -> if (st.settings.brightnessSwipe) toast = "Brightness ${changeBrightness(activity, d)}%" },
                 locked = locked,
-                onCenterDouble = if (videoPortrait && !landscape) ({ App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) } }) else null,
+                // Double tap in the middle third of the picture: picture-in-picture (2026-11-21 15:50, replaces the PiP button);
+                // left / right thirds still seek back / forward.
+                onCenterDouble = { MainActivity.instance?.enterPip() },
             )
             if (p.buffering < 100f && !p.isPlaying && p.error.isEmpty()) CircularProgressIndicator(Modifier.align(Alignment.Center), color = accent())
             if (p.error.isNotEmpty()) Text(p.error, color = C.bad, modifier = Modifier.align(Alignment.Center).background(Color(0xAA000000)).padding(12.dp))
@@ -587,7 +589,6 @@ private fun BoxScope.ControlsOverlayBody(
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
         Text("⏮", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.prev() }.padding(8.dp))
         Text("⏭", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.next() }.padding(8.dp))
-        OverlayChip("PiP", onPip)
     }
     if (!compact) Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         SeekRow(p, Modifier)
@@ -600,7 +601,6 @@ private fun BoxScope.ControlsOverlayBody(
         OverlayChip(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo(); onTouch() }
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
-        OverlayChip("PiP", onPip)
     }
     }
 }
@@ -692,7 +692,6 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             Pill(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() }
             if (tallVid) Pill(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Bigger") {
                 App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) } }
-            Pill("PiP") { onPip() }
         }
         }
         val rowUpNext: @Composable () -> Unit = {
