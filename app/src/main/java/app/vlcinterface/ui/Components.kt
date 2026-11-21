@@ -26,6 +26,7 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.Arrangement
@@ -1283,8 +1284,8 @@ class QueueDrag {
      */
     fun handle(k: String, indexOf: () -> Int, size: () -> Int, move: (Int, Int) -> Unit): Modifier = Modifier.pointerInput(k) {
         val slop = viewConfiguration.touchSlop
-        androidx.compose.foundation.gestures.awaitEachGesture {
-            val down = androidx.compose.foundation.gestures.awaitFirstDown(requireUnconsumed = false)
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
             // The hold: ends early (no drag) when the finger lifts, moves past the touch slop, or the list took it.
             val held = withTimeoutOrNull(HOLD_MS) {
                 var still = true
@@ -1297,7 +1298,7 @@ class QueueDrag {
             if (!held) return@awaitEachGesture
             key = k; dy = 0f
             try {
-                androidx.compose.foundation.gestures.drag(down.id) { ch ->
+                drag(down.id) { ch ->
                     val d = ch.positionChange().y
                     ch.consume()
                     dy += d
