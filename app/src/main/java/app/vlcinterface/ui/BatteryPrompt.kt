@@ -218,47 +218,35 @@ fun RgAutoSummaryHost() {
 
 
 /**
- * Before scanning network songs again within 10 days (2026-11-21 12:06): "This item was previously scanned for
- * ReplayGain on: <date>" (a list when several), then Scan again / Skip them / Cancel.
+ * Network songs measured in the last 10 days are skipped by a scan; a short pop-up (5 s) names one of them: "This
+ * item was previously scanned for ReplayGain on: <date>", with Scan again (2026-11-21 12:06 / 12:07). At most once
+ * an hour of scanning.
  */
 @Composable
 fun RgRecentAskHost() {
     val ask by app.vlcinterface.sources.RgScanner.recentAsk.collectAsState()
     val a = ask ?: return
     fun close() { app.vlcinterface.sources.RgScanner.recentAsk.value = null }
+    androidx.compose.runtime.LaunchedEffect(a) { kotlinx.coroutines.delay(5_000); if (app.vlcinterface.sources.RgScanner.recentAsk.value === a) close() }
     val fmt = java.text.SimpleDateFormat("d MMM yyyy, HH:mm", java.util.Locale.getDefault())
-    AlertDialog(onDismissRequest = { close() }, containerColor = C.panel,
-        title = { Text("Already scanned", color = C.text) },
-        text = {
-            androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier.heightIn(max = 420.dp)
-                .verticalScroll(androidx.compose.foundation.rememberScrollState())) {
-                if (a.songs.size == 1) {
-                    val (t, at) = a.songs[0]
-                    Text("\"$t\"", color = C.text, fontSize = 15.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-                    Text("This item was previously scanned for ReplayGain on:", color = C.muted, fontSize = 13.sp, modifier = androidx.compose.ui.Modifier.padding(top = 6.dp))
-                    Text(fmt.format(java.util.Date(at)), color = accent(), fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-                } else {
-                    Text("These ${a.songs.size} items were previously scanned for ReplayGain (in the last ${app.vlcinterface.sources.RgScanDates.DAYS} days) on:",
-                        color = C.muted, fontSize = 13.sp, modifier = androidx.compose.ui.Modifier.padding(bottom = 6.dp))
-                    a.songs.sortedByDescending { it.second }.forEachIndexed { i, (t, at) ->
-                        if (i > 0) Divider()
-                        androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                            Text(t, color = C.text, fontSize = 13.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                modifier = androidx.compose.ui.Modifier.weight(1f).padding(end = 8.dp))
-                            Text(fmt.format(java.util.Date(at)), color = accent(), fontSize = 13.sp)
-                        }
-                    }
-                }
+    val (t, at) = a.songs.first()
+    androidx.compose.ui.window.Dialog(onDismissRequest = { close() }) {
+        androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).background(C.panel)
+            .border(1.dp, accent().copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+            .padding(horizontal = 18.dp, vertical = 14.dp)) {
+            Text("Already scanned", color = C.text, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            Text("\"$t\"", color = C.text, fontSize = 14.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = androidx.compose.ui.Modifier.padding(top = 6.dp))
+            Text("This item was previously scanned for ReplayGain on:", color = C.muted, fontSize = 13.sp, modifier = androidx.compose.ui.Modifier.padding(top = 6.dp))
+            Text(fmt.format(java.util.Date(at)), color = accent(), fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            Text(if (a.count > 1) "It and ${a.count - 1} more scanned in the last ${app.vlcinterface.sources.RgScanDates.DAYS} days are skipped." else "It is skipped.",
+                color = C.muted, fontSize = 12.sp, modifier = androidx.compose.ui.Modifier.padding(top = 6.dp))
+            androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
+                STextButton({ close(); a.again() }) { Text("Scan again", color = accent()) }
             }
-        },
-        confirmButton = { STextButton({ close(); a.go(true) }) { Text("Scan again", color = accent()) } },
-        dismissButton = {
-            androidx.compose.foundation.layout.Row {
-                STextButton({ close() }) { Text("Cancel") }
-                STextButton({ close(); a.go(false) }) { Text(if (a.songs.size == 1) "Skip it" else "Skip them") }
-            }
-        },
-    )
+        }
+    }
 }
 
 

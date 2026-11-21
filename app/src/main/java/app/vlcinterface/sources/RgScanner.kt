@@ -143,9 +143,10 @@ object RgScanner {
      */
     data class AutoSummary(val folder: String, val songs: List<Pair<String, Float?>>)
 
-    /** Network songs scanned less than 10 days ago, waiting for "Scan again" / "Skip them" (see [start]). */
-    class RecentAsk(val songs: List<Pair<String, Long>>, val uris: Set<String>, val go: (again: Boolean) -> Unit)
+    /** Network songs scanned less than 10 days ago and skipped: one named in a short pop-up, [again] scans them after all. */
+    class RecentAsk(val songs: List<Pair<String, Long>>, val uris: Set<String>, val count: Int, val again: () -> Unit)
     val recentAsk = MutableStateFlow<RecentAsk?>(null)
+    @Volatile private var lastRecentNote = 0L
     val autoDone = MutableStateFlow<AutoSummary?>(null)
     private val queue = java.util.concurrent.ConcurrentLinkedDeque<Queued>()
     private var current: Queued? = null
@@ -185,9 +186,18 @@ object RgScanner {
         if (!silent && !recentOk) {
             val recent = music.filter { RgScanDates.isNetwork(it.uri) }.mapNotNull { m -> RgScanDates.recent(m.uri)?.let { m to it } }
             if (recent.isNotEmpty()) {
-                recentAsk.value = RecentAsk(recent.map { (m, t) -> m.title to t }, recent.map { it.first.uri }.toSet()) { again ->
-                    val its = if (again) items else items.filter { it.uri !in recent.map { r -> r.first.uri }.toSet() }
-                    if (its.any { it.isMusic }) start(ctx, its, mode, target, rescanTagged, onlyWithoutRg, confirmTitle, false, recentOk = true)
+                // 12:07: songs measured in the last 10 days are skipped; a short pop-up (5 s) names one of them — at
+                // most once an hour of scanning — with "Scan again" to include them after all.
+                val skip = recent.map { it.first.uri }.toSet()
+                val rest = items.filter { it.uri !in skip }
+                if (rest.any { it.isMusic }) start(ctx, rest, mode, target, rescanTagged, onlyWithoutRg, confirmTitle, false, recentOk = true)
+                val now = System.currentTimeMillis()
+                if (now - lastRecentNote > 3_600_000L) {
+                    lastRecentNote = now
+                    val (m, t) = recent.first()
+                    recentAsk.value = RecentAsk(listOf(m.title to t), skip, recent.size) {
+                        start(ctx, items.filter { it.uri in skip }, mode, target, rescanTagged, onlyWithoutRg, confirmTitle, false, recentOk = true)
+                    }
                 }
                 return
             }

@@ -568,8 +568,8 @@
   (slow); setting off: the "No ReplayGain — scan?" question for every folder.
 
 ## Network songs scanned again within 10 days: a pop-up first (requested 2026-11-21 12:06)
-- Every ReplayGain measurement now notes its date per song. Starting a scan (any menu, the "No ReplayGain"
-  question, folder / playlist / library scans) that includes network songs measured less than 10 days ago first
-  shows "Already scanned": one song — its name, "This item was previously scanned for ReplayGain on:" and the
-  date and time; several — the list of songs with their dates. Choices: Scan again (all), Skip it / Skip them (scan
-  only the others), Cancel. Phone songs and the automatic folder scan aren't asked.
+- Every ReplayGain measurement now notes its date per song. A scan (any menu, the "No ReplayGain" question, folder /
+  playlist / library scans) skips network songs measured less than 10 days ago and goes on with the others.
+- A short pop-up (5 s, 12:07) names one of them: "Already scanned — "<song>" — This item was previously scanned for
+  ReplayGain on: <date, time>", "It and N more … are skipped", with "Scan again" to scan them after all. Shown at
+  most once per hour of scanning. Phone songs and the automatic folder scan aren't affected.
