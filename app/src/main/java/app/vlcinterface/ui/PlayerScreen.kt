@@ -623,21 +623,21 @@ private fun BoxScope.ControlsOverlayBody(
     val landS = androidx.compose.ui.platform.LocalConfiguration.current.let { it.screenWidthDp > it.screenHeightDp }
     if (landS && !compact) {
         // Left (17:10): the output, Browse, the format, Rotate, speed. Right: the subtitle, sound and picture buttons.
-        val left = listOf<Triple<String, Boolean, () -> Unit>>(
-            Triple("📂 Browse", false) { onTouch(); openOrigin(nav, keepStack = true) },
-            Triple(scaleLabel.split('\u0000').let { if (it.getOrElse(1) { "" }.isEmpty()) it[0] else "${it[0]} → ${it[1]}" }, false) { onScale(); onTouch() },
-            Triple(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }, false) { App.instance.player.rotateVideo(); onTouch() },
-            Triple("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×", false) {
+        val left = listOf(
+            UBtn("📂 Browse", false) { onTouch(); openOrigin(nav, keepStack = true) },
+            UBtn(scaleLabel.split('\u0000').let { if (it.getOrElse(1) { "" }.isEmpty()) it[0] else "${it[0]} → ${it[1]}" }, false) { onScale(); onTouch() },
+            UBtn(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }, false) { App.instance.player.rotateVideo(); onTouch() },
+            UBtn("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×", false) {
                 val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
                 val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
                 player.setRate(rates[(i + 1) % rates.size]); onTouch() },
         )
-        val right = listOf<Triple<String, Boolean, () -> Unit>>(
-            Triple("Subs/Change", p.spuTracks.any { it.id >= 0 }) { onTouch(); SubChoiceUi.open = true },
-            Triple("Subs/Sync", false) { onTouch(); onPanel() },
-            Triple(syncLabel(p.audioDelayMs), false) { onTouch(); AudioSyncUi.open = true },
-            Triple("Hue/Sat", false) { onTouch(); onPicture() },
-            Triple("Subs/Format", false) { onTouch(); openSubtitleFormat(nav) },
+        val right = listOf(
+            UBtn("Subs/Change", p.spuTracks.any { it.id >= 0 }) { onTouch(); SubChoiceUi.open = true },
+            UBtn("Subs/Sync", false) { onTouch(); onPanel() },
+            UBtn(syncLabel(p.audioDelayMs), false) { onTouch(); AudioSyncUi.open = true },
+            UBtn("Hue/Sat", false) { onTouch(); onPicture() },
+            UBtn("Subs/Format", false) { onTouch(); openSubtitleFormat(nav) },
         )
         // Both columns against the side edges with the same small padding, buttons one on another (touching), all one
         // size: set by Video → "On screen buttons size", never taller than the height shared equally allows.
@@ -654,10 +654,10 @@ private fun BoxScope.ControlsOverlayBody(
             // Separate rounded buttons with a small gap (the earlier look, 17:15), same size and the same size logic.
             Column(Modifier.align(Alignment.CenterStart).width(w), verticalArrangement = Arrangement.spacedBy(gap.dp)) {
                 SideChip("🔈 $outName", false, chipH, font, w, openOutput, output = true)
-                left.forEach { (l, lit, f) -> SideChip(l, lit, chipH, font, w, f) }
+                left.forEach { b -> SideChip(b.label, b.lit, chipH, font, w, b.onClick) }
             }
             Column(Modifier.align(Alignment.CenterEnd).width(w), verticalArrangement = Arrangement.spacedBy(gap.dp)) {
-                right.forEach { (l, lit, f) -> SideChip(l, lit, chipH, font, w, f) }
+                right.forEach { b -> SideChip(b.label, b.lit, chipH, font, w, b.onClick) }
             }
         }
     }
@@ -679,21 +679,87 @@ private fun SideChip(text: String, lit: Boolean, h: androidx.compose.ui.unit.Dp,
 @Composable
 private fun SeekRow(p: PlayerState, modifier: Modifier) {
     var dragging by remember { mutableStateOf<Float?>(null) }
+    var jumpAsk by remember { mutableStateOf(false) }
+    var lastTap by remember { mutableLongStateOf(0L) }
     val frac = if (p.length > 0) (p.time.toFloat() / p.length).coerceIn(0f, 1f) else 0f
+    if (jumpAsk) JumpToTimeDialog(p.length) { jumpAsk = false }
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(fmtTime(if (dragging != null) (dragging!! * p.length).toLong() else p.time), color = Color.White, fontSize = 13.sp)
         // Thin track and small knob, like the song player's position bar.
         val sc = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = Color(0x55FFFFFF))
-        Slider(
-            value = dragging ?: frac, onValueChange = { dragging = it },
-            onValueChangeFinished = { dragging?.let { App.instance.player.seekFraction(it) }; dragging = null },
-            enabled = p.length > 0 || p.item != null, modifier = Modifier.weight(1f).padding(horizontal = 10.dp).height(26.dp),
-            colors = sc, thumb = { KnobThumb(Color.White) },
-            track = { stt -> SliderDefaults.Track(sliderState = stt, modifier = Modifier.height(4.dp), colors = sc, enabled = p.length > 0 || p.item != null,
-                drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) },
-        )
+        androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+            Slider(
+                value = dragging ?: frac, onValueChange = { dragging = it },
+                onValueChangeFinished = { dragging?.let { App.instance.player.seekFraction(it) }; dragging = null },
+                enabled = p.length > 0 || p.item != null,
+                // A double tap on the bar (17:22): "Jump to time" (the bar still moves to a single tap's place).
+                modifier = Modifier.fillMaxWidth().height(26.dp).pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        val now = System.currentTimeMillis()
+                        if (now - lastTap < 350) { jumpAsk = true; lastTap = 0L } else lastTap = now
+                    }
+                },
+                colors = sc, thumb = { KnobThumb(Color.White) },
+                track = { stt -> SliderDefaults.Track(sliderState = stt, modifier = Modifier.height(4.dp), colors = sc, enabled = p.length > 0 || p.item != null,
+                    drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) },
+            )
+            // While sliding (17:22): the time under the finger, in a bubble above the knob.
+            dragging?.let { f ->
+                val x = (maxWidth * f - 34.dp).coerceIn(0.dp, (maxWidth - 68.dp).coerceAtLeast(0.dp))
+                Text(fmtTime((f * p.length).toLong()), color = Color(0xFF1A0E05), fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
+                    modifier = Modifier.offset(x = x, y = (-30).dp).width(68.dp).clip(RoundedCornerShape(8.dp)).background(accent()).padding(vertical = 3.dp))
+            }
+        }
         Text(if (p.length > 0) "-" + fmtTime(p.length - p.time) else "Live", color = Color.White, fontSize = 13.sp)
     }
+}
+
+/**
+ * "Jump to time" (2026-11-21 17:22, a double tap on the position bar): a small box with hours : minutes : seconds;
+ * a box left empty counts as 0. The last time entered is shown again next time.
+ */
+@Composable
+private fun JumpToTimeDialog(lengthMs: Long, onDone: () -> Unit) {
+    val last = remember { KeptChoice.get("video.jumpTo", "00:00:00").split(':').let { l -> List(3) { l.getOrElse(it) { "00" } } } }
+    var hh by remember { mutableStateOf(last[0]) }
+    var mm by remember { mutableStateOf(last[1]) }
+    var ss by remember { mutableStateOf(last[2]) }
+    fun digits(v: String) = v.filter { it.isDigit() }.take(2)
+    fun go() {
+        val h = hh.toIntOrNull() ?: 0; val m = mm.toIntOrNull() ?: 0; val sec = ss.toIntOrNull() ?: 0
+        KeptChoice.put("video.jumpTo", "%02d:%02d:%02d".format(h, m, sec))
+        val ms = (h * 3600L + m * 60L + sec) * 1000L
+        App.instance.player.seekTo(if (lengthMs > 0) ms.coerceIn(0L, (lengthMs - 1000L).coerceAtLeast(0L)) else ms)
+        onDone()
+    }
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("Jump to time", color = C.text) },
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
+                // The cassette: hh : mm : ss.
+                Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF111316)).border(1.dp, accent(), RoundedCornerShape(12.dp))
+                    .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val setters: List<(String) -> Unit> = listOf({ v -> hh = digits(v) }, { v -> mm = digits(v) }, { v -> ss = digits(v) })
+                    listOf("hh" to hh, "mm" to mm, "ss" to ss)
+                        .forEachIndexed { i, (ph, v) -> val set = setters[i]
+                            if (i > 0) Text(":", color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                            androidx.compose.foundation.text.BasicTextField(v, set, singleLine = true,
+                                textStyle = androidx.compose.ui.text.TextStyle(color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
+                                    imeAction = if (i == 2) androidx.compose.ui.text.input.ImeAction.Go else androidx.compose.ui.text.input.ImeAction.Next),
+                                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onGo = { go() }),
+                                cursorBrush = androidx.compose.ui.graphics.SolidColor(accent()),
+                                modifier = Modifier.width(52.dp).padding(vertical = 4.dp),
+                                decorationBox = { inner -> Box(contentAlignment = Alignment.Center) { if (v.isEmpty()) Text(ph, color = C.muted, fontSize = 22.sp); inner() } })
+                        }
+                }
+                Text(if (lengthMs > 0) "Video length ${fmtTime(lengthMs)} · empty boxes count as 0" else "Empty boxes count as 0",
+                    color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+        },
+        confirmButton = { STextButton({ go() }) { Text("Jump", color = accent()) } },
+        dismissButton = { STextButton(onDone) { Text("Cancel") } })
 }
 
 @Composable

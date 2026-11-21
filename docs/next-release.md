@@ -908,3 +908,10 @@
   overlap or leave the screen (gaps counted); long labels are cut with "…" when a button gets narrow.
 - Position bar sideways (17:18): under the side columns, from edge to edge with 20 dp to each edge (tap or drag
   anywhere on it to jump); the columns end above it and are compressed to the height left.
+
+## Video position bar: time under the finger, double tap "Jump to time" (requested 2026-11-21 17:22)
+- Sliding on the video's position bar shows the time at the finger in a small accent bubble above the knob (the time
+  on the left follows too); letting go jumps there.
+- Double tap on the bar: a "Jump to time" box like a cassette — hh : mm : ss in three boxes (numbers only, 2 digits
+  each); a box left empty counts as 0 ("" : 12 : "" = 00:12:00). Jump (or Go on the keyboard) goes there (at most the
+  video's end); the time entered is kept and shown again next time. The video's length is shown under it.
