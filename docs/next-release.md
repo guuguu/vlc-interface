@@ -791,3 +791,10 @@
 - Subtitle tracks inside the video file (MKV / MP4) too (16:12, turned on): libVLC drops their colour codes together
   with all their other formatting (italic, bold). This setting is the player's for every text subtitle (SRT-type), so
   added SRT files show without italic / bold as well; SSA / ASS tracks inside a video keep their own look.
+
+## Choose the subtitles when a video opens (requested 2026-11-21 16:14)
+- Opening a video that has subtitle tracks: a pop-up "Subtitles — This video has subtitles. Choose one:" lists Off and
+  every track (the one in use marked ●). A tap on a choice sets it (and remembers it for that file) and closes the
+  pop-up — no buttons; a tap outside keeps what's set.
+- Once per video while the app runs: not again when the same video reopens at the same spot (format, decoder,
+  subtitle style changes). Only for videos (not songs or radio).

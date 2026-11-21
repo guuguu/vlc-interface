@@ -87,6 +87,7 @@ import app.vlcinterface.MainActivity
 import app.vlcinterface.data.SubStyle
 import app.vlcinterface.player.PlayItem
 import app.vlcinterface.player.PlayerState
+import app.vlcinterface.player.Track
 import app.vlcinterface.sources.OpenSubtitles
 import app.vlcinterface.sources.OsHash
 import app.vlcinterface.sources.SubResult
@@ -194,6 +195,21 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     LaunchedEffect(toast) { if (toast.isNotEmpty()) { delay(900); toast = "" } }
     // Music never uses the video player: hand over to the music screen (also when a queue moves on to a song).
     LaunchedEffect(p.item?.uri, p.item?.startMs) { if (p.item?.isMusic == true || p.item?.isRadio == true) nav.replace(Screen.Music) }
+
+    // A video with subtitle tracks inside it (2026-11-21 16:14): a pop-up to choose which one to use, once per video
+    // opened (not again when the same video reopens at the same spot); a tap on a choice sets it and closes the pop-up.
+    var subAsk by remember { mutableStateOf(false) }
+    LaunchedEffect(p.item?.uri) {
+        val item = p.item ?: return@LaunchedEffect
+        if (item.isRadio || item.isMusic || item.uri in SubAskOnce.asked) return@LaunchedEffect
+        // The tracks arrive while the file opens: wait for them a few seconds.
+        repeat(16) {
+            if (player.state.value.item?.uri != item.uri) return@LaunchedEffect
+            if (player.state.value.spuTracks.any { it.id >= 0 }) { delay(600); SubAskOnce.asked += item.uri; subAsk = true; return@LaunchedEffect }
+            delay(500)
+        }
+    }
+    if (subAsk) SubtitleChoiceDialog(p, onPick = { id -> player.selectSpu(id); subAsk = false }) { subAsk = false }
 
     // Auto-download subtitles when nothing in the preferred languages is present.
     LaunchedEffect(p.item?.uri) {
@@ -1332,5 +1348,32 @@ private fun VideoHeader(nav: Navigator, locked: Boolean, openOutput: () -> Unit,
 private fun UnderBtn(text: String, onClick: () -> Unit) {
     Box(Modifier.size(46.dp).clip(CircleShape).background(C.card).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Text(text, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+
+/** Videos already asked about their subtitles in this session. */
+private object SubAskOnce {
+    val asked = HashSet<String>()
+}
+
+/** Choose the subtitles of the video just opened: "Off" and every track; the choice closes the pop-up. */
+@Composable
+private fun SubtitleChoiceDialog(p: PlayerState, onPick: (Int) -> Unit, onDismiss: () -> Unit) {
+    val tracks = p.spuTracks.filter { it.id >= 0 }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.panel).padding(vertical = 12.dp)) {
+            Text("Subtitles", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+            Text("This video has subtitles. Choose one:", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
+                (listOf(Track(-1, "Off")) + tracks).forEach { t ->
+                    val on = if (t.id < 0) p.spuTrack < 0 else t.id == p.spuTrack
+                    Row(Modifier.fillMaxWidth().clickable { onPick(t.id) }.padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (on) "●" else "○", color = if (on) accent() else C.muted, fontSize = 16.sp, modifier = Modifier.width(28.dp))
+                        Text(t.name, color = if (on) accent() else C.text, fontSize = 16.sp, maxLines = 2)
+                    }
+                }
+            }
+        }
     }
 }
