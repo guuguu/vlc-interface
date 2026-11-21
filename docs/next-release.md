@@ -777,3 +777,16 @@
   picture (the block grows upward from the chosen height).
 - "Apply to video" as before (the video reopens at the same spot). Settings saved before keep their look (outline →
   border 4, shadow → shadow 3, dark box → box, old position → nearest step). Export / import carries them.
+
+## Colour codes filtered out of subtitle files (requested 2026-11-21 16:09)
+- Every subtitle file the player loads is given to it as a cleaned copy (the original file — on the phone or the
+  NAS — is never changed): its colour codes are taken out, so the colours chosen in Subs/Sync → Aa Style apply.
+  - SRT / VTT: <font color=…> tags and VTT colour classes; MicroDVD .sub: {c:$…} codes;
+  - SSA / ASS: \c, \1c … \4c colour overrides in the lines; the file's styles get the chosen text and border colours
+    (black shadow / box).
+  - Italic, bold, positions and karaoke timing are kept.
+- Covers: subtitles downloaded from OpenSubtitles, files added with "Add subtitle file", shifted / restored copies,
+  and the same-name subtitle next to a network (SMB / web) video — now loaded by the app (instead of libVLC finding it
+  itself) so it's cleaned too.
+- Not covered: subtitle tracks inside the video file (MKV / MP4) — libVLC can only drop all their formatting (colours
+  together with italic and bold).

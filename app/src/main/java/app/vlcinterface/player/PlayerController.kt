@@ -1855,6 +1855,16 @@ class PlayerController(private val context: Context, private val store: Store) {
         // The picture format chosen for this file (Fit when none).
         if (isVideo) scale = VideoAuto.str(item.uri, "scale").let { n -> MediaPlayer.ScaleType.values().firstOrNull { it.name == n } } ?: MediaPlayer.ScaleType.SURFACE_BEST_FIT
         tracksRestored = !isVideo; audioRestored = !isVideo; spuRestored = !isVideo
+        // Network videos (2026-11-21 16:09): the same-name subtitle next to the video is loaded by the app instead of
+        // libVLC, as a copy with its colour codes taken out (so the chosen subtitle colours apply).
+        val netVideo = isVideo && (item.uri.startsWith("smb://") || item.uri.startsWith("http"))
+        if (netVideo) {
+            media.addOption(":no-sub-autodetect-file")
+            bg.launch {
+                val ref = try { app.vlcinterface.sources.SubtitleFiles.findSidecar(context, item) } catch (_: Exception) { null }
+                if (ref != null && _state.value.item?.uri == item.uri) addSubtitleFile(Uri.fromFile(ref.local))
+            }
+        }
         if (deintOn) {
             media.addOption(":deinterlace=-1"); media.addOption(":deinterlace-mode=yadif2x")   // full motion (every field), best quality
             media.addOption(":no-mediacodec-dr")
@@ -2017,8 +2027,15 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     fun addSubtitleFile(uri: Uri) {
-        mp.addSlave(IMedia.Slave.Type.Subtitle, uri, true)
-        main.postDelayed({ refreshTracks() }, 800)
+        // Colour codes taken out (a cleaned copy; the original file is never changed); the original if it can't be read.
+        val st = store.current.subStyle
+        bg.launch {
+            val use = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                app.vlcinterface.sources.SubColors.cleanedCopy(context, uri, st.color, st.outlineColor)
+            } ?: uri
+            mp.addSlave(IMedia.Slave.Type.Subtitle, use, true)
+            main.postDelayed({ refreshTracks() }, 800)
+        }
     }
 
     /** Zoom mode chosen in the player (kept across items, rotation and engine restarts). */
