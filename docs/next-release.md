@@ -1006,3 +1006,10 @@
 - **Long press on the playing video's title** (under the picture upright, in the top bar sideways) opens the Video details pop-up.
 - **"YouTube" button in the details pop-ups of videos:** Video details and the file Details.
 - **What is searched:** the video's name, tidied up. Dots and underscores become spaces; release tags (720p, x264, WEB-DL, DVDRip …) and [groups] are dropped; an episode code is kept as S02E05 (e.g. "The.Office.S02E05.720p.HDTV.x264-GRP" → "The Office S02E05"). It opens in the YouTube app when installed, else the browser.
+
+## Subtitle / sound operations go straight back to the video (requested 2026-11-21 21:06)
+- Done on subtitle Sync or Sync sound (sideways and upright) closes to the video; it used to stop on "Audio & subtitles" first.
+- Same everywhere else in that panel:
+  - Back from Download subtitles, Picture colour and Audio & subtitles goes straight to the video.
+  - A subtitle file picked with "From file" is loaded, put on and the panel closes.
+  - Choosing an audio or subtitle track in the panel sets it and closes, like Subs/Change.

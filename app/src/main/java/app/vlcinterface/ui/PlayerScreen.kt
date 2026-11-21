@@ -358,10 +358,11 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 // so most of the picture stays visible and shows the real effect.
                 Panel.PICTURE -> PictureBar(onClose = { panel = Panel.NONE })
                 Panel.TRACKS, Panel.DOWNLOAD, Panel.STYLE -> SidePanel(landscape, onClose = { panel = Panel.NONE },
-                    onBack = { panel = if (panel == Panel.TRACKS) Panel.NONE else Panel.TRACKS }) {
+                    // Back goes straight to the video (2026-11-21 21:06: no stop on "Audio & subtitles" on the way back).
+                    onBack = { panel = Panel.NONE }) {
                     PanelContent(panel, p, nav, onPanel = { panel = it })
                 }
-                Panel.SYNC_SUB, Panel.SYNC_AUDIO -> OverlaySync(panel == Panel.SYNC_SUB, p, st.settings.syncPanelOpacity) { panel = Panel.TRACKS }
+                Panel.SYNC_SUB, Panel.SYNC_AUDIO -> OverlaySync(panel == Panel.SYNC_SUB, p, st.settings.syncPanelOpacity) { panel = Panel.NONE }   // done: back to the video
                 else -> {}
             }
             // Sideways: the system buttons in a bar that slides down over the picture (17:06).
@@ -383,10 +384,10 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                     Column(Modifier.fillMaxSize()) {
                         Box(Modifier.weight(1f).fillMaxWidth()) {
                             when {
-                                syncPanelOpen && syncBelowVideo -> PortraitSync(if (panel == Panel.SYNC_SUB) 0 else 1, p, onSwitch = { panel = if (it == 0) Panel.SYNC_SUB else Panel.SYNC_AUDIO }) { panel = Panel.TRACKS }
+                                syncPanelOpen && syncBelowVideo -> PortraitSync(if (panel == Panel.SYNC_SUB) 0 else 1, p, onSwitch = { panel = if (it == 0) Panel.SYNC_SUB else Panel.SYNC_AUDIO }) { panel = Panel.NONE }   // done: back to the video
                                 panel != Panel.NONE -> Column(Modifier.fillMaxSize().padding(12.dp).clip(RoundedCornerShape(18.dp)).background(C.panel)) {
                                     Row(Modifier.fillMaxWidth().padding(start = 0.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        SymButton({ panel = if (panel == Panel.TRACKS || panel == Panel.PICTURE) Panel.NONE else Panel.TRACKS }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
+                                        SymButton({ panel = Panel.NONE }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
                                         Text(when (panel) { Panel.DOWNLOAD -> "Download subtitles"; Panel.STYLE -> "Subtitle style"; Panel.PICTURE -> "Picture colour"; else -> "Audio & subtitles" },
                                             color = C.text, fontSize = (17 * btnScale()).sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f).padding(start = 8.dp))
                                         SymButton({ panel = Panel.NONE }) { Text("✕", color = C.text) }
@@ -947,9 +948,10 @@ private fun SidePanel(landscape: Boolean, onClose: () -> Unit, onBack: (() -> Un
 @Composable
 private fun PanelContent(panel: Panel, p: PlayerState, nav: Navigator, onPanel: (Panel) -> Unit) {
     when (panel) {
-        Panel.DOWNLOAD -> DownloadPanel(p, onDone = { onPanel(Panel.NONE) }) { onPanel(Panel.TRACKS) }
+        // Done or back: straight to the video (2026-11-21 21:06).
+        Panel.DOWNLOAD -> DownloadPanel(p, onDone = { onPanel(Panel.NONE) }) { onPanel(Panel.NONE) }
         Panel.STYLE -> TracksPanel(p, nav, onPanel)
-        Panel.PICTURE -> PicturePanel { onPanel(Panel.TRACKS) }
+        Panel.PICTURE -> PicturePanel { onPanel(Panel.NONE) }
         else -> TracksPanel(p, nav, onPanel)
     }
 }
@@ -1087,12 +1089,14 @@ private fun BoxScope.PictureBar(onClose: () -> Unit) {
 @Composable
 private fun TracksPanel(p: PlayerState, nav: Navigator, onPanel: (Panel) -> Unit) {
     val player = App.instance.player
-    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) player.addSubtitleFile(uri) }
+    // A subtitle file picked: loaded, and back to the video (2026-11-21 21:06).
+    val pick = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) { player.addSubtitleFile(uri, keep = true); onPanel(Panel.NONE) } }
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SectionTitle("Audio")
         if (p.audioTracks.isEmpty()) Text("No audio tracks yet", color = C.muted, fontSize = 13.sp)
-        p.audioTracks.forEach { t -> TrackRow(t.name, t.id == p.audioTrack) { player.selectAudio(t.id) } }
+        // A track chosen: set, and back to the video (like Subs/Change, 2026-11-21 21:06).
+        p.audioTracks.forEach { t -> TrackRow(t.name, t.id == p.audioTrack) { player.selectAudio(t.id); onPanel(Panel.NONE) } }
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card2).padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Audio offset  ", color = C.muted, fontSize = 13.sp)
             Text("${p.audioDelayMs} ms", color = C.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
@@ -1102,7 +1106,7 @@ private fun TracksPanel(p: PlayerState, nav: Navigator, onPanel: (Panel) -> Unit
             SectionTitle("Subtitles", Modifier.weight(1f))
             Pill("Aa Style") { openSubtitleFormat(nav) }
         }
-        p.spuTracks.forEach { t -> TrackRow(if (t.id < 0) "Off" else t.name, t.id == p.spuTrack) { player.selectSpu(t.id) } }
+        p.spuTracks.forEach { t -> TrackRow(if (t.id < 0) "Off" else t.name, t.id == p.spuTrack) { player.selectSpu(t.id); onPanel(Panel.NONE) } }
         FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("Download", filled = true) { onPanel(Panel.DOWNLOAD) }
             Pill("From file") { pick.launch(arrayOf("*/*")) }
