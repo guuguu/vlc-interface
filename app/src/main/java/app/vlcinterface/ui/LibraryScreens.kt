@@ -154,10 +154,14 @@ object SettingsNav {
         else while (nav.stack.lastIndex > i) nav.stack.removeAt(nav.stack.lastIndex)
     }
 
-    /** A sub-page's parent: the settings page it was opened from, else the main Settings page. */
+    /**
+     * A sub-page's parent: the settings page it was opened from; opened straight from a player (gear, Subs/Format,
+     * Aa Style, long press on the visualisation) → back to that player (2026-11-21 21:08: no stop on the main Settings
+     * page on the way back); else the main Settings page.
+     */
     fun toParent(nav: Navigator) {
         val prev = nav.stack.getOrNull(nav.stack.lastIndex - 1)
-        if (prev != null && isSettingsPage(prev)) nav.back() else nav.replace(Screen.Settings)
+        if (prev != null && (isSettingsPage(prev) || prev is Screen.Music || prev is Screen.Player)) nav.back() else nav.replace(Screen.Settings)
     }
 }
 

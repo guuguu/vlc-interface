@@ -1013,3 +1013,9 @@
   - Back from Download subtitles, Picture colour and Audio & subtitles goes straight to the video.
   - A subtitle file picked with "From file" is loaded, put on and the panel closes.
   - Choosing an audio or subtitle track in the panel sets it and closes, like Subs/Change.
+
+## Settings pages opened from a player go back to the player (requested 2026-11-21 21:08)
+- **Which pages:** a settings page opened straight from a player — the video ⚙, Subs/Format and Aa Style, the song / radio ⚙, a long press on the visualisation.
+- **What changed:** swiping right or pulling down at the top now goes back to that player. It used to stop on the main Settings page first. Back and the red ✕ already went to the player.
+- **Checked, already direct:** the song / radio player's menus and pop-ups (sleep timer, Jump to, speed, song menu, Play next pick) close straight to the player.
+- **Left as it is:** the Sound output sheet stays open after a device is picked. It also holds that device's volume, preamp and balance.
