@@ -330,7 +330,8 @@
 - Settings → Logs → "Collect error logs": one zip (saved where you choose) with errors only (02:03): every log
   page's failures (app-errors.txt), the system log's error / fatal lines incl. crash stacks (system-errors.txt),
   why the app ended the last times with crash / not-responding traces (exits.txt), and the phone / app details and
-  settings (info.txt, no passwords or keys) — to send for a problem.
+  settings (info.txt, no passwords or keys) — to send for a problem. Saved straight to Download/vlc interface
+  (no file picker, 02:04).
 - Crash entries now also say which page was on screen and list the app's own code lines first.
 
 ## Crash fixed: app closing at the end of a ReplayGain scan (reported 2026-11-21 01:53 / 01:55)

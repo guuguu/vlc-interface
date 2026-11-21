@@ -903,18 +903,13 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             run {
                 val ctxL = androidx.compose.ui.platform.LocalContext.current
                 val scopeL = androidx.compose.runtime.rememberCoroutineScope()
-                val saveZip = androidx.activity.compose.rememberLauncherForActivityResult(
-                    androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri ->
-                    if (uri != null) scopeL.launch {
-                        val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                            try { ctxL.contentResolver.openOutputStream(uri)?.use { app.vlcinterface.data.LogPack.write(ctxL, it) }; true } catch (_: Exception) { false }
-                        }
-                        ShortNote.show(if (ok) "Logs saved — send that zip file" else "Could not save the logs")
-                    }
-                }
                 CardBox {
-                    ValueRow("Collect error logs", "One zip with only the errors: every log's failures, the app's system errors, crashes and phone details (no passwords) — to send for a problem", "Save") {
-                        saveZip.launch(app.vlcinterface.data.LogPack.fileName())
+                    // Straight into the phone's Download folder (Download/vlc interface), no file picker.
+                    ValueRow("Collect error logs", "One zip with only the errors (every log's failures, system errors, crashes) and phone details, no passwords — saved straight to Download/vlc interface", "Save") {
+                        scopeL.launch {
+                            val where = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { app.vlcinterface.data.LogPack.saveToDownloads(ctxL) }
+                            ShortNote.show(if (where != null) "Saved: $where" else "Could not save the logs")
+                        }
                     }
                 }
             }
