@@ -723,3 +723,10 @@
 - Upright is always picture on top, controls below (header bar above): tall videos take about 60 % of the room,
   "Bigger" (or a double tap in the middle of the picture) about 80 %; wide videos keep their own shape. Sideways
   unchanged.
+
+## Video player: Up next like the song player, no Queue button (requested 2026-11-21 15:36)
+- Under the upright video's buttons, "Up next" exactly as on the song player: the title with "Queue › <time left>" on
+  the right (opens the whole queue page: reorder, remove, save as playlist), then the next files — as many as Look →
+  "Up next" count — numbered, names gliding when long, each one's length; tap plays it, long press opens its menu
+  (Play next, Move up / down, Remove from queue, Details …). Shown for every video (wide and tall).
+- The "☰ Queue" button is removed from the video player (upright and sideways); the files row keeps "📂 Browse".

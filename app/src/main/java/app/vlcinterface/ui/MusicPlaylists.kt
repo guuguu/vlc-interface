@@ -787,7 +787,7 @@ private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump0: (Long) -
 
 /** "Queue › 1h 23m 45s": time still to play in what's playing now (rest of this song + all after it), every second. */
 @Composable
-private fun QueueTimeLeft(item: PlayItem, onClick: () -> Unit) {
+internal fun QueueTimeLeft(item: PlayItem, onClick: () -> Unit) {
     val full = App.instance.player.state.collectAsState()
     val p by remember { derivedStateOf { full.value } }
     val after = remember(p.queue, p.index) { p.queue.drop(p.index + 1).sumOf { q -> (if (q.endMs > 0) q.endMs - q.startMs else q.durationMs).coerceAtLeast(0) } }

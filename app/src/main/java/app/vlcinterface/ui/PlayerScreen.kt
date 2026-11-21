@@ -529,9 +529,8 @@ private fun BoxScope.ControlsOverlayBody(
             MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 220.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
             OutputPill(openOutput)
             OverlayChip("Audio & subs") { onTouch(); onPanel() }
-            // Browse: the folder the video came from, in the Library (Back returns here); Queue: what plays next.
+            // Browse: the folder the video came from, in the Library (Back returns here).
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
-            OverlayChip("☰ Queue " + (p.queue.size - p.index - 1).coerceAtLeast(0)) { onTouch(); VideoQueueUi.open = true }
             OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             OverlayChip("Hue & sat") { onTouch(); onPicture() }
             speedChip()
@@ -551,9 +550,8 @@ private fun BoxScope.ControlsOverlayBody(
         // Short video area upright (compact): these chips are under the video instead, so nothing overlaps.
         if (!compact) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             OverlayChip("Audio & subs") { onTouch(); onPanel() }
-            // Browse: the folder the video came from, in the Library (Back returns here); Queue: what plays next.
+            // Browse: the folder the video came from, in the Library (Back returns here).
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
-            OverlayChip("☰ Queue " + (p.queue.size - p.index - 1).coerceAtLeast(0)) { onTouch(); VideoQueueUi.open = true }
             OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             // Dedicated button: hue & saturation, straight to the sliders.
             OverlayChip("Hue & sat") { onTouch(); onPicture() }
@@ -680,7 +678,6 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         // Files.
         androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("📂 Browse") { openOrigin(nav, keepStack = true) }
-            Pill("☰ Queue " + (p.queue.size - p.index - 1).coerceAtLeast(0)) { VideoQueueUi.open = true }
         }
         // Picture format and orientation.
         androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -692,25 +689,25 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             Pill("🔄 Turn") { onRotate() }
             Pill("PiP") { onPip() }
         }
-        // Wide video upright: the video collection in its own scrolling box, like the song player's "Up next".
-        val next = if (p.index >= 0) p.queue.drop(p.index + 1) else emptyList()
-        if (showList && next.isNotEmpty()) {
+        // Up next (15:36): exactly like the song player's — "Up next" with "Queue › time left" (opens the whole queue),
+        // then the next files (as many as Look → "Up next" count), numbered, gliding names, length; long press: menu.
+        val st by App.instance.store.state.collectAsState()
+        val next = if (p.index >= 0) p.queue.drop(p.index + 1).take(st.settings.upNextCount) else emptyList()
+        val cur = p.item
+        if (next.isNotEmpty() && cur != null) Column(Modifier.fillMaxWidth()) {
             var upMenu by remember { mutableIntStateOf(-1) }
-            SectionTitle("Up next")
-            Column(Modifier.heightIn(max = 320.dp).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.card)
-                .border(1.dp, accent().copy(alpha = 0.3f), RoundedCornerShape(14.dp)).verticalScroll(rememberScrollState())) {
-                next.forEachIndexed { i, n ->
-                    if (i > 0) Divider()
-                    Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
-                        .padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("${i + 1}.", color = C.muted, maxLines = 1, modifier = Modifier.width(30.dp))
-                        MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 8.dp), fontSize = 15.sp)
-                        if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
-                        Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
-                            onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
-                            onMoveDown = if (p.index + 2 + i < p.queue.size) ({ player.moveInQueue(p.index + 1 + i, 1) }) else null,
-                            removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
-                    }
+            Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); QueueTimeLeft(cur) { nav.go(Screen.Queue) } }
+            next.forEachIndexed { i, n ->
+                Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
+                    .padding(vertical = 8.dp)) {
+                    Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
+                    Box(Modifier.width(6.dp))
+                    MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 8.dp), fontSize = 15.sp, list = "upnext")
+                    if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
+                    Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
+                        onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
+                        onMoveDown = if (p.index + 2 + i < p.queue.size) ({ player.moveInQueue(p.index + 1 + i, 1) }) else null,
+                        removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
                 }
             }
         }
