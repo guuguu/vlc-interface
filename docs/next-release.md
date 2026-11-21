@@ -1076,3 +1076,9 @@
 - **Scope:** one setting for all songs and stations; each song's own Treble value works on top. It applies at once. Saved with the settings and in export / import.
 - **Helper:** hold the section for its text.
 - **Output:** app's own sound output only (libVLC's output keeps the plain treble).
+- **Flatten at volume** (fourth value, requested 22:03): the treble correction shrinks in proportion to the volume — all of it at volume 0, none at the volume set.
+  - Range Off (0) … 200 %, in 10 % steps. For example 150 %: two thirds left at 50 % volume, a third at 100 %.
+  - "Volume" is the phone's media volume; on an output Android isn't routing to, it's times the app's own volume (which can go above 100 %).
+  - It follows volume changes at once.
+  - The box draws a third, white curve: Treble +5 as it is at the volume now. The line under the slider says how much is left ("Now at 60 %: 60 % of the correction").
+  - Reset sets it Off.

@@ -34,6 +34,9 @@ object SettingHelp {
             "Peak: only a band around the frequency is raised or lowered — one band of a parametric equalizer.\n\n" +
             "Frequency 1–16 kHz (type it, slide it, or drag on the curve). Width: the shelf's slope (smaller = gentler rise) or " +
             "the peak's Q (smaller = wider band). At slider end: how many dB the slider's ±5 means.\n\n" +
+            "Flatten at volume: the correction shrinks in proportion to the volume — all of it at volume 0, none at the volume set " +
+            "(e.g. 150 %: two thirds left at 50 %, a third at 100 %). Off (0): the whole correction at every volume. The white curve " +
+            "shows Treble +5 at the volume now.\n\n" +
             "The curve shows the result: solid line Treble +5, dashed −5. One setting for all songs and stations; each song's own " +
             "Treble value works on top of it. Works with the app's own sound output. Default: Shelf, 4000 Hz, slope 0.6, ±10 dB.",
         "Loudness, Treble and Preamp sliders" to "Shows three sliders on the audio and radio players: Loudness (more bass and treble at low volume, like a hi-fi's loudness button), Treble, and Preamp (overall gain before the volume).\n\n" +

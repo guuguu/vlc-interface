@@ -1302,6 +1302,10 @@ private fun TrebleBandBox(s: Settings, set: (Settings) -> Unit) {
     fun put(n: Settings) { set(n); App.instance.player.applySoundChain() }
     val peak = s.trebleType == "peak"
     val width = if (peak) s.trebleQ else s.trebleSlope
+    // The volume now (refreshed every second) and how much of the correction is left at it (flattening, 22:03).
+    var volNow by remember { mutableStateOf(App.instance.player.volumeNowPct()) }
+    LaunchedEffect(Unit) { while (true) { volNow = App.instance.player.volumeNowPct(); kotlinx.coroutines.delay(1000) } }
+    val flatK = if (s.trebleFlatPct <= 0) 1f else (1f - volNow / s.trebleFlatPct).coerceIn(0f, 1f)
     SectionTitle("Treble band", Modifier.onGloballyPositioned { if (SettingsAnchor.want == "trebleband") SettingsAnchor.y = it.positionInParent().y.toInt() })
     CardBox {
         Column(Modifier.explain("Treble band").padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
@@ -1339,16 +1343,27 @@ private fun TrebleBandBox(s: Settings, set: (Settings) -> Unit) {
                     drawPath(path, if (dashed) a.copy(alpha = 0.5f) else a, style = androidx.compose.ui.graphics.drawscope.Stroke(
                         width = if (dashed) 2f else 5f, pathEffect = if (dashed) androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 10f)) else null))
                 }
+                // Flattening on: the +5 curve as it is at the volume now (thin, full colour).
+                if (s.trebleFlatPct > 0) {
+                    val path = androidx.compose.ui.graphics.Path()
+                    for (i in 0..120) {
+                        val f = fMin * Math.pow(fMax / fMin, i / 120.0)
+                        val y = yOf(trebleDb(f, peak, s.trebleHz.toDouble(), width.toDouble(), s.trebleMaxDb.toDouble() * flatK))
+                        if (i == 0) path.moveTo(0f, y) else path.lineTo(xOf(f, w), y)
+                    }
+                    drawPath(path, Color.White.copy(alpha = 0.8f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.5f))
+                }
                 // The dot: the frequency, on the +5 curve.
                 val fx = xOf(s.trebleHz.toDouble(), w)
                 drawCircle(a, 12f, androidx.compose.ui.geometry.Offset(fx, yOf(trebleDb(s.trebleHz.toDouble(), peak, s.trebleHz.toDouble(), width.toDouble(), s.trebleMaxDb.toDouble()))))
             }
-            Text("Solid: Treble +5 · dashed: −5 · drag on the curve to set the frequency", color = C.muted, fontSize = 12.sp)
+            Text("Solid: Treble +5 · dashed: −5" + (if (s.trebleFlatPct > 0) " · white: +5 at the volume now" else "") + " · drag on the curve to set the frequency",
+                color = C.muted, fontSize = 12.sp)
             Row(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                 Pill("Shelf", selected = !peak) { put(s.copy(trebleType = "shelf")) }
                 Pill("Peak", selected = peak) { put(s.copy(trebleType = "peak")) }
                 Box(Modifier.weight(1f))
-                STextButton({ put(s.copy(trebleType = "shelf", trebleHz = 4000, trebleSlope = 0.6f, trebleQ = 1.0f, trebleMaxDb = 10f)) }) { Text("Reset") }
+                STextButton({ put(s.copy(trebleType = "shelf", trebleHz = 4000, trebleSlope = 0.6f, trebleQ = 1.0f, trebleMaxDb = 10f, trebleFlatPct = 0)) }) { Text("Reset") }
             }
             Text(if (peak) "Peak: one band around the frequency is raised or lowered." else "Shelf: everything above the frequency is raised or lowered.",
                 color = C.muted, fontSize = 12.sp)
@@ -1372,6 +1387,16 @@ private fun TrebleBandBox(s: Settings, set: (Settings) -> Unit) {
                 Text("±%.0f dB".format(java.util.Locale.US, s.trebleMaxDb), color = accent(), fontWeight = FontWeight.SemiBold)
             }
             ThinSlider(s.trebleMaxDb, { v -> put(s.copy(trebleMaxDb = Math.round(v).toFloat())) }, valueRange = 4f..15f)
+            // Fourth value (22:03): the correction flattens in proportion to the volume, to none at this volume.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Flatten at volume", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                Text(if (s.trebleFlatPct <= 0) "Off" else "${s.trebleFlatPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
+            }
+            ThinSlider(s.trebleFlatPct.toFloat(), { v -> put(s.copy(trebleFlatPct = (Math.round(v / 10f) * 10).coerceIn(0, 200))) }, valueRange = 0f..200f)
+            Text(if (s.trebleFlatPct <= 0) "Off: the whole correction at every volume. Set a volume to flatten it gradually: all of it at volume 0, none at that volume."
+                else "All of the correction at volume 0, none at ${s.trebleFlatPct} %. Now at ${volNow.toInt()} %: ${(flatK * 100).toInt()} % of the correction." +
+                    (if (s.trebleFlatPct > 100) " Above 100 % only the app's own volume reaches (outputs Android isn't routing to)." else ""),
+                color = C.muted, fontSize = 12.sp)
             Text("With the app's own sound output (libVLC's output keeps the plain treble).", color = C.muted, fontSize = 12.sp)
         }
     }

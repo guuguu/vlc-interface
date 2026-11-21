@@ -446,7 +446,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val bands = if (l == 0f) FloatArray(10) else toneGains(l, 0f)
         val set = store.current.settings
         NativeAudio.trebleBand(set.trebleType == "peak", set.trebleHz.toFloat(), if (set.trebleType == "peak") set.trebleQ else set.trebleSlope)
-        return bands + floatArrayOf(t * set.trebleMaxDb / 5f)
+        return bands + floatArrayOf(t * set.trebleMaxDb / 5f * trebleFlatten())
     }
 
     /** Band gains (10 bands, all ≤ 0 dB) for loudness [l] and treble [t]. */
@@ -502,10 +502,28 @@ class PlayerController(private val context: Context, private val store: Store) {
         return Math.round(l * k * 2) / 2f
     }
 
+    /** The volume now, in %: the phone's media volume, times the app's own volume on an output Android isn't routing to. */
+    fun volumeNowPct(): Float {
+        val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
+        val pct = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) * 100f / max
+        return if (app.vlcinterface.App.instance.output.overriding) pct * appVolume else pct
+    }
+
+    /**
+     * Treble flattening (2026-11-21 22:03): the treble correction shrinks in proportion to the volume — all of it at
+     * volume 0, none at Settings → Audio → Treble band → "Flatten at" (e.g. 150 %: two thirds left at 50 %, a third at
+     * 100 %). 1 = whole correction (flattening off).
+     */
+    fun trebleFlatten(): Float {
+        val target = store.current.settings.trebleFlatPct
+        if (target <= 0) return 1f
+        return (1f - volumeNowPct() / target).coerceIn(0f, 1f)
+    }
+
     /** Phone volume changed (buttons, speaker): Auto loudness follows at once. */
     private val volumeRx = object : android.content.BroadcastReceiver() {
         override fun onReceive(c: Context, i: android.content.Intent) {
-            if (store.current.settings.autoLoud && ::mp.isInitialized) main.post { applySoundChain() }
+            if ((store.current.settings.autoLoud || store.current.settings.trebleFlatPct > 0) && ::mp.isInitialized) main.post { applySoundChain() }
         }
     }
 
@@ -779,6 +797,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         // Bluetooth quality mode: the app's own (digital) volume stays at 100 %; the device volume does the rest.
         appVolume = if (BtQuality.on()) 1f else v.coerceIn(0f, 2f)
         NativeAudio.appVolume(if (sleepClosing) 0f else appVolume * fadeK)
+        if (store.current.settings.trebleFlatPct > 0) applySoundChain()      // treble flattening follows the app's volume too
     }
 
     // ---------- sleep fade ----------
