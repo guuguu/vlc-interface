@@ -522,3 +522,6 @@
   ▶ playing, ⏸ paused, and ⏭ on the "Up next" notification (was Android's plain play / pause / next arrows). Orange
   in the shade and on the lock screen; in the status bar Android draws every app's symbol white, so there it's the
   same square shape with the symbol cut out.
+- Header line of the player notification (11:47 / 11:48): next to the orange ▶ square, what plays and the time
+  left — "Pink Floyd · 3 min left" (artist, else album), "RadioBlues-Flac · Live", "Video · 12 min left";
+  refreshed once a minute. In the shade and on the lock screen (the status bar can only show the symbol).

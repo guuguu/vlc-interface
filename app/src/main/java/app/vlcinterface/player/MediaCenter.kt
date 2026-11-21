@@ -90,7 +90,7 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
             lastSig = emptyList()
             return
         }
-        val sig = listOf(item.uri, item.startMs, item.title, st.metaArtist, st.metaAlbum, st.artworkUrl, st.isPlaying,
+        val sig = listOf(item.uri, item.startMs, item.title, st.metaArtist, st.metaAlbum, st.artworkUrl, st.isPlaying, minutesLeft(st),
             st.nowPlaying, st.hasNext, st.hasPrev, st.length > 0, st.upNext.map { it.uri + it.startMs }, st.ended)
         val posJump = kotlin.math.abs(expectedPos() - st.time) > 2500
         if (sig != lastSig) {
@@ -103,6 +103,13 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
         } else if (posJump && st.time > 0) {
             updateState(st)
         }
+    }
+
+    /** Whole minutes left of the song / video (null: unknown length, or radio). */
+    private fun minutesLeft(st: PlayerState): Int? {
+        val cur = st.item ?: return null
+        if (cur.isRadio || st.length <= 0) return null
+        return ((st.length - st.time).coerceAtLeast(0) / 60_000L).toInt()
     }
 
     private fun expectedPos(): Long = if (lastPlaying) lastPos + (SystemClock.elapsedRealtime() - lastPosAt) else lastPos
@@ -167,6 +174,20 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
             item.isRadio -> item.title + " · Live"
             else -> listOf(st.metaArtist, st.metaAlbum).filter { it.isNotEmpty() }.joinToString(" · ")
         }
+        // Header line next to the orange ▶ square (2026-11-21 11:48): who / what, and the time left — "Pink Floyd ·
+        // 3 min left", "RadioBlues-Flac · Live", "Video · 12 min left". Refreshed once a minute.
+        val who = when {
+            item == null -> ""
+            item.isRadio -> item.title
+            !item.isMusic -> "Video"
+            else -> st.metaArtist.ifEmpty { item.artist }.ifEmpty { st.metaAlbum.ifEmpty { item.album } }
+        }
+        val left = when {
+            item == null -> ""
+            item.isRadio -> "Live"
+            else -> minutesLeft(st)?.let { if (it <= 0) "<1 min left" else "$it min left" } ?: ""
+        }
+        val sub = listOf(who, left).filter { it.isNotEmpty() }.joinToString(" · ")
         val b = Notification.Builder(ctx, CHANNEL)
             // The same orange square in every state, only the symbol changes (▶ playing, ⏸ paused) — 2026-11-21 11:44.
             // Android draws status-bar symbols white only; the orange shows in the shade and on the lock screen.
@@ -174,6 +195,7 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
             .setColor(0xFFFF8A3D.toInt())
             .setContentTitle(title)
             .setContentText(text)
+            .apply { if (sub.isNotEmpty()) setSubText(sub) }
             .setShowWhen(false)
             .setOnlyAlertOnce(true)
             .setSilent(true)
