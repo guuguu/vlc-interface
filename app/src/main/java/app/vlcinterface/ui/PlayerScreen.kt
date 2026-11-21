@@ -644,31 +644,32 @@ private fun BoxScope.ControlsOverlayBody(
         val outName = App.instance.output.devices.collectAsState().value.firstOrNull { it.active }?.name ?: "Output"
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize().padding(top = 40.dp, bottom = 44.dp, start = 4.dp, end = 4.dp)) {
             val n = maxOf(right.size, left.size + 1)
-            val chipH = minOf(34f * pct, maxHeight.value / n).dp
+            val gap = 6f
+            val chipH = minOf(34f * pct, (maxHeight.value - gap * (n - 1)) / n).dp
             val k = chipH.value / 34f
             val font = (12f * k).coerceAtLeast(8f).sp
             val w = (96f * maxOf(k, 0.6f)).dp
-            Column(Modifier.align(Alignment.CenterStart).width(w)) {
-                SideChip("🔈 $outName", false, chipH, font, w, openOutput, first = true, last = false)
-                left.forEachIndexed { i, (l, lit, f) -> SideChip(l, lit, chipH, font, w, f, first = false, last = i == left.lastIndex) }
+            // Separate rounded buttons with a small gap (the earlier look, 17:15), same size and the same size logic.
+            Column(Modifier.align(Alignment.CenterStart).width(w), verticalArrangement = Arrangement.spacedBy(gap.dp)) {
+                SideChip("🔈 $outName", false, chipH, font, w, openOutput, output = true)
+                left.forEach { (l, lit, f) -> SideChip(l, lit, chipH, font, w, f) }
             }
-            Column(Modifier.align(Alignment.CenterEnd).width(w)) {
-                right.forEachIndexed { i, (l, lit, f) -> SideChip(l, lit, chipH, font, w, f, first = i == 0, last = i == right.lastIndex) }
+            Column(Modifier.align(Alignment.CenterEnd).width(w), verticalArrangement = Arrangement.spacedBy(gap.dp)) {
+                right.forEach { (l, lit, f) -> SideChip(l, lit, chipH, font, w, f) }
             }
         }
     }
 }
 
-/** A button of the sideways side columns: all the same size, stacked one on another (rounded only at a column's ends). */
+/** A slim button of the sideways side columns: all the same size, rounded; [lit] highlighted; [output] in the accent edge. */
 @Composable
 private fun SideChip(text: String, lit: Boolean, h: androidx.compose.ui.unit.Dp, font: androidx.compose.ui.unit.TextUnit, w: androidx.compose.ui.unit.Dp,
-                     onClick: () -> Unit, first: Boolean = true, last: Boolean = true) {
+                     onClick: () -> Unit, output: Boolean = false) {
     val a = accent()
-    val r = 10.dp
-    val shape = RoundedCornerShape(topStart = if (first) r else 0.dp, topEnd = if (first) r else 0.dp, bottomStart = if (last) r else 0.dp, bottomEnd = if (last) r else 0.dp)
-    Box(Modifier.width(w).height(h).clip(shape).background(if (lit) a.copy(alpha = 0.3f) else Color(0x66000000))
-        .border(0.5.dp, if (lit) a else Color(0x88FFFFFF), shape).clickable(onClick = onClick).padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
-        Text(text, color = if (lit) a else Color.White, fontSize = font, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false,
+    Box(Modifier.width(w).height(h).clip(RoundedCornerShape(h / 2)).background(if (lit) a.copy(alpha = 0.3f) else Color(0x55000000))
+        .border(1.dp, if (lit || output) a else Color(0x88FFFFFF), RoundedCornerShape(h / 2)).clickable(onClick = onClick).padding(horizontal = 6.dp),
+        contentAlignment = Alignment.Center) {
+        Text(text, color = if (lit || output) a else Color.White, fontSize = font, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false,
             overflow = TextOverflow.Ellipsis)
     }
 }
