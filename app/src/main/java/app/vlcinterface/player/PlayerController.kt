@@ -561,6 +561,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         // Still not moving after ~20 s: checked anyway (a silent output can also stop the position from moving).
         if (!moving && tries < 8) { main.postDelayed({ watchSound(tries + 1) }, 2_500); return }
         val before = NativeAudio.stats() ?: return
+        val timeBefore = mp.time
         main.postDelayed({
             val s = _state.value
             if (!NativeAudio.active || !s.isPlaying || s.item == null || s.item !== s0.item) return@postDelayed
@@ -570,6 +571,18 @@ class PlayerController(private val context: Context, private val store: Store) {
             // Still starting (state 3): Bluetooth in particular can take several seconds to begin taking sound —
             // not a failure yet, look again shortly (your log: "state 3, heard 0" was exactly this).
             if (now.state == 3L && tries < 8) { main.postDelayed({ watchSound(tries + 1) }, 2_500); return@postDelayed }
+            // Not a failure, look again: the sound stream was opened anew meanwhile (new song format, output
+            // changed, Bluetooth reconnected — its "frames heard" start again from 0, which looked like "nothing
+            // played"), libVLC is between two sound outputs (no stream open for a moment: track change, end of a
+            // video), or the song itself didn't move (paused, seeking, network wait) — then no sound is expected.
+            // These were the false alarms in the logs that switched the app to libVLC's output for nothing.
+            val moved = mp.time - timeBefore
+            val unclear = now.stream != before.stream || now.setups != before.setups || now.state == -1L || moved < 2_000
+            if (unclear && now.setupResult == 0L) {
+                if (tries < 8) { watchSound(tries + 1); return@postDelayed }
+                // Last look: judged only if the song really moved on the same stream.
+                if (moved < 2_000 || now.stream != before.stream) return@postDelayed
+            }
             val problem = when {
                 now.setupResult != 0L -> "the phone refused the audio stream (open ${now.openResult})"
                 now.plays == before.plays -> "libVLC delivered no sound to the app"
@@ -1691,6 +1704,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         val resume = if (startAt >= 0) startAt else if (!item.isRadio && !item.isMusic && store.current.settings.resume && item.startMs < 0)
             store.current.recent.firstOrNull { it.uri == item.uri }?.position ?: -1 else -1
         pendingSeek = resume
+        // Every item starts at normal speed: libVLC keeps the player's speed from one item to the next, so a video
+        // watched at 1.5× made the next song play fast (time-stretched, with its warble) while 1× was shown.
+        try { if (kotlin.math.abs(mp.rate - 1f) > 0.001f) mp.setRate(1f) } catch (_: Throwable) {}
         _state.value = s0.copy(item = item, index = i, isPlaying = false, time = 0, length = item.durationMs, videoW = 0, videoH = 0,
             audioTracks = emptyList(), spuTracks = emptyList(), audioDelayMs = 0, spuDelayMs = 0, rate = 1f, nowPlaying = "",
             metaArtist = item.artist, metaAlbum = item.album, artworkUrl = if (artBanned(item, item.artwork)) "" else item.artwork, buffering = 0f, error = "", ended = false,

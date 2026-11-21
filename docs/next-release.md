@@ -367,3 +367,22 @@
   the same spot (once per video) and a note is written to the Logs ("VOUT").
 - That case no longer marks the file as "hardware can't decode it" (it was a missing picture, not a decoder fault),
   so such files aren't pushed to software decoding for good.
+
+## Sound engine and pitch (requested 2026-11-21 02:22)
+- False alarms of the app's own sound output fixed. The log had 33 "App output gave no sound → switched to libVLC
+  output" entries; they were mostly wrong:
+  - "the phone did not play the sound (state 4 …)": the sound stream had been opened anew during the 4-second check
+    (new song format, output change, Bluetooth reconnect) — a new stream counts its played sound from 0 again, which
+    looked like "nothing played". The engine now numbers its streams and the check only compares the same stream.
+  - "libVLC delivered no sound (state -1)": libVLC was between two sound outputs (track change, end of a video) or
+    the song itself wasn't moving (paused, seeking, network wait). These now just get looked at again.
+  - Judged a failure only when the song really moved on ≥ 2 s on the same stream with no sound. Real failures (the
+    phone refusing the stream, no sound while playing) still switch to libVLC's output as before.
+  - Each false alarm had restarted the song and dropped the app's sound chain (tone, loudness, EQ, limiter) for
+    libVLC's plain output — a sound that changed for no reason.
+- Pitch / speed: libVLC keeps the player's speed from one item to the next, so after a video watched at another
+  speed the next song played faster or slower (time-stretched, with its warble) while the button showed 1×. Every
+  item now starts at normal speed (1×), as shown.
+- Checked again, no other pitch difference: the app's own output tells libVLC the rate the phone really opened (libVLC
+  converts to it); when the phone changes output mid-song, the app's converter goes from the song's rate to the new
+  one exactly (no drift); the visualisation, EQ and meters use the song's rate.

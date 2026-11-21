@@ -79,6 +79,7 @@ typedef struct { int64_t pts; float l, r, ba, bb; } peak_t;
 static peak_t g_ring[RING];
 
 /* Diagnostics, read by Kotlin (watchdog + Settings → Sound). */
+static atomic_long st_gen;         /* streams opened so far (frames heard restart from 0 with each one) */
 static atomic_long st_setup, st_setupRes = -99, st_play, st_frames, st_lastWrite, st_startRes = -99, st_ptsDelta, st_rate, st_open = -99;
 static atomic_uint g_w, g_r, g_r2, g_r3;
 
@@ -256,6 +257,7 @@ static bool open_stream(void) {
     atomic_store(&st_open, r);
     if (r != AAUDIO_OK) { g_stream = NULL; LOGW("open failed %d", r); return false; }
     g_rate = (unsigned)AAudioStream_getSampleRate(g_stream);
+    atomic_fetch_add(&st_gen, 1);
     g_eqRateChanged = true;
     atomic_store(&g_disconnected, false);
     g_defaultBuf = AAudioStream_getBufferSizeInFrames(g_stream);
@@ -667,11 +669,11 @@ Java_app_vlcinterface_player_NativeAudio_readPeaks(JNIEnv *env, jobject thiz, jf
     (*env)->SetFloatArrayRegion(env, out, 0, 2, v);
 }
 
-/* [setup calls, setup result, play calls, frames written, last write, start result, frames heard, stream state, pts-now µs, rate, open result, volume×1000, mute] */
+/* [setup calls, setup result, play calls, frames written, last write, start result, frames heard, stream state, pts-now µs, rate, open result, volume×1000, mute, stream number] */
 JNIEXPORT void JNICALL
 Java_app_vlcinterface_player_NativeAudio_stats(JNIEnv *env, jobject thiz, jlongArray out) {
     (void)thiz;
-    jlong v[13];
+    jlong v[14];
     pthread_mutex_lock(&g_lock);
     v[6] = g_stream ? AAudioStream_getFramesRead(g_stream) : -1;
     v[7] = g_stream ? AAudioStream_getState(g_stream) : -1;
@@ -679,8 +681,8 @@ Java_app_vlcinterface_player_NativeAudio_stats(JNIEnv *env, jobject thiz, jlongA
     v[0] = atomic_load(&st_setup); v[1] = atomic_load(&st_setupRes); v[2] = atomic_load(&st_play);
     v[3] = atomic_load(&st_frames); v[4] = atomic_load(&st_lastWrite); v[5] = atomic_load(&st_startRes);
     v[8] = atomic_load(&st_ptsDelta); v[9] = atomic_load(&st_rate); v[10] = atomic_load(&st_open);
-    v[11] = (jlong)(atomic_load(&g_vol) * 1000.f); v[12] = atomic_load(&g_mute);
-    (*env)->SetLongArrayRegion(env, out, 0, 13, v);
+    v[11] = (jlong)(atomic_load(&g_vol) * 1000.f); v[12] = atomic_load(&g_mute); v[13] = atomic_load(&st_gen);
+    (*env)->SetLongArrayRegion(env, out, 0, (*env)->GetArrayLength(env, out) < 14 ? 13 : 14, v);
 }
 
 /* Picture hue/saturation, live (libVLC "adjust" filter). Returns 0 when applied. */

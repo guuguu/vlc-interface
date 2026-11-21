@@ -57,16 +57,16 @@ object NativeAudio {
 
     data class Stats(val setups: Long, val setupResult: Long, val plays: Long, val written: Long, val lastWrite: Long,
                      val startResult: Long, val heard: Long, val state: Long, val ptsDeltaUs: Long, val rate: Long,
-                     val openResult: Long, val volume: Float, val mute: Boolean) {
+                     val openResult: Long, val volume: Float, val mute: Boolean, val stream: Long = 0) {
         override fun toString() = "setup $setups/$setupResult, open $openResult, start $startResult, state $state, rate $rate, " +
             "blocks $plays, written $written, heard $heard, last write $lastWrite, pts−now ${ptsDeltaUs / 1000} ms, " +
-            "volume ${"%.2f".format(volume)}${if (mute) " muted" else ""}"
+            "volume ${"%.2f".format(volume)}${if (mute) " muted" else ""}, stream #$stream"
     }
 
     fun stats(): Stats? {
         if (!active) return null
-        val a = LongArray(13)
-        return try { stats(a); Stats(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11] / 1000f, a[12] != 0L) } catch (_: Throwable) { null }
+        val a = LongArray(14)
+        return try { stats(a); Stats(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11] / 1000f, a[12] != 0L, a[13]) } catch (_: Throwable) { null }
     }
 
     /** Gives up on our output for this run; the player then uses libVLC's own output. */
