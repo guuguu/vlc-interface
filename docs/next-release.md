@@ -669,6 +669,7 @@
 
 # After 1.63.0
 
-## Alarm history always visible (reported 2026-11-21 13:41 "cannot find alarms history")
-- Alarm clock settings → "History" (right under Alarm health) was hidden while there were no past alarms. It's now
-  always shown; empty, it says "No past alarms yet …" and what will be listed there.
+## Alarm history moved to the alarm page (reported 2026-11-21 13:41 / 13:43)
+- "History" is now at the bottom of the alarm page (new alarm and every existing alarm, under Delete alarm), no
+  longer in the alarm clock settings. Always shown; empty, it says "No past alarms yet …". The alarm open on the
+  page isn't listed under itself; a tap on a past alarm opens its page in place of the current one.

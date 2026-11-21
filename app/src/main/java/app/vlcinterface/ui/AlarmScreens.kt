@@ -347,6 +347,9 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
             Row(Modifier.fillMaxWidth().padding(vertical = (14 * sg()).dp), horizontalArrangement = Arrangement.spacedBy((10 * sg()).dp)) {
                 if (Alarms.get(id) != null) Pill("Delete alarm", modifier = Modifier.weight(1f)) { deleted = true; Alarms.delete(a.id); nav.back() }
             }
+            // History of past alarms at the bottom of the alarm page (moved here from the alarm clock settings, 13:43).
+            AlarmHistory(nav, exclude = a.id)
+            Box(Modifier.height(24.dp))
         }
     }
     }
@@ -413,7 +416,6 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
     if (rootAsk) RootFolderDialog { rootAsk = false }
             SectionTitle("Alarm health")
             HealthCard()
-            AlarmHistory(nav)
             Text("Tip: double tap or long-press any setting for an explanation", color = C.muted, fontSize = 13.sp)
             SectionTitle("Display")
             CardBox {
@@ -1108,9 +1110,10 @@ private fun CalendarPickDialog(onDone: () -> Unit) {
  * next time, back in front of the player) and a delete button.
  */
 @Composable
-private fun AlarmHistory(nav: Navigator) {
+private fun AlarmHistory(nav: Navigator, exclude: String = "") {
     val d by Alarms.state.collectAsState()
-    val used = d.alarms.filter { Alarms.isPast(it) && it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID }.sortedByDescending { Alarms.pastAt(it) }
+    // The alarm open on this page isn't listed under itself.
+    val used = d.alarms.filter { Alarms.isPast(it) && it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID && it.id != exclude }.sortedByDescending { Alarms.pastAt(it) }
     val fmt = java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale.getDefault())
     SectionTitle("History")
     // Always shown (2026-11-21 13:41): empty, it says so instead of the section being missing.
@@ -1124,7 +1127,7 @@ private fun AlarmHistory(nav: Navigator) {
     CardBox {
         used.forEachIndexed { i, al ->
             if (i > 0) Divider()
-            Row(Modifier.fillMaxWidth().clickable { nav.go(Screen.AlarmEdit(al.id)) }.padding(start = 16.dp, end = 4.dp, top = (6 * sg()).dp, bottom = (6 * sg()).dp),
+            Row(Modifier.fillMaxWidth().clickable { nav.replace(Screen.AlarmEdit(al.id)) }.padding(start = 16.dp, end = 4.dp, top = (6 * sg()).dp, bottom = (6 * sg()).dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text(al.timeText, color = C.muted, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
