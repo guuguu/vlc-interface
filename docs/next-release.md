@@ -741,3 +741,7 @@
 ## Video player button labels (requested 2026-11-21 15:47)
 - "Audio & subs" → "Subs/Sync", "Audio sync" → "Audio/Sync" (no value on the button, 15:48 — it's in the bar it opens),
   "Hue & sat" → "Hue/Sat" (both words capitalised, 15:48) — on the video player upright and sideways, and in Look's Video row names.
+
+## Video player: 🔄 turn button removed (requested 2026-11-21 15:49)
+- The 🔄 button that turned the phone's screen between upright and sideways is gone (upright, sideways, and from the
+  Format row): the phone's own auto-rotate does it. "Rotate" (turns only the film's picture) stays.

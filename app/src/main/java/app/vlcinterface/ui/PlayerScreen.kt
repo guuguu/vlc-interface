@@ -585,7 +585,6 @@ private fun BoxScope.ControlsOverlayBody(
         OverlayChip(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo(); onTouch() }
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
-        Text("🔄", color = Color.White, fontSize = symSize, modifier = Modifier.clickable(onClick = onRotate).padding(8.dp))
         Text("⏮", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.prev() }.padding(8.dp))
         Text("⏭", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.next() }.padding(8.dp))
         OverlayChip("PiP", onPip)
@@ -601,7 +600,6 @@ private fun BoxScope.ControlsOverlayBody(
         OverlayChip(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo(); onTouch() }
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
-        Text("🔄", color = Color.White, fontSize = symSize, modifier = Modifier.clickable(onClick = onRotate).padding(6.dp))
         OverlayChip("PiP", onPip)
     }
     }
@@ -694,7 +692,6 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             Pill(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() }
             if (tallVid) Pill(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Bigger") {
                 App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) } }
-            Pill("🔄 Turn") { onRotate() }
             Pill("PiP") { onPip() }
         }
         }
