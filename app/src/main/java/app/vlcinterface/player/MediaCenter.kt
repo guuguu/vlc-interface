@@ -38,7 +38,16 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
     private var art: Pair<String, Bitmap?> = "" to null
 
     init {
-        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Playback", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
+        // "Playing" channel at normal importance but silent (no sound, no vibration, no pop-up): a low-importance
+        // ("silent") notification has no icon in the status bar on Android 12+ (Samsung hides silent icons by default),
+        // so nothing showed a player was working. The old low-importance channel is removed (its importance can't be
+        // raised once made).
+        try { nm.deleteNotificationChannel("playback") } catch (_: Exception) {}
+        nm.createNotificationChannel(NotificationChannel(CHANNEL, "Player working", NotificationManager.IMPORTANCE_DEFAULT).apply {
+            setShowBadge(false); setSound(null, null); enableVibration(false); enableLights(false)
+            lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+            description = "Shown (with an icon in the status bar) while a song, radio station or video is playing"
+        })
         nm.createNotificationChannel(NotificationChannel(CHANNEL_NEXT, "Up next", NotificationManager.IMPORTANCE_LOW).apply {
             setShowBadge(false); lockscreenVisibility = Notification.VISIBILITY_PUBLIC; setSound(null, null)
         })
@@ -164,6 +173,9 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
             .setContentText(text)
             .setShowWhen(false)
             .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)   // Android 12 would wait up to 10 s
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(openIntent())
             .setOngoing(st.isPlaying)
@@ -207,7 +219,7 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
     }
 
     companion object {
-        const val CHANNEL = "playback"
+        const val CHANNEL = "playing"
         const val CHANNEL_NEXT = "upnext"
         const val ID = 42
         const val ID_NEXT = 43

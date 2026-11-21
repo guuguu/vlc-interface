@@ -35,7 +35,7 @@ class PlaybackService : Service() {
         }
         val st = player.state.value
         if (st.item == null) { finish(); return START_NOT_STICKY }
-        startForeground(MediaCenter.ID, app.media.build(st), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+        foreground(st)
         if (job == null) {
             // Only react to "has item" / "is playing" changes; MediaCenter updates the notification content.
             job = scope.launch {
@@ -48,13 +48,26 @@ class PlaybackService : Service() {
                     .distinctUntilChanged().collect { (hasItem, active, net) ->
                     when {
                         !hasItem -> finish()
-                        active -> { startForeground(MediaCenter.ID, app.media.build(player.state.value), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK); hold(true, net) }
+                        active -> { foreground(player.state.value); hold(true, net) }
                         else -> { stopForeground(STOP_FOREGROUND_DETACH); hold(false) }
                     }
                 }
             }
         }
         return START_NOT_STICKY
+    }
+
+    /**
+     * In the foreground with the player notification. Android 12+ can refuse that while the app is in the background
+     * (e.g. playback resumed by Bluetooth after a pause): the notification is then still shown as a plain one, so a
+     * working player always has its notification and status-bar icon.
+     */
+    private fun foreground(st: PlayerState) {
+        val app = App.instance
+        try { startForeground(MediaCenter.ID, app.media.build(st), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK) }
+        catch (_: Exception) {
+            try { getSystemService(android.app.NotificationManager::class.java).notify(MediaCenter.ID, app.media.build(st)) } catch (_: Exception) {}
+        }
     }
 
     // CPU (and Wi-Fi for network music) kept awake while a queue is playing, so the next song starts with the screen off.

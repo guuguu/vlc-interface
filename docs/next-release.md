@@ -464,3 +464,16 @@
   with a fresh layout (every 0.35 s, up to 6 times).
 - Format analysis: each photo's report now says the surface size the format calls for and OK / WRONG (the yellow
   "picture seen" box is not reliable while the controls are on screen); 2.6 s per step so the self-check has run.
+
+# After 1.61.0
+
+## Notification bar: a sign whenever a player is working (requested 2026-11-21 11:17, Android 12)
+- The player notification was on a low-importance ("silent") channel: Android 12 and newer (Samsung by default)
+  show no status-bar icon for silent notifications, so nothing in the notification bar said a player was working.
+- Now on its own channel "Player working" at normal importance, but fully silent (no sound, vibration, light or
+  pop-up): the ▶ icon is in the status bar and the player notification (title, artist / station, controls) in the
+  notification shade while songs, a radio station or a video play; ⏸ while paused. Lock screen shows it too.
+- Shown at once (Android 12 otherwise waits up to 10 s for a foreground notification), and if Android refuses the
+  foreground start while the app is in the background (e.g. playback resumed by Bluetooth), it's still shown as a
+  plain notification instead of not at all.
+- The old "Playback" channel is removed from the app's notification settings (replaced by "Player working").
