@@ -1084,7 +1084,8 @@
   - Reset sets it Off.
 
 ## Hiss against foobar2000 on the same FLAC: rate conversion (reported 2026-11-21 22:10–22:12, same phone, all controls at 0)
-- **Cause:** when the phone's output doesn't open at the file's rate (a 44.1 kHz FLAC on a 48 kHz output, common on phones), the app asked libVLC to convert. libVLC never picks its good converters (soxr, speex) by itself; their priority is 0, checked in VLC 3.0's source. On Android it used its old "bandlimited" or "ugly" converter, which adds aliasing in the highs, heard as a fine hiss and a less clear sound. foobar2000 converts with a proper resampler.
+- **Rechecked (22:19):** Android's AAudio opens a stream at exactly the rate asked for (the file's), or fails. So for a normal 44.1 kHz FLAC no conversion happens in libVLC or the app; Android converts, as it does for foobar2000. The case below applies only when the output refuses the file's rate (fallback to 48 kHz), in Bluetooth quality mode (output at the link's rate), or after an output change. It's probably not the cause of the hiss heard; a sound check on the phone is proposed.
+- **What happened in those cases:** the app asked libVLC to convert. libVLC never picks its good converters (soxr, speex) by itself; their priority is 0, checked in VLC 3.0's source. On Android it used its old "bandlimited" or "ugly" converter, which adds aliasing in the highs, heard as a fine hiss and a less clear sound. foobar2000 converts with a proper resampler.
 - **Fixed:**
   - libVLC now always sends the file's own rate, and the app converts it in its sound engine with the windowed-sinc converter. Measured with a 44.1 kHz file on a 48 kHz output, at 1, 10 and 16 kHz: aliasing and noise ≈ 90 dB under the music, which is the 16-bit floor of the file itself.
   - Anything libVLC still converts (its own output, the fallback) uses soxr, as VLC's own Android app does. The engine still starts if soxr were missing.
