@@ -1856,7 +1856,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         val diSet = if (!isVideo) "off" else VideoAuto.manualDeinterlace(item.uri).ifEmpty { ps.videoDeinterlace }
         deintOn = isVideo && (diSet == "on" || (diSet == "auto" && VideoAuto.deinterlace(item.uri)))
         // The picture format chosen for this file (Fit when none).
-        if (isVideo) scale = VideoAuto.str(item.uri, "scale").let { n -> MediaPlayer.ScaleType.values().firstOrNull { it.name == n } } ?: MediaPlayer.ScaleType.SURFACE_BEST_FIT
+        // Every video starts in Fit (2026-11-21 16:25); a reopen of the same video at the same spot (format check,
+        // decoder, subtitle format…) keeps the format chosen meanwhile.
+        if (isVideo) { if (item.uri != scaleFor) scale = MediaPlayer.ScaleType.SURFACE_BEST_FIT; scaleFor = item.uri }
         tracksRestored = !isVideo; audioRestored = !isVideo; spuRestored = !isVideo
         // Network videos (2026-11-21 16:09): the same-name subtitle next to the video is loaded by the app instead of
         // libVLC, as a copy with its colour codes taken out (so the chosen subtitle colours apply).
@@ -2043,6 +2045,9 @@ class PlayerController(private val context: Context, private val store: Store) {
             main.postDelayed({ refreshTracks() }, 800)
         }
     }
+
+    /** The video [scale] belongs to (a new video starts in Fit). */
+    private var scaleFor = ""
 
     /** Zoom mode chosen in the player (kept across items, rotation and engine restarts). */
     var scale: MediaPlayer.ScaleType = MediaPlayer.ScaleType.SURFACE_BEST_FIT

@@ -813,3 +813,8 @@
   returns to the video.
 - Saved at once. When you go back to the player, a playing video takes the new format on by itself (it reopens at the
   same spot for a moment) — no "Apply" button any more.
+
+## Every video starts in Fit (requested 2026-11-21 16:25)
+- Each video now always starts with the Fit format (whole picture, to the edges), whatever format it had last time.
+  The format button changes it while watching; a reopen of the same video at the same spot (subtitle format,
+  decoder, format check) keeps the format chosen meanwhile.
