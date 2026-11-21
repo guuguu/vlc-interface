@@ -357,21 +357,23 @@ object RgScanner {
         if (mode == RgMode.ALBUMS_BY_FOLDERS) items.forEach { tagKey[it.uri] = "folder:" + physicalFolder(ctx, it) }
         val groups = items.groupBy { tagKey[it.uri] ?: groupKey(it, mode) }.values.toList()
         val albumMode = mode != RgMode.TRACK
-        // Phone files: with "All files access" (granted once) they're written straight away, no question (22:55).
-        // Without it: a scan started from a menu asks Android once for all of them; the automatic scan never asks —
-        // the values are kept in the app.
+        // Phone files (22:57): written in the music folders the app has write access to. For files outside them, the app
+        // asks for their music folder (Android's folder picker, that folder only). A scan from a menu waits for the answer;
+        // the automatic scan doesn't wait (those files keep their values in the app this time) and never asks twice.
         if (target == RgTarget.FILES) {
-            val phone = items.filter { it.uri.startsWith("content://") }.map { it.uri }
-            if (phone.isNotEmpty() && allFilesAccess()) phoneAllowed = true
-            else if (phone.isNotEmpty() && current?.silent == true) phoneAllowed = false
-            else if (phone.isNotEmpty()) {
-                val d = kotlinx.coroutines.CompletableDeferred<Boolean>(); phoneGrant = d
-                update { s -> s.copy(phase = "Waiting for Android's permission to change ${phone.size} phone files", needsPhonePermission = phone) }
-                val ok = d.await()
-                update { s -> s.copy(needsPhonePermission = emptyList()) }
-                if (!ok) addResult(RgResult("Phone files", "not allowed — values kept in the app instead", false))
-                phoneAllowed = ok
+            val phone = items.filter { it.uri.startsWith("content://") && !MusicFolderAccess.covered(ctx, it) }
+            val silentNow = current?.silent == true
+            if (!silentNow) MusicFolderAccess.clearDeclined()
+            val folders = phone.mapNotNull { MusicFolderAccess.folderToAsk(ctx, it) }.distinct().filter { !MusicFolderAccess.declinedFor(it) }
+            for (f in folders) {
+                if (MusicFolderAccess.ask.value != null) break
+                if (silentNow) { MusicFolderAccess.ask.value = MusicFolderAccess.Ask(f, null); break }
+                val d = kotlinx.coroutines.CompletableDeferred<Boolean>()
+                update { st -> st.copy(phase = "Waiting for write access to ${f.substringAfterLast('/')}") }
+                MusicFolderAccess.ask.value = MusicFolderAccess.Ask(f, d)
+                d.await()
             }
+            phoneAllowed = true
         }
         // Skip rule: a track is skipped when tagged; an album only when every file in it is tagged.
         val todo = java.util.Collections.synchronizedList(ArrayList<List<PlayItem>>())
@@ -397,7 +399,9 @@ object RgScanner {
         }
         // Measuring: the expensive part, $workers files at a time.
         val meters = java.util.concurrent.ConcurrentHashMap<String, Loudness>()
-        val toMeasure = synchronized(todo) { todo.toList() }.flatten()
+        // The song playing goes first (22:59): its ReplayGain is used live within seconds, not after the whole folder.
+        val playingUri = App.instance.player.state.value.item?.uri
+        val toMeasure = synchronized(todo) { todo.toList() }.flatten().sortedBy { if (it.uri == playingUri) 0 else 1 }
         // Dedicated download workers: network songs are copied ahead, in list order, while others are measured —
         // the network and the phone work at the same time. Never more than 500 MB of copies on the phone: a
         // download waits until there's room (measured copies are let go first; their tag update reads them again).
@@ -449,6 +453,13 @@ object RgScanner {
             val bad = m != null && (m.integrated.let { v -> v.isNaN() || v.isInfinite() } || m.peak.isNaN() || m.peak > 4f)
             if (bad) addResult(RgResult(it.title, "measurement failed (no usable sound decoded) — nothing written", false))
             if (m != null && !bad) meters[it.uri] = m
+            // The song playing: its track value is used at once, as soon as it is measured (the album value, in an album
+            // scan, follows when the whole album is done).
+            if (m != null && !bad && it.uri == App.instance.player.state.value.item?.uri) {
+                val v = linkedMapOf("REPLAYGAIN_TRACK_GAIN" to "%.2f dB".format(java.util.Locale.US, Loudness.gainDb(m.integrated)),
+                    "REPLAYGAIN_TRACK_PEAK" to "%.6f".format(java.util.Locale.US, m.peak))
+                App.instance.player.applyScannedRg(it.uri, v)
+            }
             synchronized(measuredCopies) { measuredCopies += it.uri }   // its copy may go when room is needed
             fracs.remove(it.uri)
             update { s -> s.copy(done = s.done + 1, measured = s.measured + 1, problems = s.problems + if (m == null || bad) 1 else 0, results = snapshot()) }
@@ -502,16 +513,7 @@ object RgScanner {
 
     @Volatile private var phoneAllowed = false
 
-    /** Android's "All files access" for this app (granted once in its settings): phone files written without asking. */
-    fun allFilesAccess(): Boolean = android.os.Build.VERSION.SDK_INT >= 30 && try { android.os.Environment.isExternalStorageManager() } catch (_: Throwable) { false }
 
-    /** A phone file's real path when it can be written directly (All files access granted). */
-    private fun writablePath(ctx: Context, item: PlayItem): String? {
-        if (!allFilesAccess()) return null
-        val p = try { app.vlcinterface.sources.PhysicalPath.of(ctx, item) } catch (_: Exception) { null } ?: return null
-        val f = File(p)
-        return if (p.startsWith("/") && f.isFile && f.canWrite() && (f.parentFile?.canWrite() == true)) p else null
-    }
 
     // ---------- decoding ----------
 
@@ -655,8 +657,9 @@ object RgScanner {
 
     /** Where the values went, in words (starts with "not" when nothing could be saved). */
     private suspend fun save(ctx: Context, item: PlayItem, values: Map<String, String>, target: RgTarget): String {
-        if (target == RgTarget.APP || (item.uri.startsWith("content://") && !phoneAllowed)) {
-            RgStore.put(item.uri, values); return "kept in the app"
+        if (target == RgTarget.APP) { RgStore.put(item.uri, values); return "kept in the app" }
+        if (item.uri.startsWith("content://") && !MusicFolderAccess.covered(ctx, item)) {
+            RgStore.put(item.uri, values); return "kept in the app (no write access to its music folder)"
         }
         // Read-only share: kept in the app straight away (counts as saved, nothing is sent to the share).
         if (WriteGuard.isReadOnly(item)) { RgStore.put(item.uri, values); return "kept in the app (share is read-only)" }
@@ -775,12 +778,11 @@ object RgScanner {
             !ParallelFetch.matchesRemote(item, u, orig, progress = { d, t -> if (t > 0) update { s -> s.copy(current = item.title, phase = "Checking the copy against the server ${d * 100 / t}%") } }))
             throw IllegalStateException("the copy read from the server didn't match it — nothing changed")
         when {
-            // Phone file with "All files access": written through its real path (no Android question), then Android's media
-            // library is told it changed.
-            u.startsWith("content://") && writablePath(ctx, item) != null -> {
-                val f = File(writablePath(ctx, item)!!)
-                val t = File(f.parentFile, f.name + ".rgtmp"); tmp.copyTo(t, true); if (!t.renameTo(f)) { f.delete(); t.renameTo(f) }
-                try { android.media.MediaScannerConnection.scanFile(ctx, arrayOf(f.path), null, null) } catch (_: Exception) {}
+            // Phone file in a music folder the app was given write access to (22:57): written through that folder, no
+            // question; then Android's media library is told it changed.
+            u.startsWith("content://") && MusicFolderAccess.docUri(ctx, item) != null -> {
+                ctx.contentResolver.openOutputStream(MusicFolderAccess.docUri(ctx, item)!!, "wt")!!.use { o -> tmp.inputStream().use { copy(it, o, "Saving", tmp.length()) } }
+                MusicFolderAccess.pathOf(ctx, item)?.let { p -> try { android.media.MediaScannerConnection.scanFile(ctx, arrayOf(p), null, null) } catch (_: Exception) {} }
             }
             u.startsWith("content://") -> ctx.contentResolver.openOutputStream(Uri.parse(u), "wt")!!.use { o -> tmp.inputStream().use { copy(it, o, "Saving", tmp.length()) } }
             u.startsWith("file://") || u.startsWith("/") -> {

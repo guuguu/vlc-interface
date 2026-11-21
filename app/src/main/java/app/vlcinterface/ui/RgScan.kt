@@ -306,6 +306,40 @@ fun RgFailureReport(nav: Navigator) {
             launcher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
         } catch (_: Exception) { RgScanner.phonePermissionResult(false) }
     }
+    // Write access to a music folder (22:57): asked as a question first, then Android's folder picker on that folder.
+    val folderAsk by app.vlcinterface.sources.MusicFolderAccess.ask.collectAsState()
+    val treeLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
+        val a = app.vlcinterface.sources.MusicFolderAccess.ask.value
+        val tree = r.data?.data
+        if (r.resultCode == android.app.Activity.RESULT_OK && tree != null) {
+            app.vlcinterface.sources.MusicFolderAccess.keep(ctx, tree)
+            ShortNote.show("Write access given: " + (android.net.Uri.decode(tree.lastPathSegment ?: "").substringAfter(':').ifEmpty { "folder" }))
+        } else a?.let { app.vlcinterface.sources.MusicFolderAccess.decline(it.path) }
+        a?.answer?.complete(r.resultCode == android.app.Activity.RESULT_OK)
+        app.vlcinterface.sources.MusicFolderAccess.ask.value = null
+    }
+    folderAsk?.let { a ->
+        val name = a.path.substringAfterLast('/')
+        androidx.compose.material3.AlertDialog(onDismissRequest = {}, containerColor = C.panel,
+            title = { Text("Write ReplayGain into \"$name\"?", color = C.text) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("To save ReplayGain in the songs' tags, the app needs permission to change the music files in this folder:", color = C.text, fontSize = 14.sp)
+                    Text(a.path.removePrefix("/storage/emulated/0").ifEmpty { "/" }, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Android's folder picker opens on it: tap \"Use this folder\", then \"Allow\". The app gets this folder and its " +
+                        "subfolders only — not your mails, photos, messages or anything else. Asked once; it can be removed in " +
+                        "Settings → Audio → ReplayGain.", color = C.muted, fontSize = 13.sp)
+                }
+            },
+            confirmButton = { STextButton({
+                try { treeLauncher.launch(app.vlcinterface.sources.MusicFolderAccess.pickerIntent(a.path)) }
+                catch (_: Exception) { a.answer?.complete(false); app.vlcinterface.sources.MusicFolderAccess.ask.value = null }
+            }) { Text("Choose folder", color = accent()) } },
+            dismissButton = { STextButton({
+                app.vlcinterface.sources.MusicFolderAccess.decline(a.path); a.answer?.complete(false)
+                app.vlcinterface.sources.MusicFolderAccess.ask.value = null
+            }) { Text("Not now") } })
+    }
     if (!s.reportPending || !s.finished) return
     val fails = s.results.filter { !it.ok }
     // Quick scan (playlist): confirmation of what was done, failures listed under it.

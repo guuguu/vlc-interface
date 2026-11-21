@@ -1289,20 +1289,27 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
         ToggleRow("Automatic ReplayGain for folders", "Phone and home-network songs: a song without it → its whole folder is scanned silently (track gain per song, written into the files' tags); through the VPN you're asked instead",
             s.rgAutoFolder) { set(s.copy(rgAutoFolder = it)) }
         Divider()
-        // Phone files written without asking (22:55): Android's "All files access", granted once (re-checked every 2 s).
+        // Music folders the app may write ReplayGain into (22:57): Android's folder permission, given per folder.
         run {
             val ctxA = androidx.compose.ui.platform.LocalContext.current
-            var allowed by remember { mutableStateOf(app.vlcinterface.sources.RgScanner.allFilesAccess()) }
-            LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(2000); allowed = app.vlcinterface.sources.RgScanner.allFilesAccess() } }
-            ValueRow("Write tags to phone files without asking",
-                if (allowed) "Allowed — ReplayGain is written into phone music files directly, no question (automatic and menu scans)"
-                else "Not allowed yet — tap once to allow it in Android (\"All files access\" for this app). Until then the automatic scan keeps phone values in the app",
-                if (allowed) "Allowed" else "Allow") {
-                try {
-                    ctxA.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                        android.net.Uri.parse("package:" + ctxA.packageName)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
-                } catch (_: Exception) {
-                    try { ctxA.startActivity(android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+            var grants by remember { mutableStateOf(app.vlcinterface.sources.MusicFolderAccess.grants(ctxA)) }
+            val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+                r.data?.data?.let { t -> if (r.resultCode == android.app.Activity.RESULT_OK) app.vlcinterface.sources.MusicFolderAccess.keep(ctxA, t) }
+                grants = app.vlcinterface.sources.MusicFolderAccess.grants(ctxA)
+            }
+            Column(Modifier.explain("Music folders with write access").padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
+                Text("Music folders with write access", color = C.text, fontSize = 15.sp)
+                Text("ReplayGain tags are written into phone songs in these folders (and their subfolders) without any question. " +
+                    "Only these folders — nothing else on the phone.", color = C.muted, fontSize = 13.sp)
+                if (grants.isEmpty()) Text("None yet — you're asked the first time a phone folder gets ReplayGain.", color = C.muted, fontSize = 13.sp)
+                grants.forEach { g ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("▤  " + g.path.removePrefix("/storage/emulated/0").ifEmpty { "/" }, color = C.text, fontSize = 14.sp, modifier = Modifier.weight(1f), maxLines = 2)
+                        STextButton({ app.vlcinterface.sources.MusicFolderAccess.remove(ctxA, g); grants = app.vlcinterface.sources.MusicFolderAccess.grants(ctxA) }) { Text("Remove", color = C.bad) }
+                    }
+                }
+                STextButton({ try { pick.launch(app.vlcinterface.sources.MusicFolderAccess.pickerIntent("/storage/emulated/0/Music")) } catch (_: Exception) {} }) {
+                    Text("+ Add a music folder…", color = accent())
                 }
             }
         }

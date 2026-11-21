@@ -1121,10 +1121,15 @@
 - **Now (22:53 / 22:54):** the automatic scan writes ReplayGain per song (track gain) into the files' tags, on the NAS and on the phone.
   - Album gain is left to the manual "ReplayGain scan…" (the user saves album ReplayGain himself). The 1.70 change to album gain is reverted.
   - The song playing gets its tags 1.5 s after the player moves on or stops (a file can't be changed while it plays).
-  - Phone files (22:55, "don't ask, just write"):
-    - New in Settings → Audio → ReplayGain: "Write tags to phone files without asking" → Allow. It opens Android's "All files access" page for the app; you grant it once.
-    - From then on the tags are written straight into the phone files, through their real path, with no question at all: automatic and menu scans alike. Android's media library is told the file changed.
-    - Until it's allowed, the automatic scan never asks: phone values stay in the app. A menu scan still asks Android once for its files.
+  - Phone files (22:55 / 22:57): written into the music folders the app has write access to, given per folder as a person understands it, not "all files".
+    - The first time a phone folder gets ReplayGain, the app asks: "Write ReplayGain into \"Music\"?". It explains that the app gets that music folder and its subfolders only (not mails, photos, messages…).
+    - "Choose folder" opens Android's own folder picker on it ("Use this folder" → "Allow"). From then on every song in it gets its tags with no further question.
+    - "Not now" isn't asked again (a scan started from a menu asks once more). The automatic scan never waits for the answer; until access is given, those songs keep their values in the app.
+    - Settings → Audio → ReplayGain → "Music folders with write access" lists the folders, each with Remove, plus "+ Add a music folder…". Helper text on a hold.
     - A read-only NAS share keeps the values in the app.
+- **Used live on the song playing (22:59 / 23:00):**
+  - **Why it stopped:** the value was handed to the player only after the whole folder had been measured. With 1.70's album gain, the automatic scan had to finish the whole album over the NAS first (minutes), so the change never showed while the song played.
+  - **Now:** the song playing is measured first (and downloaded first from the NAS), and its track value is used the moment it's measured.
+  - It doesn't depend on writing the file: written now, after the song, or not at all, the player uses the value at once.
   - Songs the automatic scan measured before, with values only in the app, are measured again once and written.
   - The setting's line and helper say so.
