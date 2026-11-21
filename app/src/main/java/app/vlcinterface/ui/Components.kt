@@ -17,6 +17,7 @@ import androidx.compose.ui.composed
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -1150,4 +1151,47 @@ fun DragOrderList(
             }
         }
     }
+}
+
+/**
+ * The one style of every details pop-up (2026-11-21 11:51) — songs, videos and stations in every player and list:
+ * title, "Tap a line to copy it.", sections in the accent colour, each line label on the left and value on the right
+ * with thin dividers, tap a line to copy its value, "Copy all" for everything, "Close". [sections]: title → lines;
+ * [note]: a short line at the end (or the state while loading).
+ */
+@Composable
+fun DetailsDialog(title: String, sections: List<Pair<String, List<Pair<String, String>>>>, note: String = "",
+                  emptyText: String = "Nothing to show.", onDone: () -> Unit) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    fun copy(text: String, what: String) {
+        ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText(title, text))
+        android.widget.Toast.makeText(ctx, "$what copied", android.widget.Toast.LENGTH_SHORT).show()
+    }
+    fun report() = buildString {
+        append(title).append("\n\n")
+        sections.forEach { (t, rows) -> append(t).append('\n'); rows.forEach { (k, v) -> append("  ").append(k).append(": ").append(v).append('\n') }; append('\n') }
+        if (note.isNotEmpty()) append(note).append('\n')
+    }
+    androidx.compose.material3.AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text(title, color = C.text) },
+        text = {
+            Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text("Tap a line to copy it.", color = C.muted, fontSize = 12.sp)
+                if (sections.all { it.second.isEmpty() }) Text(emptyText, color = C.text, modifier = Modifier.padding(top = 8.dp))
+                sections.filter { it.second.isNotEmpty() }.forEach { (t, rows) ->
+                    Text(t, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
+                    rows.forEachIndexed { i, (k, v) ->
+                        if (i > 0) Divider()
+                        Row(Modifier.fillMaxWidth().clickable { copy(v, k) }.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+                            Text(k, color = C.muted, fontSize = 13.sp, modifier = Modifier.width(118.dp).padding(end = 8.dp))
+                            Text(v, color = if (v == "—" || v.endsWith("…")) C.muted else C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+                if (note.isNotEmpty()) Text(note, color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+        },
+        confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
+        dismissButton = { STextButton({ copy(report(), "Details") }) { Text("Copy all") } },
+    )
 }

@@ -1079,35 +1079,9 @@ private fun PortraitSync(which: Int, p: PlayerState, onSwitch: (Int) -> Unit, on
  */
 @Composable
 private fun VideoDetailsDialog(onDone: () -> Unit) {
-    val ctx = androidx.compose.ui.platform.LocalContext.current
     var secs by remember { mutableStateOf(App.instance.player.videoDetails()) }
     LaunchedEffect(Unit) { while (true) { delay(2000); secs = App.instance.player.videoDetails() } }
-    fun copy(text: String, what: String) {
-        ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("video", text))
-        android.widget.Toast.makeText(ctx, "$what copied", android.widget.Toast.LENGTH_SHORT).show()
-    }
-    fun report() = buildString { secs.forEach { (t, rows) -> append(t).append('\n'); rows.forEach { (k, v) -> append("  ").append(k).append(": ").append(v).append('\n') }; append('\n') } }
-    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text("Video details", color = C.text) },
-        text = {
-            Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Tap a line to copy it.", color = C.muted, fontSize = 12.sp)
-                if (secs.isEmpty()) Text("No video playing.", color = C.text)
-                secs.forEach { (title, rows) ->
-                    Text(title, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 10.dp, bottom = 2.dp))
-                    rows.forEachIndexed { i, (k, v) ->
-                        if (i > 0) Divider()
-                        Row(Modifier.fillMaxWidth().clickable { copy(v, k) }.padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
-                            Text(k, color = C.muted, fontSize = 13.sp, modifier = Modifier.width(118.dp).padding(end = 8.dp))
-                            Text(v, color = C.text, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
-        dismissButton = { STextButton({ copy(report(), "Details") }) { Text("Copy all") } },
-    )
+    DetailsDialog("Video details", secs, emptyText = "No video playing.", onDone = onDone)
 }
 
 

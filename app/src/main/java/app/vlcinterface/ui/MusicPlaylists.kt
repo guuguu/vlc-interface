@@ -2019,44 +2019,13 @@ fun StationDetailsDialog(station: app.vlcinterface.data.Station, onDone: () -> U
     LaunchedEffect(playing) { while (playing) { live = App.instance.player.streamInfo(); kotlinx.coroutines.delay(2000) } }
     var dir by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
     LaunchedEffect(station.url) { dir = app.vlcinterface.sources.RadioBrowser.details(station.url) }
-    fun copy(text: String, what: String) {
-        ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText("station", text))
-        android.widget.Toast.makeText(ctx, "$what copied", android.widget.Toast.LENGTH_SHORT).show()
+    // Same style as every details pop-up (DetailsDialog).
+    val secs = buildList {
+        add("In the app" to saved)
+        if (playing) add("Live stream" to live.ifEmpty { listOf("Stream" to "waiting for the stream to report…") })
+        add("Radio directory" to (dir?.ifEmpty { listOf("Directory" to "not listed in radio-browser.info") } ?: listOf("Directory" to "looking up…")))
     }
-    fun report(): String = buildString {
-        append("Station: ${station.name}\n")
-        saved.forEach { (k, v) -> append("$k: $v\n") }
-        if (live.isNotEmpty()) { append("\nLive stream\n"); live.forEach { (k, v) -> append("$k: $v\n") } }
-        dir?.takeIf { it.isNotEmpty() }?.let { append("\nRadio directory\n"); it.forEach { (k, v) -> append("$k: $v\n") } }
-    }
-    @Composable
-    fun section(title: String, rows: List<Pair<String, String>>) {
-        Text(title, color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
-        rows.forEach { (k, v) ->
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).clickable { copy(v, k) }.padding(vertical = 3.dp)) {
-                Text(k, color = C.muted, fontSize = 12.sp)
-                Text(v, color = C.text, fontSize = 14.sp)
-            }
-        }
-    }
-    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text("Station details", color = C.text) },
-        text = {
-            androidx.compose.foundation.text.selection.SelectionContainer {
-                Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Tap a line to copy it.", color = C.muted, fontSize = 12.sp)
-                    section("In the app", saved)
-                    if (playing) section("Live stream", live.ifEmpty { listOf("Stream" to "waiting for the stream to report…") })
-                    when (val d = dir) {
-                        null -> section("Radio directory", listOf("Directory" to "looking up…"))
-                        else -> section("Radio directory", d.ifEmpty { listOf("Directory" to "not listed in radio-browser.info") })
-                    }
-                }
-            }
-        },
-        confirmButton = { STextButton(onDone) { Text("Close", color = accent()) } },
-        dismissButton = { STextButton({ copy(report(), "Details") }) { Text("Copy all") } },
-    )
+    DetailsDialog("Station details · ${station.name}", secs, onDone = onDone)
 }
 
 

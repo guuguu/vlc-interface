@@ -530,3 +530,14 @@
 - Radio lists and the radio player show the bitrate as the value followed by k ("1500k", "128k") and no codec name
   any more (no OGG / MP3 / AAC / FLAC …): favourites, Find stations results, Library → Radio, the radio player's
   details line. Other parts of the details (style, country) stay. Station details pop-ups keep the full data.
+
+## One style for every details pop-up (requested 2026-11-21 11:51)
+- Songs, videos and stations, from every list and player, now open the same kind of details pop-up (the style of the
+  video details): its title, "Tap a line to copy it.", sections in the accent colour, each line with the label on
+  the left and the value on the right and thin dividers between lines, a tap on a line copies its value, "Copy all"
+  copies everything, Close.
+  - Song / video file (list and player menus, was "Tags & ReplayGain"): "Song details" / "File details" — File,
+    Tag records, ReplayGain in the file, ReplayGain kept in the app, and which values the player uses.
+  - Station (favourites, search results, radio player): "Station details · <name>" — In the app, Live stream (while
+    it plays), Radio directory (was label above value, different sizes).
+  - Playing video (long press): Video details, unchanged look, now the shared one.
