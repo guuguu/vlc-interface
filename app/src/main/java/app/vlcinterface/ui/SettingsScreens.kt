@@ -1,5 +1,6 @@
 package app.vlcinterface.ui
 
+import kotlinx.coroutines.launch
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -897,6 +898,26 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 "logs" -> {
             // Logs, by kind. Each page has Errors only / Empty log / Share / Save to NAS.
             SectionTitle("Logs")
+            // One zip with every log, the app's system log, why it ended the last times and the phone / app details
+            // (no passwords), saved where you choose — to send for a problem report.
+            run {
+                val ctxL = androidx.compose.ui.platform.LocalContext.current
+                val scopeL = androidx.compose.runtime.rememberCoroutineScope()
+                val saveZip = androidx.activity.compose.rememberLauncherForActivityResult(
+                    androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+                    if (uri != null) scopeL.launch {
+                        val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                            try { ctxL.contentResolver.openOutputStream(uri)?.use { app.vlcinterface.data.LogPack.write(ctxL, it) }; true } catch (_: Exception) { false }
+                        }
+                        ShortNote.show(if (ok) "Logs saved — send that zip file" else "Could not save the logs")
+                    }
+                }
+                CardBox {
+                    ValueRow("Collect all logs", "One zip with every log, the app's system log, crashes and phone details (no passwords) — to send for a problem", "Save") {
+                        saveZip.launch(app.vlcinterface.data.LogPack.fileName())
+                    }
+                }
+            }
             CardBox {
                 ValueRow("All errors", "Every failure from every log, newest first", "Open") { nav.go(Screen.LogView("errors")) }; Divider()
                 ValueRow("Deleted files", "Every file deleted from Settings, with its full path", "Open") { nav.go(Screen.LogPage(ServerLog.DELETED)) }; Divider()

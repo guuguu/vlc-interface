@@ -325,3 +325,9 @@
 - Visualisation is its own export category (21 Nov 01:01): "Visualisation (all patterns' settings)" next to
   "Alarms and clock"; tick it to export / import every pattern's settings and the one in use. Setup files from
   before the split (visualisation inside the alarms section) still import it.
+
+## Problem reports (2026-11-21 01:51)
+- Settings → Logs → "Collect all logs": one zip (saved where you choose) with every log page, the app's own system
+  log (errors also in errors.txt), why the app ended the last times with crash / not-responding traces, and the
+  phone / app details and settings (no passwords or keys) — to send for a problem.
+- Crash entries now also say which page was on screen and list the app's own code lines first.

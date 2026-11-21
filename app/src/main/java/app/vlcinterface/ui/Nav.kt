@@ -143,6 +143,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 kept += pageKey
                 // Settings pages: red ✕ to the player in the header; sub-pages also go back to their parent page
                 // with a swipe to the right or by pulling down further when already at the top.
+                app.vlcinterface.data.CrashLog.screen = top.toString().take(120)
                 val settingsPage = SettingsNav.isSettingsPage(top)
                 val subPage = settingsPage && top !is Screen.Settings
                 val dens = androidx.compose.ui.platform.LocalDensity.current

@@ -21,13 +21,24 @@ object CrashLog {
             try {
                 ServerLog.log(KEY, "crash", "app", "", false,
                     "Crash in ${t.name}: ${e.javaClass.simpleName}: ${e.message ?: ""}".take(300),
-                    context() + "\n\n" + android.util.Log.getStackTraceString(e))
+                    context() + "\nScreen: $screen" + appFrames(e) + "\n\n" + android.util.Log.getStackTraceString(e))
             } catch (_: Throwable) {}
             // The radio buffer goes with the crash (also cleared at the next start).
             try { app.vlcinterface.sources.RadioCapture.wipeOnCrash(ctx) } catch (_: Throwable) {}
             previous?.uncaughtException(t, e)
         }
         recordLastExit(ctx)
+    }
+
+    /** The page on screen (set by the navigation), for crash reports. */
+    @Volatile var screen: String = ""
+
+    /** The app's own code lines in the crash (often far down a long system stack), listed first. */
+    private fun appFrames(e: Throwable): String {
+        val frames = generateSequence(e) { it.cause }.flatMap { it.stackTrace.asSequence() }
+            .filter { it.className.startsWith("app.vlcinterface") }.map { "  ${it.className.substringAfterLast('.')}.${it.methodName} (${it.fileName}:${it.lineNumber})" }
+            .distinct().take(15).toList()
+        return if (frames.isEmpty()) "\nApp code: none in the stack (inside a layout / drawing step)" else "\nApp code where it happened:\n" + frames.joinToString("\n")
     }
 
     /** What was going on (filled in by the app when available). */
