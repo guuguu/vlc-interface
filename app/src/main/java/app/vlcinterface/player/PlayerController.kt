@@ -1803,6 +1803,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
         // Settings → Video → Deinterlacing: Automatic = by the video's encoding (TV recordings / MPEG-2 / DV), On, Off.
         // The filter treats only fields marked interlaced and needs frames it can touch (no direct rendering).
+        readFileRotation(item)
         val diSet = if (!isVideo) "off" else VideoAuto.manualDeinterlace(item.uri).ifEmpty { ps.videoDeinterlace }
         deintOn = isVideo && (diSet == "on" || (diSet == "auto" && VideoAuto.deinterlace(item.uri)))
         // The picture format chosen for this file (Fit when none).
@@ -2295,6 +2296,26 @@ class PlayerController(private val context: Context, private val store: Store) {
         reloadVideo()
     }
 
+    /** Rotation stored in the playing phone video (0 / 90 / 180 / 270), read with Android's own reader; null = unknown. */
+    @Volatile private var fileRot: Int? = null
+
+    /** Phone videos: the recorded rotation and size, read once when the video starts (off the main thread). */
+    private fun readFileRotation(item: PlayItem) {
+        fileRot = null
+        if (item.isMusic || item.isRadio) return
+        val u = item.uri
+        if (!(u.startsWith("content://") || u.startsWith("file://") || u.startsWith("/"))) return
+        Thread {
+            val r = try {
+                android.media.MediaMetadataRetriever().use { mmr ->
+                    if (u.startsWith("/")) mmr.setDataSource(u) else mmr.setDataSource(context, Uri.parse(u))
+                    mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull()
+                }
+            } catch (_: Exception) { null }
+            if (r != null && _state.value.item?.uri == u) { fileRot = r; main.post { refreshTracks() } }
+        }.start()
+    }
+
     /** Deinterlacing applied to the playing video. */
     private var deintOn = false
     /** Decoder used for the playing video: "hw" (hardware, software only if libVLC must) or "sw". */
@@ -2321,7 +2342,10 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (vt != null && vt.width > 0 && vt.height > 0) {
             dw = if (vt.sarNum > 0 && vt.sarDen > 0) (vt.width.toLong() * vt.sarNum / vt.sarDen).toInt() else vt.width
             dh = vt.height
-            if (vt.orientation >= 4) { val t = dw; dw = dh; dh = t }   // LeftTop…RightBottom = turned 90°/270°
+            // Turned 90° / 270° when recorded (phone videos): the file's own rotation as Android reads it (phone
+            // files), else the rotation flag libVLC reports — LeftTop…RightBottom.
+            val turned = fileRot?.let { it == 90 || it == 270 } ?: (vt.orientation >= 4)
+            if (turned && dw > dh) { val t = dw; dw = dh; dh = t }
             if (videoRot == 90 || videoRot == 270) { val t = dw; dw = dh; dh = t }   // turned with the Rotate button
         }
         val sizeChanged = dw != _state.value.videoW || dh != _state.value.videoH

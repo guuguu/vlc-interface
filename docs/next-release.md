@@ -337,3 +337,13 @@
   ("ReplayGain done" and "ReplayGain scan: N problems"), which pop up over any page (the player too) when a scan
   ends, scrolled their text inside a window that already scrolls it — Android doesn't allow that and closed the
   app. The inner scrolling is removed; the window's own scrolling stays.
+
+## Video player fixes (reported 2026-11-21 01:57 / 02:01)
+- Header upright: the title is no longer squeezed between the symbols (it's shown under the video); the symbols
+  (back, home, lock, settings, Shazam, background work, screen-on, exit) are spread evenly over the bar.
+- Orientation: phone videos recorded upright (e.g. WhatsApp VID-…mp4) were laid out as wide videos — a short wide
+  box with the upright picture small inside. The recorded rotation is now read from the file with Android's own
+  reader (phone files) and the picture is laid out by its real shape (upright → the tall layout, two thirds of the
+  screen, or full screen); other files keep libVLC's rotation flag, and nothing is turned twice.
+- Previous / next file buttons (02:01): ⏮ and ⏭ on both sides of −10 / play / +10 go to the previous / next file of
+  the list the video was opened from (its folder).

@@ -482,10 +482,10 @@ private fun BoxScope.ControlsOverlayBody(
         }
     } else CompositionLocalProvider(LocalBtnScale provides topK) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        // Symbols spread evenly over the whole bar (the title is shown under the video, so it isn't squeezed in here).
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
             HomeButton(nav, Color.White)
-            Text(p.item?.title ?: "", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
             SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
             // Video player → Video settings.
             SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
@@ -513,12 +513,15 @@ private fun BoxScope.ControlsOverlayBody(
         modifier = Modifier.align(Alignment.End).padding(horizontal = 12.dp))
     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
     AutoFitRow(Modifier.padding(horizontal = 8.dp), spacing = if (compact) 28.dp else 56.dp) {
+        // Previous / next file of the folder (the list it was opened from).
+        RoundBtn("⏮", 44) { player.prev(); onTouch() }
         RoundBtn("−10", 52) { player.seekBy(-10_000); onTouch() }
         val k = btnScale()
         Box(Modifier.size(maxOf((if (compact) 60 else 76) * k, 56f).dp).clip(CircleShape).background(accent()).clickable { player.togglePause(); onTouch() }, contentAlignment = Alignment.Center) {
             Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = maxOf(24 * k, 20f).sp, fontWeight = FontWeight.Bold)
         }
         RoundBtn("+10", 52) { player.seekBy(10_000); onTouch() }
+        RoundBtn("⏭", 44) { player.next(); onTouch() }
     }
     }
     // Bottom controls: never shrunk (symbols at least 22 sp, text at least 13 sp). Sideways one row; upright it wraps if needed.
