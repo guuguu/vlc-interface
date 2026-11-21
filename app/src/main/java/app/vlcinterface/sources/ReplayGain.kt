@@ -34,6 +34,17 @@ object ReplayGain {
     fun forget(uri: String) { cache.remove(uri) }
     private const val TAIL = 64 * 1024
 
+    /**
+     * Only the tags written in the file itself (no values kept in the app, no cache). A scan that writes to the files
+     * checks this (2026-11-21 22:49): values the app keeps (e.g. from the automatic folder scan) made every song look
+     * "already tagged", so the scan skipped the whole album and wrote nothing.
+     */
+    suspend fun readInFile(ctx: Context, uri: String, user: String, pass: String, domain: String, smbVersion: String): Rg? =
+        withContext(Dispatchers.IO) {
+            val parts = try { fetch(ctx, uri, user, pass, domain, smbVersion) } catch (_: Exception) { null }
+            parts?.let { parse(it.first + it.second) }
+        }
+
     suspend fun read(ctx: Context, uri: String, user: String, pass: String, domain: String, smbVersion: String): Rg? =
         withContext(Dispatchers.IO) {
             cache[uri]?.let { return@withContext it }

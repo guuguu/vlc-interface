@@ -1111,3 +1111,10 @@
   - the output and the stream to Android (rate, 32-bit float, AAudio with no audio session);
   - the Bluetooth codec and link rate, Bluetooth quality mode on / off, whether Android converts to the link's rate;
   - the phone volume, and a note on per-app phone sound effects.
+
+# After 1.70.0
+
+## ReplayGain scan didn't write tags to an album (reported 2026-11-21 22:49)
+- **Found:** a scan that writes to the files decided "already tagged" from values the app keeps itself, such as the automatic folder scan's (since 1.70 these include album gain). So an album played once, then scanned to write tags, could be passed over.
+- **Fixed:** scans that write to the files now check only the files' own tags.
+- **Still investigated:** the user saw the scan run without skipping and still write nothing, the playing song included. The scan's per-song result line (or Settings → Logs → ReplayGain) says why.

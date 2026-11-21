@@ -376,7 +376,9 @@ object RgScanner {
             parallel(groups, groups.size.coerceIn(1, 4)) { g ->
                 // Values of exactly 0.00 dB come from the earlier failed scans (16-bit read as float): scan those again.
                 fun real(v: Float?) = v != null && v != 0f
-                val tagged = g.all { ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r ->
+                // Writing to the files: only the files' own tags count (values kept in the app don't make a file "tagged").
+                val tagged = g.all { (if (target == RgTarget.FILES) ReplayGain.readInFile(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)
+                    else ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion))?.let { r ->
                     // Any record at all → left alone; except, for an album scan, a record the app keeps with a track gain
                     // only (the automatic folder scan of 1.62–1.68 measured track gain alone): measured again with the
                     // album value, so albums play with album gain as set.
