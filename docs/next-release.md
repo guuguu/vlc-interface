@@ -518,3 +518,7 @@
   closest page the phone has, last the app's info page). Same "Grant" buttons in Alarm settings → alarm health; "Later" goes on with what was
   touched, Close cancels. Checked again each time you come back to the app: once everything is allowed the area is
   back to normal and touches act at once (a touch waiting behind the pop-up then just goes on).
+- Notification symbol (11:44): the same orange rounded square in every state, only the symbol inside changes —
+  ▶ playing, ⏸ paused, and ⏭ on the "Up next" notification (was Android's plain play / pause / next arrows). Orange
+  in the shade and on the lock screen; in the status bar Android draws every app's symbol white, so there it's the
+  same square shape with the symbol cut out.

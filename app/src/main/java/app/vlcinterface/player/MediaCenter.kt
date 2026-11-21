@@ -168,7 +168,10 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
             else -> listOf(st.metaArtist, st.metaAlbum).filter { it.isNotEmpty() }.joinToString(" · ")
         }
         val b = Notification.Builder(ctx, CHANNEL)
-            .setSmallIcon(if (st.isPlaying) android.R.drawable.ic_media_play else android.R.drawable.ic_media_pause)
+            // The same orange square in every state, only the symbol changes (▶ playing, ⏸ paused) — 2026-11-21 11:44.
+            // Android draws status-bar symbols white only; the orange shows in the shade and on the lock screen.
+            .setSmallIcon(if (st.isPlaying) app.vlcinterface.R.drawable.ic_stat_play else app.vlcinterface.R.drawable.ic_stat_pause)
+            .setColor(0xFFFF8A3D.toInt())
             .setContentTitle(title)
             .setContentText(text)
             .setShowWhen(false)
@@ -199,7 +202,8 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
         val style = Notification.InboxStyle().setBigContentTitle("Up next")
         lines.forEach { style.addLine(it) }
         val n = Notification.Builder(ctx, CHANNEL_NEXT)
-            .setSmallIcon(android.R.drawable.ic_media_next)
+            .setSmallIcon(app.vlcinterface.R.drawable.ic_stat_next)      // same orange square, ⏭
+            .setColor(0xFFFF8A3D.toInt())
             .setContentTitle("Up next")
             .setContentText(lines.joinToString("   "))
             .setStyle(style)
