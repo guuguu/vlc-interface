@@ -166,7 +166,12 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     private fun createEngine(style: SubStyle) {
-        libVlc = LibVLC(context, buildOptions(style))
+        // Never closing the app over an engine option (1.66.0): if libVLC refuses the options, it's started again with
+        // the subtitle look left out, and the reason is written to the Logs.
+        libVlc = try { LibVLC(context, buildOptions(style)) } catch (e: Throwable) {
+            try { app.vlcinterface.data.ServerLog.log("player", "error", "libVLC", "", false, "Engine options refused: ${e.message ?: e.javaClass.simpleName} — started without the subtitle look", "", System.currentTimeMillis()) } catch (_: Throwable) {}
+            LibVLC(context, ArrayList(buildOptions(style).filterNot { it.startsWith("--freetype-") || it.startsWith("--sub-") || it.startsWith("--no-sub") }))
+        }
         styleInUse = style
         rgInUse = rgSignature()
         mp = MediaPlayer(libVlc)
@@ -326,9 +331,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         val rel = (16f * 100f / style.sizePct.coerceIn(50, 200)).toInt().coerceIn(4, 40)
         o += "--freetype-rel-fontsize=$rel"
         if (style.bold) o += "--freetype-bold"
-        // Text subtitle tracks inside the video (2026-11-21 16:12): their colour codes dropped. libVLC can only drop all
-        // their formatting together (italic / bold too); SSA / ASS tracks keep their own look.
-        o += "--no-subsdec-formatting"
+        // (1.66.0 had "--no-subsdec-formatting" here: libVLC 3 has no such option, so the engine refused to start and the
+        // app closed at once. Removed in 1.67.0; subtitle tracks inside a video keep their own colours.)
         // Border, shadow and box, each set on its own (2026-11-21 16:05).
         o += "--freetype-outline-thickness=${style.outlineWidth.coerceIn(0, 10)}"
         o += "--freetype-outline-color=${style.outlineColor}"

@@ -923,3 +923,13 @@
   minutes, the sleep timer's custom minutes, radio recording "Continue for … minutes", and Port on a network
   location. A tap on a number field opens its pad under it (one at a time), the first digit replaces what was there,
   ✓ closes it.
+
+# After 1.66.0
+
+## 1.66.0 closed at start — fixed (reported 2026-11-21 17:37)
+- Cause: the option that was to drop colour codes from subtitle tracks inside videos ("--no-subsdec-formatting")
+  doesn't exist in libVLC 3; libVLC refused to start with it, and the app closed as soon as it opened.
+- Fixed: the option is removed. Subtitle tracks inside a video (MKV / MP4) keep their own colours and formatting —
+  libVLC 3 has no way to drop them; subtitle files (downloaded, added, next to a network video) are still cleaned.
+- Safety net: if libVLC ever refuses the engine options again, the app starts anyway with the subtitle look left
+  out, and writes why to the Logs — it no longer closes.
