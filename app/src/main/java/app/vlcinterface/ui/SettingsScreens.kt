@@ -474,7 +474,6 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     val rowRadio = rowsMode == "radio"
                     val rowAll = playerRowOrderAll(s, rowRadio)
-                    val rowHid = (if (rowRadio) s.rowHiddenRadio else s.rowHiddenSong).filter { it in rowAll && it !in PLAYER_ROWS_KEPT }
                     fun saveRows(l: List<String>) {
                         set(when (rowsMode) {
                             "radio" -> s.copy(rowOrderRadio = l)
@@ -483,20 +482,9 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         })
                         if (helpersOn) lookHelp = "Order of the player rows"
                     }
-                    fun saveHidden(h: List<String>) {
-                        set(when (rowsMode) {
-                            "radio" -> s.copy(rowHiddenRadio = h)
-                            "both" -> s.copy(rowHiddenSong = h, rowHiddenRadio = h.filter { it in PLAYER_RADIO_ROWS })
-                            else -> s.copy(rowHiddenSong = h)
-                        })
-                        if (helpersOn) lookHelp = "Order of the player rows"
-                    }
-                    // Drag (≡ or long press) to reorder, ✕ to remove a row from the player, + to bring it back (11:28).
-                    DragOrderList(rowAll.filter { it !in rowHid }, { PLAYER_ROW_NAMES[it] ?: it },
-                        onOrder = { l -> saveRows(l + rowHid) },
-                        removed = rowHid, onRemove = { id -> saveHidden(rowHid + id) }, onRestore = { id -> saveHidden(rowHid - id) },
-                        canRemove = { it !in PLAYER_ROWS_KEPT })
-                    STextButton({ saveRows(emptyList()); saveHidden(emptyList()) }) { Text("Reset order", color = accent()) }
+                    // Drag (≡ or long press) to reorder (11:28). A list only for ordering has no ✕ (11:32).
+                    DragOrderList(rowAll, { PLAYER_ROW_NAMES[it] ?: it }, onOrder = { l -> saveRows(l) })
+                    STextButton({ saveRows(emptyList()) }) { Text("Reset order", color = accent()) }
                     // Gap between the player's rows.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Player rows spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Player rows spacing"))
@@ -733,7 +721,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             SectionTitle("Order of the Settings links")
             CardBox {
                 val order = orderedGroups(s.settingsOrder).map { it.first }
-                // Drag (≡ or long press) to reorder (11:28). Never an ✕ here: every settings link always stays (11:30).
+                // Drag (≡ or long press) to reorder (11:28). A list only for ordering has no ✕ (11:32).
                 DragOrderList(order, { SETTINGS_GROUPS.toMap()[it] ?: it },
                     onOrder = { l -> set(s.copy(settingsOrder = l)) }, modifier = Modifier.explain("Order of the Settings links"))
                 Divider()

@@ -2191,11 +2191,8 @@ val PLAYER_ROW_NAMES = mapOf("picture" to "Picture / clock", "title" to "Title",
     "buttons" to "Buttons", "tone" to "Tone sliders", "from" to "Playing from", "playnext" to "Play next…",
     "extra" to "Extra buttons", "upnext" to "Up next / stations")
 
-/** The rows shown on the player, in their order (rows removed with ✕ in Look left out; the play buttons always stay). */
-fun playerRowOrder(s: app.vlcinterface.data.Settings, radio: Boolean): List<String> {
-    val hidden = (if (radio) s.rowHiddenRadio else s.rowHiddenSong).filter { it !in PLAYER_ROWS_KEPT }
-    return playerRowOrderAll(s, radio).filter { it !in hidden }
-}
+/** The rows shown on the player, in their order. */
+fun playerRowOrder(s: app.vlcinterface.data.Settings, radio: Boolean): List<String> = playerRowOrderAll(s, radio)
 
 /** Every row of that player in its order, removed ones included (for Look). */
 fun playerRowOrderAll(s: app.vlcinterface.data.Settings, radio: Boolean): List<String> {

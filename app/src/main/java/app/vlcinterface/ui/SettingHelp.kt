@@ -190,7 +190,7 @@ object SettingHelp {
         "Text size" to "The size of all the text on the settings pages, the setup wizard, the help guide and the helper pop-ups — titles stay a step bigger than the text under them.\n\n" +
             "The players and the clock aren't affected: their text fits itself to the room. Default: 100 %.",
         "Order of the player rows" to "The order of the rows on the song player and on the radio player, each with its own order: picture (or clock with alarms), title block, position bar, player buttons, tone sliders, 'Playing from', 'Play next…', extra buttons, and Up next (radio: favourites and search).\n\n" +
-            "Drag a row by its ≡ (or long-press it) to move it; ✕ removes the row from the player (the play buttons always stay), + brings it back; 'Reset order' puts back the original order and every row. Sideways the picture and title stay on the left side and the other rows keep their order on the right. " +
+            "Drag a row by its ≡ (or long-press it) to move it; 'Reset order' puts back the original order. Sideways the picture and title stay on the left side and the other rows keep their order on the right. " +
             "The album picture hides while scrolling only when it's the first row.",
         "Clock hidden for" to "With the phone upright and the clock shown on the player, scrolling the player hides the clock completely, so the list and buttons get its room.\n\n" +
             "The clock comes back this many seconds after your last action; every scroll, touch or button press starts the count again, and it never comes back while a menu, pop-up or settings window is open. Sideways the clock stays on the left.\n\nDefault: 10 s.",
