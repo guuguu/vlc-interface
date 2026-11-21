@@ -606,6 +606,11 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
                     else Text(if (indexed) "🔍 Indexed" else "🔍 Index", color = if (indexed) a else C.muted, fontSize = 13.sp)
                 }
             }
+            // Add a folder of this location (2026-11-21 16:57): pick it in a small folder browser; it's pinned and indexed.
+            var pickFolder by remember { mutableStateOf(false) }
+            Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, a, RoundedCornerShape(8.dp)).clickable { pickFolder = true }
+                .padding(horizontal = 12.dp, vertical = 7.dp)) { Text("+ Folder", color = a, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+            if (pickFolder) AddFolderDialog(s) { pickFolder = false }
             Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable {
                 App.instance.store.update { st -> st.copy(sources = st.sources.map { if (it.id == s.id) it.copy(lastScan = System.currentTimeMillis()) else it }) }
                 app.vlcinterface.sources.NetIndex.rebuild(s)          // its pinned folders' index too
@@ -944,4 +949,57 @@ private fun WriteAccessRow(s: Source) {
         if (result.isNotEmpty()) Text(result, color = C.text, fontSize = 12.sp)
         if (s.readOnly.isNotEmpty()) Text("ReplayGain values and pictures for these shares are kept in the app.", color = C.muted, fontSize = 11.sp)
     }
+}
+
+
+/**
+ * "+ Folder" on a LAN / Internet location (2026-11-21 16:57): its folders, from the top; tap one to go in, ‹ to go
+ * up, "Add this folder" to add the folder shown — it becomes one of the location's folders (★, indexed for search).
+ */
+@Composable
+private fun AddFolderDialog(src: app.vlcinterface.data.Source, onDone: () -> Unit) {
+    val root = Urls.forSource(src)
+    var uri by remember { mutableStateOf(root) }
+    var dirs by remember { mutableStateOf<List<app.vlcinterface.sources.Entry>?>(null) }
+    var err by remember { mutableStateOf("") }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(uri) {
+        dirs = null; err = ""
+        Browse.list(src, uri).onSuccess { l -> dirs = l.filter { it.isDir }.sortedBy { it.name.lowercase() } }
+            .onFailure { e -> dirs = emptyList(); err = "Could not open: " + SmbErrors.explain(e, src.user.isEmpty()) }
+    }
+    val path = android.net.Uri.decode(uri.substringAfter("://").substringAfter('/', "")).let { "/" + it.trimEnd('/') }
+    val already = path in src.pins
+    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
+        title = { Text("Add a folder · ${src.name.ifBlank { src.host }}", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (uri.trimEnd('/') != root.trimEnd('/')) Text("‹", color = accent(), fontSize = 22.sp, modifier = Modifier.clickable {
+                        uri = uri.trimEnd('/').substringBeforeLast('/') + "/"
+                    }.padding(end = 10.dp))
+                    Text(path, color = C.muted, fontSize = 12.sp, maxLines = 2)
+                }
+                Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
+                    when {
+                        dirs == null -> CircularProgressIndicator(color = accent(), strokeWidth = 2.dp, modifier = Modifier.size(22.dp))
+                        err.isNotEmpty() -> Text(err, color = C.bad, fontSize = 13.sp)
+                        dirs!!.isEmpty() -> Text("No folders inside.", color = C.muted, fontSize = 13.sp)
+                        else -> dirs!!.forEach { d ->
+                            Text("▤  " + d.name, color = C.text, fontSize = 15.sp, maxLines = 1,
+                                modifier = Modifier.fillMaxWidth().clickable { uri = d.uri.trimEnd('/') + "/" }.padding(vertical = 10.dp))
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = { STextButton({
+            if (!already) {
+                App.instance.store.update { st -> st.copy(sources = st.sources.map { if (it.id == src.id) it.copy(pins = it.pins + path) else it }) }
+                app.vlcinterface.sources.NetIndex.build(src, path)
+                ShortNote.show("Added: " + path.trim('/').substringAfterLast('/').ifEmpty { path } + " — indexing for search")
+            }
+            onDone()
+        }, enabled = !already && path != "/") { Text(if (already) "Already added" else "Add this folder", color = accent()) } },
+        dismissButton = { STextButton(onDone) { Text("Cancel") } })
 }

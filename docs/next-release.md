@@ -876,3 +876,9 @@
 - Queue page and the "Up next" boxes (song player and video player): each entry has a ≡ handle — hold it and drag up
   or down; every half row passed moves it one place in the queue, the row lifted and following the finger. Tap and
   long press (menu) work as before. In Up next an entry can't be moved above the one playing.
+
+## "+ Folder" on a LAN location (requested 2026-11-21 16:57)
+- Library → LAN (and Internet): next to a location's folders and "↻ Rescan", a "+ Folder" button. It opens a small
+  folder browser of that location from its top: tap a folder to go in, ‹ to go up, "Add this folder" to add the one
+  shown — it joins the location's folders (the same as ★ on a folder page) and is indexed for search in the
+  background. A folder already added says so.
