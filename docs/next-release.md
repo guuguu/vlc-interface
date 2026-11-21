@@ -737,3 +737,7 @@
   Turn / PiP · Up next — dragged by ≡ (or a long press) like the song rows, no ✕; "Reset order" puts back the
   original order. Kept in settings and export. "Both" stays songs + radio.
 - The video player lays its rows out in that order; the helper's preview shows a Video column next to Songs and Radio.
+
+## Video player button labels (requested 2026-11-21 15:47)
+- "Audio & subs" → "Subs/sync", "Audio sync" → "Audio/sync" (with the value when set: "Audio/sync 0.25 s"),
+  "Hue & sat" → "Hue/sat" — on the video player upright and sideways, and in Look's Video row names.

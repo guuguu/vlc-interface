@@ -113,9 +113,9 @@ private object VideoQueueUi {
 
 /** Label of the Audio sync button: the value when one is set ("Audio sync 0.25 s"). */
 private fun syncLabel(ms: Long): String {
-    if (ms == 0L) return "Audio sync"
-    // Shown as how far the sound is pushed forward ("Audio sync 0.25 s").
-    return "Audio sync " + String.format(java.util.Locale.US, "%.2f s", -ms / 1000f)
+    if (ms == 0L) return "Audio/sync"
+    // Shown as how far the sound is pushed forward ("Audio/sync 0.25 s"); labels as asked 2026-11-21 15:47.
+    return "Audio/sync " + String.format(java.util.Locale.US, "%.2f s", -ms / 1000f)
 }
 
 fun Context.findActivity(): Activity? {
@@ -528,11 +528,11 @@ private fun BoxScope.ControlsOverlayBody(
             HomeButton(nav, Color.White)
             MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 220.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
             OutputPill(openOutput)
-            OverlayChip("Audio & subs") { onTouch(); onPanel() }
+            OverlayChip("Subs/sync") { onTouch(); onPanel() }
             // Browse: the folder the video came from, in the Library (Back returns here).
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
             OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
-            OverlayChip("Hue & sat") { onTouch(); onPicture() }
+            OverlayChip("Hue/sat") { onTouch(); onPicture() }
             speedChip()
             OverlayChip("Songs") { PlayerSwitch.go(nav, "songs") }
             OverlayChip("Radio") { PlayerSwitch.go(nav, "radio") }
@@ -549,12 +549,12 @@ private fun BoxScope.ControlsOverlayBody(
         // bar above the picture (VideoHeader), not on it.
         // Short video area upright (compact): these chips are under the video instead, so nothing overlaps.
         if (!compact) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            OverlayChip("Audio & subs") { onTouch(); onPanel() }
+            OverlayChip("Subs/sync") { onTouch(); onPanel() }
             // Browse: the folder the video came from, in the Library (Back returns here).
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
             OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             // Dedicated button: hue & saturation, straight to the sliders.
-            OverlayChip("Hue & sat") { onTouch(); onPicture() }
+            OverlayChip("Hue/sat") { onTouch(); onPicture() }
             speedChip()
         }
     }
@@ -671,9 +671,9 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         // Sound & picture.
         val rowSound: @Composable () -> Unit = {
         androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Pill("Audio & subs") { onPanel() }
+            Pill("Subs/sync") { onPanel() }
             Pill(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true }
-            Pill("Hue & sat") { onPicture() }
+            Pill("Hue/sat") { onPicture() }
             Pill("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
                 val rates = listOf(1f, 1.25f, 1.5f, 2f, 0.75f)
                 val i = rates.indexOfFirst { kotlin.math.abs(it - p.rate) < 0.01f }
