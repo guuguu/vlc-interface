@@ -482,8 +482,8 @@
 - Every ordered list in the settings — Look → "Order of the player rows" (Songs / Radio / Both) and Look → "Order of
   the Settings links" — no longer uses ▲ ▼: drag a row by its ≡ handle (or long-press anywhere on it) up or down,
   the other rows make room as it passes, let go to keep the new order.
-- ✕ at the right removes an item: a player row is no longer shown on that player (Songs / Radio / Both); a settings
-  link is no longer on the main Settings page. Removed items are listed under the list ("Removed — tap to bring
-  back") with + to put them back. Kept (no ✕): the play buttons row (the player can't be used without it) and the
-  Look link (it holds this list).
-- "Reset order" also brings every removed item back. Helpers and the help guide updated.
+- ✕ at the right removes a player row from that player (Songs / Radio / Both); removed rows are listed under the
+  list ("Removed — tap to bring back") with + to put them back. The play buttons row has no ✕ (the player can't be
+  used without it).
+- Settings links: never an ✕ (2026-11-21 11:30) — they can only be put in order; every link always stays.
+- "Reset order" of the player rows also brings every removed row back. Helpers and the help guide updated.

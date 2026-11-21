@@ -68,9 +68,6 @@ private val GROUP_HINTS = mapOf("audio" to "Start volume, preamp, ReplayGain, so
     "logs" to "Errors, servers, indexing, crashes, caches", "folders" to "Search the phone, SD card and Downloads for music and videos")
 
 /** The main Settings page's links, in the chosen order (new groups added at the end). */
-/** Settings links that can't be removed: Look holds the list that brings removed links back. */
-val SETTINGS_KEPT = setOf("look")
-
 fun orderedGroups(order: List<String>): List<Pair<String, String>> {
     val byId = SETTINGS_GROUPS.toMap()
     return (order.filter { it in byId } + SETTINGS_GROUPS.map { it.first }.filter { it !in order }).map { it to byId.getValue(it) }
@@ -115,7 +112,7 @@ fun SettingsScreen(nav: Navigator) {
         BackHeader("Settings", nav, version)
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             CardBox {
-                orderedGroups(s.settingsOrder).filter { it.first !in s.settingsHidden || it.first in SETTINGS_KEPT }.forEachIndexed { i, (id, name) ->
+                orderedGroups(s.settingsOrder).forEachIndexed { i, (id, name) ->
                     if (i > 0) Divider()
                     SettingsLink(name, GROUP_HINTS[id] ?: "") { openSettingsGroup(nav, id) }
                 }
@@ -736,14 +733,11 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             SectionTitle("Order of the Settings links")
             CardBox {
                 val order = orderedGroups(s.settingsOrder).map { it.first }
-                val hid = s.settingsHidden.filter { it in order && it !in SETTINGS_KEPT }
-                // Drag (≡ or long press) to reorder, ✕ to remove a link from the Settings page, + to bring it back (11:28).
-                DragOrderList(order.filter { it !in hid }, { SETTINGS_GROUPS.toMap()[it] ?: it },
-                    onOrder = { l -> set(s.copy(settingsOrder = l + hid)) },
-                    removed = hid, onRemove = { id -> set(s.copy(settingsHidden = hid + id)) }, onRestore = { id -> set(s.copy(settingsHidden = hid - id)) },
-                    canRemove = { it !in SETTINGS_KEPT }, modifier = Modifier.explain("Order of the Settings links"))
+                // Drag (≡ or long press) to reorder (11:28). Never an ✕ here: every settings link always stays (11:30).
+                DragOrderList(order, { SETTINGS_GROUPS.toMap()[it] ?: it },
+                    onOrder = { l -> set(s.copy(settingsOrder = l)) }, modifier = Modifier.explain("Order of the Settings links"))
                 Divider()
-                ValueRow("Reset order", "Back to the original order, removed links back", "Reset") { set(s.copy(settingsOrder = emptyList(), settingsHidden = emptyList())) }
+                ValueRow("Reset order", "Back to the original order", "Reset") { set(s.copy(settingsOrder = emptyList(), settingsHidden = emptyList())) }
             }
                 }
                 "library" -> {

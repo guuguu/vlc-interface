@@ -205,7 +205,7 @@ object SettingHelp {
         "Menu text" to "Text size in menus and search results.",
         "Colour for" to "The app's accent colour: one for files, one for the radio (so you see at a glance what's playing).\n\n" +
             "Tap a circle to use it, long-press to edit it, '+' adds one (up to 5).",
-        "Order of the Settings links" to "The order of the links on the main Settings page, for example your most used groups first. Drag a link by its ≡ (or long-press it) to move it; ✕ removes it from the Settings page (Look always stays, it holds this list), + brings it back; 'Reset order' puts back the original order.",
+        "Order of the Settings links" to "The order of the links on the main Settings page, for example your most used groups first. Drag a link by its ≡ (or long-press it) to move it; 'Reset order' puts back the original order.",
         "Reset order" to "Puts the links of the main Settings page back in their original order.",
         // ---------------------------------------------------------------- Export
         "Include saved passwords" to "The export file also holds the passwords of your servers, encrypted with the passphrase you type. Without a passphrase, passwords are left out.\n\n" +
