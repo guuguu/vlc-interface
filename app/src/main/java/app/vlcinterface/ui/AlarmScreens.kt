@@ -400,6 +400,8 @@ fun AlarmSettingsScreen(nav: Navigator) {
 fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
     val d by Alarms.state.collectAsState()
     val g = d.global
+    // Alarm system switched off (Settings): this page keeps only the button that switches it on again.
+    if (!g.systemOn) { AlarmSystemButton(); return }
     fun set(n: AlarmGlobal) = Alarms.setGlobal(n)
     val ctx = LocalContext.current
     val locAsk = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
@@ -1217,4 +1219,51 @@ private fun FlashColours(selected: Int, onPick: (Int) -> Unit) {
                 .padding(if (on) 5.dp else 2.dp).clip(CircleShape).background(Color(c)).clickable { onPick(c) })
         }
     }
+}
+
+
+/**
+ * The whole alarm system on / off (2026-11-21 14:18): a big button on the main Settings page (and, while it's off, the
+ * only thing on the Alarm clock page and the wizard's alarm page).
+ * Off (after a confirmation): a ringing / snoozed alarm ends, nothing is set with Android any more, no next-alarm
+ * notification or calendar events, and every alarm display and option is hidden (clock button, clock and alarms in the
+ * player, alarm settings, alarm permissions in the wizard). The alarms are kept.
+ * On: everything comes back, every alarm is set again, and the permissions the alarms need are asked for.
+ */
+@Composable
+fun AlarmSystemButton() {
+    val d by Alarms.state.collectAsState()
+    val on = d.global.systemOn
+    val ctx = LocalContext.current
+    var confirm by remember { mutableStateOf(false) }
+    var ask by remember { mutableStateOf<List<AlarmIssue>>(emptyList()) }
+    val a = accent()
+    CardBox {
+        Column(Modifier.fillMaxWidth().padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(Modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(16.dp))
+                .background(if (on) Color(0x26E53935) else a)
+                .border(2.dp, if (on) C.bad else a, RoundedCornerShape(16.dp))
+                .clickable {
+                    if (on) confirm = true
+                    else {
+                        Alarms.setSystem(ctx, true)
+                        ShortNote.show("Alarm system on — alarms set again")
+                        ask = alarmIssues(ctx)
+                    }
+                }.padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
+                Text(if (on) "⏻  Turn off the alarm system" else "⏻  Turn on the alarm system", color = if (on) C.bad else Color(0xFF1A0E05),
+                    fontSize = 18.sp, fontWeight = FontWeight.SemiBold, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+            Text(if (on) "Alarms, the clock in the player and every alarm option are on."
+                else "The alarm system is off: nothing rings, and the clock, the alarms and their options are hidden. Your alarms are kept — turn it on to bring everything back.",
+                color = C.muted, fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+    }
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, containerColor = C.panel,
+        title = { Text("Turn off the alarm system?", color = C.text) },
+        text = { Text("No alarm will ring. A ringing or snoozed alarm ends now. The clock and the alarms in the player, the alarm settings and the alarm permissions are hidden everywhere. Your alarms and settings are kept for when you turn it on again.", color = C.text, fontSize = 14.sp) },
+        confirmButton = { STextButton({ confirm = false; Alarms.setSystem(ctx, false); ShortNote.show("Alarm system off") }) { Text("Turn off", color = C.bad) } },
+        dismissButton = { STextButton({ confirm = false }) { Text("Cancel") } })
+    // Turned on: what the alarms still need from Android, with Grant buttons.
+    if (ask.isNotEmpty()) AlarmPermissionDialog(ask, onLater = { ask = emptyList() }, onClose = { ask = emptyList() })
 }

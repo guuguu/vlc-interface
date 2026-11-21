@@ -114,9 +114,12 @@ fun SettingsScreen(nav: Navigator) {
             CardBox {
                 orderedGroups(s.settingsOrder).forEachIndexed { i, (id, name) ->
                     if (i > 0) Divider()
-                    SettingsLink(name, GROUP_HINTS[id] ?: "") { openSettingsGroup(nav, id) }
+                    SettingsLink(name, if (id == "alarm" && !app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.systemOn) "Off — the alarm system is switched off"
+                        else GROUP_HINTS[id] ?: "") { openSettingsGroup(nav, id) }
                 }
             }
+            // The whole alarm system on / off (big button).
+            AlarmSystemButton()
             CardBox {
                 SettingsLink("Launch the setup wizard", "Permissions and the important settings, page by page") { nav.go(Screen.Wizard()) }
             }
@@ -450,13 +453,14 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     // Helpers (Settings → Alarm clock → Helpers): explanation, with a preview where useful, after a change.
                     val helpersOn = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.helpers
                     var lookHelp by remember { mutableStateOf("") }
-                    // Alarm rows under the clock: height (50 % = half the old rows).
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                    // Alarm rows under the clock: height (50 % = half the old rows). Hidden while the alarm system is off.
+                    val alarmSysOn = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.systemOn
+                    if (alarmSysOn) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                         Text("Alarm rows under the clock", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain("Alarm rows under the clock"))
                         Text("${s.alarmRowPct}%", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(alarmRowPct = 50)) }) { Text("Reset") }
                     }
-                    ThinSlider(s.alarmRowPct.toFloat(), { v -> set(s.copy(alarmRowPct = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f,
+                    if (alarmSysOn) ThinSlider(s.alarmRowPct.toFloat(), { v -> set(s.copy(alarmRowPct = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f,
                         onHoldStill = { if (helpersOn) lookHelp = "Alarm rows under the clock" })
                     // Order of the player rows, songs and radio apart.
                     // Songs / Radio / Both ("Both": one order for the rows the two players share).

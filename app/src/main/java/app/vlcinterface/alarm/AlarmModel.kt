@@ -159,8 +159,10 @@ data class AlarmGlobal(
     val weatherNoon: Boolean = true,
     /** Colour of the screen flash (ARGB). */
     val ledColor: Int = 0xFFFFFFFF.toInt(),
+    /** The whole alarm system (Settings → big button): off = nothing rings, every alarm display and option hidden. */
+    val systemOn: Boolean = true,
 ) {
-    fun toJson(): JSONObject = JSONObject().put("vibrate", vibrate).put("led", led).put("ledColor", ledColor).put("crescendo", crescendo)
+    fun toJson(): JSONObject = JSONObject().put("vibrate", vibrate).put("led", led).put("ledColor", ledColor).put("systemOn", systemOn).put("crescendo", crescendo)
         .put("snooze1", snooze1).put("snooze2", snooze2).put("snooze3", snooze3).put("pattern", pattern)
         .put("wakeCheckMin", wakeCheckMin).put("useLocation", useLocation).put("lockActions", lockActions)
         .put("volumeKeys", volumeKeys).put("maxLevel", maxLevel).put("toneUri", toneUri).put("toneName", toneName).put("callWait", callWait)
@@ -182,7 +184,7 @@ data class AlarmGlobal(
             o.optString("cityName"), o.optString("cityShort"), o.optDouble("cityLat", 0.0), o.optDouble("cityLon", 0.0), o.optString("cityTz"),
             o.optBoolean("showWeather", true), o.optString("localRoot"), o.optString("localVolume"),
             o.optString("lastStationUrl"), o.optString("lastStationName"), o.optString("lastFallbackUrl"), o.optString("lastFallbackName"), o.optBoolean("weatherNoon", true),
-            o.optInt("ledColor", 0xFFFFFFFF.toInt()))
+            o.optInt("ledColor", 0xFFFFFFFF.toInt()), o.optBoolean("systemOn", true))
     }
 }
 
@@ -416,6 +418,15 @@ object Alarms {
     // Bookkeeping per alarm: when it is planned, when it last rang (missed-alarm check).
     fun planned(id: String): Long = prefs.getLong("planned_$id", 0)
     fun setPlanned(id: String, t: Long) = prefs.edit().putLong("planned_$id", t).apply()
+    /** Whole alarm system on (Settings → big button). */
+    val systemOn: Boolean get() = current.global.systemOn
+
+    /** Switches the whole alarm system off (stops a ringing / snoozed alarm, unsets everything) or on (sets every alarm again). */
+    fun setSystem(ctx: android.content.Context, on: Boolean) {
+        setGlobal(current.global.copy(systemOn = on))
+        if (!on) AlarmEngine.shutDown(ctx)
+    }
+
     fun lastRung(id: String): Long = prefs.getLong("rung_$id", 0)
 
     /**

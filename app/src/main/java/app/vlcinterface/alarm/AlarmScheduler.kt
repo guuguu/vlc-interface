@@ -106,6 +106,15 @@ object AlarmScheduler {
         val now = System.currentTimeMillis()
         val d = Alarms.current
         val am = ctx.getSystemService(AlarmManager::class.java)
+        // Alarm system off (Settings): nothing set with Android, no next-alarm notification, no calendar events;
+        // the alarms themselves are kept for when it's switched on again.
+        if (!d.global.systemOn) {
+            for (a in d.alarms) { am.cancel(ringIntent(ctx, a.id, false)); clearSnooze(ctx, a.id); Alarms.setPlanned(a.id, 0) }
+            guard(ctx, false)
+            ctx.getSystemService(NotificationManager::class.java).cancel(NEXT_ID)
+            AlarmCalendar.sync(ctx)
+            return
+        }
         for (a in d.alarms) {
             if (checkMissed && a.on) {
                 val p = Alarms.planned(a.id)

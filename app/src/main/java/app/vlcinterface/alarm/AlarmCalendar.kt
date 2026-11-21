@@ -56,7 +56,7 @@ object AlarmCalendar {
         val g = Alarms.current.global
         // Our own events only: removed, then written again for the alarms as they are now.
         cr.delete(CalendarContract.Events.CONTENT_URI, CalendarContract.Events.CUSTOM_APP_PACKAGE + "=?", arrayOf(ctx.packageName))
-        if (!g.calSync || g.calId < 0) return
+        if (!g.systemOn || !g.calSync || g.calId < 0) return
         val tz = Alarms.zone().id
         val now = System.currentTimeMillis()
         for (a in Alarms.current.alarms.filter { it.on && it.id != AlarmEngine.TEST_ID }) {

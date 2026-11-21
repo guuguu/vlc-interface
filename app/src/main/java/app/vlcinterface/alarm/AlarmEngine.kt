@@ -106,6 +106,7 @@ object AlarmEngine {
     /** From the alarm (receiver), a missed alarm, or the guard: hands over to the foreground service. */
     fun startRing(ctx: Context, id: String, snoozed: Boolean, restart: Boolean = false) {
         app = ctx.applicationContext
+        if (!Alarms.current.global.systemOn) return        // alarm system switched off in Settings
         val a = Alarms.get(id) ?: return
         if (_ui.value.phase == "ringing" && _ui.value.alarmId == id && AlarmService.running) return
         if (!snoozed && !restart) prefs(ctx).edit().putInt("snoozes_$id", 0).apply()
@@ -418,6 +419,16 @@ object AlarmEngine {
         val mins = Alarms.current.global.wakeCheckMin
         if (mins > 0 && id.isNotEmpty() && u.phase != "snoozed") startWatch(id, System.currentTimeMillis() + mins * 60_000L)
         else finishAll()
+    }
+
+    /** Alarm system switched off: whatever rings, is snoozed or watched ends at once, without a wake check. */
+    fun shutDown(ctx: Context) {
+        app = ctx.applicationContext
+        if (_ui.value.phase == "idle" && Alarms.active.isEmpty()) return
+        stopSound()
+        app.getSystemService(NotificationManager::class.java).cancel(SNOOZE_NOTIF_ID)
+        log("alarm system switched off")
+        finishAll()
     }
 
     private fun autoStop() {

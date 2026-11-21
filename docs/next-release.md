@@ -673,3 +673,17 @@
 - "History" is now at the bottom of the alarm page (new alarm and every existing alarm, under Delete alarm), no
   longer in the alarm clock settings. Always shown; empty, it says "No past alarms yet …". The alarm open on the
   page isn't listed under itself; a tap on a past alarm opens its page in place of the current one.
+
+## Whole alarm system on / off (requested 2026-11-21 14:18)
+- Main Settings page, under the settings links: a big button "⏻ Turn off the alarm system" (red) / "⏻ Turn on the
+  alarm system" (accent colour), with a line saying what it does.
+- Turning off asks first, then: a ringing, snoozed or wake-checked alarm ends at once; no alarm is set with Android
+  any more (nothing rings, also after a restart of the phone); the "Next alarm" notification and the alarms in the
+  phone's calendar are removed. Hidden everywhere: the clock button and the clock with its alarms in the players,
+  the alarm area (and its red permission warning), the alarm settings, Look → "Alarm rows under the clock", the
+  wizard's alarm permissions (exact alarms, full-screen notifications, calendar).
+- Kept: Settings → "Alarm clock" ("Off — the alarm system is switched off"), which then shows only the big
+  "Turn on the alarm system" button (also on the wizard's alarm page). The alarms and every alarm setting are kept.
+- Turning on: everything comes back, every alarm that was on is set again, and if Android lacks something the alarms
+  need (exact alarms, notifications, full-screen alarm, battery) the "Alarms need permissions" pop-up opens with a
+  Grant button for each.

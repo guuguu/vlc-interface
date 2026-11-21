@@ -145,7 +145,9 @@ fun WizardScreen(nav: Navigator, page: Int) {
         val obs = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) tick++ }
         owner.lifecycle.addObserver(obs); onDispose { owner.lifecycle.removeObserver(obs) }
     }
-    val list = remember { perms() }
+    // Alarm system off (Settings): the alarm-only permissions aren't asked for.
+    val alarmOn = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.systemOn
+    val list = remember(alarmOn) { perms().filter { alarmOn || it.name !in setOf("Alarms and reminders", "Full-screen notifications", "Calendar") } }
     var askFor by remember { mutableStateOf<Perm?>(null) }
     val req = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
         tick++
