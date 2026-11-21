@@ -1117,8 +1117,13 @@ private fun AlarmHistory(nav: Navigator) {
                 // On: set again for its next time (a passed date is dropped) — it leaves the history.
                 AppSwitch(false, { on ->
                     if (on) {
-                        Alarms.put(al.copy(on = true, used = 0L, date = "", dates = emptyList(), mode = if (al.mode == "dates") "once" else al.mode))
-                        ShortNote.show("${al.timeText} will ring")
+                        // The next time the clock shows its time: today if still ahead, else tomorrow.
+                        val re = al.copy(on = true, used = 0L, date = "", dates = emptyList(), mode = "once")
+                        Alarms.put(re)
+                        val at = app.vlcinterface.alarm.AlarmScheduler.nextTime(re)
+                        val today = java.util.Calendar.getInstance(Alarms.zone()).get(java.util.Calendar.DAY_OF_YEAR)
+                        val day = java.util.Calendar.getInstance(Alarms.zone()).apply { timeInMillis = at }.get(java.util.Calendar.DAY_OF_YEAR)
+                        ShortNote.show("${al.timeText} will ring " + if (day == today) "today" else "tomorrow")
                     }
                 })
                 Text("✕", color = C.bad, fontSize = SYM, modifier = Modifier.clickable {

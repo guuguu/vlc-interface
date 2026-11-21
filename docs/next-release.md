@@ -614,6 +614,9 @@
 - They're listed in Alarm settings → new section "History" (under Alarm health), newest first: time, name and when it
   was set for, "Rang <day, time>"; a tap opens the alarm. Each has a switch — on sets it again for its next time
   (a passed date is dropped) and it goes back in front of the player, "06:30 will ring" — and a red ✕ that deletes it.
+- Switch on in History (12:47): the alarm is set for the next time the clock shows its time — today if that time
+  is still ahead, otherwise tomorrow — as a one-time alarm (its old date / dates are dropped); a short note says
+  "06:30 will ring today" / "… tomorrow".
 - Alarms switched off by hand before ringing stay in front of the player as before.
 
 ## Open SHOUTcast / Icecast links (requested 2026-11-21 12:34)
