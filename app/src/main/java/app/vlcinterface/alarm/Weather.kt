@@ -1,5 +1,7 @@
 package app.vlcinterface.alarm
 
+import app.vlcinterface.data.CrashLog
+
 import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +32,7 @@ object Weather {
 
     private val _now = MutableStateFlow(Now())
     val now: StateFlow<Now> = _now
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + app.vlcinterface.data.CrashLog.guard)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CrashLog.guard)
     @Volatile private var busy = false
     private var prefsCtx: Context? = null
 

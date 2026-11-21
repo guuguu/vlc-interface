@@ -1,5 +1,7 @@
 package app.vlcinterface.alarm
 
+import app.vlcinterface.data.CrashLog
+
 import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
@@ -84,7 +86,7 @@ object AlarmEngine {
 
     private val _ui = MutableStateFlow(AlarmUi())
     val ui: StateFlow<AlarmUi> = _ui
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + app.vlcinterface.data.CrashLog.guard)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + CrashLog.guard)
     private var ringJob: Job? = null
     private var fxJob: Job? = null
     private var watchJob: Job? = null

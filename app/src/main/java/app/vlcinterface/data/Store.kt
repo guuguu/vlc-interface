@@ -18,7 +18,7 @@ import java.util.Locale
 /** Whole-app state in one JSON file. The same JSON (minus secrets handling) is the export format. */
 class Store(private val context: Context) {
     private val file = File(context.filesDir, "state.json")
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + app.vlcinterface.data.CrashLog.guard)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CrashLog.guard)
     private val _state = MutableStateFlow(load())
     val state: StateFlow<AppState> = _state
 

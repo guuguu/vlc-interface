@@ -1,5 +1,7 @@
 package app.vlcinterface.sources
 
+import app.vlcinterface.data.CrashLog
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -22,7 +24,7 @@ import kotlinx.coroutines.launch
  * progress; when it ends, a notification with the summary (tap → scan page with the report).
  */
 class RgScanService : Service() {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + app.vlcinterface.data.CrashLog.guard)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + CrashLog.guard)
     private var job: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null

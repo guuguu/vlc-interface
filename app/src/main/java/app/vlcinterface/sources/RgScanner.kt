@@ -1,5 +1,7 @@
 package app.vlcinterface.sources
 
+import app.vlcinterface.data.CrashLog
+
 import android.content.Context
 import android.media.AudioFormat
 import android.media.MediaCodec
@@ -78,7 +80,7 @@ data class RgScanState(
  * writes REPLAYGAIN_* tags into the files (or keeps them in the app), album gain gated over the whole album.
  */
 object RgScanner {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + app.vlcinterface.data.CrashLog.guard)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CrashLog.guard)
     private val _state = MutableStateFlow(RgScanState())
     val state: StateFlow<RgScanState> = _state
     private var job: Job? = null
@@ -857,7 +859,7 @@ object RgScanner {
     fun flushPendingSoon(ctx: Context) {
         val app = ctx.applicationContext
         if (readPending(app).length() == 0 || !flushing.compareAndSet(false, true)) return
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + app.vlcinterface.data.CrashLog.guard).launch {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + CrashLog.guard).launch {
             try {
                 kotlinx.coroutines.delay(1500)          // the player has really let go of the previous file
                 val playing = App.instance.player.state.value.item?.uri

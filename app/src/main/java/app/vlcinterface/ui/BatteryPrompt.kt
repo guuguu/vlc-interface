@@ -1,6 +1,8 @@
 @file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 package app.vlcinterface.ui
 
+import app.vlcinterface.data.CrashLog
+
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
@@ -154,7 +156,7 @@ fun RgAskHost() {
                     close()
                     // Not tied to this pop-up: it closes at once, and a job tied to it was cancelled with it while the
                     // folder was still being listed (so the folder scan never started).
-                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + app.vlcinterface.data.CrashLog.guard).launch {
+                    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main + CrashLog.guard).launch {
                         val folder = app.vlcinterface.sources.MusicLibrary.folderOf(ctx.applicationContext, it0).ifEmpty { listOf(it0) }
                         start(folder, app.vlcinterface.sources.RgMode.ALBUMS_BY_TAGS, it0.album.ifEmpty { "this folder" })
                     }

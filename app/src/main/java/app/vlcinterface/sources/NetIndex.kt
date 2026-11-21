@@ -1,5 +1,7 @@
 package app.vlcinterface.sources
 
+import app.vlcinterface.data.CrashLog
+
 import android.content.Context
 import app.vlcinterface.App
 import app.vlcinterface.data.PlEntry
@@ -25,7 +27,7 @@ import java.io.File
  * refreshed by the source's ↻ Rescan, dropped when the pin is removed. Kept in the app's own storage.
  */
 object NetIndex {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + app.vlcinterface.data.CrashLog.guard)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CrashLog.guard)
     private val lock = Mutex()
     private lateinit var file: File
 

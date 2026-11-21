@@ -1,5 +1,7 @@
 package app.vlcinterface.player
 
+import app.vlcinterface.data.CrashLog
+
 import android.content.Context
 import android.media.MediaCodecList
 import android.os.Build
@@ -156,7 +158,7 @@ object VideoFileCleanup {
         val app0 = app.vlcinterface.App.instance
         set.forEach { u ->
             val written = VideoAuto.subs(u); val dl = VideoAuto.downloaded(u)
-            if (dl.isNotEmpty()) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + app.vlcinterface.data.CrashLog.guard).launch {
+            if (dl.isNotEmpty()) kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO + CrashLog.guard).launch {
                 try { app.vlcinterface.sources.SubtitleFiles.forgetVideo(app0, u, written, dl) } catch (_: Exception) {}
             }
         }

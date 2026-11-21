@@ -1,5 +1,7 @@
 package app.vlcinterface.player
 
+import app.vlcinterface.data.CrashLog
+
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -14,7 +16,7 @@ import kotlinx.coroutines.launch
 
 /** Keeps playback alive in the background; the notification itself is built and updated by [MediaCenter]. */
 class PlaybackService : Service() {
-    private val scope = CoroutineScope(Dispatchers.Main + app.vlcinterface.data.CrashLog.guard)
+    private val scope = CoroutineScope(Dispatchers.Main + CrashLog.guard)
     private var job: Job? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
