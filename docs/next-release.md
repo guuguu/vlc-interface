@@ -625,3 +625,12 @@
   - icy:// links, and .pls / .m3u / .xspf files opened from the phone.
 - A playlist is read and its first stream is played in the radio player, named by the playlist's title
   (else the server name). A bare stream plays directly. Normal song / video files open as before.
+
+## Visualisation button and double tap on the picture (requested 2026-11-21 12:39)
+- The visualisation button (round, under the clock button, in the song / radio player) now puts the visualisation in
+  the album picture's place (station logo for radio) instead of opening it full screen; ringed in the accent colour
+  while on, like the clock button. Pressed again: the picture comes back. Kept while the app runs.
+- The clock keeps its priority: pressing the visualisation button while the clock is shown puts the clock away and
+  shows the visualisation.
+- Double tap on the picture place — album picture, station logo or the visualisation there — opens the
+  visualisation full screen. Long press keeps what it did (picture search / Visualisation settings).

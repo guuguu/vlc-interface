@@ -142,11 +142,24 @@ private fun visBackground(v: VisSettings): List<Color> {
 
 private fun lerpC(a: Color, b: Color, f: Float) = androidx.compose.ui.graphics.lerp(a, b, f)
 
-/** Button under the clock button: the full-screen visualisation. */
+/** Visualisation in the player's picture place, switched by [VisButton]; kept while the app runs. */
+object VisCover {
+    var on by mutableStateOf(false)
+}
+
+/** Button under the clock button: the visualisation in the album picture's place (again: the picture back).
+ *  The clock has priority, so pressing it while the clock is shown puts the clock away. */
 @Composable
 fun VisButton(nav: Navigator, size: Int = 30) {
-    val cols = visColours(Alarms.state.collectAsState().value.vis)
-    Box(Modifier.size(size.dp).liteShadow(CircleShape).clip(CircleShape).background(Color(0x24FFFFFF)).clickable { nav.go(Screen.Visualisation) },
+    val st = Alarms.state.collectAsState().value
+    val cols = visColours(st.vis)
+    val a = accent()
+    val lit = VisCover.on && !st.showClock
+    Box(Modifier.size(size.dp).liteShadow(CircleShape).clip(CircleShape).background(if (lit) a.copy(alpha = 0.25f) else Color(0x24FFFFFF))
+        .border(1.dp, if (lit) a else Color.Transparent, CircleShape)
+        .clickable {
+            if (st.showClock) { Alarms.toggleClock(); VisCover.on = true } else VisCover.on = !VisCover.on
+        },
         contentAlignment = Alignment.Center) {
         Canvas(Modifier.size((size * 0.7f).dp)) {
             val r = this.size.minDimension * 0.26f
