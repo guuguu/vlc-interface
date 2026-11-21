@@ -649,11 +649,15 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                          scaleLabel: String = "", onScale: () -> Unit = {}, onRotate: () -> Unit = {}, onPip: () -> Unit = {}) {
     val player = App.instance.player
     val tallVid = p.videoH > p.videoW && p.videoW > 0
+    val st by App.instance.store.state.collectAsState()
     // Upright (15:32): every control of the video under the picture, in groups — title, playing, sound & picture,
     // files, picture format; the picture itself only carries the position bar.
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        val rowTitle: @Composable () -> Unit = {
         MarqueeText(p.item?.title ?: "", C.text, Modifier.fillMaxWidth(), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, list = "player")
+        }
         // Playing: previous / −10 / play-pause / +10 / next, centred.
+        val rowPlaying: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             UnderBtn("⏮") { player.prev() }
             UnderBtn("−10") { player.seekBy(-10_000) }
@@ -663,8 +667,9 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             UnderBtn("+10") { player.seekBy(10_000) }
             UnderBtn("⏭") { player.next() }
         }
-        Divider()
+        }
         // Sound & picture.
+        val rowSound: @Composable () -> Unit = {
         androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("Audio & subs") { onPanel() }
             Pill(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true }
@@ -675,11 +680,15 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                 player.setRate(rates[(i + 1) % rates.size])
             }
         }
+        }
         // Files.
+        val rowFiles: @Composable () -> Unit = {
         androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("📂 Browse") { openOrigin(nav, keepStack = true) }
         }
+        }
         // Picture format and orientation.
+        val rowFormat: @Composable () -> Unit = {
         androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             val parts = scaleLabel.split('\u0000')
             Pill(if (parts.getOrElse(1) { "" }.isEmpty()) parts[0] else "Format: ${parts[0]} → ${parts[1]}") { onScale() }
@@ -689,9 +698,10 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             Pill("🔄 Turn") { onRotate() }
             Pill("PiP") { onPip() }
         }
+        }
+        val rowUpNext: @Composable () -> Unit = {
         // Up next (15:36): exactly like the song player's — "Up next" with "Queue › time left" (opens the whole queue),
         // then the next files (as many as Look → "Up next" count), numbered, gliding names, length; long press: menu.
-        val st by App.instance.store.state.collectAsState()
         val next = if (p.index >= 0) p.queue.drop(p.index + 1).take(st.settings.upNextCount) else emptyList()
         val cur = p.item
         if (next.isNotEmpty() && cur != null) Column(Modifier.fillMaxWidth()) {
@@ -710,6 +720,11 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                         removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
                 }
             }
+        }
+        }
+        // In the order set in Look → "Order of the player rows" → Video.
+        for (id in videoRowOrder(st.settings)) when (id) {
+            "title" -> rowTitle(); "playing" -> rowPlaying(); "sound" -> rowSound(); "files" -> rowFiles(); "format" -> rowFormat(); "upnext" -> rowUpNext()
         }
     }
 }

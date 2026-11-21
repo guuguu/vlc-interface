@@ -467,12 +467,14 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     var rowsMode by rememberKept("look.rowsMode", "song")
                     Text("Order of the player rows", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(top = 10.dp).explain("Order of the player rows"))
                     Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
-                        listOf("song" to "Songs", "radio" to "Radio", "both" to "Both").forEach { (m, l) -> Pill(l, selected = rowsMode == m, filled = rowsMode == m) { rowsMode = m } }
+                        listOf("song" to "Songs", "radio" to "Radio", "video" to "Video", "both" to "Both").forEach { (m, l) -> Pill(l, selected = rowsMode == m, filled = rowsMode == m) { rowsMode = m } }
                     }
+                    if (rowsMode == "video") Text("Video player upright: the rows under the picture", color = C.muted, fontSize = 13.sp)
                     val rowRadio = rowsMode == "radio"
-                    val rowAll = playerRowOrderAll(s, rowRadio)
+                    val rowAll = if (rowsMode == "video") videoRowOrder(s) else playerRowOrderAll(s, rowRadio)
                     fun saveRows(l: List<String>) {
                         set(when (rowsMode) {
+                            "video" -> s.copy(rowOrderVideo = l)
                             "radio" -> s.copy(rowOrderRadio = l)
                             "both" -> s.copy(rowOrderSong = l, rowOrderRadio = l.filter { it in PLAYER_RADIO_ROWS })
                             else -> s.copy(rowOrderSong = l)
@@ -480,7 +482,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         if (helpersOn) lookHelp = "Order of the player rows"
                     }
                     // Drag (≡ or long press) to reorder (11:28). A list only for ordering has no ✕ (11:32).
-                    DragOrderList(rowAll, { PLAYER_ROW_NAMES[it] ?: it }, onOrder = { l -> saveRows(l) })
+                    DragOrderList(rowAll, { (if (rowsMode == "video") VIDEO_ROW_NAMES[it] else PLAYER_ROW_NAMES[it]) ?: it }, onOrder = { l -> saveRows(l) })
                     STextButton({ saveRows(emptyList()) }) { Text("Reset order", color = accent()) }
                     // Gap between the player's rows.
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -591,6 +593,18 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                                 .background(if (id == "picture") accent().copy(alpha = 0.5f) else Color(0xFF2A2E35)), contentAlignment = Alignment.CenterStart) {
                                                 Text((PLAYER_ROW_NAMES[id] ?: id).substringBefore(" ("), color = C.text, fontSize = 8.sp, maxLines = 1, modifier = Modifier.padding(start = 3.dp))
                                             }
+                                        }
+                                    }
+                                }
+                                // Video player upright: picture on top, then its rows in their order.
+                                Column(Modifier.weight(1f).clip(RoundedCornerShape(10.dp)).background(Color(0xFF16181C)).padding(6.dp),
+                                    verticalArrangement = Arrangement.spacedBy((3 * sg()).dp)) {
+                                    Text("Video", color = C.muted, fontSize = 11.sp)
+                                    Box(Modifier.fillMaxWidth().height(30.dp).clip(RoundedCornerShape(4.dp)).background(accent().copy(alpha = 0.5f)))
+                                    videoRowOrder(s).forEach { id ->
+                                        Box(Modifier.fillMaxWidth().height((if (id == "upnext") 22 else if (id == "playing") 14 else 10).dp).clip(RoundedCornerShape(4.dp))
+                                            .background(Color(0xFF2A2E35)), contentAlignment = Alignment.CenterStart) {
+                                            Text((VIDEO_ROW_NAMES[id] ?: id).substringBefore(" ("), color = C.text, fontSize = 8.sp, maxLines = 1, modifier = Modifier.padding(start = 3.dp))
                                         }
                                     }
                                 }

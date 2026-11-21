@@ -730,3 +730,10 @@
   "Up next" count — numbered, names gliding when long, each one's length; tap plays it, long press opens its menu
   (Play next, Move up / down, Remove from queue, Details …). Shown for every video (wide and tall).
 - The "☰ Queue" button is removed from the video player (upright and sideways); the files row keeps "📂 Browse".
+
+## Video player rows in "Order of the player rows" (requested 2026-11-21 15:42)
+- Settings → Look → "Order of the player rows": Songs / Radio / Video / Both. "Video" lists the rows under the upright
+  video's picture — Title · Play buttons · Audio & subs / Audio sync / Hue & sat / speed · Browse · Format / Rotate /
+  Turn / PiP · Up next — dragged by ≡ (or a long press) like the song rows, no ✕; "Reset order" puts back the
+  original order. Kept in settings and export. "Both" stays songs + radio.
+- The video player lays its rows out in that order; the helper's preview shows a Video column next to Songs and Radio.
