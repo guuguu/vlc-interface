@@ -732,55 +732,77 @@ private fun JumpToTimeDialog(lengthMs: Long, onDone: () -> Unit) {
         App.instance.player.seekTo(if (lengthMs > 0) ms.coerceIn(0L, (lengthMs - 1000L).coerceAtLeast(0L)) else ms)
         onDone()
     }
-    AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text("Jump to time", color = C.text) },
-        text = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
-                // The cassette: hh : mm : ss (17:26: typed with the app's own small digit pad; Android's keyboard stays hidden).
-                var at by remember { mutableIntStateOf(0) }
-                var fresh by remember { mutableStateOf(true) }       // the first digit typed in a box replaces what was there
-                val vals = listOf(hh, mm, ss)
-                fun setVal(i: Int, v: String) { when (i) { 0 -> hh = v; 1 -> mm = v; else -> ss = v } }
-                Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF111316)).border(1.dp, accent(), RoundedCornerShape(12.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    listOf("hh", "mm", "ss").forEachIndexed { i, ph ->
-                        if (i > 0) Text(":", color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                        Box(Modifier.width(52.dp).clip(RoundedCornerShape(8.dp)).background(if (i == at) accent().copy(alpha = 0.25f) else Color.Transparent)
-                            .clickable { at = i; fresh = true }.padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-                            if (vals[i].isEmpty()) Text(ph, color = C.muted, fontSize = 22.sp)
-                            else Text(vals[i], color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
-                        }
+    // Laid out to fit the screen (17:53): sideways the time and the buttons on the left, the digit pad on the right;
+    // upright one under the other. Keys shrink with the room, so the whole box is always on screen.
+    var at by remember { mutableIntStateOf(0) }
+    var fresh by remember { mutableStateOf(true) }       // the first digit typed in a box replaces what was there
+    val vals = listOf(hh, mm, ss)
+    fun setVal(i: Int, v: String) { when (i) { 0 -> hh = v; 1 -> mm = v; else -> ss = v } }
+    fun key(k: String) {
+        when (k) {
+            "⌫" -> { setVal(at, vals[at].dropLast(1)); fresh = false }
+            "→" -> { at = (at + 1) % 3; fresh = true }
+            else -> {
+                val nv = (if (fresh) "" else vals[at]) + k
+                setVal(at, nv.takeLast(2)); fresh = false
+                if (nv.length >= 2 && at < 2) { at++; fresh = true }
+            }
+        }
+    }
+    val conf = LocalConfiguration.current
+    val land = conf.screenWidthDp > conf.screenHeightDp
+    val keyH = (if (land) ((conf.screenHeightDp - 96) / 4f - 6f) else 44f).coerceIn(30f, 48f)
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDone, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        val cassette: @Composable () -> Unit = {
+            Row(Modifier.clip(RoundedCornerShape(12.dp)).background(Color(0xFF111316)).border(1.dp, accent(), RoundedCornerShape(12.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                listOf("hh", "mm", "ss").forEachIndexed { i, ph ->
+                    if (i > 0) Text(":", color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
+                    Box(Modifier.width(52.dp).clip(RoundedCornerShape(8.dp)).background(if (i == at) accent().copy(alpha = 0.25f) else Color.Transparent)
+                        .clickable { at = i; fresh = true }.padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+                        if (vals[i].isEmpty()) Text(ph, color = C.muted, fontSize = 22.sp)
+                        else Text(vals[i], color = C.text, fontSize = 26.sp, fontWeight = FontWeight.Bold)
                     }
                 }
-                // Digit pad: 1–9, ⌫ 0 →; two digits fill a box and the next one is chosen.
-                Column(Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("⌫", "0", "→")).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            row.forEach { k ->
-                                Box(Modifier.size(width = 64.dp, height = 44.dp).clip(RoundedCornerShape(10.dp)).background(C.card)
-                                    .clickable {
-                                        when (k) {
-                                            "⌫" -> { setVal(at, vals[at].dropLast(1)); fresh = false }
-                                            "→" -> { at = (at + 1) % 3; fresh = true }
-                                            else -> {
-                                                val nv = (if (fresh) "" else vals[at]) + k
-                                                setVal(at, nv.takeLast(2)); fresh = false
-                                                if (nv.length >= 2 && at < 2) { at++; fresh = true }
-                                            }
-                                        }
-                                    }, contentAlignment = Alignment.Center) {
-                                    Text(k, color = if (k == "→") accent() else C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                                }
+            }
+        }
+        val info: @Composable () -> Unit = {
+            Text(if (lengthMs > 0) "Video length ${fmtTime(lengthMs)} · empty boxes count as 0" else "Empty boxes count as 0",
+                color = C.muted, fontSize = 12.sp, textAlign = TextAlign.Center)
+        }
+        val buttons: @Composable () -> Unit = {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                STextButton(onDone) { Text("Cancel") }
+                STextButton({ go() }) { Text("Jump", color = accent(), fontWeight = FontWeight.SemiBold) }
+            }
+        }
+        val pad: @Composable () -> Unit = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("⌫", "0", "→")).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        row.forEach { k ->
+                            Box(Modifier.size(width = 64.dp, height = keyH.dp).clip(RoundedCornerShape(10.dp)).background(C.card).clickable { key(k) },
+                                contentAlignment = Alignment.Center) {
+                                Text(k, color = if (k == "→") accent() else C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
                 }
-                Text(if (lengthMs > 0) "Video length ${fmtTime(lengthMs)} · empty boxes count as 0" else "Empty boxes count as 0",
-                    color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             }
-        },
-        confirmButton = { STextButton({ go() }) { Text("Jump", color = accent()) } },
-        dismissButton = { STextButton(onDone) { Text("Cancel") } })
+        }
+        Box(Modifier.clip(RoundedCornerShape(20.dp)).background(C.panel).padding(16.dp)) {
+            if (land) Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.width(230.dp)) {
+                    Text("Jump to time", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    cassette(); info(); buttons()
+                }
+                pad()
+            } else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Jump to time", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                cassette(); pad(); info(); buttons()
+            }
+        }
+    }
 }
 
 @Composable

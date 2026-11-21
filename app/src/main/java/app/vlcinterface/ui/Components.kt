@@ -1297,11 +1297,14 @@ class QueueDrag {
  */
 @Composable
 fun DigitPad(onKey: (String) -> Unit, lastKey: String = "✓", modifier: Modifier = Modifier) {
+    // Keys shrink when the phone is sideways (short screen), so the pad and its pop-up stay on screen (17:53).
+    val conf = androidx.compose.ui.platform.LocalConfiguration.current
+    val keyH = (if (conf.screenWidthDp > conf.screenHeightDp) (conf.screenHeightDp - 200) / 4f - 6f else 44f).coerceIn(26f, 44f)
     Column(modifier, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
         listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("⌫", "0", lastKey)).forEach { row ->
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
                 row.forEach { k ->
-                    Box(Modifier.size(width = 64.dp, height = 44.dp).clip(RoundedCornerShape(10.dp)).background(C.card).clickable { onKey(k) },
+                    Box(Modifier.size(width = 64.dp, height = keyH.dp).clip(RoundedCornerShape(10.dp)).background(C.card).clickable { onKey(k) },
                         contentAlignment = Alignment.Center) {
                         Text(k, color = if (k == lastKey) accent() else C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     }

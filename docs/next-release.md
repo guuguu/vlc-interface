@@ -933,3 +933,10 @@
   libVLC 3 has no way to drop them; subtitle files (downloaded, added, next to a network video) are still cleaned.
 - Safety net: if libVLC ever refuses the engine options again, the app starts anyway with the subtitle look left
   out, and writes why to the Logs — it no longer closes.
+
+## Jump to time cut off sideways (reported 2026-11-21 17:53, screenshot)
+- Sideways the box was taller than the screen: the pad's last row (⌫ 0 →) and the Jump / Cancel buttons were cut off,
+  and the time sat off-centre. Now its own pop-up laid out for the screen: sideways the title, the time, the length
+  and Cancel / Jump on the left and the digit pad on the right; upright one under the other. Keys shrink with the
+  room so everything is always on screen. The other digit pads (song Jump to, sleep, minutes, port) shrink their keys
+  sideways too.
