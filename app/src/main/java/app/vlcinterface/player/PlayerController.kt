@@ -2026,6 +2026,64 @@ class PlayerController(private val context: Context, private val store: Store) {
             try { mp.updateVideoSurfaces() } catch (_: Throwable) {}
             try { mp.setVideoScale(vlcScale) } catch (_: Throwable) {}
         }
+        verifyGen++
+        val gen = verifyGen
+        main.postDelayed({ verifySurface(gen, 0) }, 300)
+    }
+
+    // ---------- picture size self-check ----------
+    // The format analysis (21 Nov 03:18, 60 photos) showed libVLC sizes the picture right, but now and then a new
+    // size was never applied: libVLC sets it while Android is already laying the screen out, and that request can be
+    // dropped, so the picture kept the previous format's / orientation's size (8 of 60 photos; 1–2 % off or the
+    // wrong format entirely). Now the video surface is measured after every change and, while it doesn't have the
+    // size the format calls for, the sizing is applied again and a fresh layout requested (up to 6 times).
+    private var verifyGen = 0
+
+    /** The video surface inside libVLC's view: the biggest visible SurfaceView (the other one carries subtitles). */
+    fun videoSurfaceView(): android.view.SurfaceView? {
+        val found = ArrayList<android.view.SurfaceView>()
+        fun walk(v: android.view.View) {
+            if (v is android.view.SurfaceView && v.visibility == android.view.View.VISIBLE) found += v
+            if (v is android.view.ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i))
+        }
+        attachedLayout?.let { walk(it) }
+        return found.maxByOrNull { it.width.toLong() * it.height }
+    }
+
+    /** Size the video surface should have in a W × H video view for the chosen format; null when unknown. */
+    fun expectedSurface(w: Int, h: Int): Pair<Int, Int>? {
+        val s = _state.value
+        if (w <= 0 || h <= 0 || s.videoW <= 0 || s.videoH <= 0) return null
+        val a = s.videoW.toDouble() / s.videoH
+        fun fit(ar: Double) = if (w.toDouble() / h > ar) Pair((h * ar).toInt(), h) else Pair(w, (w / ar).toInt())
+        return when (vlcScale) {
+            MediaPlayer.ScaleType.SURFACE_FILL -> Pair(w, h)
+            MediaPlayer.ScaleType.SURFACE_FIT_SCREEN -> if (w.toDouble() / h > a) Pair(w, (w / a).toInt()) else Pair((h * a).toInt(), h)
+            MediaPlayer.ScaleType.SURFACE_16_9 -> fit(16.0 / 9)
+            MediaPlayer.ScaleType.SURFACE_4_3 -> fit(4.0 / 3)
+            else -> fit(a)
+        }
+    }
+
+    private fun verifySurface(gen: Int, tries: Int) {
+        if (gen != verifyGen) return                                   // a newer change is being checked
+        val layout = attachedLayout ?: return
+        val it0 = _state.value.item ?: return
+        if (it0.isMusic || it0.isRadio || voutNow <= 0) return
+        val sv = videoSurfaceView() ?: return
+        val want = expectedSurface(layout.width, layout.height) ?: return
+        val okW = kotlin.math.abs(sv.width - want.first) <= maxOf(3, want.first / 100)
+        val okH = kotlin.math.abs(sv.height - want.second) <= maxOf(3, want.second / 100)
+        if (okW && okH) return
+        if (tries >= 6) {
+            android.util.Log.w("PlayerController", "picture size still ${sv.width}x${sv.height}, wanted ${want.first}x${want.second} (${scale.name})")
+            return
+        }
+        try { mp.updateVideoSurfaces() } catch (_: Throwable) {}
+        try { mp.setVideoScale(vlcScale) } catch (_: Throwable) {}
+        // A fresh layout pass outside the current one, so the new size is really applied this time.
+        main.post { try { sv.requestLayout(); layout.requestLayout(); (layout.parent as? android.view.View)?.requestLayout() } catch (_: Throwable) {} }
+        main.postDelayed({ verifySurface(gen, tries + 1) }, 350)
     }
 
     // ---------- sync offsets ----------

@@ -449,3 +449,18 @@
   (vlc-interface-format-analysis_<date_time>.zip: report.txt + up to 60 photos) to upload, and the player is reset
   (03:05): back to the first video at the spot it was, playing or paused as it was, each video's own format and the
   phone's orientation setting as before; analysis mode turns itself off.
+
+# After 1.60.0
+
+## Picture size self-check (from the format analysis uploaded 2026-11-21 03:19)
+- The analysis (5 WhatsApp videos, upright 1072×1920 / 720×1280 / 478×850, 60 photos) showed the 1.60 sizing is
+  right: Fit, 1:1, Fill, Crop, 16:9 and 4:3 gave exactly the shape each format calls for in 52 of 60 photos, upright
+  and sideways.
+- The 8 others kept a previous size: the new size libVLC set was dropped because it came while Android was already
+  laying the screen out (e.g. upright 4:3 still the Fit shape, sideways 1:1 still 16:9, sideways Fit 1.5 % too wide
+  after the 4:3 before it).
+- Now after every change (format, turning the phone, new video, size of the video area) the app measures the video
+  surface against the size the format calls for and, while they differ by more than 1 %, applies the sizing again
+  with a fresh layout (every 0.35 s, up to 6 times).
+- Format analysis: each photo's report now says the surface size the format calls for and OK / WRONG (the yellow
+  "picture seen" box is not reliable while the controls are on screen); 2.6 s per step so the self-check has run.

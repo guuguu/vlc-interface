@@ -12,7 +12,6 @@ import android.os.Looper
 import android.view.PixelCopy
 import android.view.SurfaceView
 import android.view.View
-import android.view.ViewGroup
 import app.vlcinterface.App
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -94,7 +93,7 @@ object FormatCheck {
                     formats.forEachIndexed { i, (_, label) ->
                         running.value = "Analysis: video $v/$VIDEOS · ${pass * formats.size + i + 1}/$perVideo · $side · $label"
                         setFormat(i)
-                        delay(1800)                                  // libVLC re-fits the picture
+                        delay(2600)                                  // libVLC re-fits the picture (and the size self-check has run)
                         running.value = ""                           // the note itself stays out of the photo
                         delay(250)
                         val shot = try { capture(activity) } catch (_: Throwable) { null }
@@ -151,21 +150,13 @@ object FormatCheck {
 
     private fun onScreen(v: View): Rect { val p = IntArray(2); v.getLocationInWindow(p); return Rect(p[0], p[1], p[0] + v.width, p[1] + v.height) }
 
-    /** The video surface inside libVLC's view: the biggest visible SurfaceView (the other one carries subtitles). */
-    private fun videoSurface(root: View?): SurfaceView? {
-        val found = ArrayList<SurfaceView>()
-        fun walk(v: View) { if (v is SurfaceView && v.visibility == View.VISIBLE) found += v; if (v is ViewGroup) for (i in 0 until v.childCount) walk(v.getChildAt(i)) }
-        root?.let { walk(it) }
-        return found.maxByOrNull { it.width.toLong() * it.height }
-    }
-
     /** The screen with the video picture put where its surface is, outlines of the video view (red) and surface (green). */
     private suspend fun capture(a: Activity): Pair<ByteArray, Measure> {
         val decor = a.window.decorView
         val shot = Bitmap.createBitmap(decor.width.coerceAtLeast(1), decor.height.coerceAtLeast(1), Bitmap.Config.ARGB_8888)
         pixelCopyWindow(a, shot)
         val layout = App.instance.player.videoLayout
-        val sv = videoSurface(layout)
+        val sv = App.instance.player.videoSurfaceView()
         var surfRect: Rect? = null; var buf = "none"
         val cv = Canvas(shot)
         if (sv != null && sv.width > 0 && sv.height > 0) {
@@ -208,12 +199,13 @@ object FormatCheck {
         appendLine("  Video surface (green): ${fmt(m?.surface)}, buffer ${m?.surfaceBuffer ?: "-"}")
         appendLine("  Picture seen (yellow, non-black part): ${fmt(m?.picture)}")
         App.instance.player.formatDiag().forEach { (k, v) -> appendLine("  $k: $v") }
-        // What the picture's shape should be (from the app's picture size) against what is on the screen.
-        val s = App.instance.player.state.value
-        val want = if (s.videoW > 0 && s.videoH > 0) s.videoW.toDouble() / s.videoH else 0.0
-        val seen = m?.picture?.takeIf { it.height() > 0 }?.let { it.width().toDouble() / it.height() }
-        if (want > 0 && seen != null) appendLine("  Shape seen vs app's size: %.1f %% (%s)".format(Locale.US, (seen / want - 1) * 100,
-            when (label) { "Fill" -> "stretched on purpose"; "Crop" -> "cut on purpose (compare the surface)"; "16:9", "4:3" -> "forced shape on purpose"; else -> "should be about 0" }))
+        // The surface against the size this format calls for (the yellow box is unreliable with the controls on screen).
+        val want = m?.layout?.let { App.instance.player.expectedSurface(it.width(), it.height()) }
+        val sr = m?.surface
+        if (want != null && sr != null) {
+            val ok = kotlin.math.abs(sr.width() - want.first) <= maxOf(3, want.first / 100) && kotlin.math.abs(sr.height() - want.second) <= maxOf(3, want.second / 100)
+            appendLine("  Surface wanted for this format: ${want.first} × ${want.second} → ${if (ok) "OK" else "WRONG (off by ${sr.width() - want.first} × ${sr.height() - want.second})"}")
+        }
         appendLine()
     }
 
