@@ -750,3 +750,7 @@
 - The PiP button is removed (upright and sideways). A double tap in the middle third of the picture now opens
   picture-in-picture; double taps on the left / right thirds still seek back / forward. (For tall videos upright the
   middle double tap used to switch Bigger / Smaller — that's now only the "Bigger / Smaller" button.)
+
+## Buttons: no spaces around "/" (requested 2026-11-21 15:53)
+- Button labels written with a slash have no spaces around it: Subs/Sync, Audio/Sync, Hue/Sat (video player),
+  "Import M3U/PLS" (playlists), "+ LAN/Internet" (Songs list).

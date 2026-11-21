@@ -931,7 +931,7 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
         Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Pill("New playlist", filled = true) { newName = "" }
-                Pill("Import M3U / PLS") { importer.launch(arrayOf("*/*")) }
+                Pill("Import M3U/PLS") { importer.launch(arrayOf("*/*")) }
             }
             if (status.isNotEmpty()) Text(status, color = C.muted, fontSize = 13.sp)
             if (p.queue.isNotEmpty()) {

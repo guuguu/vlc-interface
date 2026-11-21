@@ -118,7 +118,7 @@ fun SongsTab(nav: Navigator) {
     var songMenu by remember { mutableStateOf<String?>(null) }
     fun sorted(l: List<PlayItem>) = l.distinctBy { it.uri }.sortedWith(compareBy<PlayItem>(
         { it.artist.ifEmpty { "￿" }.lowercase() }, { it.album.ifEmpty { "￿" }.lowercase() }, { it.trackNo }))
-    // Phone songs + songs of the indexed ★ LAN folders (+ any read with "+ LAN / Internet"); a song on both = phone file.
+    // Phone songs + songs of the indexed ★ LAN folders (+ any read with "+ LAN/Internet"); a song on both = phone file.
     LaunchedEffect(indexVer) {
         val fresh = sorted(SongsCache.all(ctx.applicationContext))
         if (fresh != songs) songs = fresh
@@ -136,7 +136,7 @@ fun SongsTab(nav: Navigator) {
             Text(if (selected.isEmpty()) "${songs.size} songs" else "${selected.size} selected · ${fmtLong(total)}  ▾",
                 color = if (selected.isEmpty()) C.muted else accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.weight(1f).clickable(enabled = selected.isNotEmpty()) { showSel = true })
-            Pill(if (netBusy.isNotEmpty()) netBusy else "+ LAN / Internet") {
+            Pill(if (netBusy.isNotEmpty()) netBusy else "+ LAN/Internet") {
                 if (netBusy.isNotEmpty()) return@Pill
                 netBusy = "Reading…"
                 scope.launch {
