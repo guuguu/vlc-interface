@@ -113,10 +113,9 @@ fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Comp
     // The page title on its own row (2026-11-21 17:57), the first one (18:00): the title (and its line under it) full
     // width on top, then the symbols (back, home … on the left; the page's own and the gear / red ✕ on the right).
     Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp)) {
-        Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 2.dp)) {
-            Text(title, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
+        // Only the title above the buttons (18:03); its small line goes under the button row.
+        Text(title, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 2.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             SymButton(onClick = { nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
             HomeButton(nav)
@@ -128,6 +127,8 @@ fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Comp
             // Settings symbol on every other page: opens the main Settings page.
             else if (gear) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
         }
+        if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp))
     }
 }
 

@@ -959,3 +959,5 @@
 - Title on the first row (18:00), the whole app: every header shows the page title (and its line) on top, full width,
   and the buttons on the row under it — the common header, Library and Playlists, the wizard ("Setup · N of M" and the
   title, then ‹ Help Skip Next), the Help guide and the Sound output sheet.
+- Only the title above the buttons (18:03): a page's small line (e.g. "Subtitles, decoding…", a folder's path,
+  "Setup · N of M") moves under the button row.
