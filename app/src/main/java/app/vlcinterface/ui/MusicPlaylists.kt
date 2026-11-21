@@ -2184,7 +2184,7 @@ fun playerRowOrderAll(s: app.vlcinterface.data.Settings, radio: Boolean): List<S
 /** Video player upright: the rows under the picture (2026-11-21 15:42), in Look → "Order of the player rows" → Video. */
 val PLAYER_VIDEO_ROWS = listOf("title", "playing", "subs", "picture", "files", "format", "upnext")
 val VIDEO_ROW_NAMES = mapOf("title" to "Title", "playing" to "Play buttons (⏮ −10 ▶ +10 ⏭)", "subs" to "Subs/Change, Subs/Sync, Audio/Sync", "picture" to "Hue/Sat, Subs/Format, speed",
-    "files" to "Browse", "format" to "Format, Rotate", "upnext" to "Up next")
+    "files" to "Browse", "format" to "Format, Rotate", "upnext" to "Queue box (Up next)")
 
 fun videoRowOrder(s: app.vlcinterface.data.Settings): List<String> {
     // The old single "sound" row (before 16:46) is now two lines, kept in its place.

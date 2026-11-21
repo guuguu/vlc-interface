@@ -854,7 +854,7 @@
 ## Reordering: the button lines only (2026-11-21 16:44 / 16:46)
 - Each line of buttons under the upright video is one item in Look → "Order of the player rows" → Video:
   Title · Play buttons · "Subs/Change, Subs/Sync, Audio/Sync" · "Hue/Sat, Subs/Format, speed" · Browse ·
-  "Format, Rotate" · Up next — dragged like the other rows. The buttons inside a line keep their fixed order (the
+  "Format, Rotate" · Queue box (Up next; named so 16:47) — dragged like the other rows. The buttons inside a line keep their fixed order (the
   per-button lists of 16:43 were taken back out).
 - Lines are fixed (at most 3 buttons, never wrapping), centred; all buttons the same size, at most a third of the
   width each — they shrink together, text included, when that's needed. An order saved before keeps its place
