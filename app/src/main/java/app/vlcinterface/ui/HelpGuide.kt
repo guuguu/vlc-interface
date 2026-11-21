@@ -155,6 +155,7 @@ fun HelpScreen(nav: Navigator, start: String) {
         Scaled {
             // Title on its own row (17:57).
             Column(Modifier.fillMaxWidth().background(C.card).padding(horizontal = 6.dp, vertical = 6.dp)) {
+                Text("Help", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp, top = 2.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     HeadBtn("✕") { nav.back() }
                     HeadBtn("◀", g.pos > 0) { g.pos-- }
@@ -162,7 +163,6 @@ fun HelpScreen(nav: Navigator, start: String) {
                     Box(Modifier.weight(1f))
                     if (cid.isNotEmpty()) Text("Contents", color = accent(), fontSize = 14.sp, modifier = Modifier.clip(RoundedCornerShape(14.dp)).clickable { g.open("") }.padding(10.dp))
                 }
-                Text("Help", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(start = 12.dp, bottom = 2.dp))
             }
         }
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {

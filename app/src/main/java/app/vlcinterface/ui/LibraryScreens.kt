@@ -90,14 +90,15 @@ fun LibraryHeader(title: String, openOutput: () -> Unit, nav: Navigator? = null,
     val canBack = nav != null && nav.stack.size > 1
     // Title on its own row (17:59, it was squeezed to one letter per line): the buttons on the first row — fitting the
     // width, shrunk evenly when they don't — and "Library" / "Playlists" under them.
+    // 18:00: the title on the first row, the buttons on the row under it (the whole app does the same).
     Column(Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 8.dp, bottom = 6.dp)) {
+        Text(title, color = C.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(start = 16.dp, bottom = 2.dp))
         FitRow(Modifier.fillMaxWidth(), minGap = 4.dp) {
             if (canBack) BackButton(nav!!)
             OutputPill(openOutput)
             actions()
             if (nav != null) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
         }
-        Text(title, color = C.text, fontSize = 28.sp, fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(start = 16.dp, top = 2.dp))
     }
 }
 
@@ -109,9 +110,13 @@ fun HomeButton(nav: Navigator, tint: Color = C.text) {
 @Composable
 fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Composable () -> Unit = {}, gear: Boolean = title != "Settings",
                actions: @Composable () -> Unit = {}) = Scaled {
-    // The page title on its own row (2026-11-21 17:57): symbols on the first row (back, home … on the left; the page's
-    // own symbols and the gear / red ✕ on the right), the title (and its line under it) on the second, full width.
+    // The page title on its own row (2026-11-21 17:57), the first one (18:00): the title (and its line under it) full
+    // width on top, then the symbols (back, home … on the left; the page's own and the gear / red ✕ on the right).
     Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp)) {
+        Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, top = 2.dp)) {
+            Text(title, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             SymButton(onClick = { nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = C.text) }
             HomeButton(nav)
@@ -122,10 +127,6 @@ fun BackHeader(title: String, nav: Navigator, sub: String = "", afterHome: @Comp
             if (LocalSettingsClose.current) CloseToPlayerButton(nav)
             // Settings symbol on every other page: opens the main Settings page.
             else if (gear) SymButton({ nav.go(Screen.Settings) }) { SymIcon(Icons.Filled.Settings, "Settings", tint = C.muted) }
-        }
-        Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 12.dp, bottom = 2.dp)) {
-            Text(title, color = C.text, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }

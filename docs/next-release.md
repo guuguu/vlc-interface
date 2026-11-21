@@ -956,3 +956,6 @@
 - Library and Playlists pages (17:59, screenshot: "Library" squeezed to one letter per line): their buttons on the
   first row (back, output, home, +, ▶ player, exit, ⋮, gear — fitting the width, shrunk evenly when they don't), the
   big title on its own row under them.
+- Title on the first row (18:00), the whole app: every header shows the page title (and its line) on top, full width,
+  and the buttons on the row under it — the common header, Library and Playlists, the wizard ("Setup · N of M" and the
+  title, then ‹ Help Skip Next), the Help guide and the Sound output sheet.
