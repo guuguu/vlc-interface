@@ -1046,3 +1046,10 @@
 - **Matching first:** files that belong to the video (its name or episode code) come first after the folders, in the accent colour.
 - **Picking a file:** it's loaded (colour codes taken out), put on, and saved silently as this video's subtitles. "Subtitles on: …" shows briefly, and it goes back to the video. Cancel goes back to where it was opened from.
 - A phone video without a real file path says the folder can't be read from the app.
+
+# After 1.69.0
+
+## Upright video "dancing" between two formats; picture small upright (reported 2026-11-21 21:39)
+- **1.69.0 dancing:** the size check flipped to another format and back while the picture was still wrong, with no limit, so the picture kept jumping between two sizes. That flipping is removed. The check is back to its plain re-apply (at most 6 tries).
+- **Real cause of the small picture upright:** libVLC's own sizing assumes the video fills the screen. With the phone upright and the video area wider than tall (a wide film in the upper part), it swaps the area's width and height before fitting the picture. A 1080 × 600 area got a picture made for 600 × 1080, drawn small in the middle. Sideways nothing is swapped, which is why turning the phone fixed it.
+- **Fixed:** the video view now tells libVLC an orientation that follows the view's own shape (wider than tall → landscape, taller → portrait). That's the case libVLC handles right, so the picture is sized right upright in every format, from the start.

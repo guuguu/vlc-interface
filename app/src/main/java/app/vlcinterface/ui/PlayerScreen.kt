@@ -153,8 +153,14 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     // One video view for the whole player screen: it moves between the portrait and landscape layouts
     // instead of being recreated, and the picture is re-fitted every time its area changes size.
     val videoView = remember {
-        VLCVideoLayout(ctx).also { v ->
+        // Its orientation follows its own shape (wider → landscape), so libVLC sizes the picture right upright too (21:39).
+        val octx = app.vlcinterface.player.AreaOrientationContext(ctx)
+        VLCVideoLayout(octx).also { v ->
             v.keepScreenOn = true
+            v.addOnLayoutChangeListener { view, l, t, r, b, ol, ot, orr, ob ->
+                val wide = (r - l) > (b - t)
+                if (r - l > 0 && b - t > 0 && wide != octx.wide) { octx.wide = wide; view.post { player.refreshSurface() } }
+            }
             // If Android ever takes the view off screen and puts it back (PiP, multi-window), give libVLC a fresh surface.
             var wasDetached = false
             v.addOnAttachStateChangeListener(object : android.view.View.OnAttachStateChangeListener {
