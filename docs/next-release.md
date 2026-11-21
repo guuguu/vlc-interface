@@ -349,3 +349,9 @@
   screen, or full screen); other files keep libVLC's rotation flag, and nothing is turned twice.
 - Previous / next file buttons (02:01): ⏮ and ⏭ on both sides of −10 / play / +10 go to the previous / next file of
   the list the video was opened from (its folder).
+- Error log export made crash-proof (02:05): it runs off the screen's thread and catches every failure (also
+  running out of memory), so it can't take the app down; each part of the zip is collected on its own (a part that
+  fails becomes a note, the rest is still saved); the system log is read as error lines only, the latest 20 000 at
+  most; the zip is written as a hidden "pending" file and only appears when complete — if anything goes wrong
+  (even the app closing mid-way) no broken zip is left. Crashes themselves are always kept (crash log and Android's
+  exit records), so the next export still contains them.
