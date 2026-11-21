@@ -315,8 +315,13 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     var headerHpx by remember { mutableIntStateOf(0) }
     val headerDp = if (headerOn) with(dens) { headerHpx.toDp() } else 0.dp
     // Upright: the picture's place under the header, measured from the layout below, so the video fills exactly it.
-    var videoHpx by remember { mutableIntStateOf(0) }
-    val videoDp = with(dens) { videoHpx.toDp() }
+    // Worked out directly (18:24: the picture stayed small when it was measured — the view started at 0 height and
+    // libVLC kept that first size): as tall as the video's Fit shape across the width, at most 2/3 of the screen.
+    val confP = LocalConfiguration.current
+    val realAspect0 = if (p.videoW > 0 && p.videoH > 0) p.videoW.toFloat() / p.videoH else 16f / 9f
+    val videoDp = minOf(confP.screenHeightDp * 2f / 3f, confP.screenWidthDp / realAspect0).dp
+    // Each time that size changes (video shape known, phone turned), libVLC is told again.
+    LaunchedEffect(videoDp, landscape) { delay(120); player.refreshSurface(); delay(500); player.refreshSurface() }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         video(if (fullscreen && !headerOn) Modifier.fillMaxSize()
             else if (fullscreen) Modifier.safeDrawingPadding().padding(top = headerDp).fillMaxSize()
@@ -366,11 +371,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 Box(Modifier.fillMaxWidth().height(headerDp))
                 // Upright (16:26): the picture is never more than 2/3 of the screen height — as tall as its Fit shape needs
                 // across the full width, at most 2/3 — and never scrolls; everything else scrolls in the room left under it.
-                val confV = LocalConfiguration.current
-                val realAspect = if (p.videoW > 0 && p.videoH > 0) p.videoW.toFloat() / p.videoH else 16f / 9f
-                val vH = minOf(confV.screenHeightDp * 2f / 3f, confV.screenWidthDp / realAspect)
-                val vMod = Modifier.height(vH.dp)
-                Box(Modifier.fillMaxWidth().then(vMod).onSizeChanged { videoHpx = it.height }) {
+                Box(Modifier.fillMaxWidth().height(videoDp)) {
                     // On the picture upright: only the position bar (comes and goes with a tap); everything else is below.
                     if (controls && panel == Panel.NONE && !locked) Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Color(0x77000000))) {
                         SeekRow(p, Modifier.padding(horizontal = 12.dp, vertical = 2.dp))

@@ -966,3 +966,11 @@
   own scaling (were 17–28 sp and scaled with those settings).
 - "Page titles size" (18:05): main Settings page, under Text size — 60–180 % (default 100 % = 22 dp letters, Reset);
   every page title in the app follows it together (still the same size on every page).
+
+## Upright video drawn small in its area (reported 2026-11-21 18:24, screenshot 1.67.0)
+- The picture's place under the header was measured from the layout, so the video view started at 0 height; libVLC
+  sized the picture for that first tiny view and didn't grow it after (a wide film showed at ~40 % width in the
+  middle of a black area).
+- Now the place is worked out directly (the video's Fit shape across the full width, at most 2/3 of the screen) so the
+  view has its real size from the start, and libVLC is told again (twice, 0.1 s and 0.6 s after) whenever that size
+  changes — when the video's shape becomes known or the phone turns.
