@@ -495,20 +495,21 @@ fun DeleteDialog(uris: List<String>, name: String, totalBytes: Long, count: Int,
 }
 
 /** Opens where the playing item came from (folder, playlist, radio). Used by the playing bar and the notification. */
-fun openOrigin(nav: Navigator) {
+/** [keepStack]: opened over the current page (the video player), so Back comes back to it. */
+fun openOrigin(nav: Navigator, keepStack: Boolean = false) {
     val st = App.instance.player.state.value
     val item = st.item ?: return
     val o = st.origin
     when {
-        item.isRadio || o.kind == "radio" -> { nav.home(); nav.replace(Screen.Library(4, 0)) }
-        o.kind == "playlist" -> { nav.home(); nav.go(Screen.PlaylistDetail(o.playlistId, item.uri)) }
+        item.isRadio || o.kind == "radio" -> { if (!keepStack) nav.home(); nav.replace(Screen.Library(4, 0)) }
+        o.kind == "playlist" -> { if (!keepStack) nav.home(); nav.go(Screen.PlaylistDetail(o.playlistId, item.uri)) }
         o.kind == "local" -> {
             val f = LocalFolder(o.localFolderId, o.title, o.uri, 0, o.sourceId)
-            nav.home(); nav.go(Screen.Folder(f, item.uri))
+            if (!keepStack) nav.home(); nav.go(Screen.Folder(f, item.uri))
         }
-        o.kind == "folder" -> { nav.home(); nav.go(Screen.Browse(o.sourceId, o.uri, o.title, item.uri)) }
+        o.kind == "folder" -> { if (!keepStack) nav.home(); nav.go(Screen.Browse(o.sourceId, o.uri, o.title, item.uri)) }
         // Played from the queue / Songs list / a single file: the song's own folder in Libraries.
-        else -> openItemFolder(nav, item)
+        else -> openItemFolder(nav, item, keepStack)
     }
 }
 
@@ -517,7 +518,7 @@ fun openOrigin(nav: Navigator) {
  * Opens the folder the item's file is in, in Libraries (Audio side for songs), with the item marked.
  * Unknown folder (single link, radio…) → where it was played from.
  */
-fun openItemFolder(nav: Navigator, item: PlayItem) {
+fun openItemFolder(nav: Navigator, item: PlayItem, keepStack: Boolean = false) {
     val fk = item.folderKey
     val store = App.instance.store
     val kind = if (item.isMusic) "audio" else "video"
@@ -528,12 +529,12 @@ fun openItemFolder(nav: Navigator, item: PlayItem) {
             val vol = id.substringBefore(':'); val rel = id.substringAfter(':')
             val name = rel.trimEnd('/').substringAfterLast('/').ifEmpty { rel } +
                 if (vol != android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY) " (SD card)" else ""
-            nav.home(); nav.go(Screen.Folder(LocalFolder(id, name, rel, 0, vol), item.uri))
+            if (!keepStack) nav.home(); nav.go(Screen.Folder(LocalFolder(id, name, rel, 0, vol), item.uri))
         }
         fk.contains("://") && item.sourceId.isNotEmpty() && store.current.sources.any { it.id == item.sourceId } -> {
-            nav.home(); nav.go(Screen.Browse(item.sourceId, fk, Uri.decode(fk.trimEnd('/').substringAfterLast('/')), item.uri))
+            if (!keepStack) nav.home(); nav.go(Screen.Browse(item.sourceId, fk, Uri.decode(fk.trimEnd('/').substringAfterLast('/')), item.uri))
         }
-        else -> nav.go(if (item.isMusic) Screen.Music else Screen.Player)
+        else -> if (keepStack) ShortNote.show("This file has no folder to browse — open one from the Library") else nav.go(if (item.isMusic) Screen.Music else Screen.Player)
     }
 }
 

@@ -690,3 +690,15 @@
 - Turning on: everything comes back, every alarm that was on is set again, and if Android lacks something the alarms
   need (exact alarms, notifications, full-screen alarm, battery) the "Alarms need permissions" pop-up opens with a
   Grant button for each.
+
+# After 1.65.0
+
+## Video player: Browse and Queue buttons (reported 2026-11-21 14:47 / 14:48 "cannot see any playlist or access location to open file")
+- New buttons on the video player, with the other chips (sideways and upright over the picture, and under the video
+  when it's on top): "📂 Browse" and "☰ Queue N" (N = videos after this one).
+- Browse opens the folder (or playlist) the video was played from in the Library, the video marked, with every file
+  menu (Play now, Play next, Add to queue, Add to playlist, Details …); from there any other folder or source.
+  Back returns to the video player.
+- Queue opens a panel over the video (it keeps playing): where it was played from ("Folder: …" / "Playlist: …"),
+  Now playing, Up next with each video's length — tap to play it, ✕ to take it out of the queue, long press for its
+  menu (Play next, Move up / down, Details …) — "Clear the rest", and "📂 Browse files to add".

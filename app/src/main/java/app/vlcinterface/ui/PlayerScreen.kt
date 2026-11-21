@@ -106,6 +106,11 @@ private object AudioSyncUi {
     var open by androidx.compose.runtime.mutableStateOf(false)
 }
 
+/** The video player's queue panel is open ("Queue" button). */
+private object VideoQueueUi {
+    var open by androidx.compose.runtime.mutableStateOf(false)
+}
+
 /** Label of the Audio sync button: the value when one is set ("Audio sync 0.25 s"). */
 private fun syncLabel(ms: Long): String {
     if (ms == 0L) return "Audio sync"
@@ -345,6 +350,10 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 }
             }
         }
+        // Queue / browse (2026-11-21 14:47): over everything, the video keeps playing.
+        if (VideoQueueUi.open) SidePanel(landscape, onClose = { VideoQueueUi.open = false }) {
+            VideoQueuePanel(p, nav) { VideoQueueUi.open = false }
+        }
     }
 }
 
@@ -501,6 +510,9 @@ private fun BoxScope.ControlsOverlayBody(
             MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 220.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
             OutputPill(openOutput)
             OverlayChip("Audio & subs") { onTouch(); onPanel() }
+            // Browse: the folder the video came from, in the Library (Back returns here); Queue: what plays next.
+            OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
+            OverlayChip("☰ Queue " + (p.queue.size - p.index - 1).coerceAtLeast(0)) { onTouch(); VideoQueueUi.open = true }
             OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             OverlayChip("Hue & sat") { onTouch(); onPicture() }
             speedChip()
@@ -531,6 +543,9 @@ private fun BoxScope.ControlsOverlayBody(
         if (!compact) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             OutputPill(openOutput)
             OverlayChip("Audio & subs") { onTouch(); onPanel() }
+            // Browse: the folder the video came from, in the Library (Back returns here); Queue: what plays next.
+            OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
+            OverlayChip("☰ Queue " + (p.queue.size - p.index - 1).coerceAtLeast(0)) { onTouch(); VideoQueueUi.open = true }
             OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             // Dedicated button: hue & saturation, straight to the sliders.
             OverlayChip("Hue & sat") { onTouch(); onPicture() }
@@ -636,6 +651,8 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill(if (p.isPlaying) "Pause" else "Play", filled = true) { player.togglePause() }
             Pill("Audio & subs") { onPanel() }
+            Pill("📂 Browse") { openOrigin(nav, keepStack = true) }
+            Pill("☰ Queue " + (p.queue.size - p.index - 1).coerceAtLeast(0)) { VideoQueueUi.open = true }
             Pill(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true }
             Pill("Hue & sat") { onPicture() }
             Pill("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×") {
@@ -1155,4 +1172,46 @@ private fun FormatControl(label: String, onScale: () -> Unit) {
     val parts = label.split('\u0000')
     val cur = parts[0]; val nxt = parts.getOrElse(1) { "" }
     OverlayChip(if (nxt.isEmpty()) cur else "→ $nxt", onScale)
+}
+
+
+/**
+ * Video queue (2026-11-21 14:47): what's playing, everything after it (tap: play it; long press: Play next, move,
+ * details …; ✕: take it out of the queue), "Clear the rest", and Browse — the folder in the Library to pick or queue
+ * other files (Back comes back to the video).
+ */
+@Composable
+private fun VideoQueuePanel(p: PlayerState, nav: Navigator, onClose: () -> Unit) {
+    val player = App.instance.player
+    val next = if (p.index >= 0) p.queue.drop(p.index + 1) else emptyList()
+    var menu by remember { mutableIntStateOf(-1) }
+    Column(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Queue", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        val from = p.origin.title.takeIf { it.isNotEmpty() && p.origin.kind != "single" }
+        if (from != null) Text((if (p.origin.kind == "playlist") "Playlist: " else "Folder: ") + from, color = C.muted, fontSize = 13.sp, maxLines = 1)
+        Text("Now playing", color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        MarqueeText(p.item?.title ?: "", C.text, Modifier.fillMaxWidth(), fontSize = 15.sp, list = "upnext")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Up next · ${next.size}", color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            if (next.isNotEmpty()) STextButton({ for (i in p.queue.lastIndex downTo p.index + 1) player.removeFromQueue(i) }) { Text("Clear the rest", color = C.bad) }
+        }
+        Column(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(C.card).verticalScroll(rememberScrollState())) {
+            if (next.isEmpty()) Text("Nothing after this video. Use Browse to add files.", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(14.dp))
+            next.forEachIndexed { i, n ->
+                if (i > 0) Divider()
+                Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { menu = i })
+                    .padding(start = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${i + 1}.", color = C.muted, maxLines = 1, modifier = Modifier.width(30.dp))
+                    MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 8.dp), fontSize = 15.sp, list = "upnext")
+                    if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
+                    Text("✕", color = C.bad, fontSize = 16.sp, modifier = Modifier.clickable { player.removeFromQueue(p.index + 1 + i) }.padding(horizontal = 14.dp, vertical = 8.dp))
+                    Box { if (menu == i) FileMenu(nav, n, true, { menu = -1 }, FileMenuExtras(
+                        onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
+                        onMoveDown = if (p.index + 2 + i < p.queue.size) ({ player.moveInQueue(p.index + 1 + i, 1) }) else null,
+                        removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
+                }
+            }
+        }
+        Pill("📂 Browse files to add", filled = true, modifier = Modifier.fillMaxWidth()) { onClose(); openOrigin(nav, keepStack = true) }
+    }
 }
