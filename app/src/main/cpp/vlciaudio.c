@@ -59,7 +59,6 @@ static unsigned g_src = 0;
 /* Bluetooth quality mode: the stream is opened at the Bluetooth link's rate (0 = the song's rate). */
 static _Atomic int g_prefRate = 0;
 static double g_rsPh = 0.0;          /* resampler: next output position, in input frames */
-static float g_rsHist[3 * 2];        /* resampler: last 3 input frames (L,R) */
 static unsigned g_rsFrom = 0, g_rsTo = 0;
 static atomic_int g_device;        /* output device chosen in the app (0 = Android's default routing) */
 static atomic_bool g_disconnected;
@@ -300,17 +299,47 @@ static void ensure_started(void) {
 }
 
 /*
- * Peak limiter (both channels together): does nothing at all unless a sample would go over full scale (-0.01 dBFS).
- * Then the level is lowered just enough at once and comes back smoothly (150 ms) — no waveshaping, so no added
- * distortion; untouched sound passes bit for bit. (It used to bend every peak above -0.5 dBFS whenever a boost was
- * on, which coloured loud passages.)
+ * Peak limiter (both channels together), with look-ahead (2026-11-21 audio check). It does nothing unless a sample
+ * would go over full scale (-0.01 dBFS); untouched sound passes bit for bit (only 64 frames ≈ 1.4 ms later).
+ * The old one lowered the level within a single sample right on the peak — a hard step at every kick drum, measured
+ * as distortion ≈ 38 dB under the music whenever Loudness (and its level make-up) pushed the bass over full scale.
+ * Now the sound is delayed by LA frames and the gain glides down over those LA frames before the peak arrives
+ * (minimum over the window, then its moving average: never above what the peak needs), and comes back smoothly
+ * (150 ms).
  */
+#define LA 64
 static float g_lg = 1.f;
+static float g_laSig[LA * 2];               /* delayed samples (L,R) */
+static float g_laReq[LA];                   /* gain each sample needs */
+static float g_laHold[LA];                  /* minimum of the needs over the window, per sample */
+static double g_laSum = LA;                 /* running sum of g_laHold */
+static unsigned g_laW;
+static void limit_reset(void) {
+    memset(g_laSig, 0, sizeof g_laSig);
+    for (int i = 0; i < LA; i++) { g_laReq[i] = 1.f; g_laHold[i] = 1.f; }
+    g_laSum = LA; g_lg = 1.f; g_laW = 0;
+}
+static bool g_laReady;
 static inline void limit2(float *l, float *r, float rel) {
+    if (!g_laReady) { limit_reset(); g_laReady = true; }
+    unsigned w = g_laW % LA;
     float m = fmaxf(fabsf(*l), fabsf(*r));
-    if (m * g_lg > 0.999f) g_lg = 0.999f / m;
-    else if (g_lg < 1.f) { g_lg += (1.f - g_lg) * rel; if (g_lg > 0.99999f) g_lg = 1.f; }
-    if (g_lg != 1.f) { *l *= g_lg; *r *= g_lg; }
+    float req = m > 0.999f ? 0.999f / m : 1.f;
+    g_laSig[w * 2] = *l; g_laSig[w * 2 + 1] = *r;
+    g_laReq[w] = req;
+    float hold = 1.f;
+    for (int i = 0; i < LA; i++) if (g_laReq[i] < hold) hold = g_laReq[i];
+    g_laSum += (double)hold - (double)g_laHold[w];
+    g_laHold[w] = hold;
+    g_laW++;
+    float att = (float)(g_laSum / LA);
+    if (att > 1.f) att = 1.f;
+    /* The output sample now is the one that went in LA-1 samples ago; the average covers it (see above). */
+    float ol = g_laSig[(g_laW % LA) * 2], orr = g_laSig[(g_laW % LA) * 2 + 1];
+    if (att < g_lg) g_lg = att;
+    else if (g_lg < 1.f) { g_lg += (att - g_lg) * rel; if (g_lg > 0.99999f && att >= 1.f) g_lg = 1.f; }
+    if (g_lg != 1.f) { ol *= g_lg; orr *= g_lg; }
+    *l = ol; *r = orr;
 }
 
 /* ---------- Tone (loudness / treble) equalizer, done here so it changes in the same place and at the same moment
@@ -366,40 +395,57 @@ static inline float eq_run(float x, int ch) {
 }
 
 /*
- * Rate conversion (only when the device reopened at another rate than libVLC sends): cubic Hermite interpolation
- * with 3 frames kept between buffers, so blocks join without clicks. in: n frames (L,R) at g_src;
- * out: frames at g_rate. Returns the number of output frames.
+ * Rate conversion (only when the device reopened at another rate than libVLC sends, e.g. Bluetooth connecting or an
+ * output switch mid-song — and then for every following song of the same format, the stream is kept).
+ * Windowed-sinc (Kaiser, 48 taps, table of 256 phases with interpolation), low-passed below the lower of the two
+ * rates. Replaces the cubic interpolation, whose mirror tones were only 12–21 dB under treble at 12–16 kHz
+ * (measured 2026-11-21: a harsh, metallic top after a Bluetooth switch). TAPS frames kept between buffers.
  */
-static float g_rsExt[(4096 + 3) * 2];
+#define RS_HALF 24
+#define RS_TAPS (2 * RS_HALF)
+#define RS_PH 256
+static float g_rsK[2 * RS_HALF * RS_PH + 2];          /* kernel over -HALF..+HALF input frames */
+static float g_rsH[RS_TAPS * 2];                      /* last TAPS input frames */
+static float g_rsExt[(4096 + RS_TAPS) * 2];
 static float g_rsOut[(4096 * 24 + 64) * 2];
+static double bessel_i0(double x) { double s = 1, t = 1; for (int k = 1; k < 40; k++) { t *= (x / (2 * k)) * (x / (2 * k)); s += t; } return s; }
+static void rs_design(void) {
+    double c = (g_rate < g_src ? (double)g_rate / g_src : 1.0) * 0.94, beta = 9.0, i0b = bessel_i0(beta);
+    for (int i = 0; i <= 2 * RS_HALF * RS_PH + 1; i++) {
+        double x = (double)i / RS_PH - RS_HALF;
+        double sx = fabs(x) < 1e-9 ? 1.0 : sin(M_PI * c * x) / (M_PI * c * x);
+        double u = x / RS_HALF, w = fabs(u) >= 1 ? 0 : bessel_i0(beta * sqrt(1 - u * u)) / i0b;
+        g_rsK[i] = (float)(c * sx * w);
+    }
+}
+static inline float rs_k(double x) {                 /* kernel at x (input frames), interpolated */
+    double p = (x + RS_HALF) * RS_PH; int i = (int)p; if (i < 0 || i >= 2 * RS_HALF * RS_PH) return 0.f;
+    float t = (float)(p - i); return g_rsK[i] + (g_rsK[i + 1] - g_rsK[i]) * t;
+}
 static unsigned resample(const float *in, unsigned n) {
     if (g_rsFrom != g_src || g_rsTo != g_rate) {      /* new pair of rates: start clean */
-        g_rsFrom = g_src; g_rsTo = g_rate; g_rsPh = 0.0;
-        memset(g_rsHist, 0, sizeof g_rsHist);
+        g_rsFrom = g_src; g_rsTo = g_rate; g_rsPh = RS_TAPS - RS_HALF;
+        memset(g_rsH, 0, sizeof g_rsH);
+        rs_design();
     }
     double step = (double)g_src / (double)g_rate;
-    memcpy(g_rsExt, g_rsHist, sizeof g_rsHist);
-    memcpy(g_rsExt + 6, in, (size_t)n * 2 * sizeof(float));
+    memcpy(g_rsExt, g_rsH, sizeof g_rsH);
+    memcpy(g_rsExt + RS_TAPS * 2, in, (size_t)n * 2 * sizeof(float));
     unsigned o = 0, cap = sizeof g_rsOut / sizeof(float) / 2;
-    /* ext index of input frame k is k + 3 (frames -3..-1 are the history). */
-    while (o < cap) {
-        long i = (long)floor(g_rsPh);
-        if (i > (long)n - 3) break;                       /* needs frames i-1 .. i+2 */
-        float t = (float)(g_rsPh - (double)i);
-        for (int c = 0; c < 2; c++) {
-            float y0 = g_rsExt[(i + 2) * 2 + c], y1 = g_rsExt[(i + 3) * 2 + c];
-            float y2 = g_rsExt[(i + 4) * 2 + c], y3 = g_rsExt[(i + 5) * 2 + c];
-            float a = -0.5f * y0 + 1.5f * y1 - 1.5f * y2 + 0.5f * y3;
-            float b = y0 - 2.5f * y1 + 2.f * y2 - 0.5f * y3;
-            float cc = -0.5f * y0 + 0.5f * y2;
-            g_rsOut[o * 2 + c] = ((a * t + b) * t + cc) * t + y1;
+    double last = (double)(RS_TAPS + n) - RS_HALF;    /* needs frames floor(p)-HALF+1 .. floor(p)+HALF */
+    while (o < cap && g_rsPh < last) {
+        long i0 = (long)floor(g_rsPh);
+        double fr = g_rsPh - (double)i0;
+        float sl = 0.f, sr = 0.f;
+        for (int j = -RS_HALF + 1; j <= RS_HALF; j++) {
+            float k = rs_k(fr - j);
+            sl += k * g_rsExt[(i0 + j) * 2]; sr += k * g_rsExt[(i0 + j) * 2 + 1];
         }
+        g_rsOut[o * 2] = sl; g_rsOut[o * 2 + 1] = sr;
         o++; g_rsPh += step;
     }
     g_rsPh -= (double)n;
-    /* Keep the last 3 input frames for the next block. */
-    if (n >= 3) memcpy(g_rsHist, in + (n - 3) * 2, sizeof g_rsHist);
-    else { memmove(g_rsHist, g_rsHist + n * 2, (3 - n) * 2 * sizeof(float)); memcpy(g_rsHist + (3 - n) * 2, in, n * 2 * sizeof(float)); }
+    memcpy(g_rsH, g_rsExt + (size_t)n * 2, sizeof g_rsH);   /* last TAPS frames of ext */
     return o;
 }
 
@@ -537,6 +583,7 @@ static void cb_flush(void *d, int64_t pts) {
         g_started = false;
     }
     atomic_store(&g_r, atomic_load(&g_w)); atomic_store(&g_r2, atomic_load(&g_w));
+    limit_reset();                                     /* seek: nothing of the old position comes out */
     pthread_mutex_unlock(&g_lock);
 }
 
@@ -564,7 +611,7 @@ static int cb_setup(void **opaque, char *format, unsigned *rate, unsigned *chann
     if (*rate < 8000 || *rate > 192000) *rate = 48000;
     pthread_mutex_lock(&g_lock);
     g_prevL = g_prevR = -1.f;                          /* level starts right (see cb_play) */
-    g_lg = 1.f;
+    limit_reset();
     if (!g_stream || g_src != *rate) {
         g_src = *rate;
         if (!open_stream()) {

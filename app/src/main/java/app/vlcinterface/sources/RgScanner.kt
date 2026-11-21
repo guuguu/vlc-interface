@@ -377,7 +377,11 @@ object RgScanner {
                 // Values of exactly 0.00 dB come from the earlier failed scans (16-bit read as float): scan those again.
                 fun real(v: Float?) = v != null && v != 0f
                 val tagged = g.all { ReplayGain.read(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion)?.let { r ->
-                    if (onlyWithoutRg) r.trackGain != null || r.albumGain != null   // any record at all → leave it alone
+                    // Any record at all → left alone; except, for an album scan, a record the app keeps with a track gain
+                    // only (the automatic folder scan of 1.62–1.68 measured track gain alone): measured again with the
+                    // album value, so albums play with album gain as set.
+                    if (onlyWithoutRg) (r.trackGain != null || r.albumGain != null) &&
+                        !(albumMode && r.albumGain == null && RgStore.get(it.uri)?.let { a -> a.trackGain != null && a.albumGain == null } == true)
                     else if (albumMode) real(r.trackGain) && real(r.albumGain) else real(r.trackGain) } ?: false }
                 if (tagged) {
                     g.forEach { addResult(RgResult(it.title, if (onlyWithoutRg) "skipped — already has ReplayGain" else "skipped — already tagged", true)) }

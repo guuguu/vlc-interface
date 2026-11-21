@@ -1394,7 +1394,9 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val folder = try { app.vlcinterface.sources.MusicLibrary.folderOf(context, item) } catch (_: Exception) { emptyList() }.ifEmpty { listOf(item) }
                 val name = item.folderKey.ifEmpty { android.net.Uri.decode(item.uri).substringBeforeLast('/') }.trimEnd('/').substringAfterLast('/')
                     .ifEmpty { item.album.ifEmpty { "this folder" } }
-                app.vlcinterface.sources.RgScanner.start(context, folder.filter { it.isMusic }, app.vlcinterface.sources.RgMode.TRACK,
+                // Track and album gain (the folder as one album, 2026-11-21 audio check): with track gain alone an album
+                // played in order fell back to track gain, every song pulled to the same loudness.
+                app.vlcinterface.sources.RgScanner.start(context, folder.filter { it.isMusic }, app.vlcinterface.sources.RgMode.ALBUMS_BY_FOLDERS,
                     app.vlcinterface.sources.RgTarget.APP, rescanTagged = false, onlyWithoutRg = true, confirmTitle = name, silent = true)
             }
             return
@@ -1915,7 +1917,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (item.startMs >= 0) media.addOption(":start-time=${item.startMs / 1000.0}")
         if (item.endMs > 0) media.addOption(":stop-time=${item.endMs / 1000.0}")
         if (item.isMusic) {
-            if (store.current.settings.rgMode != "off") media.addOption(":audio-replay-gain-mode=${rgModeFor(s)}")
+            // libVLC's own ReplayGain only with libVLC's output; the app's output applies it itself (never twice).
+            if (store.current.settings.rgMode != "off" && !appOutputWanted()) media.addOption(":audio-replay-gain-mode=${rgModeFor(s)}")
+            else media.addOption(":audio-replay-gain-mode=none")
         } else {
             media.addOption(":audio-replay-gain-mode=none")
         }

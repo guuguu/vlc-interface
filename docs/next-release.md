@@ -977,3 +977,22 @@
 
 # After 1.68.0
 - **Video picture small at load (upright)**: the picture now gets the right size when a video opens. Before, it was only right after you cycled the format button. Once the picture and the video size are known, the player flips to another format and back, just like cycling the button. The size self-check does the same flip if the picture is still wrong after one re-apply.
+
+## Sound check: two ways (requested 2026-11-21 20:34, "I don't like the music sound on the last 10 versions")
+- **How it was checked**
+  - Code review of the whole path: libVLC (16-bit) → tone → level → limiter → rate conversion → Android, plus ReplayGain, the scanner and the Loudness make-up gain. Every sound change since 1.55 was compared.
+  - Measurement: the app's real sound engine was compiled on its own and fed test signals: a modern-master-like mix peaking at −0.3 dBFS, tones, and a 60 Hz + 7 kHz intermodulation test. Its exact output was analysed.
+- **Fine as it was**
+  - Neutral settings are bit-perfect: the output is exactly the input.
+  - The ReplayGain scanner measures correctly (BS.1770: −20.00 LUFS for the −20.00 reference).
+- **Fixed: rate conversion after an output switch**
+  - When Bluetooth connects or the output changes mid-song, Android can reopen the output at another rate. The app's simple converter then added mirror tones only 12–21 dB under the treble at 12–16 kHz, a harsh, metallic top. It stayed that way for every following song of the same format.
+  - Now there's a proper windowed-sinc converter: mirror tones are ≈ 100 dB under.
+- **Fixed: limiter**
+  - It lowered the level within a single sample right on each peak, a hard step at every kick drum. It now looks 1.4 ms ahead and glides down before the peak.
+  - The harsh "crunch" it added is 14 dB lower.
+  - Untouched sound still passes bit for bit.
+- **Fixed: albums levelled song by song since 1.62**
+  - The automatic folder ReplayGain stored track gain only. ReplayGain "Auto" plays a whole album in order with album gain, so it fell back to track gain: every song was pulled to the same loudness, quiet songs raised and loud ones lowered.
+  - The folder scan now measures the folder as one album (track and album gain). Songs it measured before with track gain only are measured again, once, the next time their folder plays.
+- **Fixed: libVLC's own ReplayGain switched off per song** whenever the app applies ReplayGain itself, so it can never be applied twice.
