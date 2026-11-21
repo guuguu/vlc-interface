@@ -1286,7 +1286,7 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
         ToggleRow("Prevent clipping", "Uses the peak values in the tags", s.rgClipProtect) { set(s.copy(rgClipProtect = it)) }
         Divider()
         // 2026-11-21 12:01: a song without ReplayGain → its whole folder scanned silently, 5 s summary at the end.
-        ToggleRow("Automatic ReplayGain for folders", "Phone and home-network songs: a song without it → its whole folder is scanned silently (NAS: tags written into the files; phone: kept in the app); through the VPN you're asked instead",
+        ToggleRow("Automatic ReplayGain for folders", "Phone and home-network songs: a song without it → its whole folder is scanned silently (track gain per song, written into the files' tags); through the VPN you're asked instead",
             s.rgAutoFolder) { set(s.copy(rgAutoFolder = it)) }
     }
 }

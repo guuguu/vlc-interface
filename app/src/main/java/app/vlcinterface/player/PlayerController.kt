@@ -1430,13 +1430,11 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val folder = try { app.vlcinterface.sources.MusicLibrary.folderOf(context, item) } catch (_: Exception) { emptyList() }.ifEmpty { listOf(item) }
                 val name = item.folderKey.ifEmpty { android.net.Uri.decode(item.uri).substringBeforeLast('/') }.trimEnd('/').substringAfterLast('/')
                     .ifEmpty { item.album.ifEmpty { "this folder" } }
-                // Track and album gain (the folder as one album, 2026-11-21 audio check): with track gain alone an album
-                // played in order fell back to track gain, every song pulled to the same loudness.
-                app.vlcinterface.sources.RgScanner.start(context, folder.filter { it.isMusic }, app.vlcinterface.sources.RgMode.ALBUMS_BY_FOLDERS,
-                    // Network songs: written into the files (2026-11-21 22:51: the NAS album got no tags — the values stayed in the
-                    // app); the playing song is written when it ends, a read-only share keeps them in the app. Phone songs: kept in the
-                    // app (writing phone files needs Android's confirmation, which a silent scan can't ask; the menu scan does).
-                    if (net) app.vlcinterface.sources.RgTarget.FILES else app.vlcinterface.sources.RgTarget.APP,
+                // ReplayGain per song — track gain (as asked at 12:01, confirmed 22:53).
+                app.vlcinterface.sources.RgScanner.start(context, folder.filter { it.isMusic }, app.vlcinterface.sources.RgMode.TRACK,
+                    // Written into the files' tags (2026-11-21 22:51 / 22:53), NAS and phone alike. The playing song is written when it
+                    // ends; phone files: Android asks once per folder (declined → kept in the app); a read-only share keeps them in the app.
+                    app.vlcinterface.sources.RgTarget.FILES,
                     rescanTagged = false, onlyWithoutRg = true, confirmTitle = name, silent = true)
             }
             return

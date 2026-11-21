@@ -1118,7 +1118,9 @@
 - **Found:** a scan that writes to the files decided "already tagged" from values the app keeps itself, such as the automatic folder scan's (since 1.70 these include album gain). So an album played once, then scanned to write tags, could be passed over.
 - **Fixed:** scans that write to the files now check only the files' own tags.
 - **The real case (22:51, NAS album, the automatic scan):** the automatic folder ReplayGain kept its values in the app and never wrote the files (as built at 12:01).
-  - Now, for network songs (the NAS at home), it writes the tags into the files like a menu scan, track and album gain. The song playing is written as soon as it ends (a file can't be changed while it plays). A read-only share keeps the values in the app.
-  - Albums it measured before with values only in the app are measured again, once, and written.
-  - Phone songs still keep the values in the app: changing phone files needs Android's confirmation, which a silent scan can't ask; "ReplayGain scan…" from a menu does.
+- **Now (22:53 / 22:54):** the automatic scan writes ReplayGain per song (track gain) into the files' tags, on the NAS and on the phone.
+  - Album gain is left to the manual "ReplayGain scan…" (the user saves album ReplayGain himself). The 1.70 change to album gain is reverted.
+  - The song playing gets its tags 1.5 s after the player moves on or stops (a file can't be changed while it plays).
+  - Phone files: Android asks once per folder for permission to change them. Declined, or a read-only NAS share: the values are kept in the app.
+  - Songs the automatic scan measured before, with values only in the app, are measured again once and written.
   - The setting's line and helper say so.
