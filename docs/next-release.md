@@ -331,3 +331,9 @@
   log (errors also in errors.txt), why the app ended the last times with crash / not-responding traces, and the
   phone / app details and settings (no passwords or keys) — to send for a problem.
 - Crash entries now also say which page was on screen and list the app's own code lines first.
+
+## Crash fixed: app closing at the end of a ReplayGain scan (reported 2026-11-21 01:53 / 01:55)
+- "Vertically scrollable component was measured with an infinity maximum height": the ReplayGain report windows
+  ("ReplayGain done" and "ReplayGain scan: N problems"), which pop up over any page (the player too) when a scan
+  ends, scrolled their text inside a window that already scrolls it — Android doesn't allow that and closed the
+  app. The inner scrolling is removed; the window's own scrolling stays.

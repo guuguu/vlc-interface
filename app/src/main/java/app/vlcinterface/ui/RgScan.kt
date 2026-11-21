@@ -321,8 +321,8 @@ fun RgFailureReport(nav: Navigator) {
         AutoInfoDialog(onDismissRequest = { RgScanner.reportSeen() }, containerColor = C.panel,
             title = { Text("ReplayGain done — ${s.confirmTitle}", color = C.text) },
             text = {
-                val scroll = rememberScrollState()
-                Column(Modifier.verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                // No scrolling of its own: the dialog already scrolls its text (a second scroll inside it crashed the app).
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("✓ Scanned and saved per song: ${s.saved}", color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Text("Already had ReplayGain, left as they were: ${s.skipped}", color = C.text, fontSize = 13.sp)
                     if (fails.isNotEmpty()) Text("Problems: ${fails.size}", color = C.bad, fontSize = 13.sp)
@@ -341,8 +341,8 @@ fun RgFailureReport(nav: Navigator) {
     AutoInfoDialog(onDismissRequest = { RgScanner.reportSeen() }, containerColor = C.panel,
         title = { Text("ReplayGain scan: ${fails.size} problem${if (fails.size == 1) "" else "s"}", color = C.text) },
         text = {
-            val scroll = rememberScrollState()
-            Column(Modifier.verticalScroll(scroll), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            // No scrolling of its own: the dialog already scrolls its text (a second scroll inside it crashed the app).
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("Saved ${s.saved} · skipped ${s.skipped}", color = C.muted, fontSize = 13.sp)
                 fails.forEach { r ->
                     Column {
