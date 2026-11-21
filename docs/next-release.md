@@ -666,3 +666,9 @@
 - Moving the phone stops the flashing — screen flash or the camera's flash light — at once; sound and vibration go
   on until Snooze / Stop. (The first 1.5 s after ringing starts are ignored so the vibration isn't taken for a move.)
   Rings again after a snooze → flashing again.
+
+# After 1.63.0
+
+## Alarm history always visible (reported 2026-11-21 13:41 "cannot find alarms history")
+- Alarm clock settings → "History" (right under Alarm health) was hidden while there were no past alarms. It's now
+  always shown; empty, it says "No past alarms yet …" and what will be listed there.

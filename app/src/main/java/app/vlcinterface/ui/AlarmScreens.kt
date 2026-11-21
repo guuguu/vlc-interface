@@ -1111,9 +1111,16 @@ private fun CalendarPickDialog(onDone: () -> Unit) {
 private fun AlarmHistory(nav: Navigator) {
     val d by Alarms.state.collectAsState()
     val used = d.alarms.filter { Alarms.isPast(it) && it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID }.sortedByDescending { Alarms.pastAt(it) }
-    if (used.isEmpty()) return
     val fmt = java.text.SimpleDateFormat("d MMM, HH:mm", java.util.Locale.getDefault())
     SectionTitle("History")
+    // Always shown (2026-11-21 13:41): empty, it says so instead of the section being missing.
+    if (used.isEmpty()) {
+        CardBox {
+            Text("No past alarms yet. One-time alarms that have rung, and alarms whose dates are over, are listed here.",
+                color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp))
+        }
+        return
+    }
     CardBox {
         used.forEachIndexed { i, al ->
             if (i > 0) Divider()
