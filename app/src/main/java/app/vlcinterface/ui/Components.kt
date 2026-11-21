@@ -1289,3 +1289,55 @@ class QueueDrag {
         }
     }
 }
+
+
+/**
+ * The app's own small digit pad (2026-11-21 17:26 / 17:27): every number input in the app is typed with it, and
+ * Android's keyboard stays hidden. Keys 1–9, ⌫, 0 and [lastKey] (→ next box, or ✓ done).
+ */
+@Composable
+fun DigitPad(onKey: (String) -> Unit, lastKey: String = "✓", modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+        listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9"), listOf("⌫", "0", lastKey)).forEach { row ->
+            Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+                row.forEach { k ->
+                    Box(Modifier.size(width = 64.dp, height = 44.dp).clip(RoundedCornerShape(10.dp)).background(C.card).clickable { onKey(k) },
+                        contentAlignment = Alignment.Center) {
+                        Text(k, color = if (k == lastKey) accent() else C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Which number field has its digit pad open (one at a time). */
+object DigitFieldUi {
+    var open by androidx.compose.runtime.mutableStateOf<String?>(null)
+}
+
+/**
+ * A number field typed with [DigitPad] (no Android keyboard): looks like the other input fields; a tap opens the pad
+ * under it, the first digit replaces what was there, ✓ closes it. [maxLen] digits at most.
+ */
+@Composable
+fun DigitField(value: String, label: String, maxLen: Int, modifier: Modifier = Modifier, openAtStart: Boolean = false, onChange: (String) -> Unit) {
+    val key = androidx.compose.runtime.remember { java.util.UUID.randomUUID().toString() }
+    var fresh by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(true) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { if (openAtStart) DigitFieldUi.open = key }
+    val isOpen = DigitFieldUi.open == key
+    Column(modifier) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(6.dp)).border(if (isOpen) 2.dp else 1.dp, if (isOpen) accent() else C.line, RoundedCornerShape(6.dp))
+            .clickable { DigitFieldUi.open = if (isOpen) null else key; fresh = true }.padding(horizontal = 14.dp, vertical = 8.dp)) {
+            Text(label, color = if (isOpen) accent() else C.muted, fontSize = 12.sp)
+            Text(value.ifEmpty { " " }, color = C.text, fontSize = 18.sp)
+        }
+        if (isOpen) DigitPad({ k ->
+            when (k) {
+                "⌫" -> { onChange(value.dropLast(1)); fresh = false }
+                "✓" -> DigitFieldUi.open = null
+                else -> { onChange(((if (fresh) "" else value) + k).take(maxLen)); fresh = false }
+            }
+        }, modifier = Modifier.padding(top = 8.dp).align(Alignment.CenterHorizontally))
+    }
+}

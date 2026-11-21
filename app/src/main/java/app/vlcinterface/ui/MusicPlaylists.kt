@@ -492,9 +492,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     title = { Text(if (sleepAsk == "songs") "Sleep after how many songs?" else "Sleep after how many minutes?", color = C.text) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            androidx.compose.material3.OutlinedTextField(num, { v -> num = v.filter { it.isDigit() }.take(3) }, singleLine = true,
-                                label = { Text(if (sleepAsk == "songs") "Songs (1–999)" else "Minutes (1–999)") },
-                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                            DigitField(num, if (sleepAsk == "songs") "Songs (1–999)" else "Minutes (1–999)", 3, Modifier.fillMaxWidth(), openAtStart = true) { num = it }
                             if (sleepAsk == "songs") Text("The playing song counts as 1. If the queue or playlist has fewer songs left, it goes on from its beginning.", color = C.muted, fontSize = 12.sp)
                         }
                     },
@@ -742,35 +740,22 @@ private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump0: (Long) -
         fresh = false; min = ""; sec = ""
         return if (t.length > old.length) t.last().toString() else ""
     }
-    val minF = remember { androidx.compose.ui.focus.FocusRequester() }
-    val secF = remember { androidx.compose.ui.focus.FocusRequester() }
-    LaunchedEffect(Unit) { kotlinx.coroutines.delay(150); try { minF.requestFocus() } catch (_: Exception) {} }
-    @Composable
-    fun box(v: String, label: String, f: androidx.compose.ui.focus.FocusRequester, last: Boolean, onChange: (String) -> Unit) =
-        androidx.compose.material3.OutlinedTextField(
-            androidx.compose.ui.text.input.TextFieldValue(v, androidx.compose.ui.text.TextRange(v.length)), { t -> onChange(t.text) },
-            singleLine = true, label = { Text(label) },
-            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 26.sp, color = C.text, textAlign = TextAlign.Center),
-            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number,
-                imeAction = if (last) androidx.compose.ui.text.input.ImeAction.None else androidx.compose.ui.text.input.ImeAction.Next),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onNext = { secF.requestFocus() }),
-            modifier = Modifier.width(84.dp).focusRequester(f))
+    // Typed with the app's own digit pad (17:27): min (up to 3 digits) : sec (2); Android's keyboard stays hidden.
+    var atSec by remember { mutableStateOf(false) }
     AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
         title = { Text("Jump to", color = C.text) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp), horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    box(min, "min", minF, false) { t0 ->
-                        val t = typed(min, t0)
-                        if (t.any { it in " .,-:" }) secF.requestFocus()
-                        min = t.filter { it.isDigit() }.trimStart('0').take(3)
-                    }
+                    @Composable
+                    fun cell(v: String, ph: String, on: Boolean, pick: () -> Unit) =
+                        Box(Modifier.width(76.dp).clip(RoundedCornerShape(8.dp)).border(if (on) 2.dp else 1.dp, if (on) accent() else C.line, RoundedCornerShape(8.dp))
+                            .clickable(onClick = pick).padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
+                            if (v.isEmpty()) Text(ph, color = C.muted, fontSize = 20.sp) else Text(v, color = C.text, fontSize = 26.sp)
+                        }
+                    cell(min, "min", !atSec) { atSec = false }
                     Text(":", color = C.text, fontSize = 26.sp)
-                    box(sec, "sec", secF, true) { t0 ->
-                        val t = typed(sec, t0)
-                        sec = t.filter { it.isDigit() }.take(2)
-                        if (sec.length == 2) go()
-                    }
+                    cell(sec, "sec", atSec) { atSec = true }
                     // Jump to the time shown (e.g. the same place again).
                     val acc = accent()
                     androidx.compose.foundation.Canvas(Modifier.padding(start = 6.dp).size(44.dp).clip(RoundedCornerShape(8.dp)).clickable { go() }) {
@@ -783,6 +768,21 @@ private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump0: (Long) -
                         drawPath(path, acc)
                     }
                 }
+                DigitPad({ k ->
+                    when (k) {
+                        "⌫" -> { fresh = false; if (atSec) sec = sec.dropLast(1) else min = min.dropLast(1) }
+                        "→" -> atSec = !atSec
+                        else -> if (!atSec) {
+                            val t = typed(min, min + k)
+                            min = t.filter { it.isDigit() }.trimStart('0').take(3)
+                            if (min.length == 3) atSec = true
+                        } else {
+                            val t = typed(sec, sec + k)
+                            sec = t.filter { it.isDigit() }.take(2)
+                            if (sec.length == 2) go()
+                        }
+                    }
+                }, lastKey = "→", modifier = Modifier.padding(top = 4.dp))
                 Text("0:00 – ${fmtTime(len)}", color = C.muted, fontSize = 12.sp)
             }
         },

@@ -918,3 +918,8 @@
 - Typed with the app's own small digit pad (17:26) — 1–9, ⌫, 0, → — inside the box; Android's keyboard never opens.
   Tap hh / mm / ss to choose the box (highlighted); two digits fill a box and the next one is chosen; the first digit
   typed in a box replaces what was there; → goes to the next box.
+- Every number input in the app behaves the same (17:27): typed with the app's own small digit pad (1–9, ⌫, 0, ✓ or
+  →), Android's keyboard never opens — Jump to time (video), Jump to (song player: min : sec), Sleep after N songs /
+  minutes, the sleep timer's custom minutes, radio recording "Continue for … minutes", and Port on a network
+  location. A tap on a number field opens its pad under it (one at a time), the first digit replaces what was there,
+  ✓ closes it.

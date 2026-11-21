@@ -143,6 +143,8 @@ fun EditSourceScreen(nav: Navigator, e: Screen.EditSource) {
 
 @Composable
 fun Field(label: String, value: String, keyboard: KeyboardType = KeyboardType.Text, password: Boolean = false, onChange: (String) -> Unit) {
+    // Number fields use the app's own digit pad (17:27).
+    if (keyboard == KeyboardType.Number && !password) { DigitField(value, label, 6, Modifier.fillMaxWidth(), onChange = onChange); return }
     OutlinedTextField(
         value, onChange, Modifier.fillMaxWidth(), label = { Text(label) }, singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboard),

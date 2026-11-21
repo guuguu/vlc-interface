@@ -252,9 +252,7 @@ fun SaveSongDialog(onDone: () -> Unit) {
                         androidx.compose.foundation.layout.FlowRow(Modifier.padding(start = 48.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf(3, 5, 10, 15, 20, 30).forEach { m -> Pill("$m", selected = minutes == m && custom.isEmpty()) { minutes = m; custom = "" } }
                         }
-                        androidx.compose.material3.OutlinedTextField(custom, { v -> custom = v.filter { it.isDigit() }.take(3) }, singleLine = true,
-                            modifier = Modifier.padding(start = 48.dp).fillMaxWidth(), label = { Text("Custom minutes (1–180)") },
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                        DigitField(custom, "Custom minutes (1–180)", 3, Modifier.padding(start = 48.dp).fillMaxWidth()) { custom = it }
                     }
                     choice("hand", "From now until I stop it", "")
                     val mins = listOf(3, 5, 10, 15, 20).filter { it * 60 <= recSec + 5 }
@@ -355,9 +353,7 @@ fun SaveEndQuestionHost() {
                     listOf(3, 5).forEach { m -> Pill("$m min") { say(RadioCapture.answerContinue(m)) } }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    androidx.compose.material3.OutlinedTextField(custom, { v -> custom = v.filter { it.isDigit() }.take(3) }, singleLine = true,
-                        modifier = Modifier.weight(1f), label = { Text("Minutes") },
-                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number))
+                    DigitField(custom, "Minutes", 3, Modifier.weight(1f)) { custom = it }
                     val m = custom.toIntOrNull() ?: 0
                     Pill("Continue", filled = m in 1..180) { if (m in 1..180) say(RadioCapture.answerContinue(m)) }
                 }
