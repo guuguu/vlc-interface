@@ -201,7 +201,6 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
 
     // A video with subtitle tracks inside it (2026-11-21 16:14): a pop-up to choose which one to use, once per video
     // opened (not again when the same video reopens at the same spot); a tap on a choice sets it and closes the pop-up.
-    var subAsk by remember { mutableStateOf(false) }
     LaunchedEffect(p.item?.uri) {
         val item = p.item ?: return@LaunchedEffect
         if (item.isRadio || item.isMusic || item.uri in SubAskOnce.asked) return@LaunchedEffect
@@ -210,11 +209,11 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
         // The tracks arrive while the file opens: wait for them a few seconds.
         repeat(16) {
             if (player.state.value.item?.uri != item.uri) return@LaunchedEffect
-            if (player.state.value.spuTracks.any { it.id >= 0 }) { delay(600); SubAskOnce.asked += item.uri; subAsk = true; return@LaunchedEffect }
+            if (player.state.value.spuTracks.any { it.id >= 0 }) { delay(600); SubAskOnce.asked += item.uri; SubChoiceUi.open = true; return@LaunchedEffect }
             delay(500)
         }
     }
-    if (subAsk) SubtitleChoiceDialog(p, onPick = { id -> player.selectSpu(id); subAsk = false }) { subAsk = false }
+    if (SubChoiceUi.open) SubtitleChoiceDialog(p, onPick = { id -> player.selectSpu(id); SubChoiceUi.open = false }) { SubChoiceUi.open = false }
 
     // Auto-download subtitles when nothing in the preferred languages is present.
     LaunchedEffect(p.item?.uri) {
@@ -555,6 +554,7 @@ private fun BoxScope.ControlsOverlayBody(
             HomeButton(nav, Color.White)
             MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 220.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
             OutputPill(openOutput)
+            OverlayChip("Subs/Change") { onTouch(); SubChoiceUi.open = true }
             OverlayChip("Subs/Sync") { onTouch(); onPanel() }
             // Browse: the folder the video came from, in the Library (Back returns here).
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
@@ -577,6 +577,7 @@ private fun BoxScope.ControlsOverlayBody(
         // bar above the picture (VideoHeader), not on it.
         // Short video area upright (compact): these chips are under the video instead, so nothing overlaps.
         if (!compact) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            OverlayChip("Subs/Change") { onTouch(); SubChoiceUi.open = true }
             OverlayChip("Subs/Sync") { onTouch(); onPanel() }
             // Browse: the folder the video came from, in the Library (Back returns here).
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
@@ -696,6 +697,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         // Sound & picture.
         val rowSound: @Composable () -> Unit = {
         androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Pill("Subs/Change") { SubChoiceUi.open = true }
             Pill("Subs/Sync") { onPanel() }
             Pill(syncLabel(p.audioDelayMs)) { AudioSyncUi.open = true }
             Pill("Hue/Sat") { onPicture() }
@@ -1389,6 +1391,11 @@ private fun UnderBtn(text: String, onClick: () -> Unit) {
 }
 
 
+/** The subtitle choice pop-up is open (on opening a video, or the "Subs/Change" button, 2026-11-21 16:36). */
+private object SubChoiceUi {
+    var open by androidx.compose.runtime.mutableStateOf(false)
+}
+
 /** Videos already asked about their subtitles in this session. */
 private object SubAskOnce {
     val asked = HashSet<String>()
@@ -1401,7 +1408,8 @@ private fun SubtitleChoiceDialog(p: PlayerState, onPick: (Int) -> Unit, onDismis
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.panel).padding(vertical = 12.dp)) {
             Text("Subtitles", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
-            Text("This video has subtitles. Choose one:", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
+            Text(if (tracks.isEmpty()) "No subtitles in this video yet (download or add one in Subs/Sync)." else "This video has subtitles. Choose one:",
+                color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
                 (listOf(Track(-1, "Off")) + tracks).forEach { t ->
                     val on = if (t.id < 0) p.spuTrack < 0 else t.id == p.spuTrack

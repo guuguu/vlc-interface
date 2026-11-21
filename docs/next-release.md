@@ -833,3 +833,9 @@
   - loads it into the player with the app's subtitle settings (Subtitle format, colour codes filtered), shows it
     and saves it silently as this video's subtitles (used again next time);
   - closes the panel back to the video, with a short note "Subtitles on (ES) · Saved next to the video as …".
+
+## "Subs/Change" button: load / change the video's subtitles (requested 2026-11-21 16:36)
+- New button "Subs/Change" on the video player (first in the Subs/Sync row upright, next to Subs/Sync sideways): opens
+  the same subtitle pop-up as when a video opens — Off and every subtitle of the video (inside the file, plus any
+  downloaded or added), the one on marked ●. A tap puts that one on, saves it silently for this video and closes the
+  pop-up. With none: it says so and offers only Off.
