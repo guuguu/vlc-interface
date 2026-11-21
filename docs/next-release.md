@@ -996,3 +996,13 @@
   - The automatic folder ReplayGain stored track gain only. ReplayGain "Auto" plays a whole album in order with album gain, so it fell back to track gain: every song was pulled to the same loudness, quiet songs raised and loud ones lowered.
   - The folder scan now measures the folder as one album (track and album gain). Songs it measured before with track gain only are measured again, once, the next time their folder plays.
 - **Fixed: libVLC's own ReplayGain switched off per song** whenever the app applies ReplayGain itself, so it can never be applied twice.
+
+## Queue ≡ handles away from the edge, hold to drag (requested 2026-11-21 21:00 / 21:04, layout B)
+- Queue page and the Up next boxes (song player and video player): the ≡ moved from the left edge to the right side of the row, just before the length. The order number is now first.
+- The ≡ starts a drag only after the finger rests on it for 0.2 s. A swipe that moves before then scrolls the list, so scrolling over the handles no longer moves rows. Then drag as before: one place per half row.
+
+## Search on YouTube for videos (requested 2026-11-21 21:04, old TV series)
+- **Long-press menu of every video** ("Search on YouTube"): the video Up next box, the Queue page and the folder / library lists.
+- **Long press on the playing video's title** (under the picture upright, in the top bar sideways) opens the Video details pop-up.
+- **"YouTube" button in the details pop-ups of videos:** Video details and the file Details.
+- **What is searched:** the video's name, tidied up. Dots and underscores become spaces; release tags (720p, x264, WEB-DL, DVDRip …) and [groups] are dropped; an episode code is kept as S02E05 (e.g. "The.Office.S02E05.720p.HDTV.x264-GRP" → "The Office S02E05"). It opens in the YouTube app when installed, else the browser.

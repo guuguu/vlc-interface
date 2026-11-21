@@ -566,10 +566,6 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 next.forEachIndexed { i, n -> androidx.compose.runtime.key(n.uri) {
                     Row(Modifier.then(upDrag.row(n.uri)).fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
                         .padding(vertical = if (landscape) 5.dp else 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        // ≡: drag up / down to move it in the queue (16:51).
-                        Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(upDrag.handle(n.uri,
-                            { player.state.value.queue.indexOfFirst { it.uri == n.uri } }, { player.state.value.queue.size }) { a, d ->
-                                if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(end = 6.dp))
                         // Order number: fixed, outside the gliding text (which is clipped a little after it).
                         Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
                         Box(Modifier.width(6.dp))
@@ -578,7 +574,11 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                         val ctxN = LocalContext.current
                         var line by remember(n.uri) { mutableStateOf(listOf(n.artist, n.album, n.title).filter { it.isNotBlank() }.joinToString(" - ")) }
                         LaunchedEffect(n.uri) { app.vlcinterface.sources.MediaInfo.upNextLine(ctxN.applicationContext, n)?.let { line = it } }
-                        MarqueeText(line, C.text, Modifier.weight(1f).padding(end = 8.dp), fontSize = 15.sp)
+                        MarqueeText(line, C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp)
+                        // ≡ on the right, before the length, away from the screen edge (21:04): hold it a moment, then drag.
+                        Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(upDrag.handle(n.uri,
+                            { player.state.value.queue.indexOfFirst { it.uri == n.uri } }, { player.state.value.queue.size }) { a, d ->
+                                if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(horizontal = 10.dp, vertical = 4.dp))
                         if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
                         Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
                             onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
@@ -879,15 +879,16 @@ fun QueueScreen(nav: Navigator) {
                 Row(Modifier.then(qDrag.row(q.uri)).fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp)).background(C.bg)
                     .background(if (i == p.index) accent().copy(alpha = 0.12f) else Color.Transparent)
                     .combinedClickable(onClick = { player.jumpTo(i) }, onLongClick = { qMenu = i }).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // ≡: drag up / down to move it, one place per half row (16:51).
-                    Text("≡", color = C.muted, fontSize = 20.sp, modifier = Modifier.then(qDrag.handle(q.uri,
-                        { player.state.value.queue.indexOfFirst { it.uri == q.uri } }, { player.state.value.queue.size }) { a, d -> player.moveInQueue(a, d) })
-                        .padding(horizontal = 6.dp, vertical = 10.dp))
                     Text("${i + 1}", color = if (i == p.index) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
                     Column(Modifier.weight(1f)) {
                         MarqueeText(q.title, if (i == p.index) accent() else C.text, Modifier.fillMaxWidth(), fontSize = 16.sp, list = "upnext")
                         if (q.artist.isNotEmpty()) Text(q.artist, color = C.muted, fontSize = 12.sp, maxLines = 1)
                     }
+                    // ≡ on the right, before the length, away from the screen edge (21:04): hold it a moment, then drag,
+                    // one place per half row.
+                    Text("≡", color = C.muted, fontSize = 20.sp, modifier = Modifier.then(qDrag.handle(q.uri,
+                        { player.state.value.queue.indexOfFirst { it.uri == q.uri } }, { player.state.value.queue.size }) { a, d -> player.moveInQueue(a, d) })
+                        .padding(horizontal = 10.dp, vertical = 10.dp))
                     if (q.durationMs > 0) Text(fmtTime(q.durationMs), color = C.muted, fontSize = 13.sp)
                     if (i != p.index) SymButton({ player.removeFromQueue(i) }) { Text("✕", color = C.muted) }
                     androidx.compose.foundation.layout.Box {

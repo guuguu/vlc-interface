@@ -69,6 +69,8 @@ fun FileMenu(nav: Navigator, item: PlayItem, expanded: Boolean, onDismiss: () ->
         if (!item.isRadio) SMenuItem({ Text("Open song folder") }, { close { openItemFolder(nav, item) } })
         if (!item.isRadio) SMenuItem({ Text("Details…") }, { close { FileDialogs.info = item } })
         if (!item.isRadio) SMenuItem({ Text("Share details…") }, { close { FileDialogs.share = item } })
+        // Videos (old TV series …): the same name searched on YouTube (2026-11-21 21:04).
+        if (!item.isMusic && !item.isRadio) SMenuItem({ Text("Search on YouTube") }, { close { YouTube.open(ctx, item) } })
         if (item.isMusic) SMenuItem({ Text("ReplayGain scan…") }, { close { FileDialogs.rg = item } })
         x.onRemove?.let { f -> SMenuItem({ Text(x.removeLabel, color = C.bad) }, { close(f) }) }
         x.onDelete?.let { f -> SMenuItem({ Text("Delete file…", color = C.bad) }, { close(f) }) }

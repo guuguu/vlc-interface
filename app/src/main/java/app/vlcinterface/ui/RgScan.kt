@@ -240,7 +240,7 @@ fun TagInfoDialog(item: PlayItem, onDismiss: () -> Unit) {
     var info by remember { mutableStateOf<app.vlcinterface.sources.MediaInfo.Info?>(null) }
     LaunchedEffect(item.uri) { info = app.vlcinterface.sources.MediaInfo.read(ctx.applicationContext, item) }
     val (title, secs, note) = itemDetails(item, info)
-    DetailsDialog(title, secs, note = note, onDone = onDismiss)
+    DetailsDialog(title, secs, note = note, youtube = item.takeIf { !it.isMusic && !it.isRadio }, onDone = onDismiss)
 }
 
 /**

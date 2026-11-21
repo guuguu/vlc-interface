@@ -173,6 +173,7 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     LaunchedEffect(inPip) { kotlinx.coroutines.delay(250); player.reattach(videoView) }
     var toast by remember { mutableStateOf("") }
     var showDetails by remember { mutableStateOf(false) }
+    if (VideoDetailsUi.open) { VideoDetailsUi.open = false; showDetails = true }
     val volDrag = remember { VolumeDrag(ctx) }
     var touchTick by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
@@ -846,7 +847,9 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
     // files, picture format; the picture itself only carries the position bar.
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val rowTitle: @Composable () -> Unit = {
-        MarqueeText(p.item?.title ?: "", C.text, Modifier.fillMaxWidth(), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, list = "player")
+        // Long press on the title: the video's details, with "YouTube" to search the same name (2026-11-21 21:04).
+        MarqueeText(p.item?.title ?: "", C.text, Modifier.fillMaxWidth().combinedClickable(onClick = {}, onLongClick = { VideoDetailsUi.open = true }),
+            fontSize = 17.sp, fontWeight = FontWeight.SemiBold, list = "player")
         }
         // Playing: previous / −10 / play-pause / +10 / next, centred.
         val rowPlaying: @Composable () -> Unit = {
@@ -901,13 +904,13 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             next.forEachIndexed { i, n -> androidx.compose.runtime.key(n.uri) {
                 Row(Modifier.then(upDrag.row(n.uri)).fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
                     .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // ≡: drag up / down to move it in the queue (16:51).
-                    Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(upDrag.handle(n.uri,
-                        { player.state.value.queue.indexOfFirst { it.uri == n.uri } }, { player.state.value.queue.size }) { a, d ->
-                            if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(end = 6.dp))
                     Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
                     Box(Modifier.width(6.dp))
-                    MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 8.dp), fontSize = 15.sp, list = "upnext")
+                    MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp, list = "upnext")
+                    // ≡ on the right, before the length, away from the screen edge (21:04): hold it a moment, then drag.
+                    Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(upDrag.handle(n.uri,
+                        { player.state.value.queue.indexOfFirst { it.uri == n.uri } }, { player.state.value.queue.size }) { a, d ->
+                            if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(horizontal = 10.dp, vertical = 4.dp))
                     if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
                     Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
                         onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
@@ -1455,6 +1458,11 @@ private fun PortraitSync(which: Int, p: PlayerState, onSwitch: (Int) -> Unit, on
 }
 
 
+/** Asks the video player to open its details (long press on the title, 2026-11-21 21:04). */
+object VideoDetailsUi {
+    var open by mutableStateOf(false)
+}
+
 /**
  * Long press on a playing video: all its details in fixed sections and order (File, Source, Video, Audio, Subtitles,
  * Tags, Playback), label on the left, value on the right; refreshed every 2 s; tap a line to copy it.
@@ -1463,7 +1471,8 @@ private fun PortraitSync(which: Int, p: PlayerState, onSwitch: (Int) -> Unit, on
 private fun VideoDetailsDialog(onDone: () -> Unit) {
     var secs by remember { mutableStateOf(App.instance.player.videoDetails()) }
     LaunchedEffect(Unit) { while (true) { delay(2000); secs = App.instance.player.videoDetails() } }
-    DetailsDialog("Video details", secs, emptyText = "No video playing.", onDone = onDone)
+    val v = App.instance.player.state.collectAsState().value.item?.takeIf { !it.isMusic && !it.isRadio }
+    DetailsDialog("Video details", secs, emptyText = "No video playing.", youtube = v, onDone = onDone)
 }
 
 
@@ -1685,7 +1694,7 @@ private fun BoxScope.VideoTopBar(p: PlayerState, nav: Navigator, locked: Boolean
             FitRow(Modifier.fillMaxWidth(), minGap = 6.dp) {
                 SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
                 HomeButton(nav, Color.White)
-                MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 300.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
+                MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 300.dp).combinedClickable(onClick = {}, onLongClick = { VideoDetailsUi.open = true }), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
                 SymButton(onLock) { SymIcon(Icons.Filled.Lock, "Lock controls", tint = Color.White) }
                 SymButton({ nav.go(Screen.SettingsGroup("video")) }) { SymIcon(Icons.Filled.Settings, "Video settings", tint = Color.White) }
                 ShazamButton(Color.White)

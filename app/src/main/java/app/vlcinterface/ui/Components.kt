@@ -26,6 +26,7 @@ import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -1200,7 +1201,7 @@ fun DragOrderList(
  */
 @Composable
 fun DetailsDialog(title: String, sections: List<Pair<String, List<Pair<String, String>>>>, note: String = "",
-                  emptyText: String = "Nothing to show.", onDone: () -> Unit) {
+                  emptyText: String = "Nothing to show.", youtube: app.vlcinterface.player.PlayItem? = null, onDone: () -> Unit) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     fun copy(text: String, what: String) {
         ctx.getSystemService(android.content.ClipboardManager::class.java)?.setPrimaryClip(android.content.ClipData.newPlainText(title, text))
@@ -1230,6 +1231,8 @@ fun DetailsDialog(title: String, sections: List<Pair<String, List<Pair<String, S
         dismissButton = {
             Row {
                 // Share (2026-11-21 11:53): Android's share sheet with everything as text (message, mail, notes…).
+                // Videos: search the same name on YouTube (2026-11-21 21:04).
+                youtube?.let { v -> STextButton({ YouTube.open(ctx, v) }) { Text("YouTube") } }
                 STextButton({ shareDetails(ctx, title, report()) }) { Text("Share") }
                 STextButton({ copy(report(), "Details") }) { Text("Copy all") }
             }
@@ -1273,21 +1276,41 @@ class QueueDrag {
         .onGloballyPositioned { if (key == k) rowH = it.size.height }
         .background(if (key == k) C.card else Color.Transparent)
 
-    /** The ≡ handle of the row with queue key [k]; [indexOf] finds its place now, [move] moves it (+1 / -1). */
+    /**
+     * The ≡ handle of the row with queue key [k]; [indexOf] finds its place now, [move] moves it (+1 / -1).
+     * Hold first (2026-11-21 21:04): the drag starts only after the finger rests on ≡ for [HOLD_MS]; a finger that moves
+     * before that is a scroll and is left to the list (scrolling that began on ≡ used to move the row).
+     */
     fun handle(k: String, indexOf: () -> Int, size: () -> Int, move: (Int, Int) -> Unit): Modifier = Modifier.pointerInput(k) {
-        detectDragGestures(
-            onDragStart = { key = k; dy = 0f },
-            onDragEnd = { key = null; dy = 0f },
-            onDragCancel = { key = null; dy = 0f },
-        ) { ch, d ->
-            ch.consume()
-            dy += d.y
-            val h = rowH.coerceAtLeast(1).toFloat()
-            var i = indexOf()
-            while (dy > h / 2 && i in 0 until size() - 1) { move(i, 1); i++; dy -= h }
-            while (dy < -h / 2 && i > 0) { move(i, -1); i--; dy += h }
+        val slop = viewConfiguration.touchSlop
+        androidx.compose.foundation.gestures.awaitEachGesture {
+            val down = androidx.compose.foundation.gestures.awaitFirstDown(requireUnconsumed = false)
+            // The hold: ends early (no drag) when the finger lifts, moves past the touch slop, or the list took it.
+            val held = withTimeoutOrNull(HOLD_MS) {
+                var still = true
+                while (still) {
+                    val c = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                    if (c == null || !c.pressed || c.isConsumed || (c.position - down.position).getDistance() > slop) still = false
+                }
+                false                                          // the hold was broken before the time
+            } ?: true                                          // time up with the finger still: drag
+            if (!held) return@awaitEachGesture
+            key = k; dy = 0f
+            try {
+                androidx.compose.foundation.gestures.drag(down.id) { ch ->
+                    val d = ch.positionChange().y
+                    ch.consume()
+                    dy += d
+                    val h = rowH.coerceAtLeast(1).toFloat()
+                    var i = indexOf()
+                    while (dy > h / 2 && i in 0 until size() - 1) { move(i, 1); i++; dy -= h }
+                    while (dy < -h / 2 && i > 0) { move(i, -1); i--; dy += h }
+                }
+            } finally { key = null; dy = 0f }
         }
     }
+
+    companion object { const val HOLD_MS = 200L }
 }
 
 
