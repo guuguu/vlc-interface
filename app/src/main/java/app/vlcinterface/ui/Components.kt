@@ -1249,6 +1249,58 @@ fun detailsText(title: String, sections: List<Pair<String, List<Pair<String, Str
 }
 
 /** Android's share sheet with [text] (subject [title]); copied instead if nothing can share. */
+/**
+ * Shares a text as a .txt file (2026-11-21 23:38: a long log put inside the share message went over Android's size limit
+ * and nothing happened). Android's app picker opens; the text itself also goes in the message when it's short.
+ */
+fun shareTextFile(ctx: android.content.Context, fileName: String, text: String, chooserTitle: String) {
+    try {
+        val dir = java.io.File(ctx.cacheDir, "share").apply { mkdirs() }
+        dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000L }?.forEach { it.delete() }
+        val f = java.io.File(dir, fileName).apply { writeText(text) }
+        val uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.packageName + ".share", f)
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(android.content.Intent.EXTRA_SUBJECT, fileName)
+            .putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (text.length <= 60_000) send.putExtra(android.content.Intent.EXTRA_TEXT, text)
+        send.clipData = android.content.ClipData.newRawUri(fileName, uri)
+        ctx.startActivity(android.content.Intent.createChooser(send, chooserTitle).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION))
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(ctx, "Couldn't share: ${e.message ?: e.javaClass.simpleName}", android.widget.Toast.LENGTH_LONG).show()
+    }
+}
+
+/**
+ * What to share from a log (2026-11-21 23:38): all entries or errors only (the current filter chosen at first), then
+ * Android's app picker. [counts]: all, errors.
+ */
+@Composable
+fun LogShareDialog(title: String, all: Int, errors: Int, errorsFirst: Boolean, onPick: (Boolean) -> Unit, onDismiss: () -> Unit) {
+    var errOnly by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(errorsFirst && errors > 0) }
+    androidx.compose.material3.AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
+        title = { Text(title, color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("What to share:", color = C.muted, fontSize = 13.sp)
+                listOf(false to "All entries ($all)", true to "Errors only ($errors)").forEach { (k, label) ->
+                    val on = errOnly == k
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+                        .then(if (on) Modifier.background(accent().copy(alpha = 0.18f)) else Modifier)
+                        .clickable(enabled = !(k && errors == 0)) { errOnly = k }.padding(horizontal = 10.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (on) "●" else "○", color = if (on) accent() else C.muted, modifier = Modifier.width(26.dp))
+                        Text(label, color = if (k && errors == 0) C.muted else C.text, fontSize = 15.sp)
+                    }
+                }
+                Text("Sent as a .txt file — then pick the app (mail, messages, Drive…).", color = C.muted, fontSize = 12.sp)
+            }
+        },
+        confirmButton = { STextButton({ onPick(errOnly) }) { Text("Share…", color = accent()) } },
+        dismissButton = { STextButton(onDismiss) { Text("Cancel") } })
+}
+
 fun shareDetails(ctx: android.content.Context, title: String, text: String) {
     try {
         val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")

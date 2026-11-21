@@ -1268,7 +1268,7 @@ fun SaveToNasDialog(title: String, defaultName: String, what: String, content: (
             status = "Saving…"
             val folderUrl = Urls.forSource(s.copy(path = ""), folder)
             NasWriter.write(s, folderUrl, finalName, content(folderUrl), what)
-                .onSuccess { status = "Saved $finalName"; onDone() }.onFailure { status = it.message ?: "Could not save" }
+                .onSuccess { ShortNote.show("Saved to NAS: $finalName"); onDone() }.onFailure { status = it.message ?: "Could not save" }
         }
     }
     AlertDialog(onDismissRequest = onDone, title = { Text(title) },
@@ -1342,6 +1342,7 @@ fun LogPageScreen(nav: Navigator, key: String) {
     var errorsOnly by remember { mutableStateOf(false) }
     var confirmEmpty by remember { mutableStateOf(false) }
     var saveNas by remember { mutableStateOf(false) }
+    var shareAsk by remember { mutableStateOf(false) }
     val fmt = remember { SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()) }
     val shown = if (errorsOnly) entries.filter { !it.ok } else entries
     Column(Modifier.fillMaxSize()) {
@@ -1349,11 +1350,8 @@ fun LogPageScreen(nav: Navigator, key: String) {
         Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Pill("Errors only", selected = errorsOnly) { errorsOnly = !errorsOnly }
             Pill("Empty log") { confirmEmpty = true }
-            Pill("Share") {
-                val (name, text) = ServerLog.exportText(key, App.VERSION)
-                ctx.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
-                    .putExtra(Intent.EXTRA_SUBJECT, name).putExtra(Intent.EXTRA_TEXT, text), "Share log"))
-            }
+            // Share (23:38): a selection (all / errors only), then Android's app picker; sent as a .txt file.
+            Pill("Share") { shareAsk = true }
             Pill("Save to NAS") { saveNas = true }
         }
         val state = rememberLazyListState()
@@ -1372,12 +1370,18 @@ fun LogPageScreen(nav: Navigator, key: String) {
             }
         }
     }
+    if (shareAsk) LogShareDialog("Share log · $key", entries.size, entries.count { !it.ok }, errorsOnly, onPick = { err ->
+        shareAsk = false
+        val (name, text) = ServerLog.exportText(key, App.VERSION, err)
+        shareTextFile(ctx, name, text, "Share log with…")
+    }) { shareAsk = false }
     if (confirmEmpty) AlertDialog(onDismissRequest = { confirmEmpty = false }, title = { Text("Empty the log for $key?") },
-        text = { Text("Only this server's log is cleared.") },
+        text = { Text("Only this log is cleared.") },
         confirmButton = { STextButton({ ServerLog.clear(key); confirmEmpty = false }) { Text("Empty", color = C.bad) } },
         dismissButton = { STextButton({ confirmEmpty = false }) { Text("Cancel") } })
     if (saveNas) {
-        val (name, text) = remember { ServerLog.exportText(key, App.VERSION) }
+        // What the page shows (Errors only followed).
+        val (name, text) = remember { ServerLog.exportText(key, App.VERSION, errorsOnly) }
         SaveToNasDialog("Save log to NAS", name, "log", { text.toByteArray() }) { saveNas = false }
     }
 }
@@ -1521,8 +1525,17 @@ fun LogViewScreen(nav: Navigator, kind: String) {
             .filter { (_, e) -> when (kind) { "errors" -> !e.ok; "indexing" -> e.action == "index"; else -> true } }
             .sortedByDescending { it.second.at }.take(1000)
     }
+    val ctxV = LocalContext.current
+    var shareAskV by remember { mutableStateOf(false) }
+    var saveNasV by remember { mutableStateOf(false) }
+    val titleV = when (kind) { "errors" -> "All errors"; "indexing" -> "Indexing"; else -> "Logs" }
     Column(Modifier.fillMaxSize()) {
-        BackHeader(when (kind) { "errors" -> "All errors"; "indexing" -> "Indexing"; else -> "Logs" }, nav, "${rows.size} entries")
+        BackHeader(titleV, nav, "${rows.size} entries")
+        // Share and Save to NAS here too (23:38).
+        Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Pill("Share") { if (kind == "errors") { val (n, t) = ServerLog.exportRows(titleV, rows, App.VERSION); shareTextFile(ctxV, n, t, "Share log with…") } else shareAskV = true }
+            Pill("Save to NAS") { saveNasV = true }
+        }
         val state = rememberLazyListState()
         LazyColumn(Modifier.weight(1f).scrollbar(state).padding(horizontal = 20.dp), state = state) {
             if (rows.isEmpty()) item { Text("Nothing logged.", color = C.muted, modifier = Modifier.padding(vertical = 12.dp)) }
@@ -1539,8 +1552,16 @@ fun LogViewScreen(nav: Navigator, kind: String) {
             }
         }
     }
+    if (shareAskV) LogShareDialog("Share · $titleV", rows.size, rows.count { !it.second.ok }, false, onPick = { err ->
+        shareAskV = false
+        val (n, t) = ServerLog.exportRows(titleV + if (err) " (errors only)" else "", if (err) rows.filter { !it.second.ok } else rows, App.VERSION)
+        shareTextFile(ctxV, n, t, "Share log with…")
+    }) { shareAskV = false }
+    if (saveNasV) {
+        val (n, t) = remember { ServerLog.exportRows(titleV, rows, App.VERSION) }
+        SaveToNasDialog("Save log to NAS", n, "log", { t.toByteArray() }) { saveNasV = false }
+    }
 }
-
 
 /**
  * From the player's "Playlist / Folder" button: open the current source, or load another saved playlist
