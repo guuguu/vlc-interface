@@ -42,6 +42,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.zIndex
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
@@ -1119,7 +1121,7 @@ fun DragOrderList(
                         .background(if (isDrag) Color(0xFF2A3038) else Color.Transparent)
                         .onGloballyPositioned { heights[id] = it.size.height }
                         .pointerInput(id) {
-                            androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress(
+                            detectDragGesturesAfterLongPress(
                                 onDragStart = { start(id) }, onDragEnd = { end() }, onDragCancel = { end() },
                                 onDrag = { ch, d -> ch.consume(); dragBy(d.y) })
                         }
@@ -1129,7 +1131,7 @@ fun DragOrderList(
                     // ≡ handle: drags at once (no long press needed).
                     Text("≡", color = if (isDrag) accent() else C.muted, fontSize = 22.sp, lineHeight = 22.sp,
                         modifier = Modifier.pointerInput(id) {
-                            androidx.compose.foundation.gestures.detectDragGestures(
+                            detectDragGestures(
                                 onDragStart = { start(id) }, onDragEnd = { end() }, onDragCancel = { end() },
                                 onDrag = { ch, d -> ch.consume(); dragBy(d.y) })
                         }.padding(horizontal = 14.dp, vertical = 8.dp))

@@ -198,7 +198,6 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
             .apply { if (sub.isNotEmpty()) setSubText(sub) }
             .setShowWhen(false)
             .setOnlyAlertOnce(true)
-            .setSilent(true)
             .setCategory(Notification.CATEGORY_TRANSPORT)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)   // Android 12 would wait up to 10 s
             .setVisibility(Notification.VISIBILITY_PUBLIC)
