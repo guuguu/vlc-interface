@@ -85,6 +85,7 @@ class Store(private val context: Context) {
         if (ExportCat.SUBS in c) listOf("subStyle", "subOffsets", "audioOffsets").forEach { st.put(it, full.get(it)) }
         if (ExportCat.RESUME in c) listOf("recent", "scanned").forEach { st.put(it, full.get(it)) }
         if (ExportCat.ALARMS in c) try { st.put("alarms", app.vlcinterface.alarm.Alarms.exportJson()) } catch (_: Exception) {}
+        if (ExportCat.VIS in c) try { st.put("vis", app.vlcinterface.alarm.Alarms.exportVis()) } catch (_: Exception) {}
         return JSONObject()
             .put("format", "vlc-interface-setup")
             .put("formatVersion", FORMAT_VERSION)
@@ -114,13 +115,15 @@ class Store(private val context: Context) {
             val pw = root.optBoolean("passwordsIncluded")
             val cats = root.optJSONArray("categories")?.let { a -> (0 until a.length()).map { a.getString(it) }.toSet() }
                 ?: (ExportCat.ALL_IDS.toSet() - ExportCat.ALARMS - (if (pw) emptySet() else setOf(ExportCat.PASSWORDS)))   // older files
+            // Files from before the split carry the visualisation inside the alarms section.
+            val catsV = cats.let { if (ExportCat.ALARMS in it && ExportCat.VIS !in it && st.optJSONObject("alarms")?.has("vis") == true) it + ExportCat.VIS else it }
             ImportPreview(
                 true,
                 sources = st.optJSONArray("sources")?.length() ?: 0,
                 stations = st.optJSONArray("stations")?.length() ?: 0,
                 needsPassphrase = pw,
                 raw = root,
-                cats = cats,
+                cats = catsV,
             )
         }
     } catch (e: Exception) {
@@ -185,6 +188,8 @@ class Store(private val context: Context) {
             m
         }
         if (ExportCat.ALARMS in c) stJ.optJSONObject("alarms")?.let { try { app.vlcinterface.alarm.Alarms.importJson(it, replace) } catch (_: Exception) {} }
+        // Visualisation: its own section; older files kept it inside the alarms section.
+        if (ExportCat.VIS in c) (stJ.optJSONObject("vis") ?: stJ.optJSONObject("alarms"))?.let { try { app.vlcinterface.alarm.Alarms.importVis(it) } catch (_: Exception) {} }
         return null
     }
 
@@ -254,10 +259,11 @@ object ExportCat {
     const val ALARMS = "alarms"
     const val SUBS = "subs"
     const val RESUME = "resume"
+    const val VIS = "vis"
     /** id → name, in the order shown. */
     val LIST = listOf(SETTINGS to "Settings", NAS to "NAS (servers, shares, addresses)", VPN to "VPN (app, home servers, retry)",
         INTERNET to "Internet sources", PASSWORDS to "Saved passwords", RADIO to "Radio favourites", PLAYLISTS to "Playlists",
-        ALARMS to "Alarms, clock and visualisation", SUBS to "Subtitle style and sync offsets", RESUME to "Resume positions and scanned folders")
+        ALARMS to "Alarms and clock", VIS to "Visualisation (all patterns' settings)", SUBS to "Subtitle style and sync offsets", RESUME to "Resume positions and scanned folders")
     val ALL_IDS = LIST.map { it.first }
     /** Settings that belong to the VPN category. */
     val VPN_KEYS = setOf("vpnNas", "vpnAskStart", "vpnApp", "vpnRetrySec")

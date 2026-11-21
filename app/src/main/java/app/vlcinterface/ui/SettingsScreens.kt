@@ -990,6 +990,7 @@ fun BackupScreen(nav: Navigator) {
         ExportCat.RADIO to "${st.stations.size} stations",
         ExportCat.PLAYLISTS to "${st.playlists.size} playlists",
         ExportCat.ALARMS to "$alarmsN alarms",
+        ExportCat.VIS to "patterns",
         ExportCat.SUBS to "${st.subOffsets.size + st.audioOffsets.size} offsets",
         ExportCat.RESUME to "${st.recent.size} files",
     )

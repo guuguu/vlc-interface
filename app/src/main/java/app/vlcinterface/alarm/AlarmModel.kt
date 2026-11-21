@@ -355,9 +355,22 @@ object Alarms {
     fun exportJson(): JSONObject {
         val d = current
         return JSONObject().put("alarms", JSONArray().apply { d.alarms.forEach { put(it.toJson()) } }).put("global", d.global.toJson())
-            .put("aspect", d.aspect.toJson()).put("showClock", d.showClock).put("vis", d.vis.toJson())
-            // Every visualisation pattern's own settings (with the one in use brought up to date).
-            .put("visByEffect", visByEffect().put(d.vis.effect, d.vis.toJson()))
+            .put("aspect", d.aspect.toJson()).put("showClock", d.showClock)
+    }
+
+    /** Export category "Visualisation": the pattern in use and every pattern's own settings. */
+    fun exportVis(): JSONObject {
+        val d = current
+        return JSONObject().put("vis", d.vis.toJson()).put("visByEffect", visByEffect().put(d.vis.effect, d.vis.toJson()))
+    }
+
+    /** Import of the "Visualisation" category: the file's patterns replace this phone's for the same patterns. */
+    fun importVis(o: JSONObject) {
+        o.optJSONObject("visByEffect")?.let { inc2 ->
+            val all = visByEffect(); inc2.keys().forEach { k -> all.put(k, inc2.get(k)) }
+            prefs.edit().putString("visByEffect", all.toString()).apply()
+        }
+        o.optJSONObject("vis")?.let { save(current.copy(vis = VisSettings.fromJson(it))) }
     }
 
     private fun visByEffect(): JSONObject = try { JSONObject(prefs.getString("visByEffect", "{}") ?: "{}") } catch (_: Exception) { JSONObject() }
@@ -369,13 +382,8 @@ object Alarms {
         val inc = (0 until a.length()).map { Alarm.fromJson(a.getJSONObject(it)) }
         val list = if (replace) inc else d.alarms + inc.filter { n -> d.alarms.none { it.id == n.id } }
         val g = o.optJSONObject("global")?.let { AlarmGlobal.fromJson(it).copy(calSync = d.global.calSync, calId = d.global.calId, calName = d.global.calName) } ?: d.global
-        // All the patterns' settings: the file's ones replace this phone's for the same patterns (others stay).
-        o.optJSONObject("visByEffect")?.let { inc2 ->
-            val all = visByEffect(); inc2.keys().forEach { k -> all.put(k, inc2.get(k)) }
-            prefs.edit().putString("visByEffect", all.toString()).apply()
-        }
         save(d.copy(alarms = list, global = g, aspect = o.optJSONObject("aspect")?.let { ClockAspect.fromJson(it) } ?: d.aspect,
-            showClock = o.optBoolean("showClock", d.showClock), vis = o.optJSONObject("vis")?.let { VisSettings.fromJson(it) } ?: d.vis))
+            showClock = o.optBoolean("showClock", d.showClock)))
         AlarmScheduler.reschedule(ctx)
     }
 

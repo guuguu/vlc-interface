@@ -322,3 +322,6 @@
   pattern.
 - Export / import (23:44): the setup file now carries every visualisation pattern's own settings (not only the one
   in use); importing brings them back (the file's ones replace this phone's for the same patterns).
+- Visualisation is its own export category (21 Nov 01:01): "Visualisation (all patterns' settings)" next to
+  "Alarms and clock"; tick it to export / import every pattern's settings and the one in use. Setup files from
+  before the split (visualisation inside the alarms section) still import it.
