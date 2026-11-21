@@ -82,7 +82,9 @@ private fun AlarmScreen(close: () -> Unit) {
     val g = Alarms.current.global
     fun hm(t: Long) = SimpleDateFormat("HH:mm", Locale.getDefault()).apply { timeZone = Alarms.zone() }.format(Date(t))
     val aspect = Alarms.state.collectAsState().value.aspect
-    androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).padding(20.dp), contentAlignment = Alignment.Center) {
+    val flash by AlarmEngine.screenFlash.collectAsState()
+    val body: @Composable (Modifier) -> Unit = { mod ->
+    androidx.compose.foundation.layout.BoxWithConstraints(mod.background(Color.Black).padding(20.dp), contentAlignment = Alignment.Center) {
         // Sideways: clock and name on the left, the buttons / the pattern on the right; everything sized to fit, never cut.
         val land = maxWidth > maxHeight
         val fullH = maxHeight; val fullW = maxWidth
@@ -127,6 +129,30 @@ private fun AlarmScreen(close: () -> Unit) {
             app.vlcinterface.ui.ClockFace(aspect, Modifier.size(side))
             if (u.name.isNotEmpty()) Text(u.name, color = Color(0xFFB0B0B0), fontSize = 18.sp, textAlign = TextAlign.Center)
             actions(fullH - side - 60.dp)
+        }
+    }
+    }
+    // Screen flash (alarm's light choice): half of the screen flashes in the chosen colour — the top half upright, the
+    // left half sideways — and the other half keeps the clock, the alarm's name and Snooze / Stop / the pattern.
+    // Moving the phone stops it (the engine clears [flash]).
+    if (flash == 0) body(Modifier.fillMaxSize())
+    else androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+        val land = maxWidth > maxHeight
+        var lit by remember { mutableStateOf(true) }
+        LaunchedEffect(flash) { while (true) { lit = !lit; delay(500) } }
+        // Full brightness while flashing; the phone's own brightness again afterwards.
+        val act = ctx as? android.app.Activity
+        androidx.compose.runtime.DisposableEffect(Unit) {
+            act?.window?.let { w -> w.attributes = w.attributes.apply { screenBrightness = 1f } }
+            onDispose { act?.window?.let { w -> w.attributes = w.attributes.apply { screenBrightness = android.view.WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE } } }
+        }
+        val pane = Modifier.background(if (lit) Color(flash) else Color.Black)
+        if (land) Row(Modifier.fillMaxSize()) {
+            Box(pane.weight(1f).fillMaxHeight())
+            body(Modifier.weight(1f).fillMaxHeight())
+        } else Column(Modifier.fillMaxSize()) {
+            Box(pane.weight(1f).fillMaxWidth())
+            body(Modifier.weight(1f).fillMaxWidth())
         }
     }
 }

@@ -146,7 +146,7 @@ object AlarmEngine {
         val router = App.instance.output
         if (prevVolume < 0) prevVolume = router.volumePercent()
         if (prevAlarmVolume < 0) prevAlarmVolume = streamPct(am, AudioManager.STREAM_ALARM)
-        startEffects(g, a.vibrate ?: g.vibrate, a.led ?: g.led)
+        startEffects(g, a.vibrate ?: g.vibrate, a.led ?: g.led, a.ledColor ?: g.ledColor)
         val player = App.instance.player
         val low = battery() in 0..15 && g.lowBattery == "tone"
         // Music or radio already playing: stopped completely, only the phone's alarm tone rings.
@@ -303,9 +303,47 @@ object AlarmEngine {
 
     // ------------------------------------------------------------------ vibration / light
 
-    private fun startEffects(g: AlarmGlobal, vib: Boolean, led: String) {
+    /** Screen flash colour while ringing (ARGB), 0 = no screen flash. The ringing screen flashes half of itself with it. */
+    private val _screenFlash = MutableStateFlow(0)
+    val screenFlash: StateFlow<Int> = _screenFlash
+    private var lightMotion: SensorEventListener? = null
+
+    /** The phone is moved: the flashing (screen or flash light) stops; sound and vibration go on. */
+    private fun watchLightMotion() {
+        stopLightMotion()
+        val sm = app.getSystemService(SensorManager::class.java) ?: return
+        val gyro = sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+        val s = gyro ?: sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
+        val started = System.currentTimeMillis()
+        val l = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) {
+                if (System.currentTimeMillis() - started < 1500) return      // the vibration starting isn't a move
+                val mag = sqrt(e.values[0] * e.values[0] + e.values[1] * e.values[1] + e.values[2] * e.values[2])
+                val moving = if (gyro != null) mag > 0.8f else abs(mag - SensorManager.GRAVITY_EARTH) > 2.0f
+                if (moving) { stopLights(); log("lights stopped: phone moved") }
+            }
+            override fun onAccuracyChanged(s: Sensor?, a: Int) {}
+        }
+        lightMotion = l
+        try { sm.registerListener(l, s, SensorManager.SENSOR_DELAY_NORMAL) } catch (_: Exception) { lightMotion = null }
+    }
+
+    private fun stopLightMotion() {
+        lightMotion?.let { try { app.getSystemService(SensorManager::class.java).unregisterListener(it) } catch (_: Exception) {} }
+        lightMotion = null
+    }
+
+    private fun stopLights() {
+        fxJob?.cancel(); fxJob = null
+        _screenFlash.value = 0
+        stopLightMotion()
+    }
+
+    private fun startEffects(g: AlarmGlobal, vib: Boolean, led: String, color: Int) {
         if (vib) vibrate(longArrayOf(0, 700, 700))
         fxJob?.cancel()
+        _screenFlash.value = if (led == "screen") (color.takeIf { it != 0 } ?: 0xFFFFFFFF.toInt()) else 0
+        if (led == "screen" || led == "flash") watchLightMotion()
         if (led == "flash") fxJob = scope.launch {
             val cm = app.getSystemService(CameraManager::class.java)
             val id = try { cm.cameraIdList.firstOrNull { cm.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true } } catch (_: Exception) { null }
@@ -324,7 +362,7 @@ object AlarmEngine {
     }
 
     private fun stopEffects() {
-        fxJob?.cancel(); fxJob = null
+        stopLights()
         try { app.getSystemService(VibratorManager::class.java).defaultVibrator.cancel() } catch (_: Exception) {}
         tone?.let { try { it.stop(); it.release() } catch (_: Exception) {} }
         tone = null
@@ -566,8 +604,8 @@ object AlarmEngine {
         val nm = app.getSystemService(NotificationManager::class.java)
         if (nm.getNotificationChannel(CH_RING) == null) nm.createNotificationChannel(NotificationChannel(CH_RING, "Alarm ringing", NotificationManager.IMPORTANCE_HIGH)
             .apply { setSound(null, null); enableVibration(false); setBypassDnd(true); lockscreenVisibility = Notification.VISIBILITY_PUBLIC })
-        if (nm.getNotificationChannel(CH_RING_LED) == null) nm.createNotificationChannel(NotificationChannel(CH_RING_LED, "Alarm ringing (light)", NotificationManager.IMPORTANCE_HIGH)
-            .apply { setSound(null, null); enableVibration(false); enableLights(true); lightColor = Color.YELLOW; setBypassDnd(true); lockscreenVisibility = Notification.VISIBILITY_PUBLIC })
+        // The notification light is replaced by the screen flash: its old channel is removed.
+        if (nm.getNotificationChannel(CH_RING_LED) != null) try { nm.deleteNotificationChannel(CH_RING_LED) } catch (_: Exception) {}
         if (nm.getNotificationChannel(CH_WATCH) == null) nm.createNotificationChannel(NotificationChannel(CH_WATCH, "Alarm wake check", NotificationManager.IMPORTANCE_LOW)
             .apply { setSound(null, null); enableVibration(false) })
     }
@@ -585,7 +623,7 @@ object AlarmEngine {
         val u = _ui.value
         val g = Alarms.current.global
         val urgent = u.phase == "ringing" || u.phase == "confirming"
-        val b = Notification.Builder(app, if (!urgent) CH_WATCH else if ((Alarms.get(u.alarmId)?.led ?: g.led) == "notif") CH_RING_LED else CH_RING)
+        val b = Notification.Builder(app, if (!urgent) CH_WATCH else CH_RING)
             .setSmallIcon(R.drawable.ic_stat_cone).setOngoing(true).setShowWhen(false).setOnlyAlertOnce(true)
             .setSortKey("0alarm").setGroup("alarm")
             .setCategory(Notification.CATEGORY_ALARM).setContentIntent(screenIntent()).setVisibility(Notification.VISIBILITY_PUBLIC)

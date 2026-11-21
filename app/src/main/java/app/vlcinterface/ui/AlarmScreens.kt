@@ -327,7 +327,9 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                 HToggleRow("Vibrate (this alarm)", "", a.vibrate ?: Alarms.current.global.vibrate) { a = a.copy(vibrate = it) }
                 Divider()
                 Label("Light blinking (this alarm)")
-                Choices(listOf("Off" to "off", "Notification light" to "notif", "Flash light" to "flash"), a.led ?: Alarms.current.global.led) { a = a.copy(led = it) }
+                Choices(listOf("Off" to "off", "Screen flash" to "screen", "Flash light" to "flash"), a.led ?: Alarms.current.global.led) { a = a.copy(led = it) }
+                if ((a.led ?: Alarms.current.global.led) == "screen")
+                    FlashColours(a.ledColor ?: Alarms.current.global.ledColor) { a = a.copy(ledColor = it) }
             }
             SectionTitle("Snooze and stop")
             CardBox {
@@ -447,7 +449,8 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
                 Divider()
                 HToggleRow("Vibrate (default)", "", g.vibrate) { set(g.copy(vibrate = it)) }; Divider()
                 Label("Light blinking (default)")
-                Choices(listOf("Off" to "off", "Notification light" to "notif", "Flash light" to "flash"), g.led) { set(g.copy(led = it)) }
+                Choices(listOf("Off" to "off", "Screen flash" to "screen", "Flash light" to "flash"), g.led) { set(g.copy(led = it)) }
+                if (g.led == "screen") FlashColours(g.ledColor) { set(g.copy(ledColor = it)) }
                 Divider()
                 Label("Crescendo", "How the volume rises from start to target")
                 Choices(listOf("Steady" to "linear", "Gentle start" to "gentle", "Quick start" to "fast"), g.crescendo) { set(g.copy(crescendo = it)) }
@@ -671,8 +674,8 @@ private val HELP: Map<String, String> = mapOf(
     "Maximum level" to "No alarm ever goes above this volume: not the target, not the ring after the wake check, not the alarm sound.",
     "Vibrate (default)" to "The phone vibrates while an alarm rings — for alarms that have no Vibrate choice of their own. An alarm's own Vibrate (on its page, under Volume) always wins.",
     "Vibrate (this alarm)" to "Vibrate while this alarm rings. Kept with this alarm and used instead of the alarm clock settings' Vibrate.",
-    "Light blinking (default)" to "Notification light (phones that have one) or the camera's flash light blinking while an alarm rings — for alarms that have no light choice of their own. An alarm's own choice (on its page, under Volume) always wins.",
-    "Light blinking (this alarm)" to "Notification light (phones that have one) or the camera's flash light blinking while this alarm rings. Kept with this alarm and used instead of the alarm clock settings' choice.",
+    "Light blinking (default)" to "Screen flash: half of the ringing screen flashes in the chosen colour at full brightness — the clock, the alarm's name and Snooze / Stop / the pattern stay on the other half. Flash light: the camera's light blinks. Moving the phone stops either flashing (sound and vibration go on). For alarms that have no light choice of their own; an alarm's own choice (on its page, under Volume) always wins.",
+    "Light blinking (this alarm)" to "Screen flash: half of the ringing screen flashes in the chosen colour at full brightness, the alarm details and Snooze / Stop / the pattern on the other half. Flash light: the camera's light blinks. Moving the phone stops the flashing. Kept with this alarm and used instead of the alarm clock settings' choice.",
     "Crescendo" to "How the volume rises: steady, gentle (slow at first) or quick (fast at first).",
     "Snooze buttons" to "The times of the 3 snooze buttons on the ringing screen.",
     "Button 1" to "Snooze time of the first button.", "Button 2" to "Snooze time of the second button.", "Button 3" to "Snooze time of the third button.",
@@ -1185,6 +1188,23 @@ fun AlarmSetNoteHost(modifier: Modifier) {
                 fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(dateLine, color = C.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text("Sound: $sound", color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+
+/** Colours for the screen flash (white first, the default): a row of round swatches, the chosen one ringed. */
+private val FLASH_COLOURS = listOf(0xFFFFFFFF, 0xFFFF3B30, 0xFFFF8A3D, 0xFFFFD60A, 0xFF34C759, 0xFF32D3E6, 0xFF0A84FF, 0xFFBF5AF2).map { it.toInt() }
+
+@Composable
+private fun FlashColours(selected: Int, onPick: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 6.dp, bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text("Colour", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(end = 4.dp))
+        FLASH_COLOURS.forEach { c ->
+            val on = c == selected
+            Box(Modifier.size(26.dp).clip(CircleShape).border(if (on) 3.dp else 1.dp, if (on) accent() else Color(0xFF444444), CircleShape)
+                .padding(if (on) 5.dp else 2.dp).clip(CircleShape).background(Color(c)).clickable { onPick(c) })
         }
     }
 }

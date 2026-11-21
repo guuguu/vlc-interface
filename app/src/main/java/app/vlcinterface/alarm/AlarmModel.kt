@@ -45,8 +45,10 @@ data class Alarm(
     val used: Long = 0L,
     /** Vibrate while ringing, for this alarm (wins over the alarm clock settings); null = as in those settings. */
     val vibrate: Boolean? = null,
-    /** Light blinking for this alarm: "off" / "notif" / "flash" (wins over the alarm clock settings); null = as in those settings. */
+    /** Light blinking for this alarm: "off" / "screen" / "flash" (wins over the alarm clock settings); null = as in those settings. */
     val led: String? = null,
+    /** Screen flash colour for this alarm (ARGB); null = as in the alarm clock settings. */
+    val ledColor: Int? = null,
 ) {
     /** Used up: rang once (or its dates are over) and not switched on again — shown in History, not in front of the player. */
     val inHistory: Boolean get() = used > 0L && !on
@@ -55,7 +57,7 @@ data class Alarm(
         .put("days", days).put("date", date).put("mode", mode).put("dates", JSONArray(dates)).put("source", source).put("playlistId", playlistId).put("stationUrl", stationUrl).put("stationName", stationName).put("fallbackUrl", fallbackUrl).put("fallbackName", fallbackName)
         .put("volStart", volStart).put("volTarget", volTarget).put("fadeSec", fadeSec).put("maxSnoozes", maxSnoozes)
         .put("stopAfterMin", stopAfterMin).put("output", output).put("localFallback", localFallback).put("used", used)
-        .apply { vibrate?.let { put("vibrate", it) }; led?.let { put("led", it) } }
+        .apply { vibrate?.let { put("vibrate", it) }; led?.let { put("led", it) }; ledColor?.let { put("ledColor", it) } }
 
     val timeText: String get() = "%02d:%02d".format(hour, minute)
 
@@ -68,7 +70,8 @@ data class Alarm(
             o.optInt("fadeSec", 60), o.optInt("maxSnoozes", 3), o.optInt("stopAfterMin", 30), o.optString("output"),
             o.optBoolean("localFallback", true), o.optLong("used", 0L),
             if (o.has("vibrate")) o.optBoolean("vibrate", true) else null,
-            o.optString("led").takeIf { it in listOf("off", "notif", "flash") })
+            o.optString("led").let { if (it == "notif") "screen" else it }.takeIf { it in listOf("off", "screen", "flash") },
+            if (o.has("ledColor")) o.optInt("ledColor") else null)
 
         private val DAY = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
         /** Days, with the date when there is one ("Thu 4 Dec" / "Mon–Fri from 4 Dec"). */
@@ -102,7 +105,7 @@ data class Alarm(
 /** Alarm clock settings that apply to every alarm (Settings → Alarm clock): technical items only. */
 data class AlarmGlobal(
     val vibrate: Boolean = true,
-    /** "off", "notif" (notification light), "flash" (camera flash light). */
+    /** "off", "screen" (half the ringing screen flashes in [ledColor]), "flash" (camera flash light). Old "notif" = "screen". */
     val led: String = "off",
     /** Crescendo curve: "linear", "gentle" (slow start), "fast" (quick start). */
     val crescendo: String = "linear",
@@ -154,8 +157,10 @@ data class AlarmGlobal(
     val lastFallbackName: String = "",
     /** Weather icon: today's noon forecast (true) or the weather right now. */
     val weatherNoon: Boolean = true,
+    /** Colour of the screen flash (ARGB). */
+    val ledColor: Int = 0xFFFFFFFF.toInt(),
 ) {
-    fun toJson(): JSONObject = JSONObject().put("vibrate", vibrate).put("led", led).put("crescendo", crescendo)
+    fun toJson(): JSONObject = JSONObject().put("vibrate", vibrate).put("led", led).put("ledColor", ledColor).put("crescendo", crescendo)
         .put("snooze1", snooze1).put("snooze2", snooze2).put("snooze3", snooze3).put("pattern", pattern)
         .put("wakeCheckMin", wakeCheckMin).put("useLocation", useLocation).put("lockActions", lockActions)
         .put("volumeKeys", volumeKeys).put("maxLevel", maxLevel).put("toneUri", toneUri).put("toneName", toneName).put("callWait", callWait)
@@ -168,7 +173,7 @@ data class AlarmGlobal(
     val snoozes: List<Int> get() = listOf(snooze1, snooze2, snooze3)
 
     companion object {
-        fun fromJson(o: JSONObject?) = if (o == null) AlarmGlobal() else AlarmGlobal(o.optBoolean("vibrate", true), o.optString("led", "off"),
+        fun fromJson(o: JSONObject?) = if (o == null) AlarmGlobal() else AlarmGlobal(o.optBoolean("vibrate", true), o.optString("led", "off").let { if (it == "notif") "screen" else it },
             o.optString("crescendo", "linear"), o.optInt("snooze1", 5), o.optInt("snooze2", 10), o.optInt("snooze3", 15),
             o.optBoolean("pattern", true), o.optInt("wakeCheckMin", 10), o.optBoolean("useLocation"), o.optBoolean("lockActions", true),
             o.optString("volumeKeys", "snooze"), o.optInt("maxLevel", 100), o.optString("toneUri"), o.optString("toneName"), o.optBoolean("callWait", true),
@@ -176,7 +181,8 @@ data class AlarmGlobal(
             o.optBoolean("helpers", true), o.optBoolean("calSync", false), o.optLong("calId", -1), o.optString("calName"),
             o.optString("cityName"), o.optString("cityShort"), o.optDouble("cityLat", 0.0), o.optDouble("cityLon", 0.0), o.optString("cityTz"),
             o.optBoolean("showWeather", true), o.optString("localRoot"), o.optString("localVolume"),
-            o.optString("lastStationUrl"), o.optString("lastStationName"), o.optString("lastFallbackUrl"), o.optString("lastFallbackName"), o.optBoolean("weatherNoon", true))
+            o.optString("lastStationUrl"), o.optString("lastStationName"), o.optString("lastFallbackUrl"), o.optString("lastFallbackName"), o.optBoolean("weatherNoon", true),
+            o.optInt("ledColor", 0xFFFFFFFF.toInt()))
     }
 }
 

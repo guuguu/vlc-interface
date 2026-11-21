@@ -654,3 +654,15 @@
   that have no choice of their own (alarms from before this version, until changed on their page). A new alarm
   starts from the last alarm set, these two included.
 - Text helpers on both (hold the setting).
+
+## Screen flash instead of the notification light; flashing stops when the phone moves (requested 2026-11-21 12:55 / 12:57)
+- Light blinking choices (alarm clock settings default and each alarm's own): Off / Screen flash / Flash light —
+  "Notification light" is replaced by "Screen flash" (alarms and settings that had it get Screen flash).
+- Screen flash: while the alarm rings, half of the ringing screen flashes (on / off every 0.5 s, at full brightness)
+  — the top half upright, the left half sideways — and the other half keeps the clock, the alarm's name and Snooze /
+  Stop / the unlock pattern. Brightness goes back to the phone's own afterwards.
+- Colour: a row of swatches under the choice (white, red, orange, yellow, green, cyan, blue, violet), white by
+  default (12:57); per alarm like the rest, the settings' colour as default.
+- Moving the phone stops the flashing — screen flash or the camera's flash light — at once; sound and vibration go
+  on until Snooze / Stop. (The first 1.5 s after ringing starts are ignored so the vibration isn't taken for a move.)
+  Rings again after a snooze → flashing again.
