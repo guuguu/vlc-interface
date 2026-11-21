@@ -567,9 +567,21 @@
 - Kept as before (12:02 / 12:03): network songs reached through the VPN (away from home) — no automatic scan there
   (slow); setting off: the "No ReplayGain — scan?" question for every folder.
 
-## Network songs scanned again within 10 days: a pop-up first (requested 2026-11-21 12:06)
-- Every ReplayGain measurement now notes its date per song. A scan (any menu, the "No ReplayGain" question, folder /
-  playlist / library scans) skips network songs measured less than 10 days ago and goes on with the others.
-- A short pop-up (5 s, 12:07) names one of them: "Already scanned — "<song>" — This item was previously scanned for
-  ReplayGain on: <date, time>", "It and N more … are skipped", with "Scan again" to scan them after all. Shown at
-  most once per hour of scanning. Phone songs and the automatic folder scan aren't affected.
+## ReplayGain not written to network files: found, logged, scanned again (requested 2026-11-21 12:06–12:09)
+- Every ReplayGain measurement notes, per song, its date and where its values went (written to the file, cached
+  until the song ends, kept in the app, not written …).
+- Right after writing to a network file, the file is read back from the server; no ReplayGain there → the result
+  says "not written: … has no ReplayGain when read back — kept in the app", an error in the ReplayGain log (part of
+  "Collect error logs"), and the app keeps the value meanwhile.
+- A scan that includes network songs measured less than 10 days ago reads their files first:
+  - ReplayGain in the file → left out of this scan, nothing shown;
+  - none although the values were meant for the file → it wasn't written: error in the ReplayGain log ("scanned
+    for ReplayGain on <date> (<where>), but the file has no ReplayGain — it wasn't written; scanned again"), the
+    song is scanned again, and a short pop-up (5 s, at most once an hour, 12:07 / 12:08 no spam) names one such
+    song: "⚠ ReplayGain wasn't written — "<song>" — This item was previously scanned for ReplayGain on: <date>".
+- Phone songs and the automatic folder scan aren't affected.
+
+## Logs purged monthly (requested 2026-11-21 12:10)
+- Every log (servers, ReplayGain, sound engine, player, deleted files, crashes …) drops its entries older than one
+  month, oldest first; a log left empty is removed. Done at each app start and once a day while the app runs.
+  (The 1000-entries-per-log limit stays.)

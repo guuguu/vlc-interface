@@ -32,6 +32,33 @@ object ServerLog {
 
     fun init(ctx: Context) {
         dir = File(ctx.filesDir, "logs").apply { mkdirs() }
+        Thread { purgeOld() }.apply { isDaemon = true }.start()
+    }
+
+    // ---------- monthly purge (2026-11-21 12:10) ----------
+    /** Entries older than this are removed, oldest first, from every log (crashes and errors included). */
+    private const val KEEP_MS = 30L * 86_400_000L
+    @Volatile private var lastPurge = 0L
+
+    /** Removes every entry older than a month from every log (an emptied log is deleted). Runs at start and daily. */
+    @Synchronized
+    fun purgeOld() {
+        if (!::dir.isInitialized) return
+        val cut = System.currentTimeMillis() - KEEP_MS
+        lastPurge = System.currentTimeMillis()
+        var changed = false
+        (dir.listFiles() ?: emptyArray()).filter { it.name.endsWith(".jsonl") }.forEach { f ->
+            try {
+                val lines = f.readLines().filter { it.isNotBlank() }
+                // Lines are in time order: the old ones are at the start, dropped first.
+                val keep = lines.dropWhile { l -> (try { JSONObject(l).optLong("at") } catch (_: Exception) { 0L }) < cut }
+                if (keep.size != lines.size) {
+                    changed = true
+                    if (keep.isEmpty()) f.delete() else f.writeText(keep.joinToString("\n", postfix = "\n"))
+                }
+            } catch (_: Exception) {}
+        }
+        if (changed) _version.value++
     }
 
     /** One page per server: "smb://user@nas:445/share/x", "nas/share" and "NAS" all give "nas". */
@@ -51,6 +78,7 @@ object ServerLog {
         val lines = f.readLines()
         if (lines.size > MAX + 100) f.writeText(lines.takeLast(MAX).joinToString("\n", postfix = "\n"))
         _version.value++
+        if (System.currentTimeMillis() - lastPurge > 86_400_000L) Thread { purgeOld() }.apply { isDaemon = true }.start()
     }
 
     fun log(host: String, action: String, protocol: String, user: String, ok: Boolean, message: String, detail: String = "", startedAt: Long = 0) =

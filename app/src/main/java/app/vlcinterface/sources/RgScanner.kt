@@ -186,17 +186,30 @@ object RgScanner {
         if (!silent && !recentOk) {
             val recent = music.filter { RgScanDates.isNetwork(it.uri) }.mapNotNull { m -> RgScanDates.recent(m.uri)?.let { m to it } }
             if (recent.isNotEmpty()) {
-                // 12:07: songs measured in the last 10 days are skipped; a short pop-up (5 s) names one of them — at
-                // most once an hour of scanning — with "Scan again" to include them after all.
-                val skip = recent.map { it.first.uri }.toSet()
-                val rest = items.filter { it.uri !in skip }
-                if (rest.any { it.isMusic }) start(ctx, rest, mode, target, rescanTagged, onlyWithoutRg, confirmTitle, false, recentOk = true)
-                val now = System.currentTimeMillis()
-                if (now - lastRecentNote > 3_600_000L) {
-                    lastRecentNote = now
-                    val (m, t) = recent.first()
-                    recentAsk.value = RecentAsk(listOf(m.title to t), skip, recent.size) {
-                        start(ctx, items.filter { it.uri in skip }, mode, target, rescanTagged, onlyWithoutRg, confirmTitle, false, recentOk = true)
+                // 12:06–12:09: a network song measured in the last 10 days is asked for again. The file itself is read:
+                //  - its ReplayGain is there → nothing to do, it's left out of this scan (no pop-up);
+                //  - it isn't, although the values were meant for the file → it wasn't written: an error in the
+                //    ReplayGain log (in "Collect error logs"), the song is scanned again, and a short pop-up (5 s, at
+                //    most once an hour) names one such song with the date it was scanned.
+                scope.launch {
+                    val written = HashSet<String>(); val lost = ArrayList<Pair<PlayItem, Pair<Long, String>> >()
+                    for ((m, rec) in recent) {
+                        val rg = try { ReplayGain.fromFile(ctx, m.uri, m.user, m.password, m.domain, m.smbVersion) } catch (_: Exception) { null }
+                        if (rg?.trackGain != null) written += m.uri
+                        else if (RgScanDates.meantForFile(rec.second)) {
+                            lost += m to rec
+                            val day = java.text.SimpleDateFormat("d MMM yyyy HH:mm", java.util.Locale.US).format(java.util.Date(rec.first))
+                            ServerLog.log(ServerLog.REPLAYGAIN, "error", "notwritten", m.user, false,
+                                m.title + ": scanned for ReplayGain on " + day + " (" + rec.second + "), but the file has no ReplayGain — it wasn't written; scanned again", m.uri)
+                        }
+                    }
+                    val its = items.filter { it.uri !in written }
+                    if (its.any { it.isMusic }) start(ctx, its, mode, target, rescanTagged, onlyWithoutRg, confirmTitle, false, recentOk = true)
+                    val now = System.currentTimeMillis()
+                    if (lost.isNotEmpty() && now - lastRecentNote > 3_600_000L) {
+                        lastRecentNote = now
+                        val (m, rec) = lost.first()
+                        recentAsk.value = RecentAsk(listOf(m.title to rec.first), lost.map { it.first.uri }.toSet(), lost.size) {}
                     }
                 }
                 return
@@ -425,7 +438,7 @@ object RgScanner {
             // A measurement that came out silent / invalid is a failure, never written as 0.00 dB.
             val bad = m != null && (m.integrated.let { v -> v.isNaN() || v.isInfinite() } || m.peak.isNaN() || m.peak > 4f)
             if (bad) addResult(RgResult(it.title, "measurement failed (no usable sound decoded) — nothing written", false))
-            if (m != null && !bad) { meters[it.uri] = m; RgScanDates.record(ctx, it.uri) }
+            if (m != null && !bad) meters[it.uri] = m
             synchronized(measuredCopies) { measuredCopies += it.uri }   // its copy may go when room is needed
             fracs.remove(it.uri)
             update { s -> s.copy(done = s.done + 1, measured = s.measured + 1, problems = s.problems + if (m == null || bad) 1 else 0, results = snapshot()) }
@@ -457,11 +470,23 @@ object RgScanner {
             val summary = "track ${values["REPLAYGAIN_TRACK_GAIN"]}" + if (albumMode) " · album ${values["REPLAYGAIN_ALBUM_GAIN"]}" else ""
             waitNasWifi(it)
             update { s -> s.copy(current = it.title, phase = "Writing") }
-            val where = save(ctx, it, values, target)
-            addResult(RgResult(it.title, "$summary — $where", !where.startsWith("not")))
+            var saved = save(ctx, it, values, target)
             ReplayGain.forget(it.uri)
-            if (it.uri.contains("://") && !it.uri.startsWith("content://")) ServerLog.log(it.uri, "replaygain", it.uri.substringBefore("://").uppercase(), it.user, true, "${it.title}: $summary — $where")
-            update { s -> s.copy(saved = s.saved + 1, problems = s.problems + if (where.startsWith("not")) 1 else 0, results = snapshot()) }
+            // Network file said written: read back from the server at once (2026-11-21 12:09) — a value that isn't
+            // there is an error (the result says so, and it's in the error log), the app keeps the value meanwhile.
+            if (saved == "written to the file" && RgScanDates.isNetwork(it.uri)) {
+                val back = try { ReplayGain.fromFile(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion) } catch (_: Exception) { null }
+                if (back?.trackGain == null) {
+                    RgStore.put(it.uri, values)
+                    saved = "not written: the file on the server has no ReplayGain when read back — kept in the app"
+                    ServerLog.log(ServerLog.REPLAYGAIN, "error", "readback", it.user, false,
+                        "${it.title}: ReplayGain written but not found when read back from the server", it.uri)
+                }
+            }
+            RgScanDates.record(ctx, it.uri, saved)
+            addResult(RgResult(it.title, "$summary — $saved", !saved.startsWith("not")))
+            if (it.uri.contains("://") && !it.uri.startsWith("content://")) ServerLog.log(it.uri, "replaygain", it.uri.substringBefore("://").uppercase(), it.user, !saved.startsWith("not"), "${it.title}: $summary — $saved")
+            update { s -> s.copy(saved = s.saved + 1, problems = s.problems + if (saved.startsWith("not")) 1 else 0, results = snapshot()) }
         }
     }
 
@@ -941,12 +966,19 @@ object RgScanner {
 /** When each song was last measured for ReplayGain (any scan, any target), to warn before scanning it again. */
 object RgScanDates {
     const val DAYS = 10
-    private fun prefs(ctx: Context) = ctx.getSharedPreferences("rgScanDates", Context.MODE_PRIVATE)
-    fun record(ctx: Context, uri: String) = try { prefs(ctx).edit().putLong(uri, System.currentTimeMillis()).apply() } catch (_: Exception) {}
-    /** When [uri] was measured, if less than [DAYS] days ago. */
-    fun recent(uri: String): Long? = try {
-        prefs(app.vlcinterface.App.instance).getLong(uri, 0L).takeIf { it > 0 && System.currentTimeMillis() - it < DAYS * 86_400_000L }
+    private fun prefs(ctx: Context) = ctx.getSharedPreferences("rgScanDates2", Context.MODE_PRIVATE)
+    /** Notes the measurement of [uri] now and where its values went ("written to the file", "kept in the app", …). */
+    fun record(ctx: Context, uri: String, where: String) = try {
+        prefs(ctx).edit().putString(uri, "${System.currentTimeMillis()}\t$where").apply() } catch (_: Exception) {}
+    /** When [uri] was measured (and where its values went), if less than [DAYS] days ago. */
+    fun recent(uri: String): Pair<Long, String>? = try {
+        prefs(app.vlcinterface.App.instance).getString(uri, null)?.split("\t", limit = 2)?.let { p ->
+            val t = p[0].toLongOrNull() ?: 0L
+            if (t > 0 && System.currentTimeMillis() - t < DAYS * 86_400_000L) t to p.getOrElse(1) { "" } else null
+        }
     } catch (_: Exception) { null }
+    /** The values were meant for the file itself (not only kept in the app). */
+    fun meantForFile(where: String) = where.startsWith("written") || where.startsWith("cached")
     fun isNetwork(uri: String) = uri.contains("://") && !uri.startsWith("content://") && !uri.startsWith("file://")
 }
 

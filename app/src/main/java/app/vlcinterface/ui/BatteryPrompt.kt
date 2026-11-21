@@ -218,9 +218,9 @@ fun RgAutoSummaryHost() {
 
 
 /**
- * Network songs measured in the last 10 days are skipped by a scan; a short pop-up (5 s) names one of them: "This
- * item was previously scanned for ReplayGain on: <date>", with Scan again (2026-11-21 12:06 / 12:07). At most once
- * an hour of scanning.
+ * A network song scanned in the last 10 days but with no ReplayGain in its file (it wasn't written): a short pop-up
+ * (5 s, at most once an hour) names one such song and the date it was scanned; it's scanned again and the problem is
+ * in the error log (2026-11-21 12:06–12:09). Songs whose values are in the file are simply left out, without a pop-up.
  */
 @Composable
 fun RgRecentAskHost() {
@@ -233,18 +233,15 @@ fun RgRecentAskHost() {
     androidx.compose.ui.window.Dialog(onDismissRequest = { close() }) {
         androidx.compose.foundation.layout.Column(androidx.compose.ui.Modifier
             .clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).background(C.panel)
-            .border(1.dp, accent().copy(alpha = 0.6f), androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+            .border(1.dp, C.bad.copy(alpha = 0.7f), androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
             .padding(horizontal = 18.dp, vertical = 14.dp)) {
-            Text("Already scanned", color = C.text, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
+            Text("⚠  ReplayGain wasn't written", color = C.bad, fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
             Text("\"$t\"", color = C.text, fontSize = 14.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = androidx.compose.ui.Modifier.padding(top = 6.dp))
             Text("This item was previously scanned for ReplayGain on:", color = C.muted, fontSize = 13.sp, modifier = androidx.compose.ui.Modifier.padding(top = 6.dp))
             Text(fmt.format(java.util.Date(at)), color = accent(), fontSize = 16.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
-            Text(if (a.count > 1) "It and ${a.count - 1} more scanned in the last ${app.vlcinterface.sources.RgScanDates.DAYS} days are skipped." else "It is skipped.",
+            Text((if (a.count > 1) "It and ${a.count - 1} more have" else "It has") + " no ReplayGain in the file: scanned again, noted in the error log.",
                 color = C.muted, fontSize = 12.sp, modifier = androidx.compose.ui.Modifier.padding(top = 6.dp))
-            androidx.compose.foundation.layout.Row(androidx.compose.ui.Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.End) {
-                STextButton({ close(); a.again() }) { Text("Scan again", color = accent()) }
-            }
         }
     }
 }
