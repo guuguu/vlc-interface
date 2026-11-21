@@ -1362,7 +1362,7 @@ private fun TrebleBandBox(s: Settings, set: (Settings) -> Unit) {
             fun fOf(x: Float, w: Float) = fMin * Math.pow(fMax / fMin, (x / w).toDouble().coerceIn(0.0, 1.0))
             val range = maxOf(6f, s.trebleMaxDb + 2f)
             val textMeasurer = androidx.compose.ui.text.rememberTextMeasurer()
-            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(130.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF0D0F13))
+            androidx.compose.foundation.Canvas(Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(10.dp)).background(Color(0xFF0D0F13))
                 .pointerInput(s.trebleType) {
                     fun setX(x: Float) {
                         val hz = (Math.round(fOf(x, size.width.toFloat()) / 100.0) * 100).toInt().coerceIn(1000, 16000)
@@ -1371,13 +1371,16 @@ private fun TrebleBandBox(s: Settings, set: (Settings) -> Unit) {
                     detectDragGestures(onDragStart = { o -> setX(o.x) }) { ch, _ -> ch.consume(); setX(ch.position.x) }
                 }) {
                 val w = size.width; val h = size.height; val pad = 14f
-                fun yOf(db: Double) = (h / 2 - (db / range * (h / 2 - pad))).toFloat()
-                drawLine(grid, androidx.compose.ui.geometry.Offset(0f, h / 2), androidx.compose.ui.geometry.Offset(w, h / 2), 1f)
+                // The curves keep above the frequency labels at the bottom.
+                val bottom = h - 26.dp.toPx(); val mid = (pad + bottom) / 2; val half = (bottom - pad) / 2
+                fun yOf(db: Double) = (mid - (db / range * half)).toFloat()
+                drawLine(grid, androidx.compose.ui.geometry.Offset(0f, mid), androidx.compose.ui.geometry.Offset(w, mid), 1f)
                 listOf(100.0, 1000.0, 4000.0, 12000.0).forEach { f ->
                     val x = xOf(f, w)
                     drawLine(grid.copy(alpha = 0.5f), androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, h), 1f)
-                    drawText(textMeasurer, if (f >= 1000) "${(f / 1000).toInt()}k" else "${f.toInt()}", androidx.compose.ui.geometry.Offset(x + 3f, h - 16f),
-                        androidx.compose.ui.text.TextStyle(color = muted, fontSize = 9.sp))
+                    // Labels measured, so they sit fully inside the box (23:31: they were cut off at the bottom).
+                    val lay = textMeasurer.measure(if (f >= 1000) "${(f / 1000).toInt()}k" else "${f.toInt()}", androidx.compose.ui.text.TextStyle(color = muted, fontSize = 10.sp))
+                    drawText(lay, topLeft = androidx.compose.ui.geometry.Offset(x + 4f, h - lay.size.height - 4f))
                 }
                 for ((sign, dashed) in listOf(1.0 to false, -1.0 to true)) {
                     val path = androidx.compose.ui.graphics.Path()
@@ -1414,9 +1417,13 @@ private fun TrebleBandBox(s: Settings, set: (Settings) -> Unit) {
             Text(if (peak) "Peak: one band around the frequency is raised or lowered." else "Shelf: everything above the frequency is raised or lowered.",
                 color = C.muted, fontSize = 12.sp)
             // Frequency: typed with the app's digit pad, or slid (log scale 1–16 kHz).
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Frequency", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
-                DigitField(s.trebleHz.toString(), "Hz", 5, Modifier.width(110.dp)) { v -> v.toIntOrNull()?.let { if (it in 1000..16000) put(s.copy(trebleHz = it)) } }
+            // Frequency: label, then the field across the full width so its digit pad has room (23:31: the pad was cut off in a
+            // narrow box). What is typed is kept as typed and applied as soon as it is a frequency of 1000–16000 Hz.
+            Text("Frequency", color = C.text, fontSize = 15.sp)
+            var hzText by remember(s.trebleHz) { mutableStateOf(s.trebleHz.toString()) }
+            DigitField(hzText, "Hz (1000–16000)", 5, Modifier.fillMaxWidth()) { v ->
+                hzText = v
+                v.toIntOrNull()?.let { if (it in 1000..16000 && it != s.trebleHz) put(s.copy(trebleHz = it)) }
             }
             ThinSlider((Math.log(s.trebleHz / 1000.0) / Math.log(16.0)).toFloat(), { v ->
                 val hz = (Math.round(1000.0 * Math.pow(16.0, v.toDouble()) / 100.0) * 100).toInt().coerceIn(1000, 16000); put(s.copy(trebleHz = hz))

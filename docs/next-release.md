@@ -1133,3 +1133,10 @@
   - It doesn't depend on writing the file: written now, after the song, or not at all, the player uses the value at once.
   - Songs the automatic scan measured before, with values only in the app, are measured again once and written.
   - The setting's line and helper say so.
+
+# After 1.71.0
+
+## Treble band box fixes (screenshot 2026-11-21 23:31)
+- **Frequency field:** the digit pad opened inside a narrow box beside "Frequency" and was cut off (only two of its three columns: 3, 6, 9 and → missing). The field is now under its label, across the full width, so the pad shows whole.
+- **Typing a frequency:** only a value of 1000–16000 Hz was taken, so the first digit was refused and the next ones were added to the old 4000. What you type is now kept as typed and applied as soon as it is a frequency in range.
+- **Curve labels:** 100 / 1k / 4k / 12k were cut off at the bottom of the curve. They're measured now and sit fully inside the box; the curves keep above them, and the box is a little taller.
