@@ -876,7 +876,7 @@ fun VisualisationScreen(nav: Navigator) {
         if (hintA > 0.01f) Box(Modifier.align(Alignment.Center).padding(24.dp).graphicsLayer { alpha = hintA }
             .clip(RoundedCornerShape(18.dp)).background(Color(0xCC000000)).border(1.dp, Color.White.copy(alpha = 0.35f), RoundedCornerShape(18.dp))
             .padding(horizontal = 28.dp, vertical = 20.dp), contentAlignment = Alignment.Center) {
-            Text("Double tap to exit", color = Color.White, fontSize = 30.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
+            Text("To exit back to application,\ndouble tap anywhere.", color = Color.White, fontSize = 26.sp, lineHeight = 34.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
     }

@@ -636,5 +636,5 @@
   visualisation full screen. Long press keeps what it did (picture search / Visualisation settings).
 
 ## Full-screen visualisation: "Double tap to exit" (requested 2026-11-21 12:42)
-- Opening the visualisation full screen shows a short pop-up in the middle, in big letters: "Double tap to exit"
+- Opening the visualisation full screen shows a short pop-up in the middle, in big letters on two rows: "To exit back to application, / double tap anywhere." (12:44)
   (dark rounded box, fades away after about 2.5 s). A double tap anywhere closes the full screen, as before.
