@@ -523,8 +523,8 @@ private fun BoxScope.ControlsOverlayBody(
     }
     // Sideways: everything on one clean row (same readable sizes; it scrolls sideways only if a narrow screen needs it).
     if (landTop) CompositionLocalProvider(LocalBtnScale provides topK) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Fits the width: shrunk evenly when everything doesn't fit (15:56), never past the edge.
+        FitRow(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp), arrangement = Arrangement.spacedBy(6.dp), minGap = 6.dp) {
             SymButton({ nav.back() }) { SymIcon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White) }
             HomeButton(nav, Color.White)
             MarqueeText(p.item?.title ?: "", Color.White, Modifier.widthIn(max = 220.dp), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = "player")
@@ -655,7 +655,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         }
         // Playing: previous / −10 / play-pause / +10 / next, centred.
         val rowPlaying: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+        FitRow(Modifier.fillMaxWidth(), arrangement = Arrangement.SpaceEvenly, minGap = 8.dp) {
             UnderBtn("⏮") { player.prev() }
             UnderBtn("−10") { player.seekBy(-10_000) }
             Box(Modifier.size(60.dp).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
@@ -1257,7 +1257,7 @@ private fun VideoQueuePanel(p: PlayerState, nav: Navigator, onClose: () -> Unit)
 private fun VideoHeader(nav: Navigator, locked: Boolean, openOutput: () -> Unit, onLock: () -> Unit, modifier: Modifier) {
     Scaled {
         Column(modifier.fillMaxWidth().background(Color.Black).padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+            FitRow(Modifier.fillMaxWidth()) {
                 if (locked) {
                     // Locked: only the lock, to unlock.
                     Grow()
@@ -1274,10 +1274,10 @@ private fun VideoHeader(nav: Navigator, locked: Boolean, openOutput: () -> Unit,
                     ExitButton(Color.White)
                 }
             }
-            if (!locked) Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (!locked) FitRow(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
                 // The other two players (each resumes what it last played), then the output on the right.
-                PlayerSwitchButtons(nav, "video", Color.White)
-                Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { OutputPill(openOutput) }
+                Row(verticalAlignment = Alignment.CenterVertically) { PlayerSwitchButtons(nav, "video", Color.White) }
+                OutputPill(openOutput)
             }
         }
     }

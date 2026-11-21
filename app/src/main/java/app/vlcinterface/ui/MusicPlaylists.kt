@@ -238,15 +238,15 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             ShazamButton(); BackgroundWorkButton(); ScreenOnSign(C.text); ExitButton()
         }
         Scaled {
-            if (landscape) Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween) {
-                headSyms(); PlayerSwitchButtons(nav, if (item.isRadio) "radio" else "songs"); OutputPill(openOutput)
+            // Every header row fits the width (15:56): shrunk evenly when its items don't fit, never past the edge.
+            if (landscape) FitRow(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp)) {
+                headSyms(); Row(verticalAlignment = Alignment.CenterVertically) { PlayerSwitchButtons(nav, if (item.isRadio) "radio" else "songs") }; OutputPill(openOutput)
             } else Column(Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) { headSyms() }
-                Row(Modifier.fillMaxWidth().padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                FitRow(Modifier.fillMaxWidth()) { headSyms() }
+                FitRow(Modifier.fillMaxWidth().padding(horizontal = 6.dp)) {
                     // The other two players (each resumes what it last played), then the output on the right.
-                    PlayerSwitchButtons(nav, if (item.isRadio) "radio" else "songs")
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { OutputPill(openOutput) }
+                    Row(verticalAlignment = Alignment.CenterVertically) { PlayerSwitchButtons(nav, if (item.isRadio) "radio" else "songs") }
+                    OutputPill(openOutput)
                 }
             }
         }

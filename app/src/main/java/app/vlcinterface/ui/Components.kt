@@ -809,6 +809,43 @@ fun AutoFitRow(modifier: Modifier = Modifier, spacing: androidx.compose.ui.unit.
 /** True inside the trial layouts of [AutoFitRow]: nothing pops up from there. */
 val LocalMeasureOnly = androidx.compose.runtime.staticCompositionLocalOf { false }
 
+/**
+ * A horizontal row that always fits the screen width (2026-11-21 15:56): laid out with [arrangement] when its items fit;
+ * when they don't, the whole row is shrunk evenly (items, text and tap areas together) to exactly the width, so items
+ * never overlap and never go past the edge of the display.
+ */
+@Composable
+fun FitRow(modifier: Modifier = Modifier, arrangement: androidx.compose.foundation.layout.Arrangement.Horizontal = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+           minGap: androidx.compose.ui.unit.Dp = 4.dp, content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    androidx.compose.ui.layout.SubcomposeLayout(modifier) { c ->
+        val natural = subcompose("measure") {
+            androidx.compose.runtime.CompositionLocalProvider(LocalMeasureOnly provides true) {
+                androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(minGap),
+                    verticalAlignment = Alignment.CenterVertically, content = content)
+            }
+        }.map { it.measure(androidx.compose.ui.unit.Constraints()) }
+        val natW = natural.maxOfOrNull { it.width } ?: 0
+        if (!c.hasBoundedWidth || natW <= c.maxWidth) {
+            val shown = subcompose("shown") {
+                androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth(), horizontalArrangement = arrangement,
+                    verticalAlignment = Alignment.CenterVertically, content = content)
+            }.map { it.measure(c.copy(minWidth = if (c.hasBoundedWidth) c.maxWidth else 0, minHeight = 0)) }
+            val w = shown.maxOfOrNull { it.width } ?: 0; val h = shown.maxOfOrNull { it.height } ?: 0
+            layout(w, h) { shown.forEach { it.place(0, 0) } }
+        } else {
+            val sc = c.maxWidth.toFloat() / natW
+            val shown = subcompose("shown") {
+                androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(minGap),
+                    verticalAlignment = Alignment.CenterVertically, content = content)
+            }.map { it.measure(androidx.compose.ui.unit.Constraints()) }
+            val h = ((shown.maxOfOrNull { it.height } ?: 0) * sc).toInt()
+            layout(c.maxWidth, h) {
+                shown.forEach { it.placeWithLayer(0, 0) { scaleX = sc; scaleY = sc; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f) } }
+            }
+        }
+    }
+}
+
 /** Every menu and submenu starts with "‹ Back", which closes it and returns to the page. */
 @Composable
 fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = Modifier,

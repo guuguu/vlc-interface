@@ -754,3 +754,11 @@
 ## Buttons: no spaces around "/" (requested 2026-11-21 15:53)
 - Button labels written with a slash have no spaces around it: Subs/Sync, Audio/Sync, Hue/Sat (video player),
   "Import M3U/PLS" (playlists), "+ LAN/Internet" (Songs list).
+
+## Horizontal rows always fit the screen (requested 2026-11-21 15:56)
+- New fitting row: its items are laid out as designed when they fit; when they don't (narrow phone, big Button size or
+  text size, long output name), the whole row shrinks evenly — buttons, symbols, text and tap areas together — to
+  exactly the screen width, so nothing overlaps and nothing goes past the edge.
+- Used for: the song / radio player header (both upright rows and the sideways row), the video player header (both
+  rows), the video player's sideways top row (was scrolling sideways), the play row under the upright video. The song
+  player's control buttons already shrank this way; the button groups under the video wrap onto more lines.
