@@ -352,11 +352,10 @@ fun SaveEndQuestionHost() {
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     listOf(3, 5).forEach { m -> Pill("$m min") { say(RadioCapture.answerContinue(m)) } }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DigitField(custom, "Minutes", 3, Modifier.weight(1f)) { custom = it }
-                    val m = custom.toIntOrNull() ?: 0
-                    Pill("Continue", filled = m in 1..180) { if (m in 1..180) say(RadioCapture.answerContinue(m)) }
-                }
+                // The field across the full width so its digit pad opens whole (20:38); Continue under it.
+                DigitField(custom, "Minutes", 3, Modifier.fillMaxWidth()) { custom = it }
+                val m = custom.toIntOrNull() ?: 0
+                Pill("Continue", filled = m in 1..180) { if (m in 1..180) say(RadioCapture.answerContinue(m)) }
             }
         },
         confirmButton = { STextButton({ say(RadioCapture.answerStop()) }) { Text("Stop and save", color = accent(), fontWeight = FontWeight.Bold) } },

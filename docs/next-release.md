@@ -1448,3 +1448,8 @@
 - **Sideways (19:51):** the clock keeps its full size — the whole height, on the left — and the name glides in the room beside it, along the bottom of that side (the band is as wide as the free space, about 16 % of the height tall). Upright stays as shown: the band across the bottom, the clock above it.
 - **Scrolling name: one size, no frame, your colour (19:52):** the name has the same letter size upright and sideways (no longer worked out from the screen), with no frame and no background (only the band of room it needs). Settings → Alarm clock → Clock aspect → Full screen: "Scrolling name size" (16–96 sp, default 36) and "Scrolling name colour" (any colour from the colour editor; default white), with a preview of the name and Reset (white, 36 sp). Helper on a hold; found by the Settings search; exported with the clock settings.
 - **One brightness for the whole full-screen clock (20:05):** the clock's night dimming (Clock aspect → Night, 22:00–07:00) now dims everything on that screen with it — the scrolling name and the play / pause button too — so nothing is brighter than the clock. The full-screen brightness (the screen's own brightness) already acts on all of it.
+
+# After 1.87.0
+
+## Digit pad squeezed into one column (screenshot 2026-11-22 20:38)
+- "Reset volume after" had its minutes field in a narrow box beside the text, so its digit pad opened squeezed into one column (only 1, 4, 7, ⌫). The field is now on its own line across the full width (the text and Reset above it), so the pad opens whole. Fixed the same way: Library & files → Indexing → "Every N days", and the radio recording's "Continue for … minutes".

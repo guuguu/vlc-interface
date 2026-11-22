@@ -879,10 +879,13 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                             Pill(l, selected = s.indexMode == m, filled = s.indexMode == m) { set(s.copy(indexMode = m)) }
                         }
                     }
-                    if (s.indexMode == "days") Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Days", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(end = 10.dp))
-                        DigitField(s.indexDays.toString(), "days", 3, Modifier.width(90.dp)) { v -> v.toIntOrNull()?.takeIf { it in 1..365 }?.let { set(s.copy(indexDays = it)) } }
-                        STextButton({ set(s.copy(indexDays = 4)) }) { Text("Reset") }
+                    if (s.indexMode == "days") Column {
+                        // Same fix: the field across the full width so its digit pad opens whole.
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Days", color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            STextButton({ set(s.copy(indexDays = 4)) }) { Text("Reset") }
+                        }
+                        DigitField(s.indexDays.toString(), "days", 3, Modifier.fillMaxWidth()) { v -> v.toIntOrNull()?.takeIf { it in 1..365 }?.let { set(s.copy(indexDays = it)) } }
                     }
                     Text(when (s.indexMode) {
                         "never" -> "Only the first time, and when you tap 🔍 Index or ↻ Rescan."
@@ -1380,11 +1383,12 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
             Divider()
             // 2026-11-22 18:37: minutes with nothing playing → the next sound starts at the Start volume (0 = never).
             Text("Reset volume after", color = C.text, modifier = Modifier.anchor("Reset volume after").explain("Reset volume after"), fontSize = 15.sp)
+            // The field across the full width (20:38: beside other things the digit pad opened squeezed into one column).
             Row(verticalAlignment = Alignment.CenterVertically) {
-                DigitField(s.idleResetMin.toString(), "minutes", 3, Modifier.width(90.dp)) { v -> v.toIntOrNull()?.takeIf { it in 0..999 }?.let { set(s.copy(idleResetMin = it)) } }
-                Text("minutes with nothing playing", color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f).padding(start = 10.dp))
+                Text("Minutes with nothing playing", color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 STextButton({ set(s.copy(idleResetMin = 30)) }) { Text("Reset") }
             }
+            DigitField(s.idleResetMin.toString(), "minutes", 3, Modifier.fillMaxWidth()) { v -> v.toIntOrNull()?.takeIf { it in 0..999 }?.let { set(s.copy(idleResetMin = it)) } }
             Text(if (s.idleResetMin == 0) "Never: the volume stays as you left it (the start volume is set only when the app starts)."
                 else "After ${s.idleResetMin} min with nothing playing, the next song, station or video starts at ${s.startVolume} % (Preamp as set: " + "%+.1f".format(s.preampDb) + " dB).",
                 color = C.muted, fontSize = 13.sp)
