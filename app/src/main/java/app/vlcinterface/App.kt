@@ -45,7 +45,7 @@ class App : Application() {
         app.vlcinterface.sources.RgScanner.flushPendingSoon(this)   // cached ReplayGain writes left from last time
         app.vlcinterface.sources.CoverArt.init(this)
         app.vlcinterface.sources.NetIndex.init(this)
-        app.vlcinterface.sources.NetIndex.buildMissing()      // pinned LAN folders not indexed yet: in the background
+        app.vlcinterface.sources.NetIndex.autoStart()        // home-network pins not indexed yet, and interrupted ones: in the background
         // The volume is kept only: after Exit and opened again (within 30 min), or when the app was restarted by a
         // short hiccup of Bluetooth / the sound system (back within 2 min). Otherwise: the start volume.
         val vk = getSharedPreferences("volkeep", MODE_PRIVATE)

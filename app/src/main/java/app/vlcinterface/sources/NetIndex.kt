@@ -12,6 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -46,6 +48,14 @@ object NetIndex {
         file = File(ctx.filesDir, "netindex.json")
         partFile = File(ctx.filesDir, "netindex-partial.json")
         loadPartials()
+        // ReplayGain has priority (2026-11-22 08:09): while a scan runs or waits, indexing pauses (what it gathered is
+        // kept); 5 s after the last scan is done, it goes on by itself.
+        scope.launch {
+            kotlinx.coroutines.flow.combine(RgScanner.state, RgScanner.queued) { s, q -> s.running || q.isNotEmpty() }
+                .distinctUntilChanged()
+                .collectLatest { rg -> if (rg) yieldToRg() else { kotlinx.coroutines.delay(5_000); if (!rgBusy()) afterRg() } }
+        }
+        startWatch()
         try {
             if (file.exists()) {
                 val o = JSONObject(file.readText())
@@ -120,7 +130,7 @@ object NetIndex {
     }
     /** Indexing a folder on a server outside the home network right now. */
     fun internetBusy(): Boolean = inWork.values.any { (s, p) -> try { app.vlcinterface.player.NetGuard.needsInternet(Urls.forSource(s.copy(path = ""), p)) } catch (_: Exception) { false } }
-    fun resume() { val l = held.values.toList(); held.clear(); l.forEach { (s, p) -> build(s, p) }; resumeStopped() }
+    fun resume() { val l = held.values.toList(); held.clear(); l.forEach { (s, p) -> build(s, p) }; resumeStopped(); autoLan() }
 
     /** Folders waiting because the VPN is on. */
     private val vpnHeld = java.util.concurrent.ConcurrentHashMap<String, Pair<Source, String>>()
@@ -140,7 +150,53 @@ object NetIndex {
         val l = vpnHeld.values.toList(); vpnHeld.clear()
         l.forEach { (s, p) -> build(s, p) }
         resumeStopped()
+        autoLan()
     }
+
+    // ---------- ReplayGain first ----------
+    private val rgHeld = java.util.concurrent.ConcurrentHashMap<String, Pair<Source, String>>()
+    private fun rgBusy() = RgScanner.state.value.running || RgScanner.queued.value.isNotEmpty()
+
+    /** A ReplayGain scan starts or waits: indexing running now pauses (kept), and resumes after it. */
+    private fun yieldToRg() {
+        val running = synchronized(jobs) { jobs.toList() }
+        if (running.isEmpty()) return
+        rgHeld.putAll(inWork)
+        running.forEach { it.cancel() }
+        busy.value = ""
+        app.vlcinterface.data.ServerLog.log("index", "pause", "", "", true, "Indexing paused: ReplayGain scan running (it resumes when the scan is done)")
+    }
+
+    /** No ReplayGain scan any more: the paused folders go on, then anything else waiting. */
+    private fun afterRg() {
+        val l = rgHeld.values.toList(); rgHeld.clear()
+        if (l.isNotEmpty()) app.vlcinterface.data.ServerLog.log("index", "resume", "", "", true, "Indexing resumed: ReplayGain scan done")
+        l.forEach { (s, p) -> build(s, p) }
+        resumeStopped()
+        autoLan()
+    }
+
+    /**
+     * Automatic indexing (08:09): every pinned folder of a home-network (LAN) location that isn't indexed yet, or whose
+     * indexing was interrupted, is indexed by itself once everything allows it — the server answers, background work
+     * isn't paused, the VPN is off, the battery is above 15 %, no ReplayGain scan is running. Checked at app start,
+     * after each of those changes, and every 5 minutes. Internet locations are indexed when asked (pin, 🔍, Rescan).
+     * Phone songs need no indexing: Android keeps their list.
+     */
+    fun autoLan() {
+        val srcs = App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto != "upnp" && it.proto != "m3u" }
+        scope.launch {
+            srcs.forEach { s ->
+                val todo = s.pins.filter { (!has(s, it) || hasStopped(s, it)) && key(s, it) !in building }
+                if (todo.isEmpty()) return@forEach
+                if (!Net.reachable(Urls.hostOnly(s.host), if (s.port > 0) s.port else s.defaultPort)) return@forEach
+                todo.forEach { build(s, it) }
+            }
+        }
+    }
+
+    /** App start: interrupted folders resumed, home-network pins not indexed yet started. */
+    fun autoStart() { resumeStopped(); autoLan() }
 
     /** Low battery: every indexing run stops (what was already indexed is kept). */
     fun stopAll() {
@@ -182,6 +238,8 @@ object NetIndex {
         if (app.vlcinterface.player.BackgroundWork.paused.value) { held[k] = src to pin; return }   // paused: later
         // VPN on: no indexing at all — it waits until the VPN is off.
         if (VpnLink.vpnUp.value) { vpnHeld[k] = src to pin; return }
+        // ReplayGain scanning: it goes first; this folder waits (and resumes) until it's done.
+        if (rgBusy()) { rgHeld[k] = src to pin; return }
         if (!building.add(k)) return                     // already queued / running
         inWork[k] = src to pin
         lateinit var job: kotlinx.coroutines.Job
@@ -331,8 +389,7 @@ object NetIndex {
         watch = scope.launch {
             while (true) {
                 kotlinx.coroutines.delay(5 * 60_000L)
-                if (synchronized(parts) { parts.isEmpty() }) break
-                if (building.isEmpty()) resumeStopped()
+                if (building.isEmpty() && !rgBusy()) { resumeStopped(); autoLan() }
             }
         }
     }
