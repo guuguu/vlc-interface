@@ -766,9 +766,9 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
                 }.padding(horizontal = 10.dp, vertical = 7.dp), contentAlignment = Alignment.Center) {
                     if (idxBusy.contains(pin.trim('/').substringAfterLast('/'))) CircularProgressIndicator(color = a, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
                     else {
-                        // Interrupted indexing kept (07:36): "🔍 Resume" until it's finished.
+                        // Always "Index" (08:11); the state shows by its colour: accent = indexed (or interrupted, kept), grey = not yet.
                         val stopped = remember(idxVer, idxBusy) { app.vlcinterface.sources.NetIndex.hasStopped(s, pin) }
-                        Text(if (stopped) "🔍 Resume" else if (indexed) "🔍 Indexed" else "🔍 Index", color = if (indexed || stopped) a else C.muted, fontSize = 13.sp)
+                        Text("🔍 Index", color = if (indexed || stopped) a else C.muted, fontSize = 13.sp)
                     }
                 }
             }
