@@ -1224,7 +1224,11 @@ class PlayerController(private val context: Context, private val store: Store) {
      * VPN-NAS on (NAS usable again): the loaded list comes back whole — its NAS songs return to their places; the
      * playing song goes on, the list continues from it (shuffle: the rest shuffled again).
      */
+    /** "NAS is inaccessible" already shown for this drop (video queues). */
+    @Volatile private var nasDownNoted = false
+
     fun restoreNas() = main.post {
+        nasDownNoted = false
         val s = _state.value
         val full = fullList.filterNot { nasOff(it) }
         if (full.isEmpty() || s.item?.isRadio == true) return@post
@@ -1270,6 +1274,13 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun pruneNas() = main.post {
         val s = _state.value
         if (s.queue.none { nasOff(it) }) return@post
+        // A video queue (2026-11-22 19:40) is never cleared: it stays as it is, and a short pop-up says the NAS can't be
+        // reached (once per drop; again after it was back).
+        if (isVideo(s.item) || (s.item == null && s.queue.any { isVideo(it) })) {
+            if (!nasDownNoted) { nasDownNoted = true
+                try { app.vlcinterface.ui.ShortNote.hint("NAS is inaccessible") } catch (_: Exception) {} }
+            return@post
+        }
         val cur = s.queue.getOrNull(s.index)
         // VPN-NAS off: the list keeps only local songs; a NAS song playing now stops and the next local one starts.
         if (cur != null && nasOff(cur)) {
