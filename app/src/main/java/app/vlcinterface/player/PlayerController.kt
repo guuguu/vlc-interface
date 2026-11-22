@@ -1797,7 +1797,13 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = s.copy(queue = q, index = if (i < s.index) s.index - 1 else s.index)
     }
 
-    fun jumpTo(i: Int) { if (i in _state.value.queue.indices && nasOff(_state.value.queue[i])) { nasOfflineToast(); return }
+    /** The pop-up when an item can't be reached (2026-11-22 19:41): videos the "NAS is inaccessible" hint, songs as before. */
+    private fun nasBlockedNote(item: PlayItem) {
+        if (isVideo(item)) main.post { try { app.vlcinterface.ui.ShortNote.hint("NAS is inaccessible") } catch (_: Exception) {} }
+        else nasOfflineToast()
+    }
+
+    fun jumpTo(i: Int) { if (i in _state.value.queue.indices && nasOff(_state.value.queue[i])) { nasBlockedNote(_state.value.queue[i]); return }
         if (i in _state.value.queue.indices) { sessionManualChoice(); startItem(i, -1) } }
 
     /** Moves a queue entry one place up (-1) or down (+1); the playing song keeps playing. */
@@ -1907,6 +1913,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         sessionManualChoice()
         val s = _state.value
         val n = (nextIndex(s, manual = true) ?: return false).let { if (s.item?.isRadio == true) it else otherThanCurrent(_state.value, it, 1) }
+        // A video kept in the queue whose NAS can't be reached now (19:41): the pop-up, nothing else.
+        _state.value.queue.getOrNull(n)?.let { t -> if (isVideo(t) && nasOff(t)) { nasBlockedNote(t); return false } }
         startItem(n, -1); return true
     }
 
@@ -1919,6 +1927,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         // Videos (19:18: the circling is for songs and radio): as before — back to the start after 4 s, or on the first one.
         if (!item.isMusic) {
             if (mp.time > 4000 || s.index <= 0) { seekTo(if (item.startMs >= 0) item.startMs else 0); return }
+            s.queue.getOrNull(s.index - 1)?.let { t -> if (nasOff(t)) { nasBlockedNote(t); return } }
             startItem(s.index - 1, -1); return
         }
         // The queue circles (2026-11-22 19:13): ⏮ always goes to the item before, from the first to the last.
