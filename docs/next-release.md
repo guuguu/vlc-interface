@@ -1374,3 +1374,9 @@
 - **Full screen (13:29):** sideways, the clock hides while the player's buttons are shown and comes back when they hide.
 - **Locked controls (13:30):** with the controls locked (🔒), the clock stays on the picture, also full screen.
 - **Subtitles next to NAS videos are found again.** libVLC was hiding .srt/.ssa/.sub/.idx/.cue files in every network folder listing, so the "Subtitles from a folder" browser said "No folders or subtitle files here" and nothing loaded automatically. Network listings now show them. Subtitles named like the video with a language tag (`Episode 15.en.srt`, `Episode 15.en.2.srt`, `Movie.English.srt`) are all picked up when the video starts: the one in your first preferred subtitle language is switched on and the others are offered under Subs/Change.
+
+# After 1.85.0
+
+## Automatic ReplayGain still took one song of an album (reported 2026-11-22 16:20)
+- **Found:** the album was looked for where the song was *played from*, not where the file is. A song played from a pinned folder, a folder played with its subfolders, the Songs list / a search, the queue or a playlist carries that place, so the scan listed the wrong folder (often the artist / pin folder above, with no songs in it) and fell back to the playing song alone. The "already scanned this folder" note used the same place, so one album played from a pin also blocked every other album under that pin until the app restarted.
+- **Now:** the album is always found from the file itself: on the network, the folder in the song's own address (its saved location found by the server when the song doesn't carry it); on the phone, its folder in the phone's song list. Disc folders (CD1 / CD2 …) are added from there as before, and the "already scanned" note is per real folder.

@@ -45,23 +45,32 @@ object MusicLibrary {
         // The song's folder, also when the song came from a playlist, the queue, the search or the index without a
         // folder / server noted (that used to give just the one song): worked out from its address then.
         val sources = App.instance.store.current.sources
-        var fk = item.folderKey
-        var src = sources.firstOrNull { it.id == item.sourceId }
-        if (item.uri.contains("://") && !item.uri.startsWith("content://")) {
-            if (src == null) {
-                val host = item.uri.substringAfter("://").substringBefore('/').substringAfter('@').substringBefore(':')
-                src = sources.firstOrNull { it.host.substringAfter("://").substringBefore('/').substringBefore(':').equals(host, true) }
-            }
-            if (fk.isEmpty() || fk.startsWith("local:")) fk = Urls.parent(item.uri)
-        } else if (!fk.startsWith("local:")) {
-            // A phone song without its folder noted: take it from the phone's song list.
-            fk = app.vlcinterface.ui.SongsCache.phoneFolderOf(ctx, item.uri) ?: fk
-        }
+        val src = sourceOf(item)
+        val fk = realFolderKey(ctx, item)
         val r = folderOfKey(ctx, fk, src)
         if (r.size <= 1) app.vlcinterface.data.ServerLog.log(ServerLog.REPLAYGAIN, "folder", "", "", r.isNotEmpty(),
             "Folder of \"${item.title}\": ${r.size} song(s) found (folder ${fk.ifEmpty { "unknown" }}, server ${src?.name ?: src?.host ?: "none"})")
         return r
     }
+
+    /** The saved location a song belongs to: by its id, else by the server in its address. */
+    fun sourceOf(item: PlayItem): Source? {
+        val sources = App.instance.store.current.sources
+        sources.firstOrNull { it.id == item.sourceId }?.let { return it }
+        if (!item.uri.contains("://") || item.uri.startsWith("content://")) return null
+        val host = item.uri.substringAfter("://").substringBefore('/').substringAfter('@').substringBefore(':')
+        return sources.firstOrNull { it.host.substringAfter("://").substringBefore('/').substringBefore(':').equals(host, true) }
+    }
+
+    /**
+     * The folder the file really is in (2026-11-22 16:20: the automatic ReplayGain scan took one song of an album). A
+     * song's folderKey is where it was played from — a pinned folder, a folder played with its subfolders, a search, a
+     * playlist — not always its own folder, so the album was looked for in the wrong place (no songs there) and only
+     * the playing song was scanned. Network: the parent of its address; phone: its folder in the phone's song list.
+     */
+    suspend fun realFolderKey(ctx: Context, item: PlayItem): String =
+        if (item.uri.contains("://") && !item.uri.startsWith("content://")) Urls.parent(VpnLink.unroute(item.uri))
+        else app.vlcinterface.ui.SongsCache.phoneFolderOf(ctx, item.uri) ?: item.folderKey
 
     /** A disc folder of an album ("CD1", "CD 2", "Disc 1", "Disk2", "DVD 1", "Side A"…; not "Vol." / "Part": those are often albums). */
     fun isDiscFolder(name: String) = Regex("""^\s*(cd|disc|disk|dvd|side)\s*[-_.]?\s*([0-9]{1,2}|[a-d])\b.*""", RegexOption.IGNORE_CASE)
@@ -74,11 +83,10 @@ object MusicLibrary {
      */
     suspend fun albumOf(ctx: Context, item: PlayItem): List<PlayItem> {
         val here = folderOf(ctx, item)
-        val sources = App.instance.store.current.sources
         return try {
             if (item.uri.contains("://") && !item.uri.startsWith("content://")) {
-                val src = sources.firstOrNull { it.id == item.sourceId } ?: return here
-                val fk = item.folderKey.takeIf { it.isNotEmpty() && !it.startsWith("local:") } ?: Urls.parent(item.uri)
+                val src = sourceOf(item) ?: return here
+                val fk = realFolderKey(ctx, item)
                 val name = fk.trimEnd('/').substringAfterLast('/')
                 val base = if (isDiscFolder(name)) Urls.parent(fk.trimEnd('/')) else fk
                 val list = Browse.list(src, base).getOrNull() ?: return here
@@ -89,7 +97,7 @@ object MusicLibrary {
                     Browse.list(src, d.uri).getOrNull()?.let { l -> playOrder(l, d.name).map { toPlayItem(it, src, d.uri) } } ?: emptyList()
                 }
             } else {
-                val fk = item.folderKey.takeIf { it.startsWith("local:") } ?: return here
+                val fk = realFolderKey(ctx, item).takeIf { it.startsWith("local:") } ?: return here
                 val vol = fk.removePrefix("local:").substringBefore(':'); val rel = fk.removePrefix("local:").substringAfter(':')
                 val name = rel.trimEnd('/').substringAfterLast('/')
                 val baseRel = if (isDiscFolder(name)) rel.trimEnd('/').substringBeforeLast('/', "").let { if (it.isEmpty()) "" else "$it/" } else rel

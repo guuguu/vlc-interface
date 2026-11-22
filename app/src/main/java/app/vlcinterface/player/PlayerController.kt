@@ -1484,7 +1484,9 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     private fun askRgScan(item: PlayItem) {
         if (!item.isMusic) return
-        val key = item.folderKey.ifEmpty { item.uri.substringBeforeLast('/') }
+        // Keyed by the file's own folder (not where it was played from: a pinned folder would have stood for every album in it).
+        val key = if (item.uri.contains("://") && !item.uri.startsWith("content://")) app.vlcinterface.sources.Urls.parent(item.uri)
+            else item.uri.substringBeforeLast('/') + "|" + item.folderKey
         if (!rgAsked.add(key)) return
         // Automatic ReplayGain (2026-11-21 12:01–12:03): phone songs and home-network songs — the whole folder is
         // scanned silently (only songs without any ReplayGain, track gain kept in the app; no notification, no
