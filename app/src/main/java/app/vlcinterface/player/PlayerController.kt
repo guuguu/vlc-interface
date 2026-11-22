@@ -1992,8 +1992,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (netVideo) {
             media.addOption(":no-sub-autodetect-file")
             bg.launch {
-                val ref = try { app.vlcinterface.sources.SubtitleFiles.findSidecar(context, item) } catch (_: Exception) { null }
-                if (ref != null && _state.value.item?.uri == item.uri) addSubtitleFile(Uri.fromFile(ref.local))
+                // Every file named after the video ("…en.srt", "…en.2.srt" too): the preferred language switched on, the rest as choices.
+                val refs = try { app.vlcinterface.sources.SubtitleFiles.findSidecars(context, item) } catch (_: Exception) { emptyList() }
+                refs.forEachIndexed { i, r -> if (_state.value.item?.uri == item.uri) addSubtitleFile(Uri.fromFile(r.local), select = i == 0) }
             }
         }
         // Subtitles one subfolder level down (2026-11-21 21:11, e.g. "Movie/Subs/2_English.srt"): added as choices in the

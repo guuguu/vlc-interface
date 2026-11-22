@@ -122,6 +122,9 @@ object VlcBrowse {
                         }
                     }, main)
                     holder[0] = browser
+                    // libVLC hides srt/sub/idx/ssa/cue/txt/images by default ("ignore-filetypes"), so a NAS folder's subtitles never
+                    // showed (14:11, "No folders or subtitle files here" next to Episode 15.en.srt). The app filters its own lists.
+                    browser.setIgnoreFileTypes("db,ini,sfv,lnk,url")
                     browser.browse(Uri.parse(VpnLink.route(uri)), MediaBrowser.Flag.Interact or MediaBrowser.Flag.NoSlavesAutodetect)
                     cont.invokeOnCancellation { main.post { holder[0]?.release(); holder[0] = null } }
                 }

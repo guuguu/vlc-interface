@@ -103,21 +103,51 @@ object SubtitleFiles {
         ref to where
     }
 
-    /** Looks for a same-name subtitle next to a network video and makes a local working copy of it. */
-    suspend fun findSidecar(ctx: Context, item: PlayItem): SubRef? = withContext(Dispatchers.IO) {
-        refs[item.uri]?.let { return@withContext it }
-        val src = sourceOf(item) ?: return@withContext null
-        if (!(item.uri.startsWith("smb://") || item.uri.startsWith("http"))) return@withContext null
+    /** Looks for a same-name subtitle next to a network video and makes a local working copy of it (the one to switch on). */
+    suspend fun findSidecar(ctx: Context, item: PlayItem): SubRef? = findSidecars(ctx, item).firstOrNull()
+
+    /**
+     * Every subtitle next to a network video named after it (14:10: "Episode 15.en.srt" and "Episode 15.en.2.srt" weren't
+     * found — only the exact "Episode 15.srt" was): the video's name, then optionally a language code and a number or a
+     * tag ("Movie.srt", "Movie.en.srt", "Movie.en.2.srt", "Movie.es.forced.srt", "Movie.English.srt"). First the one in
+     * the first preferred language (Settings → Video → Subtitles), then the other preferred ones, then the rest; the
+     * first is switched on, the others are offered in Subs/Change.
+     */
+    private val sideRefs = HashMap<String, List<SubRef>>()
+    suspend fun findSidecars(ctx: Context, item: PlayItem): List<SubRef> = withContext(Dispatchers.IO) {
+        sideRefs[item.uri]?.let { return@withContext it }
+        val src = sourceOf(item) ?: return@withContext emptyList()
+        if (!(item.uri.startsWith("smb://") || item.uri.startsWith("http"))) return@withContext emptyList()
         val folder = Urls.parent(item.uri)
         val base = Uri.decode(item.uri.substringAfterLast('/')).substringBeforeLast('.')
-        val list = Browse.listAll(src, folder).getOrNull() ?: return@withContext null
-        val sub = list.firstOrNull { !it.isDir && Uri.decode(it.name).substringBeforeLast('.') == base && it.name.ext() in setOf("srt", "ass", "ssa", "vtt") }
-            ?: return@withContext null
-        val bytes = read(src, sub.uri) ?: return@withContext null
-        val name = Uri.decode(sub.name)
-        val local = File(dir(ctx, "subtitles/" + hash(item.uri)), name).apply { writeBytes(bytes) }
-        SubRef(local, src, folder, name).also { refs[item.uri] = it }
+        val list = Browse.listAll(src, folder).getOrNull() ?: return@withContext emptyList()
+        val langs = app.vlcinterface.App.instance.store.current.settings.subLangs.map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+        fun middle(n: String) = Uri.decode(n).substringBeforeLast('.').let { s -> if (s.equals(base, true)) "" else s.substring(base.length).trimStart('.', '_', '-', ' ').lowercase() }
+        fun rank(n: String): Int {
+            val tag = middle(n).split('.', '_', '-', ' ').firstOrNull().orEmpty()
+            val i = langs.indexOfFirst { l -> tag == l || tag.startsWith(l) || (l.length == 2 && langName(l)?.let { tag.startsWith(it) } == true) }
+            return if (i >= 0) i else if (tag.isEmpty()) langs.size else langs.size + 1
+        }
+        val subs = list.filter { e ->
+            !e.isDir && e.name.ext() in setOf("srt", "ass", "ssa", "vtt") && Uri.decode(e.name).let { n ->
+                n.substringBeforeLast('.').equals(base, true) || (n.startsWith(base, true) && n.length > base.length && n[base.length] in ".-_ ")
+            }
+        }.sortedWith(compareBy({ rank(it.name) }, { Uri.decode(it.name).length }, { Uri.decode(it.name) })).take(6)
+        val out = subs.mapNotNull { sub ->
+            val bytes = read(src, sub.uri) ?: return@mapNotNull null
+            val name = Uri.decode(sub.name)
+            val local = File(dir(ctx, "subtitles/" + hash(item.uri)), name).apply { writeBytes(bytes) }
+            SubRef(local, src, folder, name)
+        }
+        out.firstOrNull()?.let { refs[item.uri] = it }
+        sideRefs[item.uri] = out
+        out
     }
+
+    /** "en" → "english", "es" → "spanish" … for files tagged with the language's name. */
+    private fun langName(code: String): String? = try {
+        java.util.Locale(code).getDisplayLanguage(java.util.Locale.ENGLISH).lowercase().takeIf { it.isNotEmpty() && it != code }
+    } catch (_: Exception) { null }
 
     /**
      * Subtitles one folder level down and in season archives (2026-11-21 21:11 / 21:16), e.g. "Movie/Subs/2_English.srt"
