@@ -93,7 +93,7 @@ object Weather {
                     val i = (0 until times.length()).firstOrNull { times.getString(it) == "${day}T12:00" }
                     if (i != null) codes.getInt(i) else cur.getInt("weather_code")
                 }
-                // Temperature now and 6 hours later at the city (06:47: "now → in 6 hours"), from the hourly forecast.
+                // Temperature now and 6 hours later at the city (06:47: "now > in 6 hours"), from the hourly forecast.
                 val nowT = cur.optDouble("temperature_2m", Double.NaN)
                 val hh = o.optJSONObject("hourly")
                 val in6 = try {

@@ -433,7 +433,7 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
                 HValueRow("City", if (g.cityName.isEmpty()) "Not chosen: the phone's time zone" else "Clock time, alarms and weather follow it, also when the phone's time zone isn't automatic",
                     if (g.cityName.isEmpty()) "Choose" else g.cityName) { cityAsk = true }
                 Divider()
-                HToggleRow("Weather on the clock", "Sun, clouds, rain, snow or storm, with the city's short name, its time zone and the temperature now → in 6 hours", g.showWeather) {
+                HToggleRow("Weather on the clock", "Sun, clouds, rain, snow or storm, with the city's short name, its time zone and the temperature now > in 6 hours", g.showWeather) {
                     set(g.copy(showWeather = it)); if (it) app.vlcinterface.alarm.Weather.refresh(force = true) }
                 if (g.showWeather) {
                     var wHelp by remember { mutableStateOf(false) }
@@ -443,9 +443,9 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
                         if (g.helpers) wHelp = true
                     }
                     if (wHelp) HelperDialog("Weather shows", HELP["Weather shows"] ?: "") { wHelp = false }
-                    // The line under the city (2026-11-22 06:44 / 06:47): time zone, temperature now → in 6 hours, or both alternating.
+                    // The line under the city (2026-11-22 06:44 / 06:47): time zone, temperature now > in 6 hours, or both alternating.
                     var lHelp by remember { mutableStateOf(false) }
-                    Label("Under the city", "Both: the time zone and the temperature now → in 6 hours, changing every 5 s")
+                    Label("Under the city", "Both: the time zone and the temperature now > in 6 hours, changing every 5 s")
                     Choices(listOf("Both" to "both", "Time zone" to "tz", "Temperatures" to "temp"), g.wxLine) { v ->
                         set(g.copy(wxLine = v)); if (g.helpers) lHelp = true
                     }
@@ -664,7 +664,7 @@ private val LocalHelp = androidx.compose.runtime.staticCompositionLocalOf<(Strin
 
 private val HELP: Map<String, String> = mapOf(
     "Under the city" to "The small line under the city's name on the clock. Both: the time zone (e.g. UTC+1) and the temperature at the " +
-        "city now → 6 hours later (e.g. 15°C → 18°C), changing every 5 seconds. Time zone or Temperatures: always that one. The " +
+        "city now > 6 hours later (e.g. 15°C>18°C), changing every 5 seconds. Time zone or Temperatures: always that one. The " +
         "temperatures come from the same weather service as the icon (refreshed with it); until they're known the time zone is shown.",
     "Weather shows" to "What the weather icon on the clock shows for your city. 'At noon': today's forecast for 12:00 at the city (its own local time) — handy in the morning to see what the day will be; after midnight it moves to the new day's noon. " +
         "'Now': the weather right now. Either way it's refreshed every 30 minutes (only with the weather on). Icons: sun, cloud, raindrops (light rain), cloud with rain, snowflakes (light snow), cloud with snow, storm. Default: At noon.",
