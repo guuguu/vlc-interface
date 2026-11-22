@@ -154,7 +154,7 @@ fun MediaList(
     val kind = kindOverride ?: App.instance.store.state.collectAsState().value.settings.libraryKind
     val hidden = App.instance.store.state.collectAsState().value.settings.hiddenUris
     val list = remember(entries, kind, hidden) { (entries ?: emptyList()).filter { (it.isDir || (if (kind == "video") it.isVideo else it.isAudio) ||
-        (onSubtitle != null && app.vlcinterface.sources.SubtitleFiles.isSub(it.name))) && it.uri !in hidden } }
+        (onSubtitle != null && (app.vlcinterface.sources.SubtitleFiles.isSub(it.name) || app.vlcinterface.sources.SubtitleFiles.isSeasonArchive(it.name)))) && it.uri !in hidden } }
     val groups = remember(list) { MusicLibrary.group(list, folderName) }
     val order = remember(list) { MusicLibrary.playOrder(list, folderName) }
     val rows = remember(list) {
@@ -162,7 +162,13 @@ fun MediaList(
             list.filter { it.isDir }.forEach { add(Row0.Dir(it)) }
             groups.forEach { g -> add(Row0.Header(g)); g.entries.forEach { add(Row0.Song(it, g.multiDisc)) } }
             list.filter { it.isVideo }.forEach { add(Row0.Video(it)) }
-            if (onSubtitle != null) list.filter { !it.isDir && app.vlcinterface.sources.SubtitleFiles.isSub(it.name) }.forEach { add(Row0.Sub(it)) }
+            if (onSubtitle != null) {
+                // This season's archives first, then the subtitle files.
+                val season = App.instance.player.state.value.item?.let { app.vlcinterface.player.Episodes.parse(Uri.decode(it.uri.substringAfterLast('/')))?.season }
+                list.filter { !it.isDir && app.vlcinterface.sources.SubtitleFiles.isSeasonArchive(it.name) }
+                    .sortedBy { if (app.vlcinterface.sources.SubtitleFiles.seasonOf(it.name) == season) 0 else 1 }.forEach { add(Row0.Sub(it)) }
+                list.filter { !it.isDir && app.vlcinterface.sources.SubtitleFiles.isSub(it.name) }.forEach { add(Row0.Sub(it)) }
+            }
         }
     }
     // Each folder remembers where it was scrolled to (kept while the app runs): coming back from a sub-folder, the
@@ -365,11 +371,12 @@ fun MediaList(
                     is Row0.Sub -> Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
                         .combinedClickable(onClick = { onSubtitle?.invoke(r.e) }, onLongClick = { onSubtitle?.invoke(r.e) }), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.padding(start = 2.dp, end = 10.dp).clip(RoundedCornerShape(4.dp)).background(C.card2).padding(horizontal = 4.dp, vertical = 1.dp)) {
-                            Text("CC", color = accent(), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            Text(if (app.vlcinterface.sources.SubtitleFiles.isZip(r.e.name)) "ZIP" else "CC", color = accent(), fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
                         Column(Modifier.weight(1f)) {
                             MarqueeText(r.e.name, C.text, Modifier.fillMaxWidth(), fontSize = 15.sp, list = "videos")
-                            Text("Subtitles · tap to use with the video playing", color = C.muted, fontSize = 12.sp)
+                            Text(if (app.vlcinterface.sources.SubtitleFiles.isZip(r.e.name)) "Season ${app.vlcinterface.sources.SubtitleFiles.seasonOf(r.e.name)} subtitles archive · tap to pick one"
+                                else "Subtitles · tap to use with the video playing", color = C.muted, fontSize = 12.sp)
                         }
                     }
                     is Row0.Video -> {

@@ -466,7 +466,7 @@ fun FolderScreen(nav: Navigator, folder: LocalFolder, highlight: String, video: 
         val subFiles = if (!video) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
             try {
                 (java.io.File(app.vlcinterface.sources.MusicFolderAccess.pathFor(folder.volume, rel)).listFiles() ?: emptyArray())
-                    .filter { it.isFile && app.vlcinterface.sources.SubtitleFiles.isSub(it.name) && !it.name.startsWith(".") }
+                    .filter { it.isFile && (app.vlcinterface.sources.SubtitleFiles.isSub(it.name) || app.vlcinterface.sources.SubtitleFiles.isSeasonArchive(it.name)) && !it.name.startsWith(".") }
                     .map { Entry(it.name, it.path, false, it.length()) }
             } catch (_: Exception) { emptyList() }
         }
@@ -482,6 +482,7 @@ fun FolderScreen(nav: Navigator, folder: LocalFolder, highlight: String, video: 
             nav.replace(Screen.Folder(LocalFolder("${folder.volume}:$pr", pr.trimEnd('/').substringAfterLast('/').ifEmpty { title }, pr, 0, folder.volume), "", video))
         })
         PlacesBar(nav, up, if (rel.contains('/')) rel.substringBeforeLast('/').substringAfterLast('/') else if (rel.isEmpty()) "" else "Top of the storage", video)
+        if (video) SubZipPickDialog(nav)
         Box(Modifier.weight(1f)) {
             MediaList(nav, files, "", folder.name.removeSuffix(" (SD card)"), null, "local:${folder.volume}:${folder.relativePath}",
                 Origin("local", folder.volume, folder.relativePath, folder.name, localFolderId = folder.id), highlight,
@@ -502,14 +503,49 @@ fun FolderScreen(nav: Navigator, folder: LocalFolder, highlight: String, video: 
 fun useSubtitle(nav: Navigator, ctx: android.content.Context, scope: kotlinx.coroutines.CoroutineScope, src: Source?, e: Entry) {
     val player = App.instance.player
     val item = player.state.value.item?.takeIf { !it.isMusic && !it.isRadio } ?: run { ShortNote.show("No video is playing"); return }
-    ShortNote.show("Loading subtitles…")
+    ShortNote.show(if (app.vlcinterface.sources.SubtitleFiles.isZip(e.name)) "Opening ${e.name}…" else "Loading subtitles…")
     scope.launch {
+        // A season archive: its subtitles listed to pick from (this episode's first).
+        if (app.vlcinterface.sources.SubtitleFiles.isZip(e.name)) {
+            val inside = app.vlcinterface.sources.SubtitleFiles.unzip(ctx, item, src, app.vlcinterface.sources.SubtitleFiles.BEntry(e.name, e.uri, 'z'))
+            if (inside.isEmpty()) { ShortNote.show("No subtitles inside ${e.name}"); return@launch }
+            SubZipPick.files.value = e.name to inside.sortedWith(compareBy({ !app.vlcinterface.sources.SubtitleFiles.belongs(item, it.name) }, { it.name.lowercase() }))
+            return@launch
+        }
         val f = app.vlcinterface.sources.SubtitleFiles.fetch(ctx, item, src, app.vlcinterface.sources.SubtitleFiles.BEntry(e.name, e.uri, 's'))
         if (f == null) { ShortNote.show("Could not read ${e.name}"); return@launch }
         player.addSubtitleFile(android.net.Uri.fromFile(f), keep = true)
         ShortNote.show("Subtitles on: ${e.name}")
         nav.backToPlayer()
     }
+}
+
+/** A season archive opened while browsing from the video player: (its name, the subtitles in it). */
+object SubZipPick { val files = kotlinx.coroutines.flow.MutableStateFlow<Pair<String, List<java.io.File>>?>(null) }
+
+/** Pick a subtitle from the season archive: it goes on the video playing, back to the player. */
+@Composable
+fun SubZipPickDialog(nav: Navigator) {
+    val z by SubZipPick.files.collectAsState()
+    val (name, files) = z ?: return
+    val item = App.instance.player.state.collectAsState().value.item
+    androidx.compose.material3.AlertDialog(onDismissRequest = { SubZipPick.files.value = null }, containerColor = C.panel,
+        title = { Text(name, color = C.text, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                files.forEach { f ->
+                    val mine = item != null && app.vlcinterface.sources.SubtitleFiles.belongs(item, f.name)
+                    Text(f.name, color = if (mine) accent() else C.text, fontSize = 14.sp, fontWeight = if (mine) FontWeight.SemiBold else FontWeight.Normal,
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            SubZipPick.files.value = null
+                            App.instance.player.addSubtitleFile(android.net.Uri.fromFile(f), keep = true)
+                            ShortNote.show("Subtitles on: ${f.name}")
+                            nav.backToPlayer()
+                        }.padding(vertical = 9.dp))
+                }
+            }
+        },
+        confirmButton = { STextButton({ SubZipPick.files.value = null }) { Text("Cancel") } })
 }
 
 /**
@@ -766,7 +802,8 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
         val started = System.currentTimeMillis()
         // From the video player: subtitle files listed too (with the folders, videos and songs).
         val r = if (b.video) Browse.listAll(src, b.uri, "browse").map { l -> l.filter { (it.isDir || app.vlcinterface.sources.isPlayable(it.name) ||
-                app.vlcinterface.sources.SubtitleFiles.isSub(it.name)) && !app.vlcinterface.sources.Ignore.entry(it) } }
+                app.vlcinterface.sources.SubtitleFiles.isSub(it.name) || app.vlcinterface.sources.SubtitleFiles.isSeasonArchive(it.name)) &&
+                !app.vlcinterface.sources.Ignore.entry(it) } }
             else Browse.list(src, b.uri, if (reload > 0) "rescan" else "browse")
         r.onSuccess { l ->
             entries = MusicLibrary.withCachedTags(l).also { ListCache.put(b.uri, it) }
@@ -820,6 +857,7 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
         val ctxS = LocalContext.current; val scopeS = rememberCoroutineScope()
         PlacesBar(nav, parent?.let { p -> { nav.replace(Screen.Browse(b.sourceId, p, Urls.nameOf(p).let { n -> if (p.substring(hostEnd).trim('/').isEmpty()) src?.name ?: n else n }, "", b.video)) } },
             parent?.let { p -> if (p.substring(hostEnd).trim('/').isEmpty()) (src?.name ?: Urls.hostOnly(p)) + " (server)" else Urls.nameOf(p) } ?: "", b.video)
+        if (b.video) SubZipPickDialog(nav)
         Box(Modifier.weight(1f)) {
             MediaList(nav, entries, error, Urls.nameOf(b.uri), src, b.uri, Origin("folder", b.sourceId, b.uri, b.title),
                 if (b.highlight.startsWith("\u0000")) "" else b.highlight,

@@ -141,7 +141,7 @@ object SubtitleFiles {
     private fun norm(x: String) = x.lowercase().replace(Regex("""[\s._\-]+"""), " ").trim()
 
     /** The season in an archive's name: S02 / s2 / Season 2 / Temporada 2 / Staffel 2 / Saison 2 / Stagione 2. */
-    private fun seasonOf(name: String): Int? {
+    fun seasonOf(name: String): Int? {
         val n = Uri.decode(name).substringBeforeLast('.')
         Regex("""(?i)(?:^|[^a-z0-9])s(\d{1,2})(?:[^0-9e]|$)""").find(n)?.let { return it.groupValues[1].toInt() }
         Regex("""(?i)(?:season|temporada|staffel|saison|stagione|sezon)[\s._-]*(\d{1,2})""").find(n)?.let { return it.groupValues[1].toInt() }
@@ -246,6 +246,8 @@ object SubtitleFiles {
 
     fun isSub(name: String) = name.ext() in SUB_EXT
     fun isZip(name: String) = name.ext() == "zip"
+    /** A zip named for a season (Show.S02.Subs.zip, Season 2.zip …): a season's subtitles. */
+    fun isSeasonArchive(name: String) = isZip(name) && seasonOf(name) != null
 
     /** One entry of the browser: a folder, a subtitle file, or a zip archive (its subtitles listed when opened). */
     data class BEntry(val name: String, val uri: String, val kind: Char)   // 'd' folder, 's' subtitle, 'z' zip
