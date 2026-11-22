@@ -1372,3 +1372,4 @@
 - **Clock on the video, more choices (13:25):** digital only; **Clock corner** — ↖ top left, ↗ top right, ↙ bottom left, ↘ bottom right (bottom corners stay above the position bar); **Digits colour** — any colour from the colour editor (+ Create), White puts back the default; **Clock shadow** (switch) — a grey shadow under the digits (grey only). Defaults: top left, white, shadow on. Helper updated.
 - **Shadow settings (13:27):** under Clock shadow, "Shadow intensity" 10–100 % (default 70 %: from a faint haze to solid grey) and "Shadow width" 1–12 dp (default 3 dp: how far it falls and spreads), each with Reset; shown while the shadow is on. Helper updated.
 - **Full screen (13:29):** sideways, the clock hides while the player's buttons are shown and comes back when they hide.
+- **Locked controls (13:30):** with the controls locked (🔒), the clock stays on the picture, also full screen.
