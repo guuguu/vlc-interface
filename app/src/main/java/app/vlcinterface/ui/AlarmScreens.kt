@@ -664,7 +664,7 @@ private val LocalHelp = androidx.compose.runtime.staticCompositionLocalOf<(Strin
 
 private val HELP: Map<String, String> = mapOf(
     "Under the city" to "The small line under the city's name on the clock. Both: the time zone (e.g. UTC+1) and the temperature at the " +
-        "city now > 6 hours later (e.g. 15°C>18°C), changing every 5 seconds. Time zone or Temperatures: always that one. The " +
+        "city now > 6 hours later (e.g. 15°>18°), changing every 5 seconds. Time zone or Temperatures: always that one. The " +
         "temperatures come from the same weather service as the icon (refreshed with it); until they're known the time zone is shown.",
     "Weather shows" to "What the weather icon on the clock shows for your city. 'At noon': today's forecast for 12:00 at the city (its own local time) — handy in the morning to see what the day will be; after midnight it moves to the new day's noon. " +
         "'Now': the weather right now. Either way it's refreshed every 30 minutes (only with the weather on). Icons: sun, cloud, raindrops (light rain), cloud with rain, snowflakes (light snow), cloud with snow, storm. Default: At noon.",

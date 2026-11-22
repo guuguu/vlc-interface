@@ -94,7 +94,7 @@ fun ClockFace(a: ClockAspect, modifier: Modifier, now: Long = 0L) {
     // The line under the city (06:44 / 06:47): the time zone, the temperature now > in 6 hours, or both alternating every 5 s.
     val tzText = tzLabel(zone, if (now != 0L) now else t)
     val sameCity = w.key == "${g.cityLat},${g.cityLon},${if (g.weatherNoon) "noon" else "now"}"
-    val tempText = if (sameCity && !w.nowC.isNaN() && !w.in6C.isNaN()) "${Math.round(w.nowC)}°C>${Math.round(w.in6C)}°C" else ""
+    val tempText = if (sameCity && !w.nowC.isNaN() && !w.in6C.isNaN()) "${Math.round(w.nowC)}°>${Math.round(w.in6C)}°" else ""
     val line2 = when {
         tempText.isEmpty() || g.wxLine == "tz" -> tzText
         g.wxLine == "temp" -> tempText

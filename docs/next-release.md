@@ -1175,7 +1175,7 @@
   - A newer reopen, or another video chosen meanwhile, drops the pending one. The stop isn't taken for the end of the video.
 
 ## Clock: time zone and temperature now > in 6 hours under the city (requested 2026-11-22 06:44 / 06:47)
-- **On the clock face:** the line under the city's short name changes every 5 s between the time zone (UTC+1) and the temperature at the city now → 6 hours later, with the user's own ">" sign (15°C>18°C).
+- **On the clock face:** the line under the city's short name changes every 5 s between the time zone (UTC+1) and the temperature at the city now → 6 hours later, with the user's own ">" sign (15°>18°, no letters).
   - The block keeps the width of the longer text, so it doesn't move.
   - Until the temperatures are known, it shows the time zone.
 - **Settings → Alarm clock → Location → "Under the city":** Both (default, alternating) / Time zone / Temperatures. Text helper.
