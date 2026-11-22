@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.sp
  */
 class AssocType(val group: String, val key: String, val label: String, val exts: String, val mimes: List<String>) {
     val isLink get() = group == "link"
+    /** "Any other audio / video" (08:28): every type of its kind, also the ones listed. */
+    val isAny get() = key == "anyaudio" || key == "anyvideo"
     val component get() = ComponentName(app.vlcinterface.App.instance.packageName, "app.vlcinterface.Assoc_$key")
 }
 
@@ -46,6 +48,7 @@ object Associations {
         AssocType("audio", "hires", "APE / WavPack / DSD", "ape, wv, dsf, dff", listOf("audio/ape", "audio/x-ape", "audio/x-monkeys-audio", "audio/x-wavpack", "audio/wavpack", "audio/dsf", "audio/x-dsf", "audio/x-dff", "audio/dff")),
         AssocType("audio", "mka", "Matroska audio", "mka", listOf("audio/x-matroska")),
         AssocType("audio", "midi", "MIDI / AMR / other", "mid, amr, 3ga", listOf("audio/midi", "audio/x-midi", "audio/amr", "audio/3gpp", "audio/3gpp2")),
+        AssocType("audio", "anyaudio", "Any other audio", "every audio type, for compatibility", listOf("audio/x-other-audio")),
         AssocType("video", "mp4", "MP4 / MOV", "mp4, m4v, mov", listOf("video/mp4", "video/quicktime", "video/x-m4v")),
         AssocType("video", "mkv", "MKV", "mkv", listOf("video/x-matroska", "video/matroska")),
         AssocType("video", "avi", "AVI", "avi, divx", listOf("video/x-msvideo", "video/avi", "video/divx", "video/x-divx")),
@@ -56,6 +59,7 @@ object Associations {
         AssocType("video", "flv", "FLV", "flv", listOf("video/x-flv", "video/flv")),
         AssocType("video", "3gp", "3GP", "3gp, 3g2", listOf("video/3gpp", "video/3gpp2")),
         AssocType("video", "ogv", "Ogg video", "ogv", listOf("video/ogg")),
+        AssocType("video", "anyvideo", "Any other video", "every video type, for compatibility", listOf("video/x-other-video")),
         AssocType("playlist", "pls", "PLS radio playlists", "pls", listOf("audio/x-scpls", "audio/scpls", "application/pls+xml")),
         AssocType("playlist", "m3u", "M3U playlists", "m3u, m3u8", listOf("audio/x-mpegurl", "audio/mpegurl", "application/x-mpegurl", "application/vnd.apple.mpegurl")),
         AssocType("playlist", "xspf", "XSPF playlists", "xspf", listOf("application/xspf+xml")),
@@ -161,18 +165,21 @@ fun ColumnScope.AssociationSettings() {
                 if (i > 0) Divider()
                 val on = remember(tick, changed) { Associations.registered(ctx, t) }
                 val who = remember(tick, changed) { Associations.opener(ctx, t) }
+                // Switched off but "Any other …" of its kind is on: still offered through it.
+                val anyOn = remember(tick, changed) { !t.isAny && Associations.TYPES.firstOrNull { it.isAny && it.group == t.group }?.let { Associations.registered(ctx, it) } == true }
                 val status = when {
+                    !on && anyOn -> "Switched off, but still offered through \"Any other ${if (t.group == "audio") "audio" else "video"}\""
                     !on -> "Not offered for this type"
                     who is Associations.Opener.Me -> "Main app ✓"
                     who is Associations.Opener.Asks -> "Offered · Android asks which app each time"
                     who is Associations.Opener.Other -> "Offered · main app now: ${who.name}"
                     else -> "Offered"
                 }
-                ToggleRow("${t.label} (${t.exts})", status, on) { v ->
+                ToggleRow(if (t.isAny) t.label else "${t.label} (${t.exts})", if (t.isAny && on) "$status · covers every ${t.group} type, also those above" else status, on) { v ->
                     Associations.setRegistered(ctx, t, v); changed++
                     if (helpersOn) help = if (v) "Register for a type" else "Deregister a type"
                 }
-                if (on && who !is Associations.Opener.Me) Row0Link("Make it the main app for ${t.label}…") { main = t }
+                if (on && !t.isAny && who !is Associations.Opener.Me) Row0Link("Make it the main app for ${t.label}…") { main = t }
             }
         }
     }

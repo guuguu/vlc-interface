@@ -453,6 +453,24 @@
                 <data android:scheme="rtmp" />
             </intent-filter>
         </activity-alias>
+        <!-- File association "anyaudio" (any other audio): kept for compatibility (08:28), switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_anyaudio" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/*" />
+                <data android:scheme="file" android:mimeType="audio/*" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File association "anyvideo" (any other video): kept for compatibility (08:28), switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_anyvideo" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/*" />
+                <data android:scheme="file" android:mimeType="video/*" />
+            </intent-filter>
+        </activity-alias>
         <!-- Target of notification / lock-screen taps: does nothing while the phone is locked. -->
         <activity
             android:name=".OpenOriginActivity"

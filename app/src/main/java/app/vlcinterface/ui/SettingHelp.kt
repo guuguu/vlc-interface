@@ -301,8 +301,10 @@ object SettingHelp {
         "Deregister a type" to "The app is no longer offered for this type: Android won't list it, and if it was the main app for it, another app (or Android's question) takes over. Its own Library still plays these files.",
         "Register for every type" to "Switches every type on at once: audio and video files, radio playlists and radio links. Android then offers vlc interface for all of them; the main app for each stays as it is.",
         "Deregister every type" to "Switches every type off at once: Android no longer offers vlc interface for any file or radio link from other apps. Nothing else changes; the app's own Library plays as before.",
+        "Any other audio" to "Kept for compatibility: vlc interface is offered for every audio type, also rare ones not listed above (and the listed ones too). Switched on (default), a listed type switched off is still offered through it; switch this off too to take the app away from that type completely.",
+        "Any other video" to "Kept for compatibility: vlc interface is offered for every video type, also rare ones not listed above (and the listed ones too). Switched on (default), a listed type switched off is still offered through it; switch this off too to take the app away from that type completely.",
         "Stop being the main app" to "Every type that opens with vlc interface without asking goes back to Android's question (or to another app set as main). The types stay registered, so the app is still offered in the list.",
-    ) + Associations.TYPES.associate { t ->
+    ) + Associations.TYPES.filter { !it.isAny }.associate { t ->
         t.label to (if (t.isLink) "Links starting with ${t.exts} (internet radio and streams) " else "${t.label} files (${t.exts}) ") +
             "opened from another app. The switch says whether vlc interface is offered for them; the line under it says who opens them now: this app as the main app, Android's question each time, or another app.\n\n" +
             "\"Make it the main app…\" shows the steps Android allows: clear the other app's default if there is one, then open one such " + (if (t.isLink) "link" else "file") +
