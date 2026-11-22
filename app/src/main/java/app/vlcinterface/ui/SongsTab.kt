@@ -94,9 +94,18 @@ internal object SongsCache {
      * Phone songs + indexed LAN folders (★, only from servers reachable now) + LAN / Internet songs read in the
      * Songs list; a song on both the phone and the network = the phone file.
      */
+    /** The phone's songs only, at once (searches show these first, the NAS ones join when checked). */
+    suspend fun phoneOnly(ctx: android.content.Context): List<PlayItem> {
+        val hidden = App.instance.store.current.settings.hiddenUris
+        return loadPhone(ctx).filter { it.uri !in hidden && it.folderKey !in hidden && "local:" + it.folderKey.removePrefix("local:") !in hidden &&
+            !app.vlcinterface.sources.Ignore.dotName(it.fileName) && !app.vlcinterface.sources.Ignore.dotPath(it.uri.substringAfter("://")) }
+    }
+
     suspend fun all(ctx: android.content.Context): List<PlayItem> {
         val hidden = App.instance.store.current.settings.hiddenUris
-        return app.vlcinterface.sources.NetIndex.preferLocal(loadPhone(ctx) + app.vlcinterface.sources.NetIndex.songsReachable() + network)
+        // Songs read from the network in the Songs list: only from locations usable now (19:37), like the index.
+        val net = if (network.isEmpty()) network else app.vlcinterface.ui.withoutUnusableNas(network)
+        return app.vlcinterface.sources.NetIndex.preferLocal(loadPhone(ctx) + app.vlcinterface.sources.NetIndex.songsReachable() + net)
             .filter { it.uri !in hidden && it.folderKey !in hidden && "local:" + it.folderKey.removePrefix("local:") !in hidden &&
                 !app.vlcinterface.sources.Ignore.dotName(it.fileName) && !app.vlcinterface.sources.Ignore.dotPath(it.uri.substringAfter("://")) }
     }
@@ -130,6 +139,8 @@ fun SongsTab(nav: Navigator) {
         { it.artist.ifEmpty { "￿" }.lowercase() }, { it.album.ifEmpty { "￿" }.lowercase() }, { it.trackNo }))
     // Phone songs + songs of the indexed ★ LAN folders (+ any read with "+ LAN/Internet"); a song on both = phone file.
     LaunchedEffect(indexVer) {
+        // Nothing shown yet: the phone's songs at once, the NAS ones join when their NAS is checked (19:37).
+        if (songs.isEmpty()) songs = sorted(SongsCache.phoneOnly(ctx.applicationContext))
         val fresh = sorted(SongsCache.all(ctx.applicationContext))
         if (fresh != songs) songs = fresh
         SongsCache.lastShown = fresh; loading = false

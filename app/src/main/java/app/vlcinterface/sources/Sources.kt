@@ -7,6 +7,7 @@ import app.vlcinterface.App
 import app.vlcinterface.data.ServerLog
 import app.vlcinterface.data.Source
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -56,14 +57,19 @@ object Net {
 
     const val UA = "vlc-interface/0.1"
 
-    suspend fun reachable(host: String, port: Int, timeoutMs: Int = 1500): Boolean = withContext(Dispatchers.IO) {
-        try {
-            // LAN servers: their VPN address when that's the one in use.
-            Socket().use { it.connect(InetSocketAddress(VpnLink.routeHost(host), port), timeoutMs) }
-            true
-        } catch (e: Exception) {
-            false
+    suspend fun reachable(host: String, port: Int, timeoutMs: Int = 1500): Boolean {
+        // Never longer than the time given (2026-11-22 19:37: searches hung on an unreachable NAS): the name lookup
+        // before the connection has no time limit of its own, so the check runs apart and is given up when time's up.
+        val d = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).async {
+            try {
+                // LAN servers: their VPN address when that's the one in use.
+                Socket().use { it.connect(InetSocketAddress(VpnLink.routeHost(host), port), timeoutMs) }
+                true
+            } catch (e: Exception) {
+                false
+            }
         }
+        return kotlinx.coroutines.withTimeoutOrNull(timeoutMs + 300L) { d.await() } ?: false
     }
 }
 

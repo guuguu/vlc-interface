@@ -169,7 +169,10 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     var folderList by remember { mutableStateOf<List<FolderHit>?>(null) }
     var pickFolder by remember { mutableStateOf<FolderHit?>(null) }
     var phoneDelete by remember { mutableStateOf<Pair<FolderHit, List<String>>?>(null) }
-    androidx.compose.runtime.LaunchedEffect(Unit) { library = SongsCache.all(ctx.applicationContext) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        library = SongsCache.phoneOnly(ctx.applicationContext)           // phone songs at once; the NAS ones when checked (19:37)
+        library = SongsCache.all(ctx.applicationContext)
+    }
     androidx.compose.runtime.LaunchedEffect(folders) { if (folders && folderList == null) folderList = allFolders(ctx.applicationContext) }
     val folderHits = remember(dq, folderList) {
         if (dq.trim().length < 2) emptyList()
