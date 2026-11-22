@@ -133,6 +133,23 @@ object NetIndex {
     }
 
     /**
+     * A NAS item that must not go into the queue now (2026-11-22 19:35: "never load a NAS item if the NAS is
+     * inaccessible"), decided at once without waiting on the network: its location can't be used from here (away from
+     * home without the VPN, the VPN ignored for this session), or its server was found not answering in the last minute.
+     * A location not checked lately is checked in the background, so the next additions follow it.
+     */
+    fun blockedNow(item: PlayItem): Boolean {
+        if (item.isRadio || !item.uri.contains("://") || item.uri.startsWith("content://") || item.uri.startsWith("file://")) return false
+        val s = MusicLibrary.sourceOf(item) ?: return false
+        if (s.zone == app.vlcinterface.data.Zone.LAN && !(VpnLink.atHome(s) || (s.id in VpnLink.useNas.value && VpnLink.vpnUp.value))) return true
+        if (VpnLink.ignoreSession && s.zone == app.vlcinterface.data.Zone.LAN) return true
+        val c = synchronized(upAt) { upAt[s.id] }
+        val now = System.currentTimeMillis()
+        if (c == null || now - c.first > 20_000) scope.launch { try { usableSources(setOf(s.id)) } catch (_: Exception) {} }
+        return c != null && !c.second && now - c.first < 60_000
+    }
+
+    /**
      * Of [ids], the saved locations that can be used right now (2026-11-22 19:34): a home-network one only at home or over
      * the VPN when it's on (not while it's ignored for this session), and its server answering (checked at most every 20 s).
      */

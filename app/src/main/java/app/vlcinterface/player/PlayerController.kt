@@ -1186,8 +1186,10 @@ class PlayerController(private val context: Context, private val store: Store) {
      * Playlists page → Load: the playlist becomes the queue, first song ready and paused (press ▶ to start).
      * Silent while it gets ready.
      */
-    fun loadQueue(items: List<PlayItem>, origin: Origin) {
-        if (items.isEmpty()) return
+    fun loadQueue(items0: List<PlayItem>, origin: Origin) {
+        // NAS items never go into the queue while the NAS can't be used (19:35).
+        val items = items0.filterNot { nasOff(it) }
+        if (items.isEmpty()) { if (items0.isNotEmpty()) nasOfflineToast(); return }
         // A song is playing: it plays to its end; the new list comes right after it (nothing cut off).
         val s = _state.value
         val cur = s.queue.getOrNull(s.index)
@@ -1209,7 +1211,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     /** A NAS song that can't be used now (away without "Use NAS", VPN off, or skipped this session). */
-    private fun nasOff(it: PlayItem) = app.vlcinterface.sources.VpnLink.waitsForUse(it.uri) || app.vlcinterface.sources.VpnLink.ignored(it.uri)
+    private fun nasOff(it: PlayItem) = app.vlcinterface.sources.VpnLink.waitsForUse(it.uri) || app.vlcinterface.sources.VpnLink.ignored(it.uri) ||
+        try { app.vlcinterface.sources.NetIndex.blockedNow(it) } catch (_: Exception) { false }
 
     /** "NAS offline", 3 s, nothing logged (a song picked by hand). */
     private fun nasOfflineToast() = main.post {
@@ -1259,6 +1262,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         startPaused = true
         NativeAudio.appVolume(0f)
         startItem(index, if (q[index].isRadio) -1 else time.coerceAtLeast(0))
+        // The other NAS items of the queue kept from last time don't come back while the NAS can't be used (19:35).
+        if (q.any { nasOff(it) }) pruneNas()
     }
 
     /** NAS not usable (VPN-NAS off, VPN down …): the queue is refreshed to local songs only. */
@@ -1805,6 +1810,7 @@ class PlayerController(private val context: Context, private val store: Store) {
      * queue → moved there). The playlist itself isn't changed; nothing else moves.
      */
     fun queueNext(item: PlayItem) {
+        if (nasOff(item)) { nasOfflineToast(); return }                // never a NAS item while the NAS can't be used (19:35)
         val s = _state.value
         session(null, listOf(item))
         if (s.item == null) { playQueue(listOf(item), 0, Origin("single")); return }
@@ -1824,6 +1830,7 @@ class PlayerController(private val context: Context, private val store: Store) {
      * after the current song (unless already in it).
      */
     fun jumpToSong(item: PlayItem) {
+        if (nasOff(item)) { nasOfflineToast(); return }                // never a NAS item while the NAS can't be used (19:35)
         val s = _state.value
         sessionManualChoice()
         if (s.queue.none { qKey(it) == qKey(item) }) session(null, listOf(item))
