@@ -662,7 +662,7 @@ private fun SeekBlock(item: PlayItem) {
         val pos = (p.time - base).coerceAtLeast(0)
         // Touch / slide: a bubble over the thumb shows the time it points at, following the finger; the song keeps
         // playing and only jumps there when the finger is lifted.
-        // A short tap or a long press (no sliding) does not jump: it opens the "Jump to m:ss" window instead.
+        // A tap or a slide jumps there; a long press without sliding opens the "Jump to m:ss" window instead.
         var moved by remember { mutableStateOf(false) }
         var held by remember { mutableStateOf(false) }
         var tapped by remember { mutableStateOf(false) }
@@ -687,8 +687,8 @@ private fun SeekBlock(item: PlayItem) {
             Slider(drag ?: if (len > 0) (pos.toFloat() / len).coerceIn(0f, 1f) else 0f, { drag = it },
                 modifier = Modifier.height(26.dp),
                 onValueChangeFinished = {
-                    // A tap or a long press without sliding (09:01: long press asked) opens "Jump to"; sliding jumps.
-                    if (tapped || (held && !moved)) { if (len > 0) askTime = true } else drag?.let { player.seekFraction(it) }
+                    // 09:02: a tap or a slide goes to that place; only a long press without sliding opens "Jump to".
+                    if (held && !moved) { if (len > 0) askTime = true } else drag?.let { player.seekFraction(it) }
                     drag = null
                 }, enabled = len > 0 || p.item != null,
                 colors = sCols,
@@ -696,7 +696,7 @@ private fun SeekBlock(item: PlayItem) {
                 track = { st -> SliderDefaults.Track(sliderState = st, modifier = Modifier.height(4.dp), colors = sCols, enabled = len > 0 || p.item != null,
                     drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) })
             // The bubble shows once the finger slides or stays down (not for a short tap).
-            drag?.takeIf { moved || held }?.let { f ->
+            drag?.takeIf { moved }?.let { f ->
                 val target = (f * len).toLong()
                 val bubbleW = 190.dp
                 val thumbX = 10.dp + (bw - 20.dp) * f

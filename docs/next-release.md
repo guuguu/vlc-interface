@@ -1317,4 +1317,4 @@
 - Now a libVLC message naming another file than the one playing goes to the Indexing log ("Could not open (background read): <file>", with its full path) instead of the player; messages about the song playing still show under it as before.
 
 ## "Jump to" on the song player's position bar (reported 2026-11-22 09:01)
-- A long press on the position bar now opens "Jump to" (minutes : seconds) too, like a short tap. Before, a long press without sliding was taken as a slide: when the finger was lifted the song jumped to where it was pressed and the window never came. Sliding still jumps to the time shown in the bubble.
+- **Tap:** goes straight to that place in the song (09:02). **Slide:** the bubble shows the time, the song jumps there when the finger is lifted. **Long press (without sliding):** opens "Jump to" (minutes : seconds) — before, a long press was taken as a slide and the window never came.
