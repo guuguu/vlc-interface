@@ -91,8 +91,18 @@ fun ClockFace(a: ClockAspect, modifier: Modifier, now: Long = 0L) {
     // Weather for the chosen city: checked every 10 min while the clock is shown (refreshed at most every 30 min).
     LaunchedEffect(g.cityLat, g.cityLon, g.showWeather, g.weatherNoon) { while (true) { app.vlcinterface.alarm.Weather.refresh(); delay(10 * 60_000L) } }
     val zone = app.vlcinterface.alarm.Alarms.zone()
+    // The line under the city (06:44): the time zone, today's low › high temperature, or both alternating every 5 s.
+    val tzText = tzLabel(zone, if (now != 0L) now else t)
+    val sameCity = w.key == "${g.cityLat},${g.cityLon},${if (g.weatherNoon) "noon" else "now"}"
+    val tempText = if (sameCity && !w.minC.isNaN() && !w.maxC.isNaN()) "${Math.round(w.minC)}°C › ${Math.round(w.maxC)}°C" else ""
+    val line2 = when {
+        tempText.isEmpty() || g.wxLine == "tz" -> tzText
+        g.wxLine == "temp" -> tempText
+        else -> if (((if (now != 0L) now else t) / 5000L) % 2L == 1L) tempText else tzText
+    }
+    val widest = if (g.wxLine == "both" && tempText.isNotEmpty()) (if (tempText.length > tzText.length) tempText else tzText) else line2
     val wx = if (g.cityName.isEmpty() || !g.showWeather) null
-        else WxInfo(if (w.key == "${g.cityLat},${g.cityLon},${if (g.weatherNoon) "noon" else "now"}") w.stage else -1, g.cityShort, tzLabel(zone, if (now != 0L) now else t))
+        else WxInfo(if (sameCity) w.stage else -1, g.cityShort, line2, widest)
     Canvas(modifier) { drawClock(aspect, if (now != 0L) now else t, tm, zone, wx) }
 }
 
@@ -274,7 +284,7 @@ private fun placeBox(box: (Float) -> Pair<Float, Float>, limit: Float, hourAng: 
 // ---------------------------------------------------------------- weather
 
 /** stage: -1 unknown, 0 sunny, 1 cloudy, 2 rainy, 3 storm. */
-class WxInfo(val stage: Int, val city: String, val tz: String)
+class WxInfo(val stage: Int, val city: String, val tz: String, val widest: String = tz)
 
 fun tzLabel(z: TimeZone, ms: Long): String {
     val off = z.getOffset(ms) / 60_000
@@ -288,7 +298,8 @@ fun tzLabel(z: TimeZone, ms: Long): String {
 private fun wxSize(w: WxInfo, k: Float, tm: TextMeasurer, u: Float, spOf: (Float) -> TextUnit, floor: Float = 0f): Pair<Float, Float> {
     val icon = if (w.stage >= 0) maxOf(11f * k, floor * 1.3f / u) else 0f
     val l1 = tm.measure(w.city, TextStyle(fontSize = spOf(maxOf(6f * k * u, floor)), fontWeight = FontWeight.Bold))
-    val l2 = tm.measure(w.tz, TextStyle(fontSize = spOf(maxOf(4.5f * k * u, floor * 0.86f))))
+    // Measured for the longer of the two texts the line shows in turn, so the block doesn't move when it switches.
+    val l2 = tm.measure(w.widest, TextStyle(fontSize = spOf(maxOf(4.5f * k * u, floor * 0.86f))))
     val tw = max(l1.size.width, l2.size.width) / u
     val th = (l1.size.height + l2.size.height) / u
     return (icon + (if (icon > 0) 2f * k else 0f) + tw) to max(icon, th)

@@ -1173,3 +1173,10 @@
   - Letting go of the Hue/Sat slider reopens the video at the same spot to apply the colour. The old video was closed on the screen's thread: libVLC's setMedia waits for it, and a network video stuck mid-read kept that thread waiting over 10 s, so Android reported the app as not responding.
   - Now every reopen at the same spot (picture colour, decoder, subtitle format, picture check) first closes the old video on its own thread. The reopen follows when that's done, with nothing left to wait for, and the screen stays responsive meanwhile.
   - A newer reopen, or another video chosen meanwhile, drops the pending one. The stop isn't taken for the end of the video.
+
+## Clock: time zone and today's temperatures under the city (requested 2026-11-22 06:44)
+- **On the clock face:** the line under the city's short name now changes every 5 s between the time zone (UTC+1) and today's lowest › highest temperature at the city (15°C › 30°C).
+  - The block keeps the width of the longer text, so it doesn't move.
+  - Until the temperatures are known, it shows the time zone.
+- **Settings → Alarm clock → Location → "Under the city":** Both (default, alternating) / Time zone / Temperatures. Text helper.
+- **Temperatures:** the day's low and high come from the same weather service as the icon (the city's own day), refreshed with it. Weather kept from before is fetched again once to get them.

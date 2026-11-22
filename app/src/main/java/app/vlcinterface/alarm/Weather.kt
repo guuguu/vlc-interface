@@ -28,7 +28,9 @@ object Weather {
     }
 
     /** -1 = unknown, 0 sunny, 1 cloudy, 2 rain (cloud), 3 storm, 4 light rain (drops alone), 5 light snow (flakes alone), 6 snow (cloud). */
-    data class Now(val stage: Int = -1, val at: Long = 0, val key: String = "")
+    data class Now(val stage: Int = -1, val at: Long = 0, val key: String = "",
+                   /** Today's lowest and highest temperature at the city, °C (NaN = not known). */
+                   val minC: Double = Double.NaN, val maxC: Double = Double.NaN)
 
     private val _now = MutableStateFlow(Now())
     val now: StateFlow<Now> = _now
@@ -39,7 +41,8 @@ object Weather {
     fun init(ctx: Context) {
         prefsCtx = ctx.applicationContext
         val p = ctx.getSharedPreferences("alarms", Context.MODE_PRIVATE)
-        _now.value = Now(p.getInt("wStage", -1), p.getLong("wAt", 0), p.getString("wKey", "") ?: "")
+        _now.value = Now(p.getInt("wStage", -1), p.getLong("wAt", 0), p.getString("wKey", "") ?: "",
+            p.getFloat("wMin", Float.NaN).toDouble(), p.getFloat("wMax", Float.NaN).toDouble())
     }
 
     fun stageOf(code: Int): Int = when (code) {
@@ -76,11 +79,12 @@ object Weather {
         if (g.cityName.isEmpty() || !g.showWeather || busy) return
         val key = "${g.cityLat},${g.cityLon},${if (g.weatherNoon) "noon" else "now"}"
         val n = _now.value
-        if (!force && n.key == key && System.currentTimeMillis() - n.at < 30 * 60_000L) return
+        // Kept weather without the day's temperatures (from before 06:44): fetched again at once.
+        if (!force && n.key == key && !n.minC.isNaN() && System.currentTimeMillis() - n.at < 30 * 60_000L) return
         busy = true
         scope.launch {
             try {
-                val o = JSONObject(get("https://api.open-meteo.com/v1/forecast?current=weather_code&hourly=weather_code&forecast_days=2&timezone=auto&latitude=${g.cityLat}&longitude=${g.cityLon}"))
+                val o = JSONObject(get("https://api.open-meteo.com/v1/forecast?current=weather_code&hourly=weather_code&daily=temperature_2m_min,temperature_2m_max&forecast_days=2&timezone=auto&latitude=${g.cityLat}&longitude=${g.cityLon}"))
                 val cur = o.getJSONObject("current")
                 val code = if (!g.weatherNoon) cur.getInt("weather_code") else {
                     // Today's 12:00 at the city (its own local date), from the hourly forecast.
@@ -89,9 +93,14 @@ object Weather {
                     val i = (0 until times.length()).firstOrNull { times.getString(it) == "${day}T12:00" }
                     if (i != null) codes.getInt(i) else cur.getInt("weather_code")
                 }
-                val v = Now(stageOf(code), System.currentTimeMillis(), key)
+                // Today's low and high at the city (its own date: the first day of the daily forecast).
+                val d = o.optJSONObject("daily")
+                val lo = d?.optJSONArray("temperature_2m_min")?.optDouble(0, Double.NaN) ?: Double.NaN
+                val hi = d?.optJSONArray("temperature_2m_max")?.optDouble(0, Double.NaN) ?: Double.NaN
+                val v = Now(stageOf(code), System.currentTimeMillis(), key, lo, hi)
                 _now.value = v
-                prefsCtx?.getSharedPreferences("alarms", Context.MODE_PRIVATE)?.edit()?.putInt("wStage", v.stage)?.putLong("wAt", v.at)?.putString("wKey", key)?.apply()
+                prefsCtx?.getSharedPreferences("alarms", Context.MODE_PRIVATE)?.edit()?.putInt("wStage", v.stage)?.putLong("wAt", v.at)?.putString("wKey", key)
+                    ?.putFloat("wMin", v.minC.toFloat())?.putFloat("wMax", v.maxC.toFloat())?.apply()
             } catch (_: Exception) {
                 // Kept as it was; tried again in 5 min.
                 _now.value = n.copy(at = System.currentTimeMillis() - 25 * 60_000L)

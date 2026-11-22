@@ -161,6 +161,9 @@ data class AlarmGlobal(
     val ledColor: Int = 0xFFFFFFFF.toInt(),
     /** The whole alarm system (Settings → big button): off = nothing rings, every alarm display and option hidden. */
     val systemOn: Boolean = true,
+    /** The clock's weather line under the city (2026-11-22 06:44): "both" (time zone and today's low › high temperature,
+     *  alternating every 5 s), "tz" or "temp". */
+    val wxLine: String = "both",
 ) {
     fun toJson(): JSONObject = JSONObject().put("vibrate", vibrate).put("led", led).put("ledColor", ledColor).put("systemOn", systemOn).put("crescendo", crescendo)
         .put("snooze1", snooze1).put("snooze2", snooze2).put("snooze3", snooze3).put("pattern", pattern)
@@ -170,7 +173,7 @@ data class AlarmGlobal(
         .put("helpers", helpers).put("calSync", calSync).put("calId", calId).put("calName", calName)
         .put("cityName", cityName).put("cityShort", cityShort).put("cityLat", cityLat).put("cityLon", cityLon).put("cityTz", cityTz)
         .put("showWeather", showWeather).put("localRoot", localRoot).put("localVolume", localVolume)
-        .put("lastStationUrl", lastStationUrl).put("lastStationName", lastStationName).put("lastFallbackUrl", lastFallbackUrl).put("lastFallbackName", lastFallbackName).put("weatherNoon", weatherNoon)
+        .put("lastStationUrl", lastStationUrl).put("lastStationName", lastStationName).put("lastFallbackUrl", lastFallbackUrl).put("lastFallbackName", lastFallbackName).put("weatherNoon", weatherNoon).put("wxLine", wxLine)
 
     val snoozes: List<Int> get() = listOf(snooze1, snooze2, snooze3)
 
@@ -184,7 +187,8 @@ data class AlarmGlobal(
             o.optString("cityName"), o.optString("cityShort"), o.optDouble("cityLat", 0.0), o.optDouble("cityLon", 0.0), o.optString("cityTz"),
             o.optBoolean("showWeather", true), o.optString("localRoot"), o.optString("localVolume"),
             o.optString("lastStationUrl"), o.optString("lastStationName"), o.optString("lastFallbackUrl"), o.optString("lastFallbackName"), o.optBoolean("weatherNoon", true),
-            o.optInt("ledColor", 0xFFFFFFFF.toInt()), o.optBoolean("systemOn", true))
+            o.optInt("ledColor", 0xFFFFFFFF.toInt()), o.optBoolean("systemOn", true),
+            o.optString("wxLine", "both").let { if (it == "tz" || it == "temp") it else "both" })
     }
 }
 
