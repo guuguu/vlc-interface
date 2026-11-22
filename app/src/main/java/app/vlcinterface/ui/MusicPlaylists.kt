@@ -386,7 +386,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
             AutoFitRow(spacing = 12.dp) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
-                    CtlBtn("⏮", 52) { player.prev() }
+                    Box(Modifier.alpha(if (!radio && p.queue.size <= 1) 0.35f else 1f)) { CtlBtn("⏮", 52) { NextBtn.tapPrev() } }
                     Text(if (radio) "Prev\nstation" else "Prev in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
                 if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("−${st.settings.doubleTapSeekSec}", 44) { player.seekBy(-st.settings.doubleTapSeekSec * 1000L) } }

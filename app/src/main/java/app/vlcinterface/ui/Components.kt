@@ -498,6 +498,8 @@ object ShortNote {
 object NextBtn {
     fun none(): Boolean { val s = app.vlcinterface.App.instance.player.state.value; return s.item?.isRadio != true && s.queue.size <= 1 }
     fun tap(): Boolean { if (none()) { ShortNote.hint("Add more items to the queue"); return false }; app.vlcinterface.App.instance.player.next(); return true }
+    /** ⏮ the same way (19:09: both buttons). */
+    fun tapPrev(): Boolean { if (none()) { ShortNote.hint("Add more items to the queue"); return false }; app.vlcinterface.App.instance.player.prev(); return true }
 }
 
 @Composable

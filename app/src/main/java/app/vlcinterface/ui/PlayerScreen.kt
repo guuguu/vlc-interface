@@ -600,7 +600,7 @@ private fun BoxScope.ControlsOverlayBody(
     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
     AutoFitRow(Modifier.padding(horizontal = if (landTop) 96.dp else 8.dp), spacing = if (compact) 28.dp else if (landTop) 36.dp else 56.dp) {
         // Previous / next file of the folder (the list it was opened from).
-        RoundBtn("⏮", 44) { player.prev(); onTouch() }
+        Box(Modifier.alpha(if (p.queue.size <= 1) 0.35f else 1f)) { RoundBtn("⏮", 44) { NextBtn.tapPrev(); onTouch() } }
         RoundBtn("−10", 52) { player.seekBy(-10_000); onTouch() }
         val k = btnScale()
         Box(Modifier.size(maxOf((if (compact) 60 else 76) * k, 56f).dp).clip(CircleShape).background(accent()).clickable { player.togglePause(); onTouch() }, contentAlignment = Alignment.Center) {
@@ -620,7 +620,7 @@ private fun BoxScope.ControlsOverlayBody(
         OverlayChip(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo(); onTouch() }
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
-        Text("⏮", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.prev() }.padding(8.dp))
+        Text("⏮", color = Color.White.copy(alpha = if (p.queue.size <= 1) 0.35f else 1f), fontSize = symSize, modifier = Modifier.clickable { NextBtn.tapPrev() }.padding(8.dp))
         Text("⏭", color = Color.White.copy(alpha = if (p.queue.size <= 1) 0.35f else 1f), fontSize = symSize, modifier = Modifier.clickable { NextBtn.tap() }.padding(8.dp))
     }
     // Sideways (17:18): the position bar runs under the side columns from edge to edge, 20 dp from each edge.
@@ -883,7 +883,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         // Playing: previous / −10 / play-pause / +10 / next, centred.
         val rowPlaying: @Composable () -> Unit = {
         FitRow(Modifier.fillMaxWidth(), arrangement = Arrangement.SpaceEvenly, minGap = 8.dp) {
-            UnderBtn("⏮") { player.prev() }
+            Box(Modifier.alpha(if (p.queue.size <= 1) 0.35f else 1f)) { UnderBtn("⏮") { NextBtn.tapPrev() } }
             UnderBtn("−10") { player.seekBy(-10_000) }
             Box(Modifier.size(60.dp).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
                 Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = 22.sp, fontWeight = FontWeight.Bold)

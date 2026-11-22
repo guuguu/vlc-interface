@@ -1402,4 +1402,5 @@
 - Songs only (radio and videos never have ReplayGain, so they're not lowered); over the VPN (no scan there) a song without ReplayGain stays 6 dB lower. libVLC's own output (fallback) plays songs without ReplayGain 3 dB lower too. ReplayGain helper updated.
 
 ## ⏭ greyed with a single item in the queue (requested 2026-11-22 19:06)
-- When the queue holds only the item playing, every ⏭ on the song player and the video player (upright, sideways, under the picture) is greyed; a tap shows a short pop-up "Add more items to the queue" (an ℹ hint, not the green ✓ of a done action) and nothing else happens. With two or more items it works as before. Radio is untouched (⏭ goes to the next station). ⏮ stays as it is (it starts the item again).
+- When the queue holds only the item playing, every ⏭ on the song player and the video player (upright, sideways, under the picture) is greyed; a tap shows a short pop-up "Add more items to the queue" (an ℹ hint, not the green ✓ of a done action) and nothing else happens. With two or more items it works as before. Radio is untouched (⏭ / ⏮ go to the next / previous station).
+- **⏮ too (19:09):** greyed the same way with a single item, the same pop-up on a tap (it no longer restarts the item there).
