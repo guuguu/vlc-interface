@@ -1202,3 +1202,4 @@
 - **Back** from a result returns to the search with the same words and results. ✕ clears it.
 - The players' shortcuts (Subs/Format → Subtitle format, double tap on Treble → Treble band) use the same way of opening a page at a place.
 - **Kept up to date:** the list of settings is rebuilt from the settings pages at every build.
+- **Search history (07:26):** under the search bar, the last 6 searches as small buttons, newest first, kept across app restarts. A search is added when one of its results is opened. A tap on a button searches it again (the button is lit while shown); its ✕ removes it from the history.

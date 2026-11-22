@@ -119,6 +119,19 @@ fun SettingsScreen(nav: Navigator) {
         val q = SettingsSearch.query
         SmallSearchBar(q, { SettingsSearch.query = it }, "Search settings", count = if (q.isBlank()) 0 else SettingsSearch.results(q).size,
             modifier = Modifier.padding(horizontal = 20.dp), onClose = { SettingsSearch.query = "" })
+        // The last 6 searches (07:26): a tap searches it again, ✕ removes it from the history.
+        val past = SettingsSearch.history
+        if (past.isNotEmpty()) androidx.compose.foundation.layout.FlowRow(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            past.forEach { w ->
+                Row(Modifier.height(26.dp).clip(RoundedCornerShape(13.dp)).background(if (w == q.trim()) accent().copy(alpha = 0.25f) else C.card2),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text(w, color = C.text, fontSize = 12.sp, maxLines = 1,
+                        modifier = Modifier.clickable { SettingsSearch.query = w }.padding(start = 10.dp, end = 4.dp))
+                    Text("✕", color = C.muted, fontSize = 11.sp, modifier = Modifier.clickable { SettingsSearch.forget(w) }.padding(start = 2.dp, end = 9.dp))
+                }
+            }
+        }
         Column(Modifier.weight(1f).anchorViewport(scroll, "main").scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             if (q.isNotBlank()) { SettingsSearchResults(nav, q); return@Column }
             CardBox {
@@ -1618,8 +1631,26 @@ object SettingsSearch {
             .take(60).toList()
     }
 
+    /** The last 6 searches that led to a result being opened, newest first (kept across app restarts). */
+    private val prefs get() = App.instance.getSharedPreferences("settings_search", android.content.Context.MODE_PRIVATE)
+    val history = androidx.compose.runtime.mutableStateListOf<String>().apply {
+        try { addAll(App.instance.getSharedPreferences("settings_search", android.content.Context.MODE_PRIVATE)
+            .getString("history", "").orEmpty().split('\n').filter { it.isNotBlank() }.take(6)) } catch (_: Throwable) {}
+    }
+    private fun saveHistory() = try { prefs.edit().putString("history", history.joinToString("\n")).apply() } catch (_: Throwable) {}
+    fun keep(q: String) {
+        val w = q.trim().replace(Regex("\\s+"), " ")
+        if (w.isEmpty()) return
+        history.removeAll { it.equals(w, ignoreCase = true) }
+        history.add(0, w)
+        while (history.size > 6) history.removeAt(history.size - 1)
+        saveHistory()
+    }
+    fun forget(w: String) { history.remove(w); saveHistory() }
+
     /** Opens the result's page at its setting (or its section). */
     fun open(nav: Navigator, e: SettingsEntry) {
+        keep(query)
         SettingsAnchor.go(e.page, if (e.own) e.title else null, e.section)
         when (e.page) {
             "main" -> query = ""
