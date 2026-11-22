@@ -206,11 +206,11 @@ fun MediaList(
     fun toggle(e: Entry) { selected = if (e.uri in selected) selected - e.uri else selected + e.uri }
     val playing by App.instance.player.state.collectAsState()
 
-    fun play(e: Entry, random: Boolean? = null) {
+    fun play(e: Entry, random: Boolean? = null, whole: Boolean = false) {
         val items = order.map { MusicLibrary.toPlayItem(it, source, folderKey) }
         val i = items.indexOfFirst { it.uri == e.uri }.coerceAtLeast(0)
         val player = App.instance.player
-        player.playQueue(items, i, origin, random = random)
+        player.playQueue(items, i, origin, random = random, wholeList = whole)
         if (!items[i].isMusic) nav.go(Screen.Player) else nav.go(Screen.Music)
         // Playing from a folder plays the whole folder, subfolders included (user rule), in the order shown:
         // this folder's files as listed (albums in track order, then videos) start at once; then each subfolder
@@ -305,7 +305,7 @@ fun MediaList(
             }
             if (order.size > 1 && selected.isEmpty()) item {
                 PlayListButtons(Modifier.padding(top = 8.dp, bottom = 4.dp)) { random ->
-                    play(if (random) order.random() else order.first(), random)
+                    play(if (random) order.random() else order.first(), random, whole = true)
                 }
             }
             items(rows) { r ->

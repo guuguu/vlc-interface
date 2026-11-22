@@ -1286,7 +1286,14 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = s.copy(queue = q, index = q.indexOfFirst { it === cur }.coerceAtLeast(0))
     }
 
-    fun playQueue(items00: List<PlayItem>, index00: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null, keepOrder: Boolean = false) {
+    /**
+     * [wholeList] (2026-11-22 19:33): the list itself was asked for (a playlist's Play / Random, a list's "Play in order /
+     * random") — not one item picked by hand. Every item that can be played now is played; when the NAS can't be used,
+     * its items are left out and the list starts on a playable one (Random: a random one), never "NAS offline" while the
+     * list has playable (phone) items.
+     */
+    fun playQueue(items00: List<PlayItem>, index00: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null, keepOrder: Boolean = false,
+                  wholeList: Boolean = false) {
         if (items00.isEmpty()) return
         // An episode played from a folder (16:48): the queue is the whole succession of its series, in episode order
         // (never shuffled), starting at the one tapped.
@@ -1298,11 +1305,15 @@ class PlayerController(private val context: Context, private val store: Store) {
         // Duplicates are left out (first one kept); the item that was tapped stays the one that starts.
         val tapped = items0.getOrNull(index0.coerceIn(0, items0.size - 1))
         // NAS not usable: a NAS song picked by hand doesn't start ("NAS offline"); lists keep only local songs.
-        if (tapped != null && nasOff(tapped) && (index0 > 0 || items0.size == 1 || items0.all { nasOff(it) })) { nasOfflineToast(); return }
+        if (!wholeList && tapped != null && nasOff(tapped) && (index0 > 0 || items0.size == 1 || items0.all { nasOff(it) })) { nasOfflineToast(); return }
         fullList = items0.filter { !it.isRadio }.distinctBy { qKey(it) }
         val items = items0.filterNot { nasOff(it) }.distinctBy { qKey(it) }
         if (items.isEmpty()) { nasOfflineToast(); return }
-        val index = tapped?.let { t -> items.indexOfFirst { qKey(it) == qKey(t) } }?.takeIf { it >= 0 } ?: 0
+        val index = tapped?.let { t -> items.indexOfFirst { qKey(it) == qKey(t) } }?.takeIf { it >= 0 }
+            // The start item can't be played now (NAS): a whole list starts on a playable one — Random: any of them;
+            // in order: the first playable one after it (else the first one).
+            ?: if (wholeList && random == true) items.indices.random()
+            else items0.drop(index0 + 1).firstOrNull { !nasOff(it) }?.let { n -> items.indexOfFirst { qKey(it) == qKey(n) } }?.takeIf { it >= 0 } ?: 0
         if (random != null && random != store.current.settings.shuffle) store.update { it.copy(settings = it.settings.copy(shuffle = random)) }
         var i = index.coerceIn(0, items.size - 1)
         var q = items

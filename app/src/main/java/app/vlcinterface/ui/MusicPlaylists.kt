@@ -1041,8 +1041,10 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
 fun playPlaylist(nav: Navigator, pl: Playlist, index: Int, random: Boolean? = null) {
     if (pl.items.isEmpty()) return
     val items = pl.items.map { MusicLibrary.fromPlEntry(it) }
-    App.instance.player.playQueue(items, index, Origin("playlist", playlistId = pl.id, title = pl.name), random = random)
-    nav.go(items[index.coerceIn(0, items.size - 1)].let { if (it.isMusic || it.isRadio) Screen.Music else Screen.Player })
+    App.instance.player.playQueue(items, index, Origin("playlist", playlistId = pl.id, title = pl.name), random = random, wholeList = true)
+    // The player of what really started (the item asked for may have been left out: NAS not usable).
+    val started = App.instance.player.state.value.item ?: items[index.coerceIn(0, items.size - 1)]
+    nav.go(if (started.isMusic || started.isRadio) Screen.Music else Screen.Player)
 }
 
 /** "In order" / "Random" switch for the queue. */
@@ -1619,8 +1621,8 @@ fun OriginPickDialog(fromLabel: String, onOpen: () -> Unit, onDismiss: () -> Uni
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             val items = { pl.items.map { MusicLibrary.fromPlEntry(it) } }
                             val origin = Origin("playlist", playlistId = pl.id, title = pl.name)
-                            Pill("▶ Play", filled = true) { onDismiss(); player.playQueue(items(), 0, origin, random = false) }
-                            Pill("Random") { onDismiss(); player.playQueue(items(), pl.items.indices.random(), origin, random = true) }
+                            Pill("▶ Play", filled = true) { onDismiss(); player.playQueue(items(), 0, origin, random = false, wholeList = true) }
+                            Pill("Random") { onDismiss(); player.playQueue(items(), pl.items.indices.random(), origin, random = true, wholeList = true) }
                             Pill("Load") { onDismiss(); player.loadQueue(items(), origin) }
                         }
                     }
