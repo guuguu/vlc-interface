@@ -662,7 +662,7 @@ private fun SeekBlock(item: PlayItem) {
         val pos = (p.time - base).coerceAtLeast(0)
         // Touch / slide: a bubble over the thumb shows the time it points at, following the finger; the song keeps
         // playing and only jumps there when the finger is lifted.
-        // A short tap (no sliding, quickly released) does not jump: it opens the "Jump to m:ss" window instead.
+        // A short tap or a long press (no sliding) does not jump: it opens the "Jump to m:ss" window instead.
         var moved by remember { mutableStateOf(false) }
         var held by remember { mutableStateOf(false) }
         var tapped by remember { mutableStateOf(false) }
@@ -687,7 +687,8 @@ private fun SeekBlock(item: PlayItem) {
             Slider(drag ?: if (len > 0) (pos.toFloat() / len).coerceIn(0f, 1f) else 0f, { drag = it },
                 modifier = Modifier.height(26.dp),
                 onValueChangeFinished = {
-                    if (tapped) { if (len > 0) askTime = true } else drag?.let { player.seekFraction(it) }
+                    // A tap or a long press without sliding (09:01: long press asked) opens "Jump to"; sliding jumps.
+                    if (tapped || (held && !moved)) { if (len > 0) askTime = true } else drag?.let { player.seekFraction(it) }
                     drag = null
                 }, enabled = len > 0 || p.item != null,
                 colors = sCols,

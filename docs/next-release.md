@@ -1315,3 +1315,6 @@
 ## Another file's error shown under the playing song (screenshot 2026-11-22 08:57)
 - "VLC is unable to open the MRL 'smb://…/BLACK SABBATH Discography (Rema…'" showed in red under "Waterfall" (ELO). That file wasn't being played: the automatic indexing (running after the 1.79 update) was reading it in the background, and libVLC reports every file it can't open through the same message, which the player showed as its own error.
 - Now a libVLC message naming another file than the one playing goes to the Indexing log ("Could not open (background read): <file>", with its full path) instead of the player; messages about the song playing still show under it as before.
+
+## "Jump to" on the song player's position bar (reported 2026-11-22 09:01)
+- A long press on the position bar now opens "Jump to" (minutes : seconds) too, like a short tap. Before, a long press without sliding was taken as a slide: when the finger was lifted the song jumped to where it was pressed and the window never came. Sliding still jumps to the time shown in the bubble.
