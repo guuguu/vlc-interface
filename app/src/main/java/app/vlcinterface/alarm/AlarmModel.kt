@@ -223,6 +223,9 @@ data class ClockAspect(
     val thick: Map<String, Float> = emptyMap(),
     /** Full-screen clock's screen brightness 0.01…1 (2026-11-22 19:27); ≤ 0 = the phone's own. */
     val fsBright: Float = -1f,
+    /** The playing name gliding on the full-screen clock (19:52): letter size (sp, both orientations) and colour. */
+    val tickerSp: Int = 36,
+    val tickerColor: Long = 0xFFFFFFFFL,
 ) {
     fun thickFor(analog: Boolean = this.analog, design: Int = this.design): Float = thick[if (analog) "$design" else "d"] ?: 1f
     fun toJson(): JSONObject = JSONObject().put("analog", analog).put("design", design).put("h24", h24).put("seconds", seconds)
@@ -230,7 +233,7 @@ data class ClockAspect(
         .put("secHue", secHue.toDouble()).put("dateHue", dateHue.toDouble()).put("dateSat", dateSat.toDouble()).put("dateSize", dateSize.toDouble())
         .put("ringW", ringW.toDouble()).put("tickW", tickW.toDouble()).put("handW", handW.toDouble()).put("size", size.toDouble())
         .put("digitalSize", digitalSize.toDouble()).put("digitalBold", digitalBold).put("digitalDate", digitalDate).put("nightDim", nightDim).put("dim", dim)
-        .put("thick", JSONObject().apply { thick.forEach { (k, v) -> put(k, v.toDouble()) } }).put("fsBright", fsBright.toDouble())
+        .put("thick", JSONObject().apply { thick.forEach { (k, v) -> put(k, v.toDouble()) } }).put("fsBright", fsBright.toDouble()).put("tickerSp", tickerSp).put("tickerColor", tickerColor)
 
     companion object {
         fun fromJson(o: JSONObject?): ClockAspect {
@@ -242,7 +245,7 @@ data class ClockAspect(
                 f("tickW", 1f), f("handW", 1f), f("size", 1f), f("digitalSize", 1f), o.optBoolean("digitalBold"),
                 o.optBoolean("digitalDate", true), o.optInt("nightDim", 40), o.optInt("dim", 25),
                 o.optJSONObject("thick")?.let { t -> t.keys().asSequence().associateWith { k -> t.optDouble(k, 1.0).toFloat() } } ?: emptyMap(),
-                f("fsBright", -1f))
+                f("fsBright", -1f), o.optInt("tickerSp", 36).coerceIn(16, 96), o.optLong("tickerColor", 0xFFFFFFFFL))
         }
     }
 }

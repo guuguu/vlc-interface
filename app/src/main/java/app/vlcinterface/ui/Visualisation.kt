@@ -907,9 +907,9 @@ fun playingLine(ps: app.vlcinterface.player.PlayerState): String {
  */
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-fun FullScreenTicker(text: String, modifier: Modifier, size: androidx.compose.ui.unit.TextUnit) {
+fun FullScreenTicker(text: String, modifier: Modifier, a: app.vlcinterface.alarm.ClockAspect) {
     Box(modifier, contentAlignment = Alignment.CenterStart) {
-        Text(List(6) { text }.joinToString("        ●        "), color = Color.White.copy(alpha = 0.9f), fontSize = size, maxLines = 1, softWrap = false,
+        Text(List(6) { text }.joinToString("        ●        "), color = Color(a.tickerColor), fontSize = a.tickerSp.sp, maxLines = 1, softWrap = false,
             modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 0, repeatDelayMillis = 0,
                 spacing = androidx.compose.foundation.MarqueeSpacing(96.dp), velocity = 70.dp))
     }
@@ -970,24 +970,25 @@ fun ClockFullScreen(nav: Navigator) {
         val ps = app.vlcinterface.App.instance.player.state.collectAsState().value
         val line = playingLine(ps)
         val land = maxWidth > maxHeight
+        // One letter size for both orientations (19:52), from Clock aspect → "Scrolling name size"; the band is just tall
+        // enough for it (no frame, no background).
+        val bandH0 = with(LocalDensity.current) { (st.aspect.tickerSp.sp * 1.35f).toDp() }
+        val bandH = bandH0
         if (land) {
             // Sideways (19:51): the clock at its full size (the whole height) on the left; the name glides in the room
             // beside it, along the bottom of that side — the clock is never made smaller for it.
             val side = (maxHeight - 24.dp).coerceAtLeast(60.dp)
             Box(Modifier.align(Alignment.CenterStart).padding(start = 12.dp)) { ClockFace(st.aspect, Modifier.size(side)) }
             val restW = maxWidth - side - 36.dp
-            val bandH = (maxHeight * 0.16f).coerceIn(48.dp, 110.dp)
             if (line.isNotEmpty() && restW > 80.dp) FullScreenTicker(line,
-                Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp).width(restW).height(bandH),
-                with(LocalDensity.current) { (bandH * 0.55f).toSp() })
+                Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp).width(restW).height(bandH), st.aspect)
         } else {
-            val bandH = if (line.isEmpty()) 0.dp else (maxHeight * 0.13f).coerceIn(56.dp, 110.dp)
+            val bandH = if (line.isEmpty()) 0.dp else bandH0
             val side = (minOf(maxWidth, maxHeight - bandH) - 24.dp).coerceAtLeast(60.dp)
             Box(Modifier.align(Alignment.TopCenter).padding(top = ((maxHeight - bandH - side) / 2).coerceAtLeast(0.dp))) {
                 ClockFace(st.aspect, Modifier.size(side))
             }
-            if (line.isNotEmpty()) FullScreenTicker(line, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(bandH),
-                with(LocalDensity.current) { (bandH * 0.52f).toSp() })
+            if (line.isNotEmpty()) FullScreenTicker(line, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(bandH), st.aspect)
         }
         // The floating play / pause button, as on the player (its size, colour, place; dragging it moves it) — unless it's Off (17:30).
         FullScreenPlayButton()
