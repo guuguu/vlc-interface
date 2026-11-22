@@ -69,6 +69,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -606,7 +607,7 @@ private fun BoxScope.ControlsOverlayBody(
             Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = maxOf(24 * k, 20f).sp, fontWeight = FontWeight.Bold)
         }
         RoundBtn("+10", 52) { player.seekBy(10_000); onTouch() }
-        RoundBtn("⏭", 44) { player.next(); onTouch() }
+        Box(Modifier.alpha(if (p.queue.size <= 1) 0.35f else 1f)) { RoundBtn("⏭", 44) { NextBtn.tap(); onTouch() } }
     }
     }
     // Bottom controls: never shrunk (symbols at least 22 sp, text at least 13 sp). Sideways one row; upright it wraps if needed.
@@ -620,7 +621,7 @@ private fun BoxScope.ControlsOverlayBody(
         if (tallVid && !landB) OverlayChip(if (App.instance.store.current.settings.videoTallFull) "Smaller" else "Full screen") {
             App.instance.store.update { it.copy(settings = it.settings.copy(videoTallFull = !it.settings.videoTallFull)) }; onTouch() }
         Text("⏮", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.prev() }.padding(8.dp))
-        Text("⏭", color = Color.White, fontSize = symSize, modifier = Modifier.clickable { player.next() }.padding(8.dp))
+        Text("⏭", color = Color.White.copy(alpha = if (p.queue.size <= 1) 0.35f else 1f), fontSize = symSize, modifier = Modifier.clickable { NextBtn.tap() }.padding(8.dp))
     }
     // Sideways (17:18): the position bar runs under the side columns from edge to edge, 20 dp from each edge.
     if (!compact) Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = if (landB) 10.dp else 6.dp)) {
@@ -888,7 +889,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                 Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = 22.sp, fontWeight = FontWeight.Bold)
             }
             UnderBtn("+10") { player.seekBy(10_000) }
-            UnderBtn("⏭") { player.next() }
+            Box(Modifier.alpha(if (p.queue.size <= 1) 0.35f else 1f)) { UnderBtn("⏭") { NextBtn.tap() } }
         }
         }
         // The buttons under the picture (16:41): all the same size, linked across their rows (the widest label sets the

@@ -485,7 +485,19 @@ fun WideSwitch(checked: Boolean, height0: androidx.compose.ui.unit.Dp = 26.dp, h
 object ShortNote {
     var text by androidx.compose.runtime.mutableStateOf("")
     var stamp by androidx.compose.runtime.mutableLongStateOf(0L)
-    fun show(t: String) { text = t; stamp = System.currentTimeMillis() }
+    /** A hint instead of a done-note: "ℹ" and the accent-free light text instead of the green ✓. */
+    var hint by androidx.compose.runtime.mutableStateOf(false)
+    fun show(t: String) { text = t; hint = false; stamp = System.currentTimeMillis() }
+    fun hint(t: String) { text = t; hint = true; stamp = System.currentTimeMillis() }
+}
+
+/**
+ * ⏭ on the players (2026-11-22 19:06): with a single item in the queue there is no next one — the button is greyed and a
+ * tap shows "Add more items to the queue". Radio keeps its next station.
+ */
+object NextBtn {
+    fun none(): Boolean { val s = app.vlcinterface.App.instance.player.state.value; return s.item?.isRadio != true && s.queue.size <= 1 }
+    fun tap(): Boolean { if (none()) { ShortNote.hint("Add more items to the queue"); return false }; app.vlcinterface.App.instance.player.next(); return true }
 }
 
 @Composable
@@ -494,9 +506,9 @@ fun ShortNoteHost(modifier: Modifier) {
     val t = ShortNote.text; val st = ShortNote.stamp
     androidx.compose.runtime.LaunchedEffect(st) { if (t.isNotEmpty()) { kotlinx.coroutines.delay(sec * 1000L); if (ShortNote.stamp == st) ShortNote.text = "" } }
     if (t.isNotEmpty()) Box(modifier.padding(bottom = 90.dp, start = 24.dp, end = 24.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
-        .background(Color(0xF02A2E35)).border(1.dp, WIZ_GREEN, androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
+        .background(Color(0xF02A2E35)).border(1.dp, if (ShortNote.hint) Color(0xFF8A8F98) else WIZ_GREEN, androidx.compose.foundation.shape.RoundedCornerShape(18.dp))
         .clickable { ShortNote.text = "" }.padding(horizontal = 16.dp, vertical = 9.dp)) {
-        Text("✓ $t", color = WIZ_GREEN, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+        Text(if (ShortNote.hint) "ℹ $t" else "✓ $t", color = if (ShortNote.hint) Color(0xFFE8EAED) else WIZ_GREEN, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

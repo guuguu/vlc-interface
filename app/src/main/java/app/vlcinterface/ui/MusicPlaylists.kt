@@ -78,6 +78,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -394,7 +395,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 }
                 if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("+${st.settings.doubleTapSeekSec}", 44) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) } }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
-                    CtlBtn("⏭", 52) { player.next() }
+                    val noNext = !radio && p.queue.size <= 1
+                    Box(Modifier.alpha(if (noNext) 0.35f else 1f)) { CtlBtn("⏭", 52) { NextBtn.tap() } }
                     Text(if (radio) "Next\nstation" else "Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
