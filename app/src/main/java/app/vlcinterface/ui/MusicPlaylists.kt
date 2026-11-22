@@ -895,6 +895,15 @@ fun QueueScreen(nav: Navigator) {
         OrderSwitch(st.settings.shuffle, Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) { player.setShuffle(it) }
         val state = rememberLazyListState(initialFirstVisibleItemIndex = (p.index - 2).coerceAtLeast(0))
         val qDrag = remember { QueueDrag() }
+        // The playing item stays in view (2026-11-22 19:17): when the queue moves on (or goes round to the start) and the
+        // playing row isn't on screen, the list glides to it (two rows above it shown). A row being dragged isn't disturbed.
+        LaunchedEffect(p.index, p.queue.size) {
+            val off = if (p.queue.size > 20) 1 else 0          // the sticky "Jump to" box is the list's first entry
+            val row = p.index + off
+            val vis = state.layoutInfo.visibleItemsInfo
+            val inView = vis.any { it.index == row && it.offset >= 0 && it.offset + it.size <= state.layoutInfo.viewportEndOffset }
+            if (p.index >= 0 && !inView && !state.isScrollInProgress) state.animateScrollToItem((row - 2).coerceAtLeast(0))
+        }
         LazyColumn(Modifier.weight(1f).scrollbar(state).padding(horizontal = 16.dp), state = state) {
             if (p.queue.size > 20) stickyHeader { JumpToBox(state, p.queue.map { listOf(it.title, it.artist).joinToString(" ") }, offset = 1) }
             itemsIndexed(p.queue, key = { _, q -> q.uri }) { i, q ->
