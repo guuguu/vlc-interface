@@ -1850,7 +1850,12 @@ private fun VideoClock(set: app.vlcinterface.data.Settings, modifier: Modifier) 
     val bottom = set.videoClockCorner.startsWith("b")
     Text(text, color = Color(set.videoClockColor).copy(alpha = alphaPct / 100f), fontSize = (18f * sizePct / 100f).sp, fontWeight = FontWeight.SemiBold,
         style = androidx.compose.ui.text.TextStyle(shadow = if (!set.videoClockShadow) null else
-            androidx.compose.ui.graphics.Shadow(Color(0xFF808080).copy(alpha = 0.9f * alphaPct / 100f), androidx.compose.ui.geometry.Offset(2f, 2f), 4f)),
+            // Grey, its intensity and width set (13:27): the width is how far the shadow falls and spreads.
+            with(androidx.compose.ui.platform.LocalDensity.current) {
+                val w = set.videoClockShadowW.dp.toPx()
+                androidx.compose.ui.graphics.Shadow(Color(0xFF808080).copy(alpha = (set.videoClockShadowPct / 100f) * alphaPct / 100f),
+                    androidx.compose.ui.geometry.Offset(w * 0.6f, w * 0.6f), w * 1.4f)
+            }),
         // Bottom corners: above the position bar.
         modifier = modifier.padding(horizontal = 12.dp, vertical = if (bottom) 36.dp else 8.dp))
 }

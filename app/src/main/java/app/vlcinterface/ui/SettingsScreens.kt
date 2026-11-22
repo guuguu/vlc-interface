@@ -312,6 +312,22 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
                 if (s.videoClock) ToggleRow("Clock shadow", "A grey shadow under the digits", s.videoClockShadow) { v ->
                     set(s.copy(videoClockShadow = v)); if (helpersV) vidHelp = "Clock on the video" }
+                if (s.videoClock && s.videoClockShadow) Column(Modifier.padding(horizontal = 16.dp, vertical = (6 * sg()).dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Shadow intensity", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Shadow intensity").weight(1f).explain("Clock on the video"))
+                        Text("${s.videoClockShadowPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(videoClockShadowPct = 70)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.videoClockShadowPct.toFloat(), { v -> set(s.copy(videoClockShadowPct = (Math.round(v / 5f) * 5).coerceIn(10, 100))) }, valueRange = 10f..100f,
+                        onHoldStill = { if (helpersV) vidHelp = "Clock on the video" })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Shadow width", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Shadow width").weight(1f).explain("Clock on the video"))
+                        Text("${s.videoClockShadowW} dp", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(videoClockShadowW = 3)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.videoClockShadowW.toFloat(), { v -> set(s.copy(videoClockShadowW = Math.round(v).coerceIn(1, 12))) }, valueRange = 1f..12f, steps = 10,
+                        onHoldStill = { if (helpersV) vidHelp = "Clock on the video" })
+                }
             }
             if (vidHelp.isNotEmpty()) HelperDialog(vidHelp, SettingHelp.text(vidHelp, "")) { vidHelp = "" }
             SectionTitle("Picture")

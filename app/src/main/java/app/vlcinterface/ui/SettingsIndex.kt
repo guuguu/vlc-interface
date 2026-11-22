@@ -52,6 +52,8 @@ val SETTINGS_INDEX: List<SettingsEntry> = listOf(
     E("video", "Video", "On-screen buttons", "Digits colour", "", true),
     E("video", "Video", "On-screen buttons", "Custom colour", "", true),
     E("video", "Video", "On-screen buttons", "Clock shadow", "A grey shadow under the digits", true),
+    E("video", "Video", "On-screen buttons", "Shadow intensity", "", true),
+    E("video", "Video", "On-screen buttons", "Shadow width", "", true),
     E("video", "Video", "Picture", "Picture", "", true),
     E("video", "Video", "Picture", "Video decoding", "", true),
     E("video", "Video", "Picture", "Deinterlacing", "", true),
