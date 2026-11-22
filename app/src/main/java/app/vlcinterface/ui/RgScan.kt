@@ -344,19 +344,27 @@ fun RgFailureReport(nav: Navigator) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("To save ReplayGain in the songs' tags, the app needs permission to change the music files in this folder:", color = C.text, fontSize = 14.sp)
                     Text(a.path.removePrefix("/storage/emulated/0").ifEmpty { "/" }, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                    Text("Android's folder picker opens on it: tap \"Use this folder\", then \"Allow\". The app gets this folder and its " +
-                        "subfolders only — not your mails, photos, messages or anything else. It can be removed in " +
+                    Text("Yes: Android's folder picker opens on this folder — tap \"Use this folder\", then \"Allow\". " +
+                        "Choose location: the picker opens at the top of the phone's storage, to pick another folder (e.g. one holding all your music). " +
+                        "The app gets the folder chosen and its subfolders only — not your mails, photos, messages or anything else; it can be removed in " +
                         "Settings → Audio → ReplayGain. No: never asked again for this folder (it can still be added there).", color = C.muted, fontSize = 13.sp)
                 }
             },
-            confirmButton = { STextButton({
-                try { treeLauncher.launch(app.vlcinterface.sources.MusicFolderAccess.pickerIntent(a.path)) }
-                catch (_: Exception) { a.answer?.complete(false); app.vlcinterface.sources.MusicFolderAccess.ask.value = null }
-            }) { Text("Choose folder", color = accent()) } },
-            dismissButton = { STextButton({
-                app.vlcinterface.sources.MusicFolderAccess.refuse(a.path); a.answer?.complete(false)
-                app.vlcinterface.sources.MusicFolderAccess.ask.value = null
-            }) { Text("No") } })
+            // Yes · No · Choose location (2026-11-22 07:43).
+            confirmButton = {
+                val fa = app.vlcinterface.sources.MusicFolderAccess
+                val pick: (String) -> Unit = { path ->
+                    try { treeLauncher.launch(fa.pickerIntent(path)) } catch (_: Exception) { a.answer?.complete(false); fa.ask.value = null }
+                }
+                // Wraps onto two lines on a narrow screen instead of squeezing the buttons.
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {
+                    STextButton({ pick(a.path) }) { Text("Yes", color = accent(), fontWeight = FontWeight.SemiBold) }
+                    STextButton({ fa.refuse(a.path); a.answer?.complete(false); fa.ask.value = null }) { Text("No") }
+                    val top = if (a.path.startsWith("/storage/emulated/0")) "/storage/emulated/0" else "/storage/" + a.path.removePrefix("/storage/").substringBefore('/')
+                    STextButton({ pick(top) }) {
+                        Text("Choose location", color = accent()) }
+                }
+            })
     }
     if (!s.reportPending || !s.finished) return
     val fails = s.results.filter { !it.ok }
