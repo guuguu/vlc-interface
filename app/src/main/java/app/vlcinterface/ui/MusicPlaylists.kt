@@ -892,7 +892,8 @@ fun QueueScreen(nav: Navigator) {
             if (p.queue.isNotEmpty()) STextButton({ saveName = "" }) { Text("Save as playlist", color = accent()) }
         }
         val st by App.instance.store.state.collectAsState()
-        OrderSwitch(st.settings.shuffle, Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) { player.setShuffle(it) }
+        // Videos and stations are always in order (19:20 / 19:21): the Random / Sequential switch only while songs play.
+        if (p.item?.isMusic != false) OrderSwitch(st.settings.shuffle, Modifier.padding(horizontal = 20.dp, vertical = 6.dp)) { player.setShuffle(it) }
         val state = rememberLazyListState(initialFirstVisibleItemIndex = (p.index - 2).coerceAtLeast(0))
         val qDrag = remember { QueueDrag() }
         // The playing item stays in view (2026-11-22 19:17): when the queue moves on (or goes round to the start) and the

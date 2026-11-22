@@ -1136,7 +1136,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val list = items.filterNot { nasOff(it) || qKey(it) == qKey(cur) }.distinctBy { qKey(it) }
                 if (list.isEmpty()) return@post
                 fullList = list.filter { !it.isRadio }
-                val shuffled = store.current.settings.shuffle
+                val shuffled = store.current.settings.shuffle && !isVideo(cur)
                 orderedQueue = if (shuffled) listOf(cur) + list else null
                 val q = listOf(cur) + if (shuffled) list.shuffled() else list
                 _state.value = _state.value.copy(queue = q, index = 0, origin = origin)
@@ -1172,7 +1172,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val fullKeys = full.map { qKey(it) }.toHashSet()
         val extra = s.queue.filter { qKey(it) !in fullKeys }
         val ordered = (full.map { f -> s.queue.firstOrNull { qKey(it) == qKey(f) } ?: f }) + extra
-        if (store.current.settings.shuffle && orderedQueue != null && cur != null) {
+        if (store.current.settings.shuffle && orderedQueue != null && cur != null && !isVideo(cur)) {
             orderedQueue = ordered
             val played = s.queue.take(s.index + 1)
             val playedKeys = played.map { qKey(it) }.toHashSet()
@@ -1246,7 +1246,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (random != null && random != store.current.settings.shuffle) store.update { it.copy(settings = it.settings.copy(shuffle = random)) }
         var i = index.coerceIn(0, items.size - 1)
         var q = items
-        if (!keepOrderAll && store.current.settings.shuffle && items.size > 1) {
+        if (!keepOrderAll && store.current.settings.shuffle && items.size > 1 && !isVideo(items[i])) {
             orderedQueue = items
             q = listOf(items[i]) + items.filterIndexed { j, _ -> j != i }.shuffled()
             i = 0
@@ -1263,10 +1263,15 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     /** Switches the current queue between random and original order without interrupting the playing item. */
+    /** Not a song: videos (19:20) and radio stations (19:21) are never played in random order — Random is for songs only. */
+    private fun isVideo(i: PlayItem?) = i != null && !i.isMusic
+
     fun setShuffle(on: Boolean) {
         if (on != store.current.settings.shuffle) store.update { it.copy(settings = it.settings.copy(shuffle = on)) }
         val s = _state.value
         val cur = s.queue.getOrNull(s.index)
+        // Videos and stations stay in order: the choice is kept for songs, their queue isn't touched.
+        if (isVideo(cur) && orderedQueue == null) return
         if (on) {
             if (orderedQueue != null || s.queue.size < 2 || cur == null) return
             orderedQueue = s.queue
@@ -1829,7 +1834,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             s.index + 1 < s.queue.size -> s.index + 1
             // Random (19:15: random stays random): past the last item a fresh random order for the next round, not the
             // queue's first item again (and not starting with the item that just ended).
-            repeat == "all" && store.current.settings.shuffle && s.queue.size > 1 -> {
+            repeat == "all" && store.current.settings.shuffle && s.queue.size > 1 && !isVideo(s.item) -> {
                 val last = s.queue.getOrNull(s.index)
                 var q = (orderedQueue ?: s.queue).shuffled()
                 // Never the item just heard again (19:15), also when it's in the queue twice: the new round starts with

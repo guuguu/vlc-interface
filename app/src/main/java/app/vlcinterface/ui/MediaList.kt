@@ -228,7 +228,7 @@ fun MediaList(
             }.filter { it.uri !in have }.let { ofKind(it) }
             // Only if that folder is still what's playing.
             if (extra.isNotEmpty() && player.state.value.origin == origin)
-                player.addToQueue(if (App.instance.store.current.settings.shuffle) extra.shuffled() else extra)
+                player.addToQueue(if (App.instance.store.current.settings.shuffle && extra.all { it.isMusic }) extra.shuffled() else extra)
         }
     }
 
