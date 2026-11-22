@@ -286,8 +286,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 // left / right thirds still seek back / forward.
                 onCenterDouble = { MainActivity.instance?.enterPip() },
             )
-            // The time on the picture, top-left (13:23): always while a video plays (Settings → Video → On-screen buttons).
-            if (!inPip && st.settings.videoClock) VideoClock(st.settings, Modifier.align(when (st.settings.videoClockCorner) {
+            // The time on the picture (13:23): while a video plays; full screen (sideways) it steps aside while the player buttons show (13:29).
+            if (!inPip && st.settings.videoClock && !(landscape && controls)) VideoClock(st.settings, Modifier.align(when (st.settings.videoClockCorner) {
                 "tr" -> Alignment.TopEnd; "bl" -> Alignment.BottomStart; "br" -> Alignment.BottomEnd; else -> Alignment.TopStart }))
             if (p.buffering < 100f && !p.isPlaying && p.error.isEmpty()) CircularProgressIndicator(Modifier.align(Alignment.Center), color = accent())
             if (p.error.isNotEmpty()) Text(p.error, color = C.bad, modifier = Modifier.align(Alignment.Center).background(Color(0xAA000000)).padding(12.dp))
