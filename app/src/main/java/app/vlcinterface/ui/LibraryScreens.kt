@@ -587,7 +587,7 @@ fun PlacesBar(nav: Navigator, onUp: (() -> Unit)?, upName: String, video: Boolea
             srcs.forEach { s ->
                 val ok = up[s.id]
                 // Only places that answer can be opened; still checking: shown dim.
-                if (ok != false) chip((if (s.zone == app.vlcinterface.data.Zone.LAN) "🖧 " else "🌐 ") + s.name.ifBlank { s.host }, ok == true) {
+                if (ok != false) chip((if (s.zone == app.vlcinterface.data.Zone.LAN) "🏠 " else "🌐 ") + s.name.ifBlank { s.host }, ok == true) {
                     nav.replace(Screen.Browse(s.id, Urls.forSource(s), s.name.ifBlank { s.host }, "", video))
                 }
             }

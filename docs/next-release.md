@@ -1242,7 +1242,7 @@
 ## Video player's Browse: every place, every level, subtitles too (requested 2026-11-22 08:02 / 08:03)
 - **📂 Browse** (video player, upright and sideways, and "Browse files to add" in the queue) opens the playing video's own folder — on the phone, the NAS or an Internet location — showing videos and subtitle files (and its folders), whatever the Libraries' Audio / Video switch is on.
 - **Up one level** at the top of every folder page: on the phone as far as the top of the storage (Phone / SD card), on a network location past its saved path up to the server itself (its shares) or the site's top.
-- **Places** under it, a sideways row: 📱 Phone, 💾 SD card (when there is one) and every saved LAN 🖧 and Internet 🌐 location. Locations are checked when the page opens: dim while checking, hidden when they don't answer (VPN routing followed).
+- **Places** under it, a sideways row: 📱 Phone, 💾 SD card (when there is one) and every saved LAN 🏠 and Internet 🌐 location. Locations are checked when the page opens: dim while checking, hidden when they don't answer (VPN routing followed).
 - **Phone folders now list their subfolders** (any folder holding songs or videos), so the phone can be walked down and up like the NAS.
 - **Videos:** tap plays; a long press opens the usual file menu (Play now, Play next, Add to queue, Add to playlist, Details, Search on YouTube…). Folders: the folder menu (Play all, Add all to queue / playlist, Details…).
 - **Subtitle files** (.srt .ass .ssa .vtt .sub, with a CC mark): a tap loads it into the video playing (colour codes taken out), saves it silently as this video's subtitles, and goes straight back to the video ("Subtitles on: …"). Phone folders list the subtitle files Android lets the app see.
@@ -1319,3 +1319,6 @@
 ## "Jump to" on the song player's position bar (reported 2026-11-22 09:01)
 - **Tap:** goes straight to that place in the song (09:02). **Slide:** the bubble shows the time, the song jumps there when the finger is lifted. **Long press (without sliding):** opens "Jump to" (minutes : seconds) — before, a long press was taken as a slide and the window never came.
 - **Video player too (09:03):** on the video's position bar a tap goes straight to that place, a slide shows the time in the bubble and jumps on release, and a long press without sliding opens "Jump to time" (hh : mm : ss) — replacing the double tap. Long press = held about half a second, on both players.
+
+## Places row: home-network symbol (screenshot 2026-11-22 09:09)
+- The LAN locations' symbol (🖧) doesn't exist in the phone's font and showed as an empty box. Now 🏠 (home network); Internet locations keep 🌐.
