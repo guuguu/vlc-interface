@@ -1777,10 +1777,27 @@ class PlayerController(private val context: Context, private val store: Store) {
         startItem(pos, -1)
     }
 
+    /**
+     * With two or more items, ⏭ / ⏮ and the queue going round never land on the item playing (19:15) — also when the same
+     * file is in the queue more than once: from [i] on, in direction [dir], the first item that is another file.
+     * Only the same file everywhere: [i] as it is.
+     */
+    private fun otherThanCurrent(s: PlayerState, i: Int, dir: Int): Int {
+        val q = s.queue; val cur = s.item ?: return i
+        if (q.size < 2 || i !in q.indices) return i
+        var j = i
+        repeat(q.size) {
+            val c = q[j]
+            if (j != s.index && (c.uri != cur.uri || c.startMs != cur.startMs)) return j
+            j = ((j + dir) % q.size + q.size) % q.size
+        }
+        return i
+    }
+
     fun next(): Boolean {
         sessionManualChoice()
         val s = _state.value
-        val n = nextIndex(s, manual = true) ?: return false
+        val n = (nextIndex(s, manual = true) ?: return false).let { if (s.item?.isRadio == true) it else otherThanCurrent(_state.value, it, 1) }
         startItem(n, -1); return true
     }
 
@@ -1792,7 +1809,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (item.isRadio) { if (s.queue.size > 1) startItem(if (s.index <= 0) s.queue.size - 1 else s.index - 1, -1); return }
         // The queue circles (2026-11-22 19:13): ⏮ always goes to the item before, from the first to the last.
         if (s.queue.size <= 1) { seekTo(if (item.startMs >= 0) item.startMs else 0); return }
-        startItem(if (s.index <= 0) s.queue.size - 1 else s.index - 1, -1)
+        startItem(otherThanCurrent(s, if (s.index <= 0) s.queue.size - 1 else s.index - 1, -1), -1)
     }
 
     private fun nextIndex(s: PlayerState, manual: Boolean): Int? {
@@ -1809,7 +1826,10 @@ class PlayerController(private val context: Context, private val store: Store) {
             repeat == "all" && store.current.settings.shuffle && s.queue.size > 1 -> {
                 val last = s.queue.getOrNull(s.index)
                 var q = (orderedQueue ?: s.queue).shuffled()
-                if (q.first() === last) q = q.drop(1) + q.first()
+                // Never the item just heard again (19:15), also when it's in the queue twice: the new round starts with
+                // the first item that is another file.
+                val k = q.indexOfFirst { it.uri != last?.uri || it.startMs != last.startMs }
+                if (k > 0) q = q.drop(k) + q.take(k)
                 _state.value = _state.value.copy(queue = q)
                 0
             }
@@ -2614,7 +2634,9 @@ class PlayerController(private val context: Context, private val store: Store) {
             _state.value = _state.value.copy(sleepSongs = left)
             wrap = true
         }
-        val n = nextIndex(_state.value, manual = false) ?: if (wrap && _state.value.queue.isNotEmpty()) 0 else null
+        val n0 = nextIndex(_state.value, manual = false) ?: if (wrap && _state.value.queue.isNotEmpty()) 0 else null
+        // Repeat one plays the same item on purpose; otherwise never the same file again with 2+ items (19:15).
+        val n = if (n0 == null || store.current.settings.repeat == "one" || _state.value.item?.isRadio == true) n0 else otherThanCurrent(_state.value, n0, 1)
         if (n != null) main.post { startItem(n, -1) }
         else {
             _state.value = _state.value.copy(isPlaying = false, ended = true)
