@@ -1040,11 +1040,27 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
 /** [random]: true = random order, false = in order, null = keep the current mode (tap on a song). */
 fun playPlaylist(nav: Navigator, pl: Playlist, index: Int, random: Boolean? = null) {
     if (pl.items.isEmpty()) return
-    val items = pl.items.map { MusicLibrary.fromPlEntry(it) }
-    App.instance.player.playQueue(items, index, Origin("playlist", playlistId = pl.id, title = pl.name), random = random, wholeList = true)
-    // The player of what really started (the item asked for may have been left out: NAS not usable).
-    val started = App.instance.player.state.value.item ?: items[index.coerceIn(0, items.size - 1)]
-    nav.go(if (started.isMusic || started.isRadio) Screen.Music else Screen.Player)
+    val all = pl.items.map { MusicLibrary.fromPlEntry(it) }
+    kotlinx.coroutines.MainScope().launch {
+        // NAS items are ignored when the NAS can't be used now (19:34): away from home without the VPN, the VPN ignored
+        // for this session, or the server not answering — the list plays its phone (and reachable) items only.
+        val items = withoutUnusableNas(all)
+        if (items.isEmpty()) { ShortNote.hint("Nothing in \"${pl.name}\" can be played now (NAS not reachable)"); return@launch }
+        val start = all.getOrNull(index)?.let { t -> items.indexOfFirst { it.uri == t.uri } }?.takeIf { it >= 0 }
+            ?: if (random == true) items.indices.random() else 0
+        App.instance.player.playQueue(items, start, Origin("playlist", playlistId = pl.id, title = pl.name), random = random, wholeList = true)
+        val started = App.instance.player.state.value.item ?: items[start]
+        nav.go(if (started.isMusic || started.isRadio) Screen.Music else Screen.Player)
+    }
+}
+
+/** The list without the network items whose location can't be used right now (phone items always stay). */
+suspend fun withoutUnusableNas(items: List<PlayItem>): List<PlayItem> {
+    val net = items.filter { it.uri.contains("://") && !it.uri.startsWith("content://") && !it.uri.startsWith("file://") && !it.isRadio }
+    if (net.isEmpty()) return items
+    val srcOf = net.associate { it.uri to (MusicLibrary.sourceOf(it)?.id ?: "") }
+    val ok = app.vlcinterface.sources.NetIndex.usableSources(srcOf.values.filter { it.isNotEmpty() }.toSet())
+    return items.filter { i -> srcOf[i.uri]?.let { id -> id.isEmpty() || id in ok } ?: true }
 }
 
 /** "In order" / "Random" switch for the queue. */
@@ -1621,8 +1637,10 @@ fun OriginPickDialog(fromLabel: String, onOpen: () -> Unit, onDismiss: () -> Uni
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             val items = { pl.items.map { MusicLibrary.fromPlEntry(it) } }
                             val origin = Origin("playlist", playlistId = pl.id, title = pl.name)
-                            Pill("▶ Play", filled = true) { onDismiss(); player.playQueue(items(), 0, origin, random = false, wholeList = true) }
-                            Pill("Random") { onDismiss(); player.playQueue(items(), pl.items.indices.random(), origin, random = true, wholeList = true) }
+                            Pill("▶ Play", filled = true) { onDismiss(); kotlinx.coroutines.MainScope().launch {
+                                val l = withoutUnusableNas(items()); if (l.isNotEmpty()) player.playQueue(l, 0, origin, random = false, wholeList = true) } }
+                            Pill("Random") { onDismiss(); kotlinx.coroutines.MainScope().launch {
+                                val l = withoutUnusableNas(items()); if (l.isNotEmpty()) player.playQueue(l, l.indices.random(), origin, random = true, wholeList = true) } }
                             Pill("Load") { onDismiss(); player.loadQueue(items(), origin) }
                         }
                     }

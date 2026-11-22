@@ -132,6 +132,28 @@ object NetIndex {
         up
     }
 
+    /**
+     * Of [ids], the saved locations that can be used right now (2026-11-22 19:34): a home-network one only at home or over
+     * the VPN when it's on (not while it's ignored for this session), and its server answering (checked at most every 20 s).
+     */
+    suspend fun usableSources(ids: Set<String>): Set<String> = kotlinx.coroutines.coroutineScope {
+        val now = System.currentTimeMillis()
+        App.instance.store.current.sources.filter { it.id in ids }
+            .filter { s -> s.zone != app.vlcinterface.data.Zone.LAN || VpnLink.atHome(s) || (s.id in VpnLink.useNas.value && VpnLink.vpnUp.value) }
+            .filter { s -> !(VpnLink.ignoreSession && s.zone == app.vlcinterface.data.Zone.LAN) }
+            .map { s ->
+                async(Dispatchers.IO) {
+                    val c = synchronized(upAt) { upAt[s.id] }
+                    if (c != null && now - c.first < 20_000) s.id to c.second
+                    else {
+                        val ok = try { Net.reachable(Urls.hostOnly(s.host), if (s.port > 0) s.port else s.defaultPort) } catch (_: Exception) { false }
+                        synchronized(upAt) { upAt[s.id] = now to ok }
+                        s.id to ok
+                    }
+                }
+            }.map { it.await() }.filter { it.second }.map { it.first }.toHashSet()
+    }
+
     /** Indexed videos from servers that answer right now (the same check as the songs). */
     suspend fun videosReachable(): List<PlayItem> {
         val ids = reachableIds()
