@@ -170,7 +170,8 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     var pickFolder by remember { mutableStateOf<FolderHit?>(null) }
     var phoneDelete by remember { mutableStateOf<Pair<FolderHit, List<String>>?>(null) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        library = SongsCache.phoneOnly(ctx.applicationContext)           // phone songs at once; the NAS ones when checked (19:37)
+        // Phone songs at once only while a NAS is in doubt (19:37 / 19:38); NAS on line: the whole list at once.
+        if (app.vlcinterface.sources.NetIndex.anyNasDoubt()) library = SongsCache.phoneOnly(ctx.applicationContext)
         library = SongsCache.all(ctx.applicationContext)
     }
     androidx.compose.runtime.LaunchedEffect(folders) { if (folders && folderList == null) folderList = allFolders(ctx.applicationContext) }

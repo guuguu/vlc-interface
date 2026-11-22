@@ -140,7 +140,7 @@ fun SongsTab(nav: Navigator) {
     // Phone songs + songs of the indexed ★ LAN folders (+ any read with "+ LAN/Internet"); a song on both = phone file.
     LaunchedEffect(indexVer) {
         // Nothing shown yet: the phone's songs at once, the NAS ones join when their NAS is checked (19:37).
-        if (songs.isEmpty()) songs = sorted(SongsCache.phoneOnly(ctx.applicationContext))
+        if (songs.isEmpty() && app.vlcinterface.sources.NetIndex.anyNasDoubt()) songs = sorted(SongsCache.phoneOnly(ctx.applicationContext))
         val fresh = sorted(SongsCache.all(ctx.applicationContext))
         if (fresh != songs) songs = fresh
         SongsCache.lastShown = fresh; loading = false

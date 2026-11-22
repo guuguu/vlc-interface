@@ -61,7 +61,7 @@ fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, videos: Boolea
     // [videos]: the video player's Find — the phone's videos and the indexed network videos.
     // The phone's songs first, at once; the NAS ones (only from a NAS that can be used now) join when checked (19:37).
     LaunchedEffect(indexVer) {
-        if (!videos && library == null) library = SongsCache.phoneOnly(ctx.applicationContext)
+        if (!videos && library == null && app.vlcinterface.sources.NetIndex.anyNasDoubt()) library = SongsCache.phoneOnly(ctx.applicationContext)
         library = if (videos) SongsCache.allVideos(ctx.applicationContext) else SongsCache.all(ctx.applicationContext)
     }
     val queue = player.state.value.queue

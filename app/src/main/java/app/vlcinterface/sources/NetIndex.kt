@@ -65,6 +65,7 @@ object NetIndex {
                 .collectLatest { rg -> if (rg) yieldToRg() else { kotlinx.coroutines.delay(5_000); if (!rgBusy()) afterRg() } }
         }
         startWatch()
+        nasMonitor()
         try {
             if (file.exists()) {
                 val o = JSONObject(file.readText())
@@ -149,13 +150,49 @@ object NetIndex {
         return c != null && !c.second && now - c.first < 60_000
     }
 
-    /** Can go into the queue at once, without waiting on the network: a phone item, or a NAS that answered in the last 20 s. */
-    fun knownUsable(item: PlayItem): Boolean {
-        if (item.isRadio || !item.uri.contains("://") || item.uri.startsWith("content://") || item.uri.startsWith("file://")) return true
-        val s = MusicLibrary.sourceOf(item) ?: return true
-        if (blockedNow(item)) return false
-        val c = synchronized(upAt) { upAt[s.id] }
-        return c != null && c.second && System.currentTimeMillis() - c.first < 20_000
+    /**
+     * Can go into the queue at once: a phone item, or a NAS item not known to be unusable (2026-11-22 19:38: while the NAS
+     * is on line nothing is held back — only a NAS known to be off is left out).
+     */
+    fun knownUsable(item: PlayItem): Boolean = !blockedNow(item)
+
+    /** True when the NAS state is in doubt for some of [items]' locations (not checked lately, or found off / out of reach). */
+    fun nasDoubt(items: List<PlayItem>): Boolean {
+        val now = System.currentTimeMillis()
+        return items.asSequence().filter { !it.isRadio && it.uri.contains("://") && !it.uri.startsWith("content://") && !it.uri.startsWith("file://") }
+            .mapNotNull { MusicLibrary.sourceOf(it) }.distinctBy { it.id }
+            .any { s -> blockedNow(PlayItem(s.host.let { "smb://$it/" }, "", sourceId = s.id)) ||
+                synchronized(upAt) { upAt[s.id] }.let { c -> c == null || !c.second || now - c.first > 25_000 } }
+    }
+    /** Is any saved NAS / server in doubt right now (searches: the phone's songs first only then). */
+    fun anyNasDoubt(): Boolean {
+        val now = System.currentTimeMillis()
+        return App.instance.store.current.sources.any { s -> synchronized(upAt) { upAt[s.id] }.let { c -> c == null || !c.second || now - c.first > 25_000 } }
+    }
+
+    /**
+     * Keeps every saved location's state fresh (2026-11-22 19:38), so that while the NAS is on line nothing waits on a
+     * check and nothing is left out: every 20 s the usable locations are checked (a quick connection, ~1.5 s at most).
+     * A NAS that goes off: its items leave the queue (the next phone item plays if one of them was playing); when it's
+     * back: the list gets them back.
+     */
+    private var lastUp: Set<String>? = null
+    private fun nasMonitor() {
+        scope.launch {
+            while (true) {
+                try {
+                    val ids = App.instance.store.current.sources.map { it.id }.toSet()
+                    val up = if (ids.isEmpty()) emptySet() else usableSources(ids)
+                    val before = lastUp
+                    lastUp = up
+                    if (before != null) {
+                        if ((before - up).isNotEmpty()) try { App.instance.player.pruneNas() } catch (_: Exception) {}
+                        if ((up - before).isNotEmpty()) try { App.instance.player.restoreNas() } catch (_: Exception) {}
+                    }
+                } catch (_: Exception) {}
+                kotlinx.coroutines.delay(20_000)
+            }
+        }
     }
 
     /**

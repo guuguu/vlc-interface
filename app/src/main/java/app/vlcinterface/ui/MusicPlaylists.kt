@@ -1061,6 +1061,14 @@ fun playListFast(all0: List<PlayItem>, index: Int, random: Boolean?, origin: Ori
     val first = all0.getOrNull(index)
     val order = if (shuffleIt && songs) (listOfNotNull(first) + all0.filterIndexed { i, _ -> i != index }.shuffled())
         else all0.drop(index.coerceIn(0, all0.size - 1)) + all0.take(index.coerceIn(0, all0.size - 1))
+    // NAS on line (19:38): no splitting, no waiting — the whole list at once, exactly as before.
+    if (!app.vlcinterface.sources.NetIndex.nasDoubt(order)) {
+        if (random != null && random != App.instance.store.current.settings.shuffle)
+            App.instance.store.update { it.copy(settings = it.settings.copy(shuffle = random)) }
+        player.playQueue(order, 0, origin, keepOrder = true, wholeList = true)
+        onStarted(player.state.value.item ?: order[0])
+        return
+    }
     val visible = App.instance.store.current.settings.upNextCount + 1
     val now = order.filter { app.vlcinterface.sources.NetIndex.knownUsable(it) }.take(visible)
     val later = order.filter { o -> now.none { it.uri == o.uri } }
