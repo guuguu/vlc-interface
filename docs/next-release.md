@@ -1220,3 +1220,8 @@
 - **Started by hand** (🔍 Index on the folder, ↻ Rescan, + Folder, pinning a folder) on a folder whose indexing was interrupted: a question, "Resume indexing?", with when it stopped and how many songs are kept. **Resume** reads only what's left; **Start over** reads everything again (tags come from the cache). Tap outside: nothing is started. A folder being indexed right now isn't asked about.
 - The folder's button shows "🔍 Resume" while an interrupted run is waiting.
 - The Indexing log notes each stop with the songs kept ("stopped at N songs — kept, it resumes from there").
+
+## ReplayGain: write access asked while playing (requested 2026-11-22 07:40)
+- Besides the first scan (a scan from a menu waits for the answer; the automatic scan asks without waiting), the write-access question now also comes when a phone song starts playing and its music folder has no write access yet, so ReplayGain from that listening session can go into the files' tags.
+- Once per music folder while the app runs; the song plays on meanwhile. "Not now" isn't asked again until the app restarts (a scan from a menu still asks once more). A folder already granted is never asked.
+- Only while "Automatic ReplayGain for folders" is on (that's what writes ReplayGain during playback).

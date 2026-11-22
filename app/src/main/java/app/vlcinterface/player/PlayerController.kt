@@ -226,6 +226,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         rgJob?.cancel()
         val set = store.current.settings
         if (!item.isMusic || set.rgMode == "off") return
+        askRgWriteAccess(item)
         if (!NativeAudio.active) {
             // libVLC's own output applies ReplayGain itself; the line still shows the song's value from its tags.
             val m = rgModeFor(s)
@@ -1433,6 +1434,24 @@ class PlayerController(private val context: Context, private val store: Store) {
     val rgAsk = kotlinx.coroutines.flow.MutableStateFlow<PlayItem?>(null)
     /** Folders already asked about while the app runs (answered or not): not asked again until the next start. */
     private val rgAsked = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /**
+     * Playing a phone song (2026-11-22 07:40): when its music folder has no write access yet, the question for it comes
+     * now, once per folder while the app runs, so the ReplayGain of this listening session can be written into the
+     * files' tags. Not waited for (the song plays on); "Not now" isn't asked again until the app restarts.
+     */
+    private val rgWriteAsked = java.util.Collections.synchronizedSet(HashSet<String>())
+    private fun askRgWriteAccess(item: PlayItem) {
+        if (!item.uri.startsWith("content://") || !store.current.settings.rgAutoFolder) return
+        bg.launch {
+            val fa = app.vlcinterface.sources.MusicFolderAccess
+            val f = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                if (fa.covered(context, item)) null else fa.folderToAsk(context, item)
+            } ?: return@launch
+            if (fa.declinedFor(f) || !rgWriteAsked.add(f)) return@launch
+            if (fa.ask.value == null) fa.ask.value = fa.Ask(f, null) else rgWriteAsked.remove(f)   // another question open: next song
+        }
+    }
 
     private fun askRgScan(item: PlayItem) {
         if (!item.isMusic) return
