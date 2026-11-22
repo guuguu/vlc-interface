@@ -109,7 +109,12 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
             val isPlayer = top is Screen.Player
             // Auto-rotate setting: everywhere except the video player (which turns with its own button / the video).
             val act = androidx.compose.ui.platform.LocalContext.current as? android.app.Activity
-            LaunchedEffect(st.settings.autoRotate, isPlayer) { if (!isPlayer) act?.requestedOrientation = defaultOrientation() }
+            // The full-screen clock (2026-11-22 19:26) always turns with the phone (upright / sideways, either way round).
+            val clockFull = top is Screen.ClockFull
+            LaunchedEffect(st.settings.autoRotate, isPlayer, clockFull) {
+                if (clockFull) act?.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
+                else if (!isPlayer) act?.requestedOrientation = defaultOrientation()
+            }
             // Audio or video player on screen: the phone screen stays on (so it doesn't dim and lock) for as long as
             // the player page is shown; any other page lets the screen time out as usual.
             // Not at 10 % battery or less (unless charging).

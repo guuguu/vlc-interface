@@ -1422,3 +1422,4 @@
 - A station gets 10 s to connect before the 5 s count starts (so a slow start isn't skipped). If every station of the list turns out silent one after another, it stops ("No station has sound — stopped") instead of going round for ever.
 - Not while you paused it, while an alarm rings, or while the sleep timer fades out. Each skip / stop is written to the Player log with the reason ("buffering 40 %", "silence", "the stream stopped", "error: …").
 - Songs and videos aren't affected.
+- **Full-screen clock turns with the phone (19:26):** upright or sideways, either way round, following the phone's position whatever the auto-rotate setting; leaving it puts the app's usual orientation back. The clock is sized to the screen each time.
