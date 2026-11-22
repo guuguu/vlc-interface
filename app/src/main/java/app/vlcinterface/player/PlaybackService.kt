@@ -49,7 +49,10 @@ class PlaybackService : Service() {
                     when {
                         !hasItem -> finish()
                         active -> { foreground(player.state.value); hold(true, net) }
-                        else -> { stopForeground(STOP_FOREGROUND_DETACH); hold(false) }
+                        // Paused: classic notification (Android 12): stays in the foreground, so the notification stays at the top
+                        // of the bar with its icon while a player is on (11:57); the phone may sleep (no wake / Wi-Fi lock).
+                        // Modern: let go of the foreground, Android's media card stays as long as the session is active.
+                        else -> { if (App.instance.media.modern) stopForeground(STOP_FOREGROUND_DETACH) else foreground(player.state.value); hold(false) }
                     }
                 }
             }

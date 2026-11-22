@@ -83,7 +83,7 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
      * stream), ⏮ ⏭ are the previous / next station.
      */
     @Volatile private var sessionOk = true
-    private val modern get() = android.os.Build.VERSION.SDK_INT >= 33 && sessionOk
+    val modern get() = android.os.Build.VERSION.SDK_INT >= 33 && sessionOk
 
     private fun stepMs() = app.vlcinterface.App.instance.store.current.settings.doubleTapSeekSec * 1000L
 
@@ -219,7 +219,10 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)   // Android 12 would wait up to 10 s
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(openIntent())
-            .setOngoing(st.isPlaying)
+            // Classic notification (11:57): at the top of the notification bar, with its status-bar icon, whenever a player is on —
+            // playing or paused, the app in front or in the background — and it can't be swiped away while a player is on.
+            .setOngoing(st.isPlaying || (!modern && item != null))
+            .apply { if (!modern) { setSortKey("a"); @Suppress("DEPRECATION") setPriority(Notification.PRIORITY_MAX) } }
             .setDeleteIntent(PendingIntent.getService(ctx, 9, Intent(ctx, PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP), PendingIntent.FLAG_IMMUTABLE))
         artwork(st.artworkUrl)?.let { b.setLargeIcon(it) }
         // The same buttons on every player; radio without the jumps (a live stream has nothing to jump in).
