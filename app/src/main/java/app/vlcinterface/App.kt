@@ -75,6 +75,13 @@ class App : Application() {
         if (app.vlcinterface.alarm.Alarms.active.isNotEmpty()) app.vlcinterface.alarm.AlarmEngine.guardCheck(this)
         app.vlcinterface.sources.VpnLink.init(this)          // home NAS over a VPN (ZeroTier …)   // radio: keeps the playing station ready to save songs
         player.currentOutputName = output.active?.name ?: ""
+        // Every second: the volume of the output in use, kept per output (put back exactly after a short change of output).
+        android.os.Handler(android.os.Looper.getMainLooper()).let { h ->
+            h.post(object : Runnable { override fun run() {
+                try { output.active?.name?.let { n -> volByOutput.put(n, output.volumePercent()) } } catch (_: Exception) {}
+                h.postDelayed(this, 1_000)
+            } })
+        }
         // Every minute: alive, and the volume now (kept over a restart / a Bluetooth drop shorter than 30 min).
         android.os.Handler(android.os.Looper.getMainLooper()).let { h ->
             h.post(object : Runnable { override fun run() {
@@ -91,11 +98,22 @@ class App : Application() {
             // An output that went away: its volumes kept, to put back if it returns within 30 min (Bluetooth stack
             // restarting, a short drop) instead of falling back to the defaults.
             if (before != null && (after == null || after.name != before.name)) {
-                lostName = before.name; lostAt = now; lostPct = try { output.volumePercent() } catch (_: Exception) { -1 }; lostApp = player.appVolume
+                // The volume it had (2026-11-22 19:46): taken from the last reading while it was the output — read now, after the
+                // change, it was the NEW output's volume (a notification moving the sound for a moment, then back, left the
+                // device at the wrong level).
+                lostName = before.name; lostAt = now; lostPct = volByOutput.getOrDefault(before.name, -1); lostApp = player.appVolume
             }
             val back = after != null && after.name == lostName && now - lostAt < BLIP_MS     // a short drop only
             if (back) {
-                if (lostPct >= 0) try { output.setVolumePercent(lostPct) } catch (_: Exception) {}
+                val want = lostPct
+                if (want >= 0) {
+                    try {
+                        if (output.volumePercent() != want) {
+                            output.setVolumePercent(want)
+                            ServerLog.log("player", "volume", "", "", true, (after?.name ?: "") + " back after a short change: volume put back to " + want + " %")
+                        }
+                    } catch (_: Exception) {}
+                }
                 player.setAppVolume(lostApp)
                 lostName = ""
             } else if (!output.overriding) player.setAppVolume(1f)   // back on Android's routing: Android's volume again
@@ -129,6 +147,8 @@ class App : Application() {
 
     /** Set by Exit / Restart the app: the minute "alive" note stops. */
     @Volatile var exiting = false
+    /** The media volume of each output, read every second while it is the one in use (see onActiveChanged). */
+    private val volByOutput = java.util.concurrent.ConcurrentHashMap<String, Int>()
     @Volatile private var lostName = ""
     @Volatile private var lostAt = 0L
     @Volatile private var lostPct = -1
