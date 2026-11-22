@@ -310,11 +310,11 @@ fun MediaList(
             }
             items(rows) { r ->
                 when (r) {
-                    is Row0.Dir -> Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(8.dp))
+                    is Row0.Dir -> Row(Modifier.fillMaxWidth().heightIn(min = lrDp(56)).clip(RoundedCornerShape(8.dp))
                         .background(if (r.e.uri in selected) accent().copy(alpha = 0.18f) else Color.Transparent)
                         .combinedClickable(onClick = { if (selected.isNotEmpty()) toggle(r.e) else onOpenDir(r.e) }, onLongClick = { if (selected.isNotEmpty()) quickFromSelection() else menuFor = r.e }),
                         verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(lrDp(40).coerceIn(26.dp, 44.dp)).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) {
                             Text(if (r.e.uri in selected) "✓" else "▤", color = accent(), fontWeight = FontWeight.Bold)
                         }
                         MarqueeText(r.e.name, C.text, Modifier.padding(start = 14.dp).weight(1f), fontSize = 15.sp, list = "folders")
@@ -349,7 +349,7 @@ fun MediaList(
                         val isCur = playing.item?.uri == e.uri
                         val hl = isCur || e.uri == highlightUri
                         val sel = e.uri in selected
-                        Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
+                        Row(Modifier.fillMaxWidth().heightIn(min = lrDp(52)).clip(RoundedCornerShape(8.dp))
                             .background(if (sel) accent().copy(alpha = 0.18f) else if (hl) accent().copy(alpha = 0.12f) else Color.Transparent)
                             .combinedClickable(onClick = { if (selected.isNotEmpty()) toggle(e) else play(e) }, onLongClick = { if (selected.isNotEmpty()) quickFromSelection() else menuFor = e }).padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically) {
@@ -368,7 +368,7 @@ fun MediaList(
                         }
                     }
                     // Subtitle file (video player's Browse): a tap puts it on the video playing.
-                    is Row0.Sub -> Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
+                    is Row0.Sub -> Row(Modifier.fillMaxWidth().heightIn(min = lrDp(52)).clip(RoundedCornerShape(8.dp))
                         .combinedClickable(onClick = { onSubtitle?.invoke(r.e) }, onLongClick = { onSubtitle?.invoke(r.e) }), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.padding(start = 2.dp, end = 10.dp).clip(RoundedCornerShape(4.dp)).background(C.card2).padding(horizontal = 4.dp, vertical = 1.dp)) {
                             Text(if (app.vlcinterface.sources.SubtitleFiles.isZip(r.e.name)) "ZIP" else "CC", color = accent(), fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -381,7 +381,7 @@ fun MediaList(
                     }
                     is Row0.Video -> {
                         val e = r.e
-                        Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).clip(RoundedCornerShape(8.dp))
+                        Row(Modifier.fillMaxWidth().heightIn(min = lrDp(60)).clip(RoundedCornerShape(8.dp))
                             .background(if (e.uri == highlightUri || playing.item?.uri == e.uri) accent().copy(alpha = 0.12f) else Color.Transparent)
                             .combinedClickable(onClick = { play(e) }, onLongClick = { menuFor = e }), verticalAlignment = Alignment.CenterVertically) {
                             Text("▶", color = accent(), modifier = Modifier.padding(start = 6.dp, end = 14.dp))

@@ -110,6 +110,8 @@ object UiPrefs {
     var menuAlpha by androidx.compose.runtime.mutableFloatStateOf(0.9f)
     /** Space above and below each menu row (dp), from Settings. */
     var menuGapDp by androidx.compose.runtime.mutableIntStateOf(6)
+    /** Look → "List row spacing" (%): the height of every list / queue row. */
+    var listRowPct by androidx.compose.runtime.mutableIntStateOf(70)
     /** Battery 15 % or less (not charging): coloured items turn bright red. */
     var lowBattery by androidx.compose.runtime.mutableStateOf(false)
     var menuFont by androidx.compose.runtime.mutableStateOf("medium")
@@ -1512,3 +1514,7 @@ fun Modifier.anchorViewport(scroll: androidx.compose.foundation.ScrollState, pag
     }
     return this.onGloballyPositioned { top[0] = it.positionInRoot().y }
 }
+
+
+/** A list row's height / spacing scaled by Look → "List row spacing" (one value for every list and queue). */
+fun lrDp(base: Int): androidx.compose.ui.unit.Dp = (base * UiPrefs.listRowPct / 100f).dp

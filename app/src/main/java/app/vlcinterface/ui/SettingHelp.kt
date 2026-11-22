@@ -218,6 +218,8 @@ object SettingHelp {
             "Lower fits more settings on screen; higher is airier. Touch areas stay easy to hit. Default: 85 %.",
         "Text size" to "The size of all the text on the settings pages, the setup wizard, the help guide and the helper pop-ups — titles stay a step bigger than the text under them.\n\n" +
             "The players and the clock aren't affected: their text fits itself to the room. Default: 100 %.",
+        "List row spacing" to "The space between the items of every list and queue in the app, one value for all: the Queue page, Up next on the song and video players, playlists, phone and network folders, Library → Songs and Videos, the phone's folder list, radio favourites and search results.\n\n" +
+            "30 % packs the rows as close as their text allows (more items on screen); 160 % gives roomy rows that are easier to tap. Text sizes don't change. Default: 70 % (the rows used to be at 100 %).",
         "Order of the player rows" to "The order of the rows on the song player, the radio player and the video player (upright, the rows under the picture), each with its own order. All: the song player's order for the radio player too, and the video player's Title, Play buttons and Up next follow it. The song / radio rows: picture (or clock with alarms), title block, position bar, player buttons, tone sliders, 'Playing from', 'Play next…', extra buttons, and Up next (radio: favourites and search).\n\n" +
             "Drag a row by its ≡ (or long-press it) to move it; 'Reset order' puts back the original order. Sideways the picture and title stay on the left side and the other rows keep their order on the right. " +
             "The album picture hides while scrolling only when it's the first row.",

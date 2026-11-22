@@ -84,6 +84,7 @@ val SETTINGS_INDEX: List<SettingsEntry> = listOf(
     E("look", "Look", "Look", "Alarm rows under the clock", "", true),
     E("look", "Look", "Look", "Order of the player rows", "", true),
     E("look", "Look", "Look", "Player rows spacing", "", true),
+    E("look", "Look", "Look", "List row spacing", "", true),
     E("look", "Look", "Look", "Hiding while scrolling", "", true),
     E("look", "Look", "Look", "Hide the clock while scrolling", "", true),
     E("look", "Look", "Look", "Short pop-ups stay for", "", true),

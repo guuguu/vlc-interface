@@ -58,7 +58,7 @@ fun VideosTab(nav: Navigator) {
         LazyColumn(Modifier.fillMaxSize().scrollbar(st), state = st) {
             items(shown, key = { it.uri }) { v ->
                 var menu by remember(v.uri) { mutableStateOf(false) }
-                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clip(RoundedCornerShape(8.dp))
+                Row(Modifier.fillMaxWidth().heightIn(min = lrDp(56)).clip(RoundedCornerShape(8.dp))
                     .background(if (playing.item?.uri == v.uri) accent().copy(alpha = 0.12f) else Color.Transparent)
                     .combinedClickable(onClick = {
                         // Plays this video.

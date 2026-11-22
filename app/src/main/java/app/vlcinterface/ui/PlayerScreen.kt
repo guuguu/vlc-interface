@@ -928,7 +928,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
             val upDrag = remember { QueueDrag() }
             next.forEachIndexed { i, n -> androidx.compose.runtime.key(n.uri) {
                 Row(Modifier.then(upDrag.row(n.uri)).fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
-                    .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    .padding(vertical = lrDp(8)), verticalAlignment = Alignment.CenterVertically) {
                     Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
                     Box(Modifier.width(6.dp))
                     MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp, list = "upnext")

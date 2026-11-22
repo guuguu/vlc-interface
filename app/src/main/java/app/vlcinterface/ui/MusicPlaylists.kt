@@ -567,7 +567,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 val upDrag = remember { QueueDrag() }
                 next.forEachIndexed { i, n -> androidx.compose.runtime.key(n.uri) {
                     Row(Modifier.then(upDrag.row(n.uri)).fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
-                        .padding(vertical = if (landscape) 5.dp else 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        .padding(vertical = if (landscape) lrDp(5) else lrDp(8)), verticalAlignment = Alignment.CenterVertically) {
                         // Order number: fixed, outside the gliding text (which is clipped a little after it).
                         Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
                         Box(Modifier.width(6.dp))
@@ -879,7 +879,7 @@ fun QueueScreen(nav: Navigator) {
         LazyColumn(Modifier.weight(1f).scrollbar(state).padding(horizontal = 16.dp), state = state) {
             if (p.queue.size > 20) stickyHeader { JumpToBox(state, p.queue.map { listOf(it.title, it.artist).joinToString(" ") }, offset = 1) }
             itemsIndexed(p.queue, key = { _, q -> q.uri }) { i, q ->
-                Row(Modifier.then(qDrag.row(q.uri)).fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp)).background(C.bg)
+                Row(Modifier.then(qDrag.row(q.uri)).fillMaxWidth().heightIn(min = lrDp(52)).clip(RoundedCornerShape(8.dp)).background(C.bg)
                     .background(if (i == p.index) accent().copy(alpha = 0.12f) else Color.Transparent)
                     .combinedClickable(onClick = { player.jumpTo(i) }, onLongClick = { qMenu = i }).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("${i + 1}", color = if (i == p.index) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
@@ -1113,7 +1113,7 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
             if (pl.items.size > 20) stickyHeader { JumpToBox(state, pl.items.map { listOf(it.title, it.artist).joinToString(" ") }, offset = 1) }
             itemsIndexed(pl.items) { i, e ->
                 val cur = playing.origin.playlistId == pl.id && playing.index == i
-                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
+                Row(Modifier.fillMaxWidth().heightIn(min = lrDp(52)).clip(RoundedCornerShape(8.dp))
                     .background(if (i in selected) accent().copy(alpha = 0.18f) else if (cur || e.uri == d.highlight) accent().copy(alpha = 0.12f) else Color.Transparent)
                     .combinedClickable(onClick = { if (selected.isNotEmpty()) selected = if (i in selected) selected - i else selected + i else playPlaylist(nav, pl, i) },
                         onLongClick = { if (selected.isNotEmpty()) selected = if (i in selected) selected - i else selected + i else itemMenu = i }).padding(horizontal = 6.dp),
@@ -1217,7 +1217,7 @@ fun PickCueScreen(nav: Navigator, p: Screen.PickCue) {
             if (error.isNotEmpty()) Text(error, color = C.bad)
             if (busy) Row(verticalAlignment = Alignment.CenterVertically) { CircularProgressIndicator(Modifier.size(18.dp), color = accent(), strokeWidth = 2.dp); Text("  Checking the files in the .cue…", color = C.muted) }
             entries?.forEach { e ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable {
+                Row(Modifier.fillMaxWidth().heightIn(min = lrDp(52)).clickable {
                     if (e.isDir) nav.go(Screen.PickCue(p.playlistId, p.sourceId, e.uri))
                     else if (src != null) scope.launch {
                         busy = true
@@ -1502,7 +1502,7 @@ fun PickMediaScreen(nav: Navigator, p: Screen.PickMedia) {
 
 @Composable
 private fun PickRow(icon: String, label: String, checked: Boolean?, checkable: Boolean, onCheck: () -> Unit = {}, onOpen: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = lrDp(52)).clickable(onClick = onOpen), verticalAlignment = Alignment.CenterVertically) {
         if (checkable && checked != null) androidx.compose.material3.Checkbox(checked, { onCheck() },
             colors = androidx.compose.material3.CheckboxDefaults.colors(checkedColor = accent()))
         Text(icon, color = accent(), modifier = Modifier.padding(start = 4.dp, end = 12.dp))
@@ -1722,7 +1722,7 @@ private fun RadioPanel(nav: Navigator) {
                     // Same tight rows as the search results (2026-11-21 02:58): flag (or globe) in front, no extra gap.
                     Row(Modifier.fillMaxWidth().background(if (on) accent().copy(alpha = 0.14f) else Color.Transparent)
                         .combinedClickable(onClick = { player.playStation(s.name, s.url) }, onLongClick = { menu = s.id })
-                        .padding(start = 6.dp, top = (3 * sg()).dp, bottom = (3 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
+                        .padding(start = 6.dp, top = lrDp(4), bottom = lrDp(4)), verticalAlignment = Alignment.CenterVertically) {
                         val rs = remember(s.url, s.meta) { app.vlcinterface.sources.RadioStation("", s.name, s.url, "", 0, stationCountry(s.meta), "", s.favicon) }
                         StationFlag(rs)
                         MarqueeText((if (on) "▶ " else "") + s.name, if (on) accent() else C.text, Modifier.weight(1f), fontSize = 15.sp,
@@ -1828,7 +1828,7 @@ fun StationSearch() {
                 var rDetails by remember(r.url) { mutableStateOf(false) }
                 if (rDetails) StationDetailsDialog(app.vlcinterface.data.Station(name = r.name, url = r.url, meta = r.meta, favicon = r.favicon)) { rDetails = false }
                 Row(Modifier.fillMaxWidth().combinedClickable(onClick = { player.playStation(r.name, r.url) }, onLongClick = { rMenu = true })
-                    .padding(vertical = (3 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
+                    .padding(vertical = lrDp(4)), verticalAlignment = Alignment.CenterVertically) {
                     // The station's country flag; when the country isn't known, a globe turned to where the station is
                     // (Europe while looking it up and when nothing is found).
                     StationFlag(r)

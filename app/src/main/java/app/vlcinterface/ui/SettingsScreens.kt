@@ -549,6 +549,15 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     ThinSlider(s.playerGap.toFloat(), { v -> set(s.copy(playerGap = Math.round(v).coerceIn(0, 16))) }, valueRange = 0f..16f, steps = 15,
                         onHoldStill = { if (helpersOn) lookHelp = "Player rows spacing" })
+                    // One spacing for every list and queue (2026-11-22 09:12).
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("List row spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("List row spacing").weight(1f).explain("List row spacing"))
+                        Text("${s.listRowPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(listRowPct = 70)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.listRowPct.toFloat(), { v -> set(s.copy(listRowPct = (Math.round(v / 5f) * 5).coerceIn(30, 160))) }, valueRange = 30f..160f,
+                        onHoldStill = { if (helpersOn) lookHelp = "List row spacing" })
+                    Text("Every list and queue: queue, Up next (songs and videos), playlists, folders, Songs, Videos, radio stations", color = C.muted, fontSize = 12.sp)
                     // Upright player: the clock / album picture hide while scrolling (on) or not (off: clock pinned), and for how long.
                     // Clock / Picture / Both ("Both": one switch and one time for the two).
                     var hideMode by rememberKept("look.hideMode", "clock")

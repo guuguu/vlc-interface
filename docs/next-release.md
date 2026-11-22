@@ -1322,3 +1322,7 @@
 
 ## Places row: home-network symbol (screenshot 2026-11-22 09:09)
 - The LAN locations' symbol (🖧) doesn't exist in the phone's font and showed as an empty box. Now 🏠 (home network); Internet locations keep 🌐.
+
+## One spacing for every list and queue (requested 2026-11-22 09:12)
+- **Settings → Look → "List row spacing"** (under Player rows spacing): 30 %–160 % in 5 % steps, default 70 % (the rows were at 100 %, too far apart), Reset. Text helper (hold the setting; pops up on a still hold of the slider when Helpers are on). Saved with the settings and in export / import; found by the Settings search.
+- It sets the same row spacing everywhere: the Queue page, Up next on the song and video players, playlists, phone and network folder lists (folders, songs, videos, subtitle files), Library → Songs and Videos, the phone's folder list, radio favourites and Find stations results, the cue picker. Text sizes stay; at the low end the rows are as close as their text allows.

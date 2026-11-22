@@ -393,7 +393,7 @@ fun InternalTab(nav: Navigator) {
             else -> folders!!.filter { if (st.settings.libraryKind == "video") it.videos > 0 else it.songs > 0 }.also { shown ->
                 if (shown.isEmpty()) Text(if (st.settings.libraryKind == "video") "No videos on the phone." else "No music on the phone.", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
             }.forEach { f ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).combinedClickable(onClick = { nav.go(Screen.Folder(f)) }, onLongClick = { menuFor = f }),
+                Row(Modifier.fillMaxWidth().heightIn(min = lrDp(64)).combinedClickable(onClick = { nav.go(Screen.Folder(f)) }, onLongClick = { menuFor = f }),
                     verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) { Text("▤", color = accent()) }
                     Column(Modifier.weight(1f).padding(start = 14.dp)) {
@@ -1018,7 +1018,7 @@ fun RadioTab(nav: Navigator) {
 
 @Composable
 fun StationRow(name: String, meta: String, fav: Boolean, onFav: () -> Unit, onLong: (() -> Unit)? = null, list: String = if (fav) "radioFav" else "radioFind", onPlay: () -> Unit) {
-    Row(Modifier.fillMaxWidth().heightIn(min = 60.dp).combinedClickable(onClick = onPlay, onLongClick = onLong).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().heightIn(min = lrDp(60)).combinedClickable(onClick = onPlay, onLongClick = onLong).padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             MarqueeText(name, C.text, Modifier.fillMaxWidth(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold, list = list)
             if (meta.isNotEmpty()) Text(stationMetaShort(meta), color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

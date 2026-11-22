@@ -275,7 +275,7 @@ fun SongsTab(nav: Navigator) {
         LazyColumn(Modifier.weight(1f).scrollbar(state), state = state) {
             items(songs, key = { it.uri }) { s ->
                 val on = s.uri in selected
-                Row(Modifier.fillMaxWidth().heightIn(min = 40.dp).clip(RoundedCornerShape(6.dp))
+                Row(Modifier.fillMaxWidth().heightIn(min = lrDp(40)).clip(RoundedCornerShape(6.dp))
                     .background(if (on) accent().copy(alpha = 0.22f) else Color.Transparent)
                     .then(if (s.uri == focus) Modifier.border(2.dp, accent(), RoundedCornerShape(6.dp)) else Modifier)
                     .combinedClickable(onClick = { selected = if (on) selected - s.uri else selected + s.uri },
