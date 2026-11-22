@@ -1803,7 +1803,24 @@ class PlayerController(private val context: Context, private val store: Store) {
         else nasOfflineToast()
     }
 
-    fun jumpTo(i: Int) { if (i in _state.value.queue.indices && nasOff(_state.value.queue[i])) { nasBlockedNote(_state.value.queue[i]); return }
+    /**
+     * In a video queue (19:42): from [i] on in direction [dir], the first item that can be played now (not on an unreachable
+     * NAS), without going round; null when there's none.
+     */
+    private fun usableFrom(s: PlayerState, i: Int, dir: Int): Int? {
+        var j = i
+        while (j in s.queue.indices) { if (j != s.index && !nasOff(s.queue[j])) return j; j += dir }
+        return null
+    }
+
+    fun jumpTo(i: Int) {
+        val q0 = _state.value.queue
+        if (i in q0.indices && nasOff(q0[i])) {
+            nasBlockedNote(q0[i])
+            // A video: on to the next item that can be played (a phone video), if there is one.
+            if (isVideo(q0[i])) usableFrom(_state.value, i + 1, 1)?.let { sessionManualChoice(); startItem(it, -1) }
+            return
+        }
         if (i in _state.value.queue.indices) { sessionManualChoice(); startItem(i, -1) } }
 
     /** Moves a queue entry one place up (-1) or down (+1); the playing song keeps playing. */
@@ -1913,8 +1930,13 @@ class PlayerController(private val context: Context, private val store: Store) {
         sessionManualChoice()
         val s = _state.value
         val n = (nextIndex(s, manual = true) ?: return false).let { if (s.item?.isRadio == true) it else otherThanCurrent(_state.value, it, 1) }
-        // A video kept in the queue whose NAS can't be reached now (19:41): the pop-up, nothing else.
-        _state.value.queue.getOrNull(n)?.let { t -> if (isVideo(t) && nasOff(t)) { nasBlockedNote(t); return false } }
+        // A video kept in the queue whose NAS can't be reached now (19:41 / 19:42): the pop-up, and on to the next item that
+        // can be played (a phone video); none: the video playing stays.
+        _state.value.queue.getOrNull(n)?.let { t -> if (isVideo(t) && nasOff(t)) {
+            nasBlockedNote(t)
+            val u = usableFrom(_state.value, n + 1, 1) ?: return false
+            startItem(u, -1); return true
+        } }
         startItem(n, -1); return true
     }
 
@@ -1927,7 +1949,11 @@ class PlayerController(private val context: Context, private val store: Store) {
         // Videos (19:18: the circling is for songs and radio): as before — back to the start after 4 s, or on the first one.
         if (!item.isMusic) {
             if (mp.time > 4000 || s.index <= 0) { seekTo(if (item.startMs >= 0) item.startMs else 0); return }
-            s.queue.getOrNull(s.index - 1)?.let { t -> if (nasOff(t)) { nasBlockedNote(t); return } }
+            s.queue.getOrNull(s.index - 1)?.let { t -> if (nasOff(t)) {
+                nasBlockedNote(t)
+                usableFrom(s, s.index - 2, -1)?.let { startItem(it, -1) }            // the previous one that can be played
+                return
+            } }
             startItem(s.index - 1, -1); return
         }
         // The queue circles (2026-11-22 19:13): ⏮ always goes to the item before, from the first to the last.
@@ -2761,8 +2787,11 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
         val n0 = nextIndex(_state.value, manual = false) ?: if (wrap && _state.value.queue.isNotEmpty()) 0 else null
         // Repeat one plays the same item on purpose; otherwise never the same file again with 2+ items (19:15).
-        val n = if (n0 == null || store.current.settings.repeat == "one" || _state.value.item?.isRadio == true) n0 else otherThanCurrent(_state.value, n0, 1)
-        if (n != null) main.post { startItem(n, -1) }
+        var n = if (n0 == null || store.current.settings.repeat == "one" || _state.value.item?.isRadio == true) n0 else otherThanCurrent(_state.value, n0, 1)
+        // The next video's NAS can't be reached (19:42): the pop-up, and on to the next video that can be played.
+        n?.let { k -> _state.value.queue.getOrNull(k)?.let { t -> if (isVideo(t) && nasOff(t)) { nasBlockedNote(t); n = usableFrom(_state.value, k + 1, 1) } } }
+        val nn = n
+        if (nn != null) main.post { startItem(nn, -1) }
         else {
             _state.value = _state.value.copy(isPlaying = false, ended = true)
             // Nothing follows: stop and remove the notification.
