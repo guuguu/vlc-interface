@@ -1169,4 +1169,7 @@
 - **Cause:** "Flatten at volume" (Treble band, since 1.70). Once it was set, the treble calculation asked for the output volume while the app was still starting, before the output router existed, so every start crashed (1.72, 1.73, and 1.70 / 1.71 alike). Going back to 1.71 worked only because the downgrade needed an uninstall, which wiped the settings.
 - **Fixed:** the volume is read safely at any point of the start (no output router yet → the phone volume alone), and the flattening can never take the app down (on any error: the whole correction).
 - **The 1.73 guesses** (file-sharing component, video view inflater) were not the cause. The inflater for libVLC's video view is put back (upright picture size); logs stay shared from Download/vlc_interface.
-- **Also in the pack, separate:** one "not responding" at 00:46. The screen's thread waited on libVLC while it closed a video that was stuck (reopening after a picture-colour change). To be looked at separately.
+- **"Not responding" at 00:46 (same pack), fixed (06:41):**
+  - Letting go of the Hue/Sat slider reopens the video at the same spot to apply the colour. The old video was closed on the screen's thread: libVLC's setMedia waits for it, and a network video stuck mid-read kept that thread waiting over 10 s, so Android reported the app as not responding.
+  - Now every reopen at the same spot (picture colour, decoder, subtitle format, picture check) first closes the old video on its own thread. The reopen follows when that's done, with nothing left to wait for, and the screen stays responsive meanwhile.
+  - A newer reopen, or another video chosen meanwhile, drops the pending one. The stop isn't taken for the end of the video.

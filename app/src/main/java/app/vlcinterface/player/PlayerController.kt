@@ -879,13 +879,32 @@ class PlayerController(private val context: Context, private val store: Store) {
      * Reloads the playing video with the current video settings and goes on from the same spot (paused stays paused).
      * Used whenever a video setting is changed in the player.
      */
+    /** Closes the playing video away from the screen's thread (reopen at the same spot). */
+    private val closer = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "video-close").apply { isDaemon = true } }
+    private var reloadGen = 0
+
+    /**
+     * The video reopened at the same spot (picture colour, decoder, subtitle format, picture check).
+     * 2026-11-22: the old video used to be closed on the screen's thread (libVLC's setMedia waits for it); a network video
+     * stuck in a read kept that thread waiting >10 s — "app not responding" after a Hue/Sat change. Now the old video is
+     * closed first on its own thread; the reopen follows on the screen's thread when that's done (nothing left to wait for).
+     * A newer reopen or another item chosen meanwhile → this one is dropped.
+     */
     fun reloadVideo() {
         val s = _state.value
         val item = s.item ?: return
         if (item.isMusic || item.isRadio) return
         val pos = mp.time; val playing = mp.isPlaying
-        startItem(s.index, pos.coerceAtLeast(0))
-        if (!playing) main.postDelayed({ pause() }, 400)
+        val gen = ++reloadGen
+        stopping = true; endHandled = true              // this stop isn't the end of the video
+        closer.execute {
+            try { mp.stop() } catch (_: Throwable) {}
+            main.post {
+                if (gen != reloadGen || _state.value.item?.uri != item.uri) { stopping = false; return@post }
+                startItem(s.index, pos.coerceAtLeast(0))
+                if (!playing) main.postDelayed({ pause() }, 400)
+            }
+        }
     }
 
     /**
