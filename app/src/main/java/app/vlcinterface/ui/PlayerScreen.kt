@@ -931,11 +931,11 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                     .padding(vertical = lrDp(8)), verticalAlignment = Alignment.CenterVertically) {
                     Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
                     Box(Modifier.width(6.dp))
-                    MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp, list = "upnext")
+                    MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp, list = "upnext", lineHeight = lrLine(15f))
                     // ≡ on the right, before the length, away from the screen edge (21:04): hold it a moment, then drag.
                     Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(upDrag.handle(n.uri,
                         { player.state.value.queue.indexOfFirst { it.uri == n.uri } }, { player.state.value.queue.size }) { a, d ->
-                            if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(horizontal = 10.dp, vertical = 4.dp))
+                            if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(horizontal = 10.dp, vertical = lrDp(4)))
                     if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
                     Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
                         onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,

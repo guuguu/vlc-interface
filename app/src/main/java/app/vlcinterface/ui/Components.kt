@@ -692,8 +692,8 @@ fun Scaled(content: @Composable () -> Unit) {
 
 /** Symbol button (replaces IconButton). */
 @Composable
-fun SymButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, content: @Composable () -> Unit) = Scaled {
-    Box(modifier.size(48.dp).clip(CircleShape).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) { content() }
+fun SymButton(onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, size: androidx.compose.ui.unit.Dp = 48.dp, content: @Composable () -> Unit) = Scaled {
+    Box(modifier.size(size).clip(CircleShape).clickable(enabled = enabled, onClick = onClick), contentAlignment = Alignment.Center) { content() }
 }
 
 /** Material symbol at the Button size setting. */
@@ -1520,6 +1520,13 @@ fun Modifier.anchorViewport(scroll: androidx.compose.foundation.ScrollState, pag
 
 /** A list row's height / spacing scaled by Look → "List row spacing" (one value for every list and queue). */
 fun lrDp(base: Int): androidx.compose.ui.unit.Dp = (base * UiPrefs.listRowPct / 100f).dp
+
+/** A row's small buttons (✕, ⋮) follow List row spacing too (12:01), never smaller than a fingertip's 26 dp. */
+fun lrBtn(): androidx.compose.ui.unit.Dp = lrDp(48).coerceIn(26.dp, 48.dp)
+
+/** Text line height in list rows: the usual at 100 % and more, tighter below it (down to the letters' own height). */
+fun lrLine(fontSp: Float): androidx.compose.ui.unit.TextUnit =
+    androidx.compose.ui.unit.TextUnit(fontSp * (1.02f + 0.23f * (UiPrefs.listRowPct / 100f).coerceIn(0f, 1f)), androidx.compose.ui.unit.TextUnitType.Sp)
 
 
 /**

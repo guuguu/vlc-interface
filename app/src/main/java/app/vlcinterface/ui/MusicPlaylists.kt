@@ -576,11 +576,11 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                         val ctxN = LocalContext.current
                         var line by remember(n.uri) { mutableStateOf(listOf(n.artist, n.album, n.title).filter { it.isNotBlank() }.joinToString(" - ")) }
                         LaunchedEffect(n.uri) { app.vlcinterface.sources.MediaInfo.upNextLine(ctxN.applicationContext, n)?.let { line = it } }
-                        MarqueeText(line, C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp)
+                        MarqueeText(line, C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp, lineHeight = lrLine(15f))
                         // ≡ on the right, before the length, away from the screen edge (21:04): hold it a moment, then drag.
                         Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(upDrag.handle(n.uri,
                             { player.state.value.queue.indexOfFirst { it.uri == n.uri } }, { player.state.value.queue.size }) { a, d ->
-                                if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(horizontal = 10.dp, vertical = 4.dp))
+                                if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(horizontal = 10.dp, vertical = lrDp(4)))
                         if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
                         Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
                             onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
@@ -884,16 +884,16 @@ fun QueueScreen(nav: Navigator) {
                     .combinedClickable(onClick = { player.jumpTo(i) }, onLongClick = { qMenu = i }).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("${i + 1}", color = if (i == p.index) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
                     Column(Modifier.weight(1f)) {
-                        MarqueeText(q.title, if (i == p.index) accent() else C.text, Modifier.fillMaxWidth(), fontSize = 16.sp, list = "upnext")
-                        if (q.artist.isNotEmpty()) Text(q.artist, color = C.muted, fontSize = 12.sp, maxLines = 1)
+                        MarqueeText(q.title, if (i == p.index) accent() else C.text, Modifier.fillMaxWidth(), fontSize = 16.sp, list = "upnext", lineHeight = lrLine(16f))
+                        if (q.artist.isNotEmpty()) Text(q.artist, color = C.muted, fontSize = 12.sp, maxLines = 1, lineHeight = lrLine(12f))
                     }
                     // ≡ on the right, before the length, away from the screen edge (21:04): hold it a moment, then drag,
                     // one place per half row.
                     Text("≡", color = C.muted, fontSize = 20.sp, modifier = Modifier.then(qDrag.handle(q.uri,
                         { player.state.value.queue.indexOfFirst { it.uri == q.uri } }, { player.state.value.queue.size }) { a, d -> player.moveInQueue(a, d) })
-                        .padding(horizontal = 10.dp, vertical = 10.dp))
+                        .padding(horizontal = 10.dp, vertical = lrDp(10)))
                     if (q.durationMs > 0) Text(fmtTime(q.durationMs), color = C.muted, fontSize = 13.sp)
-                    if (i != p.index) SymButton({ player.removeFromQueue(i) }) { Text("✕", color = C.muted) }
+                    if (i != p.index) SymButton({ player.removeFromQueue(i) }, size = lrBtn()) { Text("✕", color = C.muted) }
                     androidx.compose.foundation.layout.Box {
                         FileMenu(nav, q, qMenu == i, { qMenu = -1 }, FileMenuExtras(
                             onMoveUp = if (i > 0) ({ player.moveInQueue(i, -1) }) else null,
@@ -1120,13 +1120,13 @@ fun PlaylistDetailScreen(nav: Navigator, d: Screen.PlaylistDetail) {
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(if (i in selected) "✓" else "${i + 1}", color = if (cur || i in selected) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
                     Column(Modifier.weight(1f)) {
-                        MarqueeText(e.title, if (cur) accent() else C.text, Modifier.fillMaxWidth(), fontSize = 16.sp, list = "songs")
+                        MarqueeText(e.title, if (cur) accent() else C.text, Modifier.fillMaxWidth(), fontSize = 16.sp, list = "songs", lineHeight = lrLine(16f))
                         val sub = listOfNotNull(e.artist.ifEmpty { null }, e.album.ifEmpty { null }).joinToString(" · ")
-                        if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 12.sp, maxLines = 1)
+                        if (sub.isNotEmpty()) Text(sub, color = C.muted, fontSize = 12.sp, maxLines = 1, lineHeight = lrLine(12f))
                     }
                     Text(if (e.durationMs > 0) fmtTime(e.durationMs) else "–:––", color = C.muted, fontSize = 13.sp)
                     Box {
-                        SymButton({ itemMenu = i }) { SymIcon(Icons.Filled.MoreVert, "Item options", tint = C.muted) }
+                        SymButton({ itemMenu = i }, size = lrBtn()) { SymIcon(Icons.Filled.MoreVert, "Item options", tint = C.muted) }
                         // Same file menu as everywhere; here also Select, Move up / down and Remove from playlist.
                         FileMenu(nav, MusicLibrary.fromPlEntry(e), itemMenu == i, { itemMenu = -1 }, FileMenuExtras(
                             onSelect = { selected = setOf(i) },
