@@ -816,6 +816,9 @@ private fun DrawScope.drawBackground(effect: String, bg0: List<Color>, t: Float,
 fun VisualisationScreen(nav: Navigator) {
     val v = Alarms.state.collectAsState().value.vis
     val act = LocalContext.current.findActivity()
+    // Alarms go over the full-screen visualisation too (19:30).
+    val alarmPhase = app.vlcinterface.alarm.AlarmEngine.ui.collectAsState().value.phase
+    LaunchedEffect(alarmPhase) { if (alarmPhase == "ringing" || alarmPhase == "confirming") nav.back() }
     // Settings → Visualisation → Full-screen brightness (or the phone's own); a swipe changes it and is kept.
     var bright by remember { mutableFloatStateOf(v.fsBright.takeIf { it > 0f } ?: act?.window?.attributes?.screenBrightness?.takeIf { it >= 0f } ?: 0.5f) }
     var shownAt by remember { mutableLongStateOf(0L) }
@@ -906,6 +909,10 @@ fun androidx.compose.foundation.layout.BoxScope.FullScreenPlayButton() {
 fun ClockFullScreen(nav: Navigator) {
     val st = Alarms.state.collectAsState().value
     val act = LocalContext.current.findActivity()
+    // Alarms go over it (19:30): an alarm ringing (or asking "are you awake?") closes the full-screen clock at
+    // once — its own brightness and the hidden bars go with it — and the alarm's screen is on top.
+    val alarmPhase = app.vlcinterface.alarm.AlarmEngine.ui.collectAsState().value.phase
+    LaunchedEffect(alarmPhase) { if (alarmPhase == "ringing" || alarmPhase == "confirming") nav.back() }
     var bright by remember { mutableFloatStateOf(st.aspect.fsBright.takeIf { it > 0f } ?: act?.window?.attributes?.screenBrightness?.takeIf { it >= 0f } ?: 0.5f) }
     var shownAt by remember { mutableLongStateOf(0L) }
     var showB by remember { mutableStateOf(false) }
