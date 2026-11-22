@@ -1262,3 +1262,11 @@
 - **Videos searchable, in two places (answered 08:13: Both):**
   - **Library → Videos:** with the Audio / Video switch on Video, the Songs tab becomes "Videos" (the switch now shows on that tab too): every video on the phone (the Library's places) and in the indexed network folders whose server answers now, A–Z, with a search (title, series or file name, 2 letters or more). Each row: name, its folder, Phone or the location's name, length. Tap plays it; long press opens the usual file menu (Play next, Add to queue, Add to playlist, Details, Search on YouTube…).
   - **Video player → "🔎 Find"** (next to 📂 Browse, upright and sideways): the "Find a video" search — the queue's videos and the same videos as above. A tap plays it (from its place when already in the queue, else right after the current video); long press: its menu.
+
+## Indexing settings (requested 2026-11-22 08:19)
+- **Settings → Library & files → new section "Indexing" → "Index again":** Never / Every N days (default 4; days typed with the app's digit pad, 1–365, Reset) / When a new file appears. A line under it says what the choice does. Saved with the settings and in export / import; found by the Settings search; long press for its helper.
+  - **Never:** a pinned folder is indexed the first time, then only when you tap 🔍 Index or ↻ Rescan.
+  - **Every N days:** each pinned home-network folder is indexed again by itself N days after its last indexing (checked with the other automatic indexing; folders indexed before this version count from now).
+  - **When a new file appears:** when a network folder is opened in the app and holds a song or video that isn't in the index, that folder (with its subfolders) is indexed again and merged into its pin's index.
+- **A file played that isn't indexed yet:** its folder (with subfolders) is indexed at once in the background, whatever the setting — merged into the pinned folder above it, or kept on its own when it isn't under a pin, so it's found by searches afterwards. Once per folder while the app runs.
+- **Transparent:** indexing runs on its own pool of 6 background threads at low priority (below the player and the screen), several folders and files at once; it still waits for paused background work, the VPN, low battery and ReplayGain scans (the folder asked for is done right after).

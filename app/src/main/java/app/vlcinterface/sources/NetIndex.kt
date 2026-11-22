@@ -11,6 +11,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.collectLatest
@@ -29,7 +30,15 @@ import java.io.File
  * refreshed by the source's ↻ Rescan, dropped when the pin is removed. Kept in the app's own storage.
  */
 object NetIndex {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + CrashLog.guard)
+    /**
+     * Indexing runs transparently (08:19): on its own pool of background threads at low priority (below the player
+     * and the screen), several folders and files at once.
+     */
+    private val lowPrio = java.util.concurrent.Executors.newFixedThreadPool(6) { r ->
+        Thread({ try { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND + android.os.Process.THREAD_PRIORITY_LESS_FAVORABLE) } catch (_: Throwable) {}; r.run() }, "index")
+            .apply { isDaemon = true; priority = Thread.MIN_PRIORITY }
+    }.asCoroutineDispatcher()
+    private val scope = CoroutineScope(SupervisorJob() + lowPrio + CrashLog.guard)
     private val lock = Mutex()
     private lateinit var file: File
 
@@ -149,7 +158,7 @@ object NetIndex {
     }
     /** Indexing a folder on a server outside the home network right now. */
     fun internetBusy(): Boolean = inWork.values.any { (s, p) -> try { app.vlcinterface.player.NetGuard.needsInternet(Urls.forSource(s.copy(path = ""), p)) } catch (_: Exception) { false } }
-    fun resume() { val l = held.values.toList(); held.clear(); l.forEach { (s, p) -> build(s, p) }; resumeStopped(); autoLan() }
+    fun resume() { val l = held.values.toList(); held.clear(); l.forEach { (s, p) -> build(s, p) }; resumeStopped(); autoLan(); runHeldPaths() }
 
     /** Folders waiting because the VPN is on. */
     private val vpnHeld = java.util.concurrent.ConcurrentHashMap<String, Pair<Source, String>>()
@@ -170,6 +179,7 @@ object NetIndex {
         l.forEach { (s, p) -> build(s, p) }
         resumeStopped()
         autoLan()
+        runHeldPaths()
     }
 
     // ---------- ReplayGain first ----------
@@ -193,6 +203,7 @@ object NetIndex {
         l.forEach { (s, p) -> build(s, p) }
         resumeStopped()
         autoLan()
+        runHeldPaths()
     }
 
     /**
@@ -206,13 +217,102 @@ object NetIndex {
         val srcs = App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto != "upnp" && it.proto != "m3u" }
         scope.launch {
             srcs.forEach { s ->
-                val todo = s.pins.filter { (!has(s, it) || hasStopped(s, it)) && key(s, it) !in building }
+                val todo = s.pins.filter { (!has(s, it) || hasStopped(s, it) || due(key(s, it))) && key(s, it) !in building }
                 if (todo.isEmpty()) return@forEach
                 if (!Net.reachable(Urls.hostOnly(s.host), if (s.port > 0) s.port else s.defaultPort)) return@forEach
                 todo.forEach { build(s, it) }
             }
         }
     }
+
+    // ---------- indexing again (08:19): Never / every N days / when a new file appears ----------
+
+    private val atPrefs by lazy { App.instance.getSharedPreferences("netindex_at", Context.MODE_PRIVATE) }
+    private fun markIndexed(k: String) = try { atPrefs.edit().putLong(k, System.currentTimeMillis()).apply() } catch (_: Exception) {}
+    /** "Every N days": an indexed folder whose last indexing is that old (indexes from before this setting count from now). */
+    private fun due(k: String): Boolean {
+        val set = App.instance.store.current.settings
+        if (set.indexMode != "days" || k !in byPin) return false
+        val at = atPrefs.getLong(k, 0L)
+        if (at == 0L) { markIndexed(k); return false }
+        return System.currentTimeMillis() - at > set.indexDays * 86_400_000L
+    }
+
+    /** Every indexed file address (looked up when a folder is listed or a file is played). */
+    @Volatile private var known: Pair<Int, Set<String>>? = null
+    private fun knownUris(): Set<String> {
+        val v = version.value
+        known?.let { if (it.first == v) return it.second }
+        val all = withPartial().values.flatten().map { VpnLink.unroute(it.uri) }.toHashSet()
+        known = v to all
+        return all
+    }
+
+    /** The index entry a network folder belongs to: a pinned folder above it, or the folder indexed on its own. */
+    private fun keyFor(src: Source, folderUri: String): String? {
+        val path = "/" + android.net.Uri.decode(VpnLink.unroute(folderUri).substringAfter("://").substringAfter('/', "")).trim('/')
+        return src.pins.map { "/" + it.trim('/') }.filter { path == it || path.startsWith("$it/") }.maxByOrNull { it.length }?.let { key(src, it) }
+            ?: key(src, path).takeIf { byPin.containsKey(it) }
+    }
+
+    /**
+     * A network folder was listed (Library, browsing). "When a new file appears": a song or video there that isn't in
+     * the index has that folder read again.
+     */
+    fun noticeListing(src: Source, folderUri: String, entries: List<Entry>) {
+        if (App.instance.store.current.settings.indexMode != "new") return
+        if (keyFor(src, folderUri) == null) return
+        val have = knownUris()
+        if (entries.any { (it.isAudio || it.isVideo) && VpnLink.unroute(it.uri) !in have }) indexPath(src, folderUri, "new files found")
+    }
+
+    /** A network file starts playing and isn't indexed yet (08:19): its folder is indexed now, whatever the setting. */
+    private val playedFolders = java.util.Collections.synchronizedSet(HashSet<String>())
+    fun onPlayed(item: PlayItem) {
+        if (item.isRadio || isLocal(item) || item.sourceId.isEmpty() || !item.uri.contains("://")) return
+        val src = App.instance.store.current.sources.firstOrNull { it.id == item.sourceId } ?: return
+        if (src.proto == "upnp" || src.proto == "m3u") return
+        val folder = VpnLink.unroute(item.folderKey.ifEmpty { Urls.parent(item.uri) })
+        if (!folder.contains("://") || !playedFolders.add(folder)) return
+        scope.launch { if (VpnLink.unroute(item.uri) !in knownUris()) indexPath(src, folder, "played") }
+    }
+
+    private val pathHeld = java.util.concurrent.ConcurrentHashMap<String, Triple<Source, String, String>>()
+    private val pathBusy = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /**
+     * One folder (with its subfolders) indexed on its own, merged into the pinned folder above it — or kept on its own
+     * when it isn't under a pin. Waits like any indexing (paused, VPN, battery, ReplayGain first).
+     */
+    fun indexPath(src: Source, folderUri: String, why: String) {
+        val f = VpnLink.unroute(folderUri).trimEnd('/') + "/"
+        if (app.vlcinterface.player.BatteryGuard.busyBlocked(silent = true)) return
+        if (app.vlcinterface.player.BackgroundWork.paused.value || VpnLink.vpnUp.value || rgBusy()) { pathHeld[f] = Triple(src, f, why); return }
+        if (!pathBusy.add(f)) return
+        scope.launch {
+            try {
+                val name = Urls.nameOf(f)
+                busy.value = "Indexing $name…"
+                val url = VpnLink.route(f)
+                val done = java.util.concurrent.atomic.AtomicLong(0)
+                val gate = ParallelFetch.Gate(Urls.hostOnly(src.host), done).also { it.start(this) }
+                val found = try {
+                    crawl(src, url, 0, gate.sem, kotlinx.coroutines.sync.Semaphore(8), Partial(System.currentTimeMillis())) { n -> done.addAndGet(n.toLong()) }
+                } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { null } finally { gate.stop() }
+                if (found != null) lock.withLock {
+                    val path = "/" + android.net.Uri.decode(f.substringAfter("://").substringAfter('/', "")).trim('/')
+                    val k = keyFor(src, f) ?: key(src, path)
+                    val fresh = found.map { MusicLibrary.toPlEntry(it) }
+                    val old = byPin[k].orEmpty().filterNot { VpnLink.unroute(it.folderKey).trimEnd('/').let { fk -> fk + "/" == f || fk.startsWith(f) } }
+                    byPin = byPin + (k to (old + fresh)); save(); version.value++
+                    if (k == key(src, path)) markIndexed(k)
+                    app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, true,
+                        "Indexed $name ($why): ${found.count { it.isMusic }} songs, ${found.count { !it.isMusic }} videos", f)
+                }
+            } finally { pathBusy.remove(f); if (building.isEmpty()) busy.value = "" }
+        }
+    }
+    private fun runHeldPaths() { val l = pathHeld.values.toList(); pathHeld.clear(); l.forEach { (s, f, w) -> indexPath(s, f, w) } }
 
     /** App start: interrupted folders resumed, home-network pins not indexed yet started. */
     fun autoStart() { resumeStopped(); autoLan() }
@@ -296,6 +396,7 @@ object NetIndex {
                 if (songs != null) {
                     synchronized(parts) { parts.remove(k) }
                     savePartials()
+                    markIndexed(k)
                     byPin = byPin + (k to songs.map { MusicLibrary.toPlEntry(it) })
                     save(); version.value++
                     app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, true,

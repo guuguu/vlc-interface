@@ -1726,6 +1726,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         saveProgress()
         // ReplayGain values waiting for a file the player had open: written now that it moves on.
         app.vlcinterface.sources.RgScanner.flushPendingSoon(context)
+        // A network file that isn't indexed yet: its folder is indexed now (08:19), in the background.
+        _state.value.queue.getOrNull(i0)?.let { try { app.vlcinterface.sources.NetIndex.onPlayed(it) } catch (_: Exception) {} }
         var i = i0
         // Today's list: the song being left was heard whole, or skipped (then it's taken out).
         _state.value.let { pv -> if (pv.item != null && pv.queue.getOrNull(i0) !== pv.item) sessionLeaving(pv.item, pv.time, pv.length) }

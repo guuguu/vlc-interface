@@ -120,6 +120,9 @@ object SettingHelp {
         "Auto-rotate" to "On: the app turns with the phone, upright or sideways. Off: the app stays upright whatever the phone does.\n\n" +
             "Videos can always be turned with their own rotate button. Default: on.",
         // ---------------------------------------------------------------- Library
+        "Index again" to "Pinned network folders (★) are indexed so their songs and videos can be searched without reading the NAS each time. This says when an indexed folder is read again to catch new, changed or removed files.\n\n" +
+            "Never: only the first time, and when you tap 🔍 Index or ↻ Rescan. Every N days (default 4): each home-network folder is read again N days after its last indexing, by itself. When a new file appears: a folder is read again as soon as the app sees a file there that isn't in the index — when you open the folder or play something from it.\n\n" +
+            "Indexing always runs in the background at low priority, several folders at once, pauses for ReplayGain scans and resumes after. Tags already read come from the cache, so reading again is quick. A file played from a folder that isn't indexed yet gets that folder indexed at once, whatever is chosen here.",
         "Automatic scanning" to "The library looks for new, changed and removed files by itself when the app starts and when sources come online.\n\n" +
             "Off: only when you tap Rescan — saves battery and NAS traffic with very large libraries.\n\nDefault: on.",
         "Watch folders for changes" to "While the app runs, phone folders are watched so new or removed files show up at once.\n\n" +

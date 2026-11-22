@@ -799,6 +799,29 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             SectionTitle("Horizontal autoscroll")
             ScrollSpeedCard("Songs list autoscroll", "Long rows in Library → Songs, playlists and saved radio songs", "songs")
             ScrollSpeedCard("Folder lists autoscroll", "Long folder and song names in the phone and network folder lists", "folders")
+            // Indexing again (2026-11-22 08:19): how pinned network folders are kept up to date.
+            SectionTitle("Indexing")
+            CardBox {
+                Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+                    Text("Index again", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Index again").explain("Index again"))
+                    Text("Pinned network folders are indexed once; this says when they're read again", color = C.muted, fontSize = 13.sp)
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+                        listOf("never" to "Never", "days" to "Every ${s.indexDays} days", "new" to "When a new file appears").forEach { (m, l) ->
+                            Pill(l, selected = s.indexMode == m, filled = s.indexMode == m) { set(s.copy(indexMode = m)) }
+                        }
+                    }
+                    if (s.indexMode == "days") Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Days", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(end = 10.dp))
+                        DigitField(s.indexDays.toString(), "days", 3, Modifier.width(90.dp)) { v -> v.toIntOrNull()?.takeIf { it in 1..365 }?.let { set(s.copy(indexDays = it)) } }
+                        STextButton({ set(s.copy(indexDays = 4)) }) { Text("Reset") }
+                    }
+                    Text(when (s.indexMode) {
+                        "never" -> "Only the first time, and when you tap 🔍 Index or ↻ Rescan."
+                        "new" -> "A folder is read again when a file not in the index is found there (opening the folder, or playing from it)."
+                        else -> "Each pinned home-network folder is read again ${s.indexDays} days after its last indexing (tags already read come from the cache)."
+                    } + " Indexing runs in the background at low priority, several folders at once, and waits for ReplayGain scans.", color = C.muted, fontSize = 12.sp)
+                }
+            }
             SectionTitle("Library scanning")
             CardBox {
                 ToggleRow("Automatic scanning", "Off: only scans when you tap Rescan", s.autoScan) { set(s.copy(autoScan = it)) }; Divider()

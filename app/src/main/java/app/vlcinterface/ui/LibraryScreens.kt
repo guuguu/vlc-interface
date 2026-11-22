@@ -808,6 +808,8 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
             else Browse.list(src, b.uri, if (reload > 0) "rescan" else "browse")
         r.onSuccess { l ->
             entries = MusicLibrary.withCachedTags(l).also { ListCache.put(b.uri, it) }
+            // "Index again: when a new file appears" (08:19): a file here not in the index → this folder is indexed again.
+            app.vlcinterface.sources.NetIndex.noticeListing(src, b.uri, l)
             // Videos of this folder that are gone: what was kept for them (settings, position, delays…) is forgotten.
             app.vlcinterface.player.VideoFileCleanup.folderListed(b.uri, l.map { it.uri })
             // Tags are read only on a manual Rescan (no automatic scanning).
