@@ -34,8 +34,9 @@ import app.vlcinterface.sources.LocalFolder
 sealed interface Screen {
     /** tab: 0 Internal, 1 LAN, 2 Internet; sub (Internet): 0 Storage, 1 Radio, 2 Streams */
     data class Library(val tab: Int = 0, val sub: Int = 0) : Screen
-    data class Folder(val folder: LocalFolder, val highlight: String = "") : Screen
-    data class Browse(val sourceId: String, val uri: String, val title: String, val highlight: String = "") : Screen
+    /** [video]: opened from the video player's Browse — videos and subtitle files shown, every place reachable. */
+    data class Folder(val folder: LocalFolder, val highlight: String = "", val video: Boolean = false) : Screen
+    data class Browse(val sourceId: String, val uri: String, val title: String, val highlight: String = "", val video: Boolean = false) : Screen
     data class EditSource(val zone: Zone, val sourceId: String? = null, val draft: Source? = null) : Screen
     data class SmbDetect(val input: String, val draft: Source) : Screen
     /** "What do I need to connect?" for a host name or IP. */
@@ -74,6 +75,11 @@ class Navigator {
     fun replace(s: Screen) { stack[stack.lastIndex] = s }
     fun back(): Boolean = if (stack.size > 1) { stack.removeAt(stack.lastIndex); true } else false
     fun home() { while (stack.size > 1) stack.removeAt(stack.lastIndex) }
+    /** Back to the video player when it's in the stack (else one step back). */
+    fun backToPlayer() {
+        if (stack.none { it is Screen.Player }) { back(); return }
+        while (stack.size > 1 && stack.last() !is Screen.Player) stack.removeAt(stack.lastIndex)
+    }
 }
 
 @Composable
@@ -174,7 +180,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 holder.SaveableStateProvider(pageKey) {
                 when (top) {
                     is Screen.Library -> LibraryScreen(nav, top, openOutput)
-                    is Screen.Folder -> FolderScreen(nav, top.folder, top.highlight)
+                    is Screen.Folder -> FolderScreen(nav, top.folder, top.highlight, top.video)
                     is Screen.Browse -> BrowseScreen(nav, top)
                     is Screen.EditSource -> EditSourceScreen(nav, top)
                     is Screen.SmbDetect -> SmbDetectScreen(nav, top)

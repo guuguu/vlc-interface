@@ -1238,3 +1238,12 @@
 - **Now "All" everywhere a choice covers every option, even with two (07:47):** Look → order of the player rows (Songs / Radio / Video / All), hiding while scrolling (Clock / Picture / All), switch colour (On / Off / All), accent colour (Files / Radio / All); Visualisation → instead of album pictures (Off / Songs / Radio / All); Alarm clock → Under the city (All / Time zone / Temperatures); the Songs list import question (All / Playlist / Add folders to library). Helpers and grey lines say "All".
 - **Order of the player rows → All now includes Video:** the song order goes to the radio player as before, and the video player's matching rows (Title, Play buttons, Up next) take the same order among themselves; its other rows (Subs, Hue/Sat…, Browse, Format) keep their places. A line under the choice says so. Reset order resets all three.
 - The saved choices keep working (only the names changed).
+
+## Video player's Browse: every place, every level, subtitles too (requested 2026-11-22 08:02 / 08:03)
+- **📂 Browse** (video player, upright and sideways, and "Browse files to add" in the queue) opens the playing video's own folder — on the phone, the NAS or an Internet location — showing videos and subtitle files (and its folders), whatever the Libraries' Audio / Video switch is on.
+- **Up one level** at the top of every folder page: on the phone as far as the top of the storage (Phone / SD card), on a network location past its saved path up to the server itself (its shares) or the site's top.
+- **Places** under it, a sideways row: 📱 Phone, 💾 SD card (when there is one) and every saved LAN 🖧 and Internet 🌐 location. Locations are checked when the page opens: dim while checking, hidden when they don't answer (VPN routing followed).
+- **Phone folders now list their subfolders** (any folder holding songs or videos), so the phone can be walked down and up like the NAS.
+- **Videos:** tap plays; a long press opens the usual file menu (Play now, Play next, Add to queue, Add to playlist, Details, Search on YouTube…). Folders: the folder menu (Play all, Add all to queue / playlist, Details…).
+- **Subtitle files** (.srt .ass .ssa .vtt .sub, with a CC mark): a tap loads it into the video playing (colour codes taken out), saves it silently as this video's subtitles, and goes straight back to the video ("Subtitles on: …"). Phone folders list the subtitle files Android lets the app see.
+- The same Up and Places rows are on every folder page of the Library (phone and network), without the subtitle files there.

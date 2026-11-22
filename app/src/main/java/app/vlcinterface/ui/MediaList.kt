@@ -123,6 +123,7 @@ private sealed interface Row0 {
     data class Header(val g: AlbumGroup) : Row0
     data class Song(val e: Entry, val multiDisc: Boolean) : Row0
     data class Video(val e: Entry) : Row0
+    data class Sub(val e: Entry) : Row0
 }
 
 /**
@@ -142,13 +143,18 @@ fun MediaList(
     highlightUri: String = "",
     onOpenDir: (Entry) -> Unit,
     onRefresh: () -> Unit = {},
+    /** Shown kind instead of the Libraries' Audio / Video switch ("video" from the video player). */
+    kindOverride: String? = null,
+    /** Subtitle files listed too; a tap gives them to the video playing. */
+    onSubtitle: ((Entry) -> Unit)? = null,
 ) {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
     // Audio / Video switch of Libraries: folders always shown, files only of the chosen kind.
-    val kind = App.instance.store.state.collectAsState().value.settings.libraryKind
+    val kind = kindOverride ?: App.instance.store.state.collectAsState().value.settings.libraryKind
     val hidden = App.instance.store.state.collectAsState().value.settings.hiddenUris
-    val list = remember(entries, kind, hidden) { (entries ?: emptyList()).filter { (it.isDir || (if (kind == "video") it.isVideo else it.isAudio)) && it.uri !in hidden } }
+    val list = remember(entries, kind, hidden) { (entries ?: emptyList()).filter { (it.isDir || (if (kind == "video") it.isVideo else it.isAudio) ||
+        (onSubtitle != null && app.vlcinterface.sources.SubtitleFiles.isSub(it.name))) && it.uri !in hidden } }
     val groups = remember(list) { MusicLibrary.group(list, folderName) }
     val order = remember(list) { MusicLibrary.playOrder(list, folderName) }
     val rows = remember(list) {
@@ -156,6 +162,7 @@ fun MediaList(
             list.filter { it.isDir }.forEach { add(Row0.Dir(it)) }
             groups.forEach { g -> add(Row0.Header(g)); g.entries.forEach { add(Row0.Song(it, g.multiDisc)) } }
             list.filter { it.isVideo }.forEach { add(Row0.Video(it)) }
+            if (onSubtitle != null) list.filter { !it.isDir && app.vlcinterface.sources.SubtitleFiles.isSub(it.name) }.forEach { add(Row0.Sub(it)) }
         }
     }
     // Each folder remembers where it was scrolled to (kept while the app runs): coming back from a sub-folder, the
@@ -220,7 +227,15 @@ fun MediaList(
     }
 
     fun itemsOfDir(e: Entry): suspend () -> List<PlayItem> = {
-        ofKind(if (source != null) MusicLibrary.collectRecursive(source, e.uri) else emptyList())
+        ofKind(when {
+            source != null -> MusicLibrary.collectRecursive(source, e.uri)
+            // A phone subfolder ("localdir:<volume>:<relative path>"): everything under it.
+            e.uri.startsWith("localdir:") -> {
+                val id = e.uri.removePrefix("localdir:"); val vol = id.substringBefore(':'); val rel = id.substringAfter(':')
+                MusicLibrary.collectLocal(ctx, app.vlcinterface.sources.LocalFolder(id, e.name, rel, 0, vol), true)
+            }
+            else -> emptyList()
+        })
     }
 
     /** Long-press while selecting (like the Songs list): play time of the selection + new playlist. */
@@ -239,7 +254,7 @@ fun MediaList(
         else -> LazyColumn(Modifier.fillMaxSize().scrollbar(state).padding(horizontal = 16.dp), state = state) {
             // Long folders: "Jump to…" pinned on top (each letter: the first matching name).
             if (rows.size > 20) stickyHeader {
-                JumpToBox(state, rows.map { r -> when (r) { is Row0.Dir -> r.e.name; is Row0.Song -> r.e.name; is Row0.Video -> r.e.name; is Row0.Header -> "" } },
+                JumpToBox(state, rows.map { r -> when (r) { is Row0.Dir -> r.e.name; is Row0.Song -> r.e.name; is Row0.Video -> r.e.name; is Row0.Sub -> r.e.name; is Row0.Header -> "" } },
                     offset = 1 + (if (selected.isNotEmpty()) 1 else 0) + (if (order.size > 1 && selected.isEmpty()) 1 else 0))
             }
             // Play the whole folder (its audio + video files, album order) in order or at random.
@@ -344,6 +359,17 @@ fun MediaList(
                             Box { if (menuFor == e) FileMenu(nav, MusicLibrary.toPlayItem(e, source, folderKey), true, { menuFor = null }, FileMenuExtras(
                                 onSelect = { toggle(e) },
                                 onRemove = { HiddenFiles.hide(e.uri) })) }   // deleting files: only from Settings
+                        }
+                    }
+                    // Subtitle file (video player's Browse): a tap puts it on the video playing.
+                    is Row0.Sub -> Row(Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(8.dp))
+                        .combinedClickable(onClick = { onSubtitle?.invoke(r.e) }, onLongClick = { onSubtitle?.invoke(r.e) }), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.padding(start = 2.dp, end = 10.dp).clip(RoundedCornerShape(4.dp)).background(C.card2).padding(horizontal = 4.dp, vertical = 1.dp)) {
+                            Text("CC", color = accent(), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Column(Modifier.weight(1f)) {
+                            MarqueeText(r.e.name, C.text, Modifier.fillMaxWidth(), fontSize = 15.sp, list = "videos")
+                            Text("Subtitles · tap to use with the video playing", color = C.muted, fontSize = 12.sp)
                         }
                     }
                     is Row0.Video -> {
@@ -496,10 +522,12 @@ fun DeleteDialog(uris: List<String>, name: String, totalBytes: Long, count: Int,
 
 /** Opens where the playing item came from (folder, playlist, radio). Used by the playing bar and the notification. */
 /** [keepStack]: opened over the current page (the video player), so Back comes back to it. */
-fun openOrigin(nav: Navigator, keepStack: Boolean = false) {
+fun openOrigin(nav: Navigator, keepStack: Boolean = false, video: Boolean = false) {
     val st = App.instance.player.state.value
     val item = st.item ?: return
     val o = st.origin
+    // From the video player (08:02 / 08:03): the video's own folder, with videos and subtitle files and every place reachable.
+    if (video) { openItemFolder(nav, item, keepStack, video = true); return }
     when {
         item.isRadio || o.kind == "radio" -> { if (!keepStack) nav.home(); nav.replace(Screen.Library(4, 0)) }
         o.kind == "playlist" -> { if (!keepStack) nav.home(); nav.go(Screen.PlaylistDetail(o.playlistId, item.uri)) }
@@ -518,7 +546,7 @@ fun openOrigin(nav: Navigator, keepStack: Boolean = false) {
  * Opens the folder the item's file is in, in Libraries (Audio side for songs), with the item marked.
  * Unknown folder (single link, radio…) → where it was played from.
  */
-fun openItemFolder(nav: Navigator, item: PlayItem, keepStack: Boolean = false) {
+fun openItemFolder(nav: Navigator, item: PlayItem, keepStack: Boolean = false, video: Boolean = false) {
     val fk = item.folderKey
     val store = App.instance.store
     val kind = if (item.isMusic) "audio" else "video"
@@ -529,11 +557,12 @@ fun openItemFolder(nav: Navigator, item: PlayItem, keepStack: Boolean = false) {
             val vol = id.substringBefore(':'); val rel = id.substringAfter(':')
             val name = rel.trimEnd('/').substringAfterLast('/').ifEmpty { rel } +
                 if (vol != android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY) " (SD card)" else ""
-            if (!keepStack) nav.home(); nav.go(Screen.Folder(LocalFolder(id, name, rel, 0, vol), item.uri))
+            if (!keepStack) nav.home(); nav.go(Screen.Folder(LocalFolder(id, name, rel, 0, vol), item.uri, video))
         }
         fk.contains("://") && item.sourceId.isNotEmpty() && store.current.sources.any { it.id == item.sourceId } -> {
-            if (!keepStack) nav.home(); nav.go(Screen.Browse(item.sourceId, fk, Uri.decode(fk.trimEnd('/').substringAfterLast('/')), item.uri))
+            if (!keepStack) nav.home(); nav.go(Screen.Browse(item.sourceId, fk, Uri.decode(fk.trimEnd('/').substringAfterLast('/')), item.uri, video))
         }
+        video -> { if (!keepStack) nav.home(); nav.go(Screen.Folder(app.vlcinterface.sources.LocalFolder(android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY + ":", "Phone", "", 0, android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY), "", true)) }
         else -> if (keepStack) ShortNote.show("This file has no folder to browse — open one from the Library") else nav.go(if (item.isMusic) Screen.Music else Screen.Player)
     }
 }

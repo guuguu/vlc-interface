@@ -577,7 +577,7 @@ private fun BoxScope.ControlsOverlayBody(
             OverlayChip("Subs/Change", lit = p.spuTracks.any { it.id >= 0 }) { onTouch(); SubChoiceUi.open = true }
             OverlayChip("Subs/Sync") { onTouch(); onPanel() }
             // Browse: the folder the video came from, in the Library (Back returns here).
-            OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true) }
+            OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true, video = true) }
             OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             // Dedicated button: hue & saturation, straight to the sliders.
             OverlayChip("Hue/Sat") { onTouch(); onPicture() }
@@ -636,7 +636,7 @@ private fun BoxScope.ControlsOverlayBody(
     if (landS && !compact) {
         // Left (17:10): the output, Browse, the format, Rotate, speed. Right: the subtitle, sound and picture buttons.
         val left = listOf(
-            UBtn("📂 Browse", false) { onTouch(); openOrigin(nav, keepStack = true) },
+            UBtn("📂 Browse", false) { onTouch(); openOrigin(nav, keepStack = true, video = true) },
             UBtn(scaleLabel.split('\u0000').let { if (it.getOrElse(1) { "" }.isEmpty()) it[0] else "${it[0]} → ${it[1]}" }, false) { onScale(); onTouch() },
             UBtn(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }, false) { App.instance.player.rotateVideo(); onTouch() },
             UBtn("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×", false) {
@@ -889,7 +889,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                 player.setRate(rates[(i + 1) % rates.size])
             },
         )
-        val fileBtns = listOf(UBtn("📂 Browse") { openOrigin(nav, keepStack = true) })
+        val fileBtns = listOf(UBtn("📂 Browse") { openOrigin(nav, keepStack = true, video = true) })
         val formatBtns = listOf(
             UBtn(if (parts.getOrElse(1) { "" }.isEmpty()) parts[0] else "${parts[0]} → ${parts[1]}") { onScale() },
             UBtn(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() },
@@ -1537,7 +1537,7 @@ private fun VideoQueuePanel(p: PlayerState, nav: Navigator, onClose: () -> Unit)
                 }
             }
         }
-        Pill("📂 Browse files to add", filled = true, modifier = Modifier.fillMaxWidth()) { onClose(); openOrigin(nav, keepStack = true) }
+        Pill("📂 Browse files to add", filled = true, modifier = Modifier.fillMaxWidth()) { onClose(); openOrigin(nav, keepStack = true, video = true) }
     }
 }
 

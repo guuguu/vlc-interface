@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -443,20 +444,128 @@ fun InternalTab(nav: Navigator) {
 }
 
 @Composable
-fun FolderScreen(nav: Navigator, folder: LocalFolder, highlight: String) {
+fun FolderScreen(nav: Navigator, folder: LocalFolder, highlight: String, video: Boolean = false) {
     val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
     // Shown at once from the last listing (so coming back keeps your place), then refreshed.
-    var files by remember { mutableStateOf(ListCache.get("local:" + folder.id)) }
+    val ck = "local:" + folder.id + if (video) "#v" else ""
+    var files by remember { mutableStateOf(ListCache.get(ck)) }
     var reload by remember { mutableIntStateOf(0) }
-    LaunchedEffect(folder.id, reload) { files = InternalSource.files(ctx, folder).also { ListCache.put("local:" + folder.id, it) } }
+    LaunchedEffect(folder.id, reload) {
+        // Subfolders holding songs or videos (from the phone's media list), then this folder's files; from the video
+        // player also its subtitle files (read from the folder itself, when Android lets the app see them).
+        val rel = folder.relativePath
+        val subs = try {
+            InternalSource.folders(ctx, all = true).filter { it.volume == folder.volume && it.relativePath.startsWith(rel) && it.relativePath != rel }
+                .groupBy { it.relativePath.removePrefix(rel).substringBefore('/') }
+                .filterKeys { it.isNotEmpty() }
+                .map { (name, fs) -> Entry(name, "localdir:${folder.volume}:$rel$name/", true, meta = "${fs.sumOf { it.count }} files") }
+                .sortedBy { it.name.lowercase() }
+        } catch (_: Exception) { emptyList() }
+        val own = if (rel.isEmpty()) emptyList() else InternalSource.files(ctx, folder)
+        val subFiles = if (!video) emptyList() else kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                (java.io.File(app.vlcinterface.sources.MusicFolderAccess.pathFor(folder.volume, rel)).listFiles() ?: emptyArray())
+                    .filter { it.isFile && app.vlcinterface.sources.SubtitleFiles.isSub(it.name) && !it.name.startsWith(".") }
+                    .map { Entry(it.name, it.path, false, it.length()) }
+            } catch (_: Exception) { emptyList() }
+        }
+        files = (subs + own + subFiles).also { ListCache.put(ck, it) }
+    }
+    val title = if (folder.relativePath.isEmpty()) (if (folder.volume == android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY) "Phone" else "SD card") else folder.name
     Column(Modifier.fillMaxSize()) {
-        BackHeader(folder.name, nav, folder.relativePath)
+        BackHeader(title, nav, folder.relativePath.ifEmpty { "Top of the storage" })
+        // Up one level, as far as the top of the phone's storage; and every other place (phone, SD card, LAN, Internet).
+        val rel = folder.relativePath.trimEnd('/')
+        val up: (() -> Unit)? = if (rel.isEmpty()) null else ({
+            val pr = rel.substringBeforeLast('/', "").let { if (it.isEmpty()) "" else "$it/" }
+            nav.replace(Screen.Folder(LocalFolder("${folder.volume}:$pr", pr.trimEnd('/').substringAfterLast('/').ifEmpty { title }, pr, 0, folder.volume), "", video))
+        })
+        PlacesBar(nav, up, if (rel.contains('/')) rel.substringBeforeLast('/').substringAfterLast('/') else if (rel.isEmpty()) "" else "Top of the storage", video)
         Box(Modifier.weight(1f)) {
             MediaList(nav, files, "", folder.name.removeSuffix(" (SD card)"), null, "local:${folder.volume}:${folder.relativePath}",
                 Origin("local", folder.volume, folder.relativePath, folder.name, localFolderId = folder.id), highlight,
-                onOpenDir = {}, onRefresh = { reload++ })
+                onOpenDir = { e ->
+                    if (e.uri.startsWith("localdir:")) {
+                        val id = e.uri.removePrefix("localdir:"); val r = id.substringAfter(':')
+                        nav.go(Screen.Folder(LocalFolder(id, e.name, r, 0, folder.volume), "", video))
+                    }
+                }, onRefresh = { reload++ },
+                kindOverride = if (video) "video" else null,
+                onSubtitle = if (!video) null else ({ e -> useSubtitle(nav, ctx, scope, null, e) }))
         }
         BottomBar(nav, current = 0)
+    }
+}
+
+/** A subtitle file picked while browsing from the video player: put on the video playing, back to the player. */
+fun useSubtitle(nav: Navigator, ctx: android.content.Context, scope: kotlinx.coroutines.CoroutineScope, src: Source?, e: Entry) {
+    val player = App.instance.player
+    val item = player.state.value.item?.takeIf { !it.isMusic && !it.isRadio } ?: run { ShortNote.show("No video is playing"); return }
+    ShortNote.show("Loading subtitles…")
+    scope.launch {
+        val f = app.vlcinterface.sources.SubtitleFiles.fetch(ctx, item, src, app.vlcinterface.sources.SubtitleFiles.BEntry(e.name, e.uri, 's'))
+        if (f == null) { ShortNote.show("Could not read ${e.name}"); return@launch }
+        player.addSubtitleFile(android.net.Uri.fromFile(f), keep = true)
+        ShortNote.show("Subtitles on: ${e.name}")
+        nav.backToPlayer()
+    }
+}
+
+/**
+ * Top of a folder page (2026-11-22 08:02): "⬆ Up one level" (when there is one) and the places to jump to — the
+ * phone, its SD card, and every LAN / Internet location that answers now (checked when the page opens).
+ */
+@Composable
+fun PlacesBar(nav: Navigator, onUp: (() -> Unit)?, upName: String, video: Boolean) {
+    val st by App.instance.store.state.collectAsState()
+    val ctx = LocalContext.current
+    val srcs = remember(st.sources) { st.sources.filter { it.proto != "m3u" && it.proto != "upnp" } }
+    val up = remember { mutableStateMapOf<String, Boolean>() }
+    LaunchedEffect(srcs) {
+        srcs.forEach { s -> launch {
+            up[s.id] = PlacesReach.check(s)
+        } }
+    }
+    var sd by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        sd = try { InternalSource.folders(ctx, all = true).map { it.volume }.firstOrNull { it != android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY } } catch (_: Exception) { null }
+    }
+    fun local(vol: String, name: String) = Screen.Folder(LocalFolder("$vol:", name, "", 0, vol), "", video)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (onUp != null) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { onUp() }.padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("⬆", color = accent(), fontSize = 16.sp, modifier = Modifier.padding(end = 8.dp))
+            Text("Up one level" + if (upName.isNotEmpty()) " · $upName" else "", color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
+                overflow = TextOverflow.Ellipsis)
+        }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            @Composable fun chip(label: String, on: Boolean, go: () -> Unit) =
+                Box(Modifier.clip(RoundedCornerShape(14.dp)).background(C.card2).clickable(enabled = on) { go() }.padding(horizontal = 10.dp, vertical = 5.dp)) {
+                    Text(label, color = if (on) C.text else C.muted.copy(alpha = 0.5f), fontSize = 12.sp, maxLines = 1)
+                }
+            chip("📱 Phone", true) { nav.replace(local(android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY, "Phone")) }
+            sd?.let { v -> chip("💾 SD card", true) { nav.replace(local(v, "SD card")) } }
+            srcs.forEach { s ->
+                val ok = up[s.id]
+                // Only places that answer can be opened; still checking: shown dim.
+                if (ok != false) chip((if (s.zone == app.vlcinterface.data.Zone.LAN) "🖧 " else "🌐 ") + s.name.ifBlank { s.host }, ok == true) {
+                    nav.replace(Screen.Browse(s.id, Urls.forSource(s), s.name.ifBlank { s.host }, "", video))
+                }
+            }
+        }
+    }
+}
+
+/** Which locations answer (each checked at most every 20 s), for the places bar. */
+object PlacesReach {
+    private val at = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, Boolean>>()
+    suspend fun check(s: Source): Boolean {
+        at[s.id]?.let { (t, v) -> if (System.currentTimeMillis() - t < 20_000) return v }
+        val ok = try { Net.reachable(app.vlcinterface.sources.VpnLink.routeHost(Urls.hostOnly(s.host)), if (s.port > 0) s.port else s.defaultPort) } catch (_: Exception) { false }
+        at[s.id] = System.currentTimeMillis() to ok
+        return ok
     }
 }
 
@@ -655,7 +764,10 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
         error = ""
         if (src == null) { error = "Source not found"; return@LaunchedEffect }
         val started = System.currentTimeMillis()
-        val r = Browse.list(src, b.uri, if (reload > 0) "rescan" else "browse")
+        // From the video player: subtitle files listed too (with the folders, videos and songs).
+        val r = if (b.video) Browse.listAll(src, b.uri, "browse").map { l -> l.filter { (it.isDir || app.vlcinterface.sources.isPlayable(it.name) ||
+                app.vlcinterface.sources.SubtitleFiles.isSub(it.name)) && !app.vlcinterface.sources.Ignore.entry(it) } }
+            else Browse.list(src, b.uri, if (reload > 0) "rescan" else "browse")
         r.onSuccess { l ->
             entries = MusicLibrary.withCachedTags(l).also { ListCache.put(b.uri, it) }
             // Videos of this folder that are gone: what was kept for them (settings, position, delays…) is forgotten.
@@ -702,10 +814,18 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
                 else SymIcon(Icons.Filled.Refresh, "Rescan", tint = C.text)
             }
         }
+        // Up one level, as far as the server itself (its shares) or the site's top; and every other place.
+        val hostEnd = b.uri.indexOf('/', b.uri.indexOf("://") + 3)
+        val parent = if (hostEnd < 0 || b.uri.substring(hostEnd).trim('/').isEmpty()) null else Urls.parent(b.uri)
+        val ctxS = LocalContext.current; val scopeS = rememberCoroutineScope()
+        PlacesBar(nav, parent?.let { p -> { nav.replace(Screen.Browse(b.sourceId, p, Urls.nameOf(p).let { n -> if (p.substring(hostEnd).trim('/').isEmpty()) src?.name ?: n else n }, "", b.video)) } },
+            parent?.let { p -> if (p.substring(hostEnd).trim('/').isEmpty()) (src?.name ?: Urls.hostOnly(p)) + " (server)" else Urls.nameOf(p) } ?: "", b.video)
         Box(Modifier.weight(1f)) {
             MediaList(nav, entries, error, Urls.nameOf(b.uri), src, b.uri, Origin("folder", b.sourceId, b.uri, b.title),
                 if (b.highlight.startsWith("\u0000")) "" else b.highlight,
-                onOpenDir = { e -> nav.go(Screen.Browse(b.sourceId, e.uri, e.name)) }, onRefresh = { reload++ })
+                onOpenDir = { e -> nav.go(Screen.Browse(b.sourceId, e.uri, e.name, "", b.video)) }, onRefresh = { reload++ },
+                kindOverride = if (b.video) "video" else null,
+                onSubtitle = if (!b.video) null else ({ e -> useSubtitle(nav, ctxS, scopeS, src, e) }))
         }
         BottomBar(nav, current = 0)
     }
