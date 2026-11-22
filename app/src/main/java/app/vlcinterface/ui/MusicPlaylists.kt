@@ -262,7 +262,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         val pinnedClock: @Composable (Modifier) -> Unit = { mod ->
             val asp = app.vlcinterface.alarm.Alarms.state.collectAsState().value.aspect
             androidx.compose.foundation.layout.BoxWithConstraints(mod, contentAlignment = Alignment.Center) {
-                ClockWithGear(nav) { ClockFace(asp, Modifier.size(minOf(maxWidth, maxHeight)).combinedClickable(onClick = {}, onLongClick = { nav.go(Screen.ClockFull) })) }
+                ClockWithGear(nav) { ClockFace(asp, Modifier.size(minOf(maxWidth, maxHeight)).combinedClickable(onClick = {}, onDoubleClick = { nav.go(Screen.ClockFull) })) }
             }
         }
         // The page's rows, in the order chosen in Look → "Order of the player rows" (songs and radio apart).
@@ -282,7 +282,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // Settings → Visualisation: always the visualisation in the picture's place (songs / radio / both).
             val visAlways = VisCover.on || setsP.visInsteadCover.let { it == "both" || (it == "radio" && item.isRadio) || (it == "songs" && !item.isRadio) }
             val pic: @Composable (Int) -> Unit = { sz ->
-                if (clockOn) Box(Modifier.padding(top = 8.dp)) { ClockWithGear(nav) { ClockFace(alarmData.aspect, Modifier.size(sz.dp).combinedClickable(onClick = {}, onLongClick = { nav.go(Screen.ClockFull) })) } } else
+                if (clockOn) Box(Modifier.padding(top = 8.dp)) { ClockWithGear(nav) { ClockFace(alarmData.aspect, Modifier.size(sz.dp).combinedClickable(onClick = {}, onDoubleClick = { nav.go(Screen.ClockFull) })) } } else
                 if (visAlways) Box(Modifier.padding(top = 8.dp).size(sz.dp).background(Color.Black)) {
                     VisArea(Modifier.fillMaxSize().combinedClickable(onClick = {}, onDoubleClick = { nav.go(Screen.Visualisation) }, onLongClick = { nav.go(Screen.SettingsGroup("vis")) }))
                 } else

@@ -897,7 +897,7 @@ fun androidx.compose.foundation.layout.BoxScope.FullScreenPlayButton() {
 }
 
 /**
- * The player's clock full screen (2026-11-22 17:28), like the visualisation's: opened with a long press on the clock in
+ * The player's clock full screen (2026-11-22 17:28), like the visualisation's: opened with a double tap on the clock in
  * the song / radio player, the clock as big as the screen allows (upright and sideways), bars hidden, the screen kept
  * on, the visualisation's full-screen brightness (a swipe along the short side changes it and is kept); a double tap
  * anywhere goes back to the player. The same exit pop-up on opening.
