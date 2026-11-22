@@ -866,6 +866,8 @@ fun VisualisationScreen(nav: Navigator) {
             }
         }) {
         VisCanvas(v, Modifier.fillMaxSize(), live = true)
+        // The floating play / pause button, as on the player (its size, colour, place; dragging it moves it) — unless it's Off (17:30).
+        FullScreenPlayButton()
         if (showB) Text("☀ ${(bright * 100).toInt()} %", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp, modifier = Modifier.align(Alignment.Center))
         if (note.isNotEmpty()) Text(note, color = Color.White.copy(alpha = 0.85f), fontSize = 20.sp, modifier = Modifier.align(Alignment.Center).padding(top = 60.dp))
         LaunchedEffect(shownAt) { kotlinx.coroutines.delay(1300); showB = false }
@@ -884,6 +886,15 @@ fun VisualisationScreen(nav: Navigator) {
 }
 
 // ---------------------------------------------------------------- clock full screen
+
+/** The player's floating play / pause on the full-screen visualisation and clock (2026-11-22 17:30), unless set to Off. */
+@Composable
+fun androidx.compose.foundation.layout.BoxScope.FullScreenPlayButton() {
+    val player = app.vlcinterface.App.instance.player
+    val ps = player.state.collectAsState().value
+    val mode = app.vlcinterface.App.instance.store.state.collectAsState().value.settings.floatBtnMode
+    if (mode != "off" && ps.item != null) FloatingPlayButton(ps.isPlaying) { player.togglePause() }
+}
 
 /**
  * The player's clock full screen (2026-11-22 17:28), like the visualisation's: opened with a long press on the clock in
@@ -925,6 +936,8 @@ fun ClockFullScreen(nav: Navigator) {
         }, contentAlignment = Alignment.Center) {
         val side = minOf(maxWidth, maxHeight) - 24.dp
         ClockFace(st.aspect, Modifier.size(side.coerceAtLeast(60.dp)))
+        // The floating play / pause button, as on the player (its size, colour, place; dragging it moves it) — unless it's Off (17:30).
+        FullScreenPlayButton()
         if (showB) Text("☀ ${(bright * 100).toInt()} %", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp))
         var exitHint by remember { mutableStateOf(true) }
         LaunchedEffect(Unit) { kotlinx.coroutines.delay(2500); exitHint = false }

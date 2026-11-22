@@ -1386,3 +1386,4 @@
 - The same pop-up on opening: "To exit back to application, double tap anywhere." A **double tap** anywhere goes back to the player.
 - Brightness as on the full-screen visualisation: the "Full-screen brightness" setting is used, and a swipe along the short side changes it (kept as that setting); leaving gives the phone its own brightness back.
 - The small ⚙ beside the clock still opens the alarm clock settings.
+- **Play / pause on the full screens (17:30):** the floating play / pause button is also on the full-screen clock and the full-screen visualisation — same size, colour and transparency as on the player, drag it anywhere (its place is kept), tap to pause / play. Not shown when the floating button is set Off (Look), or when nothing is loaded in the player. The button's helper says so.

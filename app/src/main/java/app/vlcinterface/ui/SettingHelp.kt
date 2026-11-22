@@ -194,7 +194,7 @@ object SettingHelp {
             "Radio: only the radio player. All: the two players.\n\n" +
             "It keeps the picture's place and rules: scrolls and hides with the page like the picture, and a long press opens this page. " +
             "The clock, when on, still takes that place. The visualisation uses a little more battery than a still picture. Default: Off.",
-        "Floating play / pause button" to "A round play / pause button floating over the audio and radio players, that you can drag anywhere (its place is kept).\n\n" +
+        "Floating play / pause button" to "A round play / pause button floating over the audio and radio players, that you can drag anywhere (its place is kept). It's also on the full-screen visualisation and the full-screen clock (unless Off).\n\n" +
             "'Always': it's always there, handy when the album picture or clock takes the screen. 'When the buttons scroll away': it appears only while the player's own buttons are out of view. 'Off': never shown.\n\nDefault: Always.",
         "Cover hidden for" to "With the phone upright and the album picture shown on the player, scrolling the player hides the picture completely, so the list and buttons get its room.\n\n" +
             "It comes back this many seconds after your last action; every scroll, touch or button press starts the count again, and it never comes back while a menu, pop-up or settings window is open. Sideways the picture stays on the left. The clock has its own time.\n\nDefault: 10 s.",
