@@ -157,7 +157,7 @@ val SETTINGS_INDEX: List<SettingsEntry> = listOf(
     E("alarm", "Alarm clock", "Location (clock and weather)", "City", "", true),
     E("alarm", "Alarm clock", "Location (clock and weather)", "Weather on the clock", "Sun, clouds, rain, snow or storm, with the city's short name, its time zone and the temperature now > in 6 hours", true),
     E("alarm", "Alarm clock", "Location (clock and weather)", "Weather shows", "Now: the weather right now · At noon: today's forecast for 12:00 at the city", true),
-    E("alarm", "Alarm clock", "Location (clock and weather)", "Under the city", "Both: the time zone and the temperature now > in 6 hours, changing every 5 s", true),
+    E("alarm", "Alarm clock", "Location (clock and weather)", "Under the city", "All: the time zone and the temperature now > in 6 hours, changing every 5 s", true),
     E("alarm", "Alarm clock", "Ringing", "Ringing", "", true),
     E("alarm", "Alarm clock", "Ringing", "Maximum level", "", true),
     E("alarm", "Alarm clock", "Ringing", "Alarm sound", "When nothing else can play, or music was already playing", true),

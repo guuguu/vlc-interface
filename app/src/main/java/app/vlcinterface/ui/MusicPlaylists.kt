@@ -2251,6 +2251,16 @@ val PLAYER_VIDEO_ROWS = listOf("title", "playing", "subs", "picture", "files", "
 val VIDEO_ROW_NAMES = mapOf("title" to "Title", "playing" to "Play buttons (⏮ −10 ▶ +10 ⏭)", "subs" to "Subs/Change, Subs/Sync, Audio/Sync", "picture" to "Hue/Sat, Subs/Format, speed",
     "files" to "Browse", "format" to "Format, Rotate", "upnext" to "Queue box (Up next)")
 
+/** Song rows → the video rows that match them. */
+private val SONG_TO_VIDEO_ROW = mapOf("title" to "title", "buttons" to "playing", "upnext" to "upnext")
+
+/** The video order with its rows matching [songOrder] put in that order, in the slots they had; the others stay. */
+fun videoRowsLike(songOrder: List<String>, video: List<String>): List<String> {
+    val wanted = songOrder.mapNotNull { SONG_TO_VIDEO_ROW[it] }.filter { it in video }
+    val next = wanted.iterator()
+    return video.map { v -> if (v in wanted && next.hasNext()) next.next() else v }
+}
+
 fun videoRowOrder(s: app.vlcinterface.data.Settings): List<String> {
     // The old single "sound" row (before 16:46) is now two lines, kept in its place.
     val saved = s.rowOrderVideo.flatMap { if (it == "sound") listOf("subs", "picture") else listOf(it) }.filter { it in PLAYER_VIDEO_ROWS }

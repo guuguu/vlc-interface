@@ -191,7 +191,7 @@ object SettingHelp {
         "Visualisation instead of album pictures" to "The song and / or radio player show the visualisation, always, in the place of the album picture or station logo — " +
             "with the patterns, colours and frequencies chosen on this page.\n\n" +
             "Off: the album picture as usual (the visualisation still fills the place when no picture is found). Songs: only the song player. " +
-            "Radio: only the radio player. Both: the two players.\n\n" +
+            "Radio: only the radio player. All: the two players.\n\n" +
             "It keeps the picture's place and rules: scrolls and hides with the page like the picture, and a long press opens this page. " +
             "The clock, when on, still takes that place. The visualisation uses a little more battery than a still picture. Default: Off.",
         "Floating play / pause button" to "A round play / pause button floating over the audio and radio players, that you can drag anywhere (its place is kept).\n\n" +
@@ -215,14 +215,14 @@ object SettingHelp {
             "Lower fits more settings on screen; higher is airier. Touch areas stay easy to hit. Default: 85 %.",
         "Text size" to "The size of all the text on the settings pages, the setup wizard, the help guide and the helper pop-ups — titles stay a step bigger than the text under them.\n\n" +
             "The players and the clock aren't affected: their text fits itself to the room. Default: 100 %.",
-        "Order of the player rows" to "The order of the rows on the song player and on the radio player, each with its own order: picture (or clock with alarms), title block, position bar, player buttons, tone sliders, 'Playing from', 'Play next…', extra buttons, and Up next (radio: favourites and search).\n\n" +
+        "Order of the player rows" to "The order of the rows on the song player, the radio player and the video player (upright, the rows under the picture), each with its own order. All: the song player's order for the radio player too, and the video player's Title, Play buttons and Up next follow it. The song / radio rows: picture (or clock with alarms), title block, position bar, player buttons, tone sliders, 'Playing from', 'Play next…', extra buttons, and Up next (radio: favourites and search).\n\n" +
             "Drag a row by its ≡ (or long-press it) to move it; 'Reset order' puts back the original order. Sideways the picture and title stay on the left side and the other rows keep their order on the right. " +
             "The album picture hides while scrolling only when it's the first row.",
         "Clock hidden for" to "With the phone upright and the clock shown on the player, scrolling the player hides the clock completely, so the list and buttons get its room.\n\n" +
             "The clock comes back this many seconds after your last action; every scroll, touch or button press starts the count again, and it never comes back while a menu, pop-up or settings window is open. Sideways the clock stays on the left.\n\nDefault: 10 s.",
         "Short pop-ups stay for" to "How long short notes that close by themselves stay on screen: an alarm switched on or off, the explanation pop-ups of the alarm pages, and similar confirmations.\n\n" +
             "Longer gives time to read; shorter gets them out of the way sooner. A pop-up you touch stays open until you close it. Default: 3 s.",
-        "Switch colour" to "The colour of every switch in the app, one for the on position and one for the off position, so the state shows at a glance as well as by the knob's place. Choose On, Off, or Both (the same colour for the two positions — then only the knob's side shows the state).\n\n" +
+        "Switch colour" to "The colour of every switch in the app, one for the on position and one for the off position, so the state shows at a glance as well as by the knob's place. Choose On, Off, or All (the same colour for the two positions — then only the knob's side shows the state).\n\n" +
             "'+ Create' opens the colour editor (hue, saturation, brightness); the new colour replaces the current one. Switches that can't be used stay dark grey.\n\n" +
             "Default: on = your accent colour, off = a muted grey-blue.",
         "Shadow on player buttons" to "A faint grey shadow under the players' buttons and slider knobs, so they stay visible over bright album pictures.",

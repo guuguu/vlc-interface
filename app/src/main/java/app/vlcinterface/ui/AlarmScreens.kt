@@ -445,8 +445,8 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
                     if (wHelp) HelperDialog("Weather shows", HELP["Weather shows"] ?: "") { wHelp = false }
                     // The line under the city (2026-11-22 06:44 / 06:47): time zone, temperature now > in 6 hours, or both alternating.
                     var lHelp by remember { mutableStateOf(false) }
-                    Label("Under the city", "Both: the time zone and the temperature now > in 6 hours, changing every 5 s")
-                    Choices(listOf("Both" to "both", "Time zone" to "tz", "Temperatures" to "temp"), g.wxLine) { v ->
+                    Label("Under the city", "All: the time zone and the temperature now > in 6 hours, changing every 5 s")
+                    Choices(listOf("All" to "both", "Time zone" to "tz", "Temperatures" to "temp"), g.wxLine) { v ->
                         set(g.copy(wxLine = v)); if (g.helpers) lHelp = true
                     }
                     if (lHelp) HelperDialog("Under the city", HELP["Under the city"] ?: "") { lHelp = false }
@@ -663,7 +663,7 @@ private fun CityDialog(onDone: () -> Unit) {
 private val LocalHelp = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Unit> { {} }
 
 internal val HELP: Map<String, String> = mapOf(
-    "Under the city" to "The small line under the city's name on the clock. Both: the time zone (e.g. UTC+1) and the temperature at the " +
+    "Under the city" to "The small line under the city's name on the clock. All: the time zone (e.g. UTC+1) and the temperature at the " +
         "city now > 6 hours later (e.g. 15°>18°), changing every 5 seconds. Time zone or Temperatures: always that one. The " +
         "the temperature now is measured at the nearest airport weather station (within 35 km; else the forecast for the city), the one in 6 hours is the forecast; refreshed every 15 min. Until they're known the time zone is shown.",
     "Weather shows" to "What the weather icon on the clock shows for your city. 'At noon': today's forecast for 12:00 at the city (its own local time) — handy in the morning to see what the day will be; after midnight it moves to the new day's noon. " +

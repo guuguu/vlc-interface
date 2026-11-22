@@ -519,16 +519,20 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     var rowsMode by rememberKept("look.rowsMode", "song")
                     Text("Order of the player rows", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Order of the player rows").padding(top = 10.dp).explain("Order of the player rows"))
                     Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
-                        listOf("song" to "Songs", "radio" to "Radio", "video" to "Video", "both" to "Both").forEach { (m, l) -> Pill(l, selected = rowsMode == m, filled = rowsMode == m) { rowsMode = m } }
+                        listOf("song" to "Songs", "radio" to "Radio", "video" to "Video", "both" to "All").forEach { (m, l) -> Pill(l, selected = rowsMode == m, filled = rowsMode == m) { rowsMode = m } }
                     }
                     if (rowsMode == "video") Text("Video player upright: the rows under the picture", color = C.muted, fontSize = 13.sp)
+                    if (rowsMode == "both") Text("Songs, Radio and Video: the video player's Title, Play buttons and Up next follow the same order", color = C.muted, fontSize = 13.sp)
                     val rowRadio = rowsMode == "radio"
                     val rowAll = if (rowsMode == "video") videoRowOrder(s) else playerRowOrderAll(s, rowRadio)
                     fun saveRows(l: List<String>) {
                         set(when (rowsMode) {
                             "video" -> s.copy(rowOrderVideo = l)
                             "radio" -> s.copy(rowOrderRadio = l)
-                            "both" -> s.copy(rowOrderSong = l, rowOrderRadio = l.filter { it in PLAYER_RADIO_ROWS })
+                            // All (07:46 / 07:47): songs, radio and the video player — the video rows that match (title, play
+                            // buttons, Up next) take the same order among themselves; its other rows keep their places.
+                            "both" -> s.copy(rowOrderSong = l, rowOrderRadio = l.filter { it in PLAYER_RADIO_ROWS },
+                                rowOrderVideo = if (l.isEmpty()) emptyList() else videoRowsLike(l, videoRowOrder(s)))
                             else -> s.copy(rowOrderSong = l)
                         })
                         if (helpersOn) lookHelp = "Order of the player rows"
@@ -549,7 +553,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     var hideMode by rememberKept("look.hideMode", "clock")
                     Text("Hiding while scrolling", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Hiding while scrolling").padding(top = 10.dp).explain("Hide the clock while scrolling"))
                     Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
-                        listOf("clock" to "Clock", "cover" to "Picture", "both" to "Both").forEach { (m, l) -> Pill(l, selected = hideMode == m, filled = hideMode == m) { hideMode = m } }
+                        listOf("clock" to "Clock", "cover" to "Picture", "both" to "All").forEach { (m, l) -> Pill(l, selected = hideMode == m, filled = hideMode == m) { hideMode = m } }
                     }
                     val hideOn = when (hideMode) { "clock" -> s.clockAutoHide; "cover" -> s.coverAutoHide; else -> s.clockAutoHide && s.coverAutoHide }
                     val hideSecV = when (hideMode) { "cover" -> s.coverHideSec; else -> s.clockHideSec }
@@ -584,7 +588,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     var swMode by rememberKept("look.swMode", "on")
                     Text("Switch colour", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Switch colour").padding(top = 10.dp).explain("Switch colour"))
                     Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
-                        listOf("on" to "On", "off" to "Off", "both" to "Both").forEach { (m, l) -> Pill(l, selected = swMode == m, filled = swMode == m) { swMode = m } }
+                        listOf("on" to "On", "off" to "Off", "both" to "All").forEach { (m, l) -> Pill(l, selected = swMode == m, filled = swMode == m) { swMode = m } }
                         Box(Modifier.weight(1f))
                         val cur = if (swMode == "off") s.switchOff else (if (s.switchOn != 0L) s.switchOn else accArgb)
                         Box(Modifier.size(22.dp).clip(CircleShape).background(Color(cur)))
@@ -718,7 +722,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             fun pick(c: Long) = set(when (accMode) { "radio" -> s.copy(radioAccent = c); "both" -> s.copy(accent = c, radioAccent = c); else -> s.copy(accent = c) })
             Row(horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Colour for", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Colour for").explain("Colour for"))
-                listOf("files" to "Files", "radio" to "Radio", "both" to "Both").forEach { (m, l) -> Pill(l, selected = accMode == m, filled = accMode == m) { accMode = m } }
+                listOf("files" to "Files", "radio" to "Radio", "both" to "All").forEach { (m, l) -> Pill(l, selected = accMode == m, filled = accMode == m) { accMode = m } }
             }
             // Custom colours: up to 5 slots; tap uses one, long-press edits it. "+" adds while a slot is free.
             var editSlot by remember { mutableStateOf(-1) }      // -1 closed, 0..2 edit that slot, 3 new

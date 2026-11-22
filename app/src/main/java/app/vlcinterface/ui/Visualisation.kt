@@ -938,7 +938,7 @@ fun VisualisationSettings() {
                 Text("Always in the picture's place on the players", color = C.muted, fontSize = 13.sp)
                 androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp),
                     verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
-                    listOf("off" to "Off", "songs" to "Songs", "radio" to "Radio", "both" to "Both").forEach { (m, l) ->
+                    listOf("off" to "Off", "songs" to "Songs", "radio" to "Radio", "both" to "All").forEach { (m, l) ->
                         Pill(l, selected = s.visInsteadCover == m, filled = s.visInsteadCover == m) {
                             store.update { it.copy(settings = it.settings.copy(visInsteadCover = m)) }
                             if (Alarms.current.global.helpers) visHelp = true

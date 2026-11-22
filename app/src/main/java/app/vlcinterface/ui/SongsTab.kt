@@ -165,10 +165,10 @@ fun SongsTab(nav: Navigator) {
             // Ask each time: the songs as a playlist, their folders added to the library, or both.
             AlertDialog(onDismissRequest = { imported = null }, containerColor = C.panel,
                 title = { Text("Import ${lines.size} songs", color = C.text) },
-                text = { Text("From \"$name\". Make a playlist of them, add their folders to the library (so they show in Songs), or both?", color = C.text) },
+                text = { Text("From \"$name\". Make a playlist of them, add their folders to the library (so they show in Songs), or all of it?", color = C.text) },
                 confirmButton = {
                     Column(horizontalAlignment = Alignment.End) {
-                        STextButton({ imported = null; scope.launch { SongsIo.apply(ctx, name, lines, playlist = true, folders = true); songs = sorted(SongsCache.all(ctx.applicationContext)) } }) { Text("Both", color = accent()) }
+                        STextButton({ imported = null; scope.launch { SongsIo.apply(ctx, name, lines, playlist = true, folders = true); songs = sorted(SongsCache.all(ctx.applicationContext)) } }) { Text("All", color = accent()) }
                         STextButton({ imported = null; scope.launch { SongsIo.apply(ctx, name, lines, playlist = true, folders = false) } }) { Text("Playlist", color = accent()) }
                         STextButton({ imported = null; scope.launch { SongsIo.apply(ctx, name, lines, playlist = false, folders = true); songs = sorted(SongsCache.all(ctx.applicationContext)) } }) { Text("Add folders to library", color = accent()) }
                         STextButton({ imported = null }) { Text("Cancel") }

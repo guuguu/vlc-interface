@@ -1232,3 +1232,9 @@
   - **Browse the phone's music folders…:** the app's own browser, only through folders that hold music, with song counts; "⬆ Up one level" / "Back to the list"; "✓ Use this folder (N songs)" on the folder shown.
   - Picking a folder opens Android's own picker right on it, where it's approved ("Use this folder", "Allow"); Android grants write access only through that step. Back returns to the question.
   - Storage roots and the Download folder itself aren't offered (Android's picker refuses them); folders inside them are.
+
+## "Both" → "All" on every choice (requested 2026-11-22 07:46 / 07:47)
+- **Found:** Look → "Order of the player rows" showed Songs / Radio / Video / Both, where "Both" still meant only songs + radio from before the Video choice was added.
+- **Now "All" everywhere a choice covers every option, even with two (07:47):** Look → order of the player rows (Songs / Radio / Video / All), hiding while scrolling (Clock / Picture / All), switch colour (On / Off / All), accent colour (Files / Radio / All); Visualisation → instead of album pictures (Off / Songs / Radio / All); Alarm clock → Under the city (All / Time zone / Temperatures); the Songs list import question (All / Playlist / Add folders to library). Helpers and grey lines say "All".
+- **Order of the player rows → All now includes Video:** the song order goes to the radio player as before, and the video player's matching rows (Title, Play buttons, Up next) take the same order among themselves; its other rows (Subs, Hue/Sat…, Browse, Format) keep their places. A line under the choice says so. Reset order resets all three.
+- The saved choices keep working (only the names changed).
