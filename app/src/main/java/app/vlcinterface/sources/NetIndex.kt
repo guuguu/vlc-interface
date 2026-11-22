@@ -219,7 +219,21 @@ object NetIndex {
             srcs.forEach { s ->
                 val todo = s.pins.filter { (!has(s, it) || hasStopped(s, it) || due(key(s, it))) && key(s, it) !in building }
                 if (todo.isEmpty()) return@forEach
-                if (!Net.reachable(Urls.hostOnly(s.host), if (s.port > 0) s.port else s.defaultPort)) return@forEach
+                if (!Net.reachable(Urls.hostOnly(s.host), if (s.port > 0) s.port else s.defaultPort)) {
+                    app.vlcinterface.data.ServerLog.log(Urls.hostOnly(s.host), "index", s.proto, s.user, true,
+                        "Automatic indexing waits: ${s.name.ifBlank { s.host }} doesn't answer now (${todo.size} folders to do)")
+                    return@forEach
+                }
+                // Why it can't start now, said once per reason (it starts by itself when that changes).
+                waitReason()?.let { why ->
+                    if (lastWait != why) { lastWait = why; app.vlcinterface.data.ServerLog.log(Urls.hostOnly(s.host), "index", s.proto, s.user, true,
+                        "Automatic indexing waits: $why (${todo.size} folders to do)") }
+                    return@forEach
+                }
+                lastWait = null
+                app.vlcinterface.data.ServerLog.log(Urls.hostOnly(s.host), "index", s.proto, s.user, true,
+                    "Automatic indexing: " + todo.joinToString(", ") { p -> p.trim('/').substringAfterLast('/') + when {
+                        !has(s, p) -> " (new)"; hasStopped(s, p) -> " (resumed)"; outdated(key(s, p)) -> " (videos added)"; else -> " (every ${App.instance.store.current.settings.indexDays} days)" } })
                 todo.forEach { build(s, it) }
             }
         }
@@ -228,9 +242,17 @@ object NetIndex {
     // ---------- indexing again (08:19): Never / every N days / when a new file appears ----------
 
     private val atPrefs by lazy { App.instance.getSharedPreferences("netindex_at", Context.MODE_PRIVATE) }
-    private fun markIndexed(k: String) = try { atPrefs.edit().putLong(k, System.currentTimeMillis()).apply() } catch (_: Exception) {}
+    /**
+     * What an index holds: 1 = songs only (before 1.78), 2 = songs and videos. An index made by an older version is
+     * indexed again once by itself after the update (08:50: 1.78 kept the old song-only indexes, so no videos were
+     * found and nothing started), whatever "Index again" is set to.
+     */
+    private const val SCHEMA = 2
+    private fun markIndexed(k: String) = try { atPrefs.edit().putLong(k, System.currentTimeMillis()).putInt("schema:$k", SCHEMA).apply() } catch (_: Exception) {}
+    private fun outdated(k: String) = k in byPin && try { atPrefs.getInt("schema:$k", 1) < SCHEMA } catch (_: Exception) { false }
     /** "Every N days": an indexed folder whose last indexing is that old (indexes from before this setting count from now). */
     private fun due(k: String): Boolean {
+        if (outdated(k)) return true
         val set = App.instance.store.current.settings
         if (set.indexMode != "days" || k !in byPin) return false
         val at = atPrefs.getLong(k, 0L)
@@ -313,6 +335,15 @@ object NetIndex {
         }
     }
     private fun runHeldPaths() { val l = pathHeld.values.toList(); pathHeld.clear(); l.forEach { (s, f, w) -> indexPath(s, f, w) } }
+
+    @Volatile private var lastWait: String? = null
+    private fun waitReason(): String? = when {
+        app.vlcinterface.player.BatteryGuard.busyBlocked(silent = true) -> "battery 15 % or less"
+        app.vlcinterface.player.BackgroundWork.paused.value -> "background work is paused"
+        VpnLink.vpnUp.value -> "the VPN is on"
+        rgBusy() -> "a ReplayGain scan is running"
+        else -> null
+    }
 
     /** App start: interrupted folders resumed, home-network pins not indexed yet started. */
     fun autoStart() { resumeStopped(); autoLan() }

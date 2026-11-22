@@ -1302,3 +1302,10 @@
 - Parts the app reads when it starts: after the import a question offers "Restart now" (or Later: they apply next time).
 - Setup files are now format 2.
 - **Never forgotten again:** the build checks that every place the app stores data is classified (exported with a category, or this phone only: caches, logs, indexes, battery / crash notes, weather), and fails if something new isn't — so export / import always follows the app.
+
+# After 1.78.0
+
+## Indexing didn't start after the update (reported 2026-11-22 08:50)
+- **Cause:** the folders indexed before 1.78 already had an index (songs only). 1.78 only started folders with no index or an interrupted one, and "Every 4 days" counted the old indexes from the update — so nothing ran, and their videos were never added.
+- **Fixed:** each index now records what it holds (songs and videos). An index made by an older version is indexed again once by itself — whatever "Index again" is set to — and the Indexing log says "(videos added)".
+- **Every automatic start is now in the Indexing log**, with each folder and why ("new", "resumed", "videos added", "every N days"); and when it can't start, why it waits, once per reason: the server doesn't answer, battery 15 % or less, background work paused, the VPN on, or a ReplayGain scan running. It starts by itself when that changes.
