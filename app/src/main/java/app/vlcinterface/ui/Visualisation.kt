@@ -969,6 +969,15 @@ fun ClockFullScreen(nav: Navigator) {
         // What's playing (19:49): a band along the bottom with its name gliding continuously, big — no buttons, no labels.
         val ps = app.vlcinterface.App.instance.player.state.collectAsState().value
         val line = playingLine(ps)
+        // The clock's dimming (Clock aspect → Night: 22:00–07:00) applies to everything on this screen (20:05): the scrolling
+        // name and the play / pause button are dimmed with the clock, so nothing stands out brighter than it. (The
+        // full-screen brightness is the screen's own, so it already acts on all of it.)
+        var minute by remember { mutableLongStateOf(System.currentTimeMillis() / 60_000) }
+        LaunchedEffect(Unit) { while (true) { kotlinx.coroutines.delay(15_000); minute = System.currentTimeMillis() / 60_000 } }
+        val dimK = remember(minute, st.aspect.nightDim) {
+            val h = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+            if (st.aspect.nightDim > 0 && (h >= 22 || h < 7)) 1f - st.aspect.nightDim / 100f else 1f
+        }
         val land = maxWidth > maxHeight
         // One letter size for both orientations (19:52), from Clock aspect → "Scrolling name size"; the band is just tall
         // enough for it (no frame, no background).
@@ -981,17 +990,17 @@ fun ClockFullScreen(nav: Navigator) {
             Box(Modifier.align(Alignment.CenterStart).padding(start = 12.dp)) { ClockFace(st.aspect, Modifier.size(side)) }
             val restW = maxWidth - side - 36.dp
             if (line.isNotEmpty() && restW > 80.dp) FullScreenTicker(line,
-                Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp).width(restW).height(bandH), st.aspect)
+                Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp).width(restW).height(bandH).graphicsLayer { alpha = dimK }, st.aspect)
         } else {
             val bandH = if (line.isEmpty()) 0.dp else bandH0
             val side = (minOf(maxWidth, maxHeight - bandH) - 24.dp).coerceAtLeast(60.dp)
             Box(Modifier.align(Alignment.TopCenter).padding(top = ((maxHeight - bandH - side) / 2).coerceAtLeast(0.dp))) {
                 ClockFace(st.aspect, Modifier.size(side))
             }
-            if (line.isNotEmpty()) FullScreenTicker(line, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(bandH), st.aspect)
+            if (line.isNotEmpty()) FullScreenTicker(line, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(bandH).graphicsLayer { alpha = dimK }, st.aspect)
         }
         // The floating play / pause button, as on the player (its size, colour, place; dragging it moves it) — unless it's Off (17:30).
-        FullScreenPlayButton()
+        Box(Modifier.matchParentSize().graphicsLayer { alpha = dimK }) { FullScreenPlayButton() }
         if (showB) Text("☀ ${(bright * 100).toInt()} %", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp))
         var exitHint by remember { mutableStateOf(true) }
         LaunchedEffect(Unit) { kotlinx.coroutines.delay(2500); exitHint = false }
