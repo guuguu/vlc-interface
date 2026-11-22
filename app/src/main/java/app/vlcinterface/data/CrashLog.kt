@@ -25,6 +25,7 @@ object CrashLog {
             } catch (_: Throwable) {}
             // The radio buffer goes with the crash (also cleared at the next start).
             try { app.vlcinterface.sources.RadioCapture.wipeOnCrash(ctx) } catch (_: Throwable) {}
+            notifyProblem(ctx, "crashed")
             previous?.uncaughtException(t, e)
         }
         recordLastExit(ctx)
@@ -97,6 +98,39 @@ object CrashLog {
                 ).joinToString("\n\n")
                 ServerLog.add(KEY, LogEntry(x.timestamp, "last exit", "android", "", normal, why, detail, 0))
             }
+            // Crashes the app couldn't catch itself (native code, "not responding") get the small notice now.
+            exits.lastOrNull { it.reason == ApplicationExitInfo.REASON_ANR || it.reason == ApplicationExitInfo.REASON_CRASH_NATIVE }?.let {
+                notifyProblem(ctx, if (it.reason == ApplicationExitInfo.REASON_ANR) "stopped responding" else "crashed")   // app crashes: already shown when they happened
+            }
+        } catch (_: Throwable) {}
+    }
+
+    const val CH_PROBLEM = "app_problem"
+    const val EXTRA_OPEN_LOGS = "open_logs"
+    private const val PROBLEM_ID = 7400
+
+    /**
+     * Very small notice that the app crashed / stopped responding: one line, silent (no sound, vibration or pop-up),
+     * a tap opens Settings → Logs. Always the same notice (replaced, never piled up).
+     */
+    fun notifyProblem(ctx: Context, what: String) {
+        try {
+            val nm = ctx.getSystemService(android.app.NotificationManager::class.java) ?: return
+            if (nm.getNotificationChannel(CH_PROBLEM) == null) nm.createNotificationChannel(
+                android.app.NotificationChannel(CH_PROBLEM, "App problems", android.app.NotificationManager.IMPORTANCE_DEFAULT).apply {
+                    setSound(null, null); enableVibration(false); enableLights(false); setShowBadge(false)
+                })
+            val open = android.content.Intent(ctx, app.vlcinterface.MainActivity::class.java)
+                .putExtra(EXTRA_OPEN_LOGS, true)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            val pi = android.app.PendingIntent.getActivity(ctx, PROBLEM_ID, open,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE)
+            nm.notify(PROBLEM_ID, android.app.Notification.Builder(ctx, CH_PROBLEM)
+                .setSmallIcon(app.vlcinterface.R.drawable.ic_stat_cone)
+                .setContentTitle("vlc interface $what · check error log")
+                .setContentIntent(pi).setAutoCancel(true).setOnlyAlertOnce(true)
+                .setCategory(android.app.Notification.CATEGORY_ERROR)
+                .build())
         } catch (_: Throwable) {}
     }
 }

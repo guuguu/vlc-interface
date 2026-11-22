@@ -1184,3 +1184,10 @@
 # After 1.74.0
 
 - **"Not responding" when picking a subtitle while the video was still opening (07:01):** the tap waited on libVLC, which was busy opening the file from the network. Subtitle and audio track picks, subtitle files added, the kept per-video tracks put back, and the subtitle/audio sync offsets now go to libVLC from their own thread. The choice shows at once; the screen never waits.
+
+## Small notice when the app crashed (requested 2026-11-22 07:08)
+- A one-line notification: "vlc interface crashed · check error log" (or "… stopped responding · check error log"). It's silent: no sound, vibration or pop-up, just the small icon and the line in the notification shade.
+- **App crashes:** posted the moment the crash happens.
+- **Crashes in the sound / video code and "not responding":** the app can't catch these, so the notice is posted at the next start, from Android's record of why the app ended.
+- A tap opens Settings → Logs (where "Collect error logs" is). Always the same single notice, replaced, never piled up.
+- Its own channel, "App problems", in the app's notification settings.

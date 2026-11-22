@@ -111,6 +111,11 @@ class MainActivity : ComponentActivity() {
             if (nav.top !is Screen.RgScan) nav.go(Screen.RgScan)
             return
         }
+        if (i?.getBooleanExtra(CrashLog.EXTRA_OPEN_LOGS, false) == true) {
+            i.removeExtra(CrashLog.EXTRA_OPEN_LOGS)
+            if (nav.top != Screen.SettingsGroup("logs")) nav.go(Screen.SettingsGroup("logs"))
+            return
+        }
         if (i?.getBooleanExtra(EXTRA_OPEN_ORIGIN, false) == true) {
             i.removeExtra(EXTRA_OPEN_ORIGIN)
             app.vlcinterface.ui.openOrigin(nav)
