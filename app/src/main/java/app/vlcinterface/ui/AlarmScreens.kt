@@ -611,6 +611,17 @@ fun ClockAspectScreen(nav: Navigator) {
                 SliderRow("Dimming", a.nightDim.toFloat(), 0f..80f, "${a.nightDim} %") { set(a.copy(nightDim = it.toInt())) }
                 Text("From 22:00 to 07:00", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, bottom = 10.dp))
             }
+            // 2026-11-22 19:27: the full-screen clock (double tap on the player's clock) keeps the screen on at this brightness.
+            SectionTitle("Full screen")
+            CardBox {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Full-screen brightness", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Full-screen clock brightness").weight(1f).helpOn("Full-screen clock brightness"))
+                    Pill("Phone's own", selected = a.fsBright <= 0f, filled = a.fsBright <= 0f) { set(a.copy(fsBright = if (a.fsBright <= 0f) 0.6f else -1f)) }
+                }
+                if (a.fsBright > 0f) SliderRow("Brightness", a.fsBright, 0.01f..1f, "${(a.fsBright * 100).toInt()} %") { set(a.copy(fsBright = (Math.round(it * 100f) / 100f).coerceIn(0.01f, 1f))) }
+                Text("The screen stays on while the clock is full screen. A swipe along the short side there changes it too (kept here).",
+                    color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp))
+            }
             Box(Modifier.height(24.dp))
         }
     }
@@ -663,6 +674,7 @@ private fun CityDialog(onDone: () -> Unit) {
 private val LocalHelp = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Unit> { {} }
 
 internal val HELP: Map<String, String> = mapOf(
+    "Full-screen clock brightness" to "The screen's brightness while the clock is full screen (double tap on the clock in the song or radio player). \"Phone's own\" keeps the phone's brightness; otherwise a level of its own, 1–100 %. The screen stays on while the full-screen clock is shown, and the clock turns with the phone. A swipe along the short side on the full screen changes it too, and is kept here. Leaving gives the phone its own brightness back.",
     "Under the city" to "The small line under the city's name on the clock. All: the time zone (e.g. UTC+1) and the temperature at the " +
         "city now > 6 hours later (e.g. 15°>18°), changing every 5 seconds. Time zone or Temperatures: always that one. " +
         "The temperature now is measured at the nearest airport weather station (within 35 km; else the forecast for the city), the one in 6 hours is the forecast; refreshed every 15 min. Until they're known the time zone is shown.",

@@ -899,27 +899,27 @@ fun androidx.compose.foundation.layout.BoxScope.FullScreenPlayButton() {
 /**
  * The player's clock full screen (2026-11-22 17:28), like the visualisation's: opened with a double tap on the clock in
  * the song / radio player, the clock as big as the screen allows (upright and sideways), bars hidden, the screen kept
- * on, the visualisation's full-screen brightness (a swipe along the short side changes it and is kept); a double tap
+ * on (19:27) at Clock aspect → "Full-screen brightness" (a swipe along the short side changes it and is kept); a double tap
  * anywhere goes back to the player. The same exit pop-up on opening.
  */
 @Composable
 fun ClockFullScreen(nav: Navigator) {
     val st = Alarms.state.collectAsState().value
     val act = LocalContext.current.findActivity()
-    var bright by remember { mutableFloatStateOf(st.vis.fsBright.takeIf { it > 0f } ?: act?.window?.attributes?.screenBrightness?.takeIf { it >= 0f } ?: 0.5f) }
+    var bright by remember { mutableFloatStateOf(st.aspect.fsBright.takeIf { it > 0f } ?: act?.window?.attributes?.screenBrightness?.takeIf { it >= 0f } ?: 0.5f) }
     var shownAt by remember { mutableLongStateOf(0L) }
     var showB by remember { mutableStateOf(false) }
     DisposableEffect(Unit) {
         val w = act?.window
         w?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        if (st.vis.fsBright > 0f) w?.let { it.attributes = it.attributes.apply { screenBrightness = st.vis.fsBright.coerceIn(0.01f, 1f) } }
+        if (st.aspect.fsBright > 0f) w?.let { it.attributes = it.attributes.apply { screenBrightness = st.aspect.fsBright.coerceIn(0.01f, 1f) } }
         try { w?.insetsController?.let { it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; it.hide(WindowInsets.Type.systemBars()) } } catch (_: Exception) {}
         onDispose {
             try { w?.insetsController?.show(WindowInsets.Type.systemBars()) } catch (_: Exception) {}
             w?.attributes = w?.attributes?.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
         }
     }
-    LaunchedEffect(shownAt) { if (shownAt > 0) { kotlinx.coroutines.delay(700); Alarms.setVis(Alarms.current.vis.copy(fsBright = bright)) } }
+    LaunchedEffect(shownAt) { if (shownAt > 0) { kotlinx.coroutines.delay(700); Alarms.setAspect(Alarms.current.aspect.copy(fsBright = bright)) } }
     LaunchedEffect(shownAt) { kotlinx.coroutines.delay(1300); showB = false }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)
         .pointerInput(Unit) { detectTapGestures(onDoubleTap = { nav.back() }) }
