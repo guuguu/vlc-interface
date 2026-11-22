@@ -48,7 +48,7 @@ import app.vlcinterface.player.PlayItem
  * after the current song (and into the playing playlist) — nothing is removed, no duplicates.
  */
 @Composable
-fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, onDone: () -> Unit) {
+fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, videos: Boolean = false, onDone: () -> Unit) {
     val ctx = LocalContext.current
     val player = App.instance.player
     var library by remember { mutableStateOf<List<PlayItem>?>(null) }
@@ -57,14 +57,15 @@ fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, onDone: () -> 
     val indexVer by app.vlcinterface.sources.NetIndex.version.collectAsState()
     val indexing by app.vlcinterface.sources.NetIndex.busy.collectAsState()
     LaunchedEffect(Unit) { app.vlcinterface.sources.NetIndex.buildMissing() }
-    LaunchedEffect(indexVer) { library = SongsCache.all(ctx.applicationContext) }
+    // [videos]: the video player's Find — the phone's videos and the indexed network videos.
+    LaunchedEffect(indexVer) { library = if (videos) SongsCache.allVideos(ctx.applicationContext) else SongsCache.all(ctx.applicationContext) }
     val queue = player.state.value.queue
     val inQueue = remember(queue) { queue.map { "${it.uri}#${it.startMs}" }.toHashSet() }
     val hits = remember(query, library, queue) {
         if (query.trim().length < 2) emptyList() else {
             fun ok(p: PlayItem) = songMatches(p, query)
             // Play next searches the whole Songs list; Jump to also looks in the queue first.
-            ((if (playNext) emptyList() else queue.filter(::ok)) + (library ?: emptyList()).filter(::ok)).distinctBy { "${it.uri}#${it.startMs}" }.take(60)
+            ((if (playNext) emptyList() else queue.filter { videos == !it.isMusic }.filter(::ok)) + (library ?: emptyList()).filter(::ok)).distinctBy { "${it.uri}#${it.startMs}" }.take(60)
         }
     }
     // Own window instead of a centred dialog: it sits at the top and always ends above the keyboard (the results
@@ -78,19 +79,19 @@ fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, onDone: () -> 
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(C.menu)
                 .clickable(interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }, indication = null) {}
                 .padding(20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(if (playNext) "Play next" else "Jump to song", color = C.text, fontSize = 22.sp)
+                Text(if (videos) "Find a video" else if (playNext) "Play next" else "Jump to song", color = C.text, fontSize = 22.sp)
                 val st = rememberLazyListState()
                 val jscope = androidx.compose.runtime.rememberCoroutineScope()
                 var at by remember(query) { mutableStateOf(-1) }
                 fun step(k: Int) { if (hits.isEmpty()) return; at = (k + hits.size) % hits.size; jscope.launch { st.animateScrollToItem(at) } }
-                SmallSearchBar(query, { query = it }, "Artist, album or song", hits.size, at.coerceAtLeast(0), { step(at - 1) }, { step(at + 1) })
+                SmallSearchBar(query, { query = it }, if (videos) "Title, series or file name" else "Artist, album or song", hits.size, at.coerceAtLeast(0), { step(at - 1) }, { step(at + 1) })
                 Text(when {
                     library == null -> "Reading the Library…"
                     query.trim().length < 2 -> if (playNext) "Type at least 2 letters · the song you pick plays after the current one"
                         else "Type at least 2 letters · queue and Library are searched"
                     else -> "${hits.size}${if (hits.size == 60) "+" else ""} found"
                 }, color = C.muted, fontSize = 12.sp)
-                if (indexing.isNotEmpty()) Text("★ $indexing — LAN songs appear when done", color = accent(), fontSize = 12.sp)
+                if (indexing.isNotEmpty()) Text("★ $indexing — LAN ${if (videos) "videos" else "songs"} appear when done", color = accent(), fontSize = 12.sp)
                 LazyColumn(Modifier.weight(1f, fill = false).scrollbar(st), state = st, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     itemsIndexed(hits) { idx, h ->
                         val queued = "${h.uri}#${h.startMs}" in inQueue
@@ -102,7 +103,9 @@ fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, onDone: () -> 
                             .padding(horizontal = 8.dp, vertical = UiPrefs.menuGapDp.dp)) {
                             // Results follow the menu settings (text size, row spacing, opacity).
                             Text(h.title, color = C.text, fontSize = UiPrefs.menuFontSp.sp, lineHeight = (UiPrefs.menuFontSp + 3).sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}" + if (queued) "  · in the queue" else "",
+                            Text((if (videos) android.net.Uri.decode(h.folderKey.trimEnd('/').substringAfterLast('/')).substringAfterLast(':').ifEmpty { "—" } +
+                                    (if (app.vlcinterface.sources.NetIndex.isLocal(h)) " · phone" else " · network")
+                                else "${h.artist.ifEmpty { "Unknown artist" }} · ${h.album.ifEmpty { "—" }}") + if (queued) "  · in the queue" else "",
                                 color = if (queued) accent() else C.muted, fontSize = (UiPrefs.menuFontSp - 2).sp, lineHeight = (UiPrefs.menuFontSp + 1).sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }

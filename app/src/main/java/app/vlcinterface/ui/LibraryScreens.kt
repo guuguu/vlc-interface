@@ -248,7 +248,7 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
         }
         // Audio / Video switch: every Library tab then lists only that kind of file.
         val kind = App.instance.store.state.collectAsState().value.settings.libraryKind
-        if (!(s.tab == 2 && s.sub != 0) && s.tab != 3 && s.tab != 4) Scaled { Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
+        if (!(s.tab == 2 && s.sub != 0) && s.tab != 4) Scaled { Row(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp).fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(C.card).padding(3.dp)) {
             listOf("audio" to "♫  Audio", "video" to "▶  Video").forEach { (k, t) ->
                 Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(8.dp)).background(if (kind == k) accent() else Color.Transparent)
                     .clickable { App.instance.store.update { it.copy(settings = it.settings.copy(libraryKind = k)) } }, contentAlignment = Alignment.Center) {
@@ -259,7 +259,8 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
         } // Audio / Video switch
         // Internal · LAN · Internet · Radio · Songs (Radio is its own section, tab 4; shrinks to fit narrow screens).
         AutoFitRow(Modifier.padding(horizontal = 20.dp).padding(bottom = 10.dp), spacing = 8.dp) {
-            listOf(0 to "Internal", 1 to "LAN", 2 to "Internet", 4 to "Radio", 3 to "Songs").forEach { (i, t) ->
+            // With the Video switch, "Songs" becomes "Videos" (08:13): the phone's and the indexed network videos.
+            listOf(0 to "Internal", 1 to "LAN", 2 to "Internet", 4 to "Radio", 3 to (if (kind == "video") "Videos" else "Songs")).forEach { (i, t) ->
                 Pill(t, filled = s.tab == i) { if (s.tab != i) nav.go(Screen.Library(i, if (i == 2 && s.sub == 1) 0 else s.sub)) }
             }
         }
@@ -278,7 +279,7 @@ fun LibraryScreen(nav: Navigator, s: Screen.Library, openOutput: () -> Unit) {
             when (s.tab) {
                 0 -> InternalTab(nav)
                 1 -> SourcesTab(nav, Zone.LAN)
-                3 -> SongsTab(nav)
+                3 -> if (kind == "video") VideosTab(nav) else SongsTab(nav)
                 4 -> RadioTab(nav)
                 else -> when (s.sub) {
                     0, 1 -> SourcesTab(nav, Zone.INTERNET)

@@ -97,9 +97,16 @@ object NetIndex {
      * Indexed songs only from servers that answer right now (checked in parallel, ~1.5 s at most, remembered 20 s):
      * a NAS that's off or out of reach gives no search results.
      */
-    suspend fun songsReachable(): List<PlayItem> = kotlinx.coroutines.coroutineScope {
+    suspend fun songsReachable(): List<PlayItem> {
+        val up = reachableIds()
+        return withPartial().filterKeys { it.substringBefore('|') in up }.values.flatten().map { MusicLibrary.fromPlEntry(it) }.filter { it.isMusic }
+    }
+
+    /** Servers with an index that answer right now (checked in parallel, remembered 20 s). */
+    private suspend fun reachableIds(): Set<String> = kotlinx.coroutines.coroutineScope {
         val now = System.currentTimeMillis()
-        val srcs = App.instance.store.current.sources.filter { s -> byPin.keys.any { it.startsWith(s.id + "|") } }
+        val keys = withPartial().keys
+        val srcs = App.instance.store.current.sources.filter { s -> keys.any { it.startsWith(s.id + "|") } }
             .filter { s -> s.zone != app.vlcinterface.data.Zone.LAN || VpnLink.atHome(s) || (s.id in VpnLink.useNas.value && VpnLink.vpnUp.value) }
             .filter { s -> !(VpnLink.ignoreSession && s.zone == app.vlcinterface.data.Zone.LAN) }
         val up = srcs.map { s ->
@@ -113,7 +120,13 @@ object NetIndex {
                 }
             }
         }.map { it.await() }.filter { it.second }.map { it.first }.toHashSet()
-        withPartial().filterKeys { it.substringBefore('|') in up }.values.flatten().map { MusicLibrary.fromPlEntry(it) }.filter { it.isMusic }
+        up
+    }
+
+    /** Indexed videos from servers that answer right now (the same check as the songs). */
+    suspend fun videosReachable(): List<PlayItem> {
+        val ids = reachableIds()
+        return withPartial().filterKeys { it.substringBefore('|') in ids }.values.flatten().map { MusicLibrary.fromPlEntry(it) }.filter { !it.isMusic && !it.isRadio }
     }
 
     fun has(src: Source, pin: String) = byPin.containsKey(key(src, pin))

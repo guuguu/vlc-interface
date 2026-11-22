@@ -80,6 +80,16 @@ internal object SongsCache {
         return phone!!
     }
 
+    /** The phone's videos (the Library's places, read once) + indexed network videos from servers that answer now. */
+    var phoneVideos: List<PlayItem>? = null
+    suspend fun allVideos(ctx: android.content.Context): List<PlayItem> {
+        if (phoneVideos == null) phoneVideos = InternalSource.folders(ctx).flatMap { f -> MusicLibrary.collectLocal(ctx, f, false) }.filter { !it.isMusic && !it.isRadio }
+        val hidden = App.instance.store.current.settings.hiddenUris
+        return (phoneVideos!! + app.vlcinterface.sources.NetIndex.videosReachable()).distinctBy { it.uri }
+            .filter { it.uri !in hidden && it.folderKey !in hidden && !app.vlcinterface.sources.Ignore.dotName(it.fileName) }
+            .sortedBy { it.title.ifEmpty { it.fileName }.lowercase() }
+    }
+
     /**
      * Phone songs + indexed LAN folders (★, only from servers reachable now) + LAN / Internet songs read in the
      * Songs list; a song on both the phone and the network = the phone file.

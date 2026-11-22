@@ -227,6 +227,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     }
     // Picked: back to the video (panels closed); Cancel keeps where it was (21:17).
     if (SubBrowseUi.open) SubtitleBrowseDialog(onPicked = { panel = Panel.NONE }) { SubBrowseUi.open = false }
+    // Find a video (08:13): the queue, the phone's videos and the indexed network videos.
+    if (VideoFindUi.open) JumpDialog(nav = nav, videos = true) { VideoFindUi.open = false }
     if (SubChoiceUi.open) SubtitleChoiceDialog(p, onPick = { id -> player.selectSpu(id); SubChoiceUi.open = false }) { SubChoiceUi.open = false }
 
     // Auto-download subtitles when nothing in the preferred languages is present.
@@ -578,6 +580,7 @@ private fun BoxScope.ControlsOverlayBody(
             OverlayChip("Subs/Sync") { onTouch(); onPanel() }
             // Browse: the folder the video came from, in the Library (Back returns here).
             OverlayChip("📂 Browse") { onTouch(); openOrigin(nav, keepStack = true, video = true) }
+            OverlayChip("🔎 Find") { onTouch(); VideoFindUi.open = true }
             OverlayChip(syncLabel(p.audioDelayMs)) { onTouch(); AudioSyncUi.open = true }
             // Dedicated button: hue & saturation, straight to the sliders.
             OverlayChip("Hue/Sat") { onTouch(); onPicture() }
@@ -637,6 +640,7 @@ private fun BoxScope.ControlsOverlayBody(
         // Left (17:10): the output, Browse, the format, Rotate, speed. Right: the subtitle, sound and picture buttons.
         val left = listOf(
             UBtn("📂 Browse", false) { onTouch(); openOrigin(nav, keepStack = true, video = true) },
+            UBtn("🔎 Find", false) { onTouch(); VideoFindUi.open = true },
             UBtn(scaleLabel.split('\u0000').let { if (it.getOrElse(1) { "" }.isEmpty()) it[0] else "${it[0]} → ${it[1]}" }, false) { onScale(); onTouch() },
             UBtn(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }, false) { App.instance.player.rotateVideo(); onTouch() },
             UBtn("${"%.2f".format(p.rate).trimEnd('0').trimEnd('.')}×", false) {
@@ -889,7 +893,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                 player.setRate(rates[(i + 1) % rates.size])
             },
         )
-        val fileBtns = listOf(UBtn("📂 Browse") { openOrigin(nav, keepStack = true, video = true) })
+        val fileBtns = listOf(UBtn("📂 Browse") { openOrigin(nav, keepStack = true, video = true) }, UBtn("🔎 Find") { VideoFindUi.open = true })
         val formatBtns = listOf(
             UBtn(if (parts.getOrElse(1) { "" }.isEmpty()) parts[0] else "${parts[0]} → ${parts[1]}") { onScale() },
             UBtn(App.instance.player.videoRot.let { if (it == 0) "Rotate" else "Rotate · $it°" }) { App.instance.player.rotateVideo() },
@@ -1811,4 +1815,10 @@ private fun BoxScope.VideoTopBar(p: PlayerState, nav: Navigator, locked: Boolean
             }
         }
     }
+}
+
+
+/** The video player's "🔎 Find" search (2026-11-22 08:13). */
+object VideoFindUi {
+    var open by androidx.compose.runtime.mutableStateOf(false)
 }
