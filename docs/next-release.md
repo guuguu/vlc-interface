@@ -1270,3 +1270,18 @@
   - **When a new file appears:** when a network folder is opened in the app and holds a song or video that isn't in the index, that folder (with its subfolders) is indexed again and merged into its pin's index.
 - **A file played that isn't indexed yet:** its folder (with subfolders) is indexed at once in the background, whatever the setting — merged into the pinned folder above it, or kept on its own when it isn't under a pin, so it's found by searches afterwards. Once per folder while the app runs.
 - **Transparent:** indexing runs on its own pool of 6 background threads at low priority (below the player and the screen), several folders and files at once; it still waits for paused background work, the VPN, low battery and ReplayGain scans (the folder asked for is done right after).
+
+## File associations (requested 2026-11-22 08:24 / 08:25, helpers yes)
+- **Settings → new page "File associations"** (in the settings links, its order set in Look), in the app's usual format (sections, switches with the grey line, long-press explanations, helpers on a change when Helpers are on). Web links (http / https) aren't managed here and keep working as before.
+- **Types, each with its own switch (registered = Android offers the app for it):**
+  - Audio files: MP3 · FLAC · AAC / M4A / ALAC · Ogg / Opus · WAV / AIFF · WMA · APE / WavPack / DSD · Matroska audio · MIDI / AMR / other.
+  - Video files: MP4 / MOV · MKV · AVI · WebM · TS / M2TS · MPEG / VOB · WMV / ASF · FLV · 3GP · Ogg video.
+  - Radio playlists: PLS · M3U / M3U8 · XSPF (files opened from other apps).
+  - Radio links: icy:// · mms:// / mmsh:// · rtsp:// · rtmp:// (new: mms / rtsp / rtmp links open in the radio player).
+  - Each row's line says who opens the type now: "Main app ✓", "Android asks which app each time", "main app now: <app>", or "Not offered".
+- **"Make it the main app for …"** under each registered type that isn't the main one: Android doesn't let apps make themselves the main app, so the steps it allows are shown and checked:
+  - another app is the main one → "Open <app>'s settings" (→ Open by default → Clear defaults), then
+  - "Open a … file / link": a real file of that type from the phone (or a test link) opens through Android's list — choose vlc interface → "Always". The app only confirms ("vlc interface opens MP3 now (main app ✓)"), plays nothing, and returns to the page, which shows the new state.
+- **All types:** Register for every type · Deregister every type · Stop being the main app (every type opened by default goes back to Android's question; types stay registered).
+- Technically: each type is its own entry of the app (an activity alias with that type's filter) switched on / off with Android's package manager; the old catch-all audio / video filter is replaced by these entries (all on by default, as before).
+- Helpers: the page, every type, and each action (register / deregister one or all, stop being the main app).

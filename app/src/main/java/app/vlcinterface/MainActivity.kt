@@ -121,6 +121,15 @@ class MainActivity : ComponentActivity() {
             app.vlcinterface.ui.openOrigin(nav)
             return
         }
+        // "Make it the main app" test (Settings → File associations): only confirmed, nothing played.
+        i?.getStringExtra(app.vlcinterface.ui.Associations.EXTRA_TEST)?.let { k ->
+            i.removeExtra(app.vlcinterface.ui.Associations.EXTRA_TEST); i.data = null
+            val t = app.vlcinterface.ui.Associations.TYPES.firstOrNull { it.key == k }
+            app.vlcinterface.ui.ShortNote.show("vlc interface opens ${t?.label ?: "these files"} now" +
+                if (app.vlcinterface.ui.Associations.opener(this, t ?: return@let) is app.vlcinterface.ui.Associations.Opener.Me) " (main app ✓)" else "")
+            if (nav.top != Screen.SettingsGroup("assoc")) nav.go(Screen.SettingsGroup("assoc"))
+            return
+        }
         if (i?.action == Intent.ACTION_VIEW) {
             val data = i.data ?: return
             // SHOUTcast / Icecast links (.pls, .m3u, .xspf or a bare stream URL): play as a radio station.

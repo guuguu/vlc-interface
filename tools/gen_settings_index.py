@@ -60,7 +60,7 @@ def walk(code, out, sec, seen):
 pages = [  # (id used to open, page name, code)
     ('main', 'Settings', body_of('SettingsScreens.kt', 'fun SettingsScreen(')),
 ] + [(g, n, branch(g)) for g, n in [('audio','Audio'),('playback','Playback & gestures'),('video','Video'),('radio','Radio'),('look','Look'),
-     ('library','Library & files'),('network','Network & NAS'),('vpn','VPN'),('vis','Visualisation'),('logs','Logs')]] + [
+     ('library','Library & files'),('network','Network & NAS'),('vpn','VPN'),('vis','Visualisation'),('logs','Logs'),('assoc','File associations')]] + [
     ('alarm', 'Alarm clock', body_of('AlarmScreens.kt', 'fun ColumnScope.AlarmSettingsBody(')),
     ('clock', 'Clock aspect', body_of('AlarmScreens.kt', 'fun ClockAspectScreen(')),
     ('backup', 'Export / import', body_of('SettingsScreens.kt', 'fun BackupScreen(')),

@@ -293,7 +293,21 @@ object SettingHelp {
         "Calendar" to "Lets the app add your alarms to the phone's calendar (on the calendar you choose), so they show next to your appointments. Nothing else in your calendar is read or changed.",
         "Location (optional)" to "Lets the clock's weather follow where you are. Only a rough location is used, once in a while.\n\nWithout it, the weather is for the city you choose on the Alarm clock page.",
         "Screen saver" to "Android shows a screen saver while the phone charges; choose 'vlc interface clock' in Android's screen saver settings to see the app's clock there.\n\nNothing to grant: it's a choice in Android's settings.",
-    )
+        // ---------------------------------------------------------------- File associations (2026-11-22 08:24)
+        "File associations" to "Which media files and radio links open with this app when you open them from another app (file manager, mail, downloads, messages, a web page's icy:// link).\n\n" +
+            "Each type has a switch: switched on, Android offers vlc interface for that type; switched off, it doesn't (the app still plays those files from its own Library). Web links (http / https) aren't set here.\n\n" +
+            "\"Main app\" means Android opens that type with this app without asking. Android doesn't let an app make itself the main app: you choose it in Android's own list (\"Always\"), and when another app is the main one you clear it in that app's settings first. \"Make it the main app…\" under a type walks you through it and checks the result.",
+        "Register for a type" to "The app is now offered for this type: when you open such a file or link from another app, vlc interface is in Android's list. To make it open them without asking, use \"Make it the main app…\" under the type.",
+        "Deregister a type" to "The app is no longer offered for this type: Android won't list it, and if it was the main app for it, another app (or Android's question) takes over. Its own Library still plays these files.",
+        "Register for every type" to "Switches every type on at once: audio and video files, radio playlists and radio links. Android then offers vlc interface for all of them; the main app for each stays as it is.",
+        "Deregister every type" to "Switches every type off at once: Android no longer offers vlc interface for any file or radio link from other apps. Nothing else changes; the app's own Library plays as before.",
+        "Stop being the main app" to "Every type that opens with vlc interface without asking goes back to Android's question (or to another app set as main). The types stay registered, so the app is still offered in the list.",
+    ) + Associations.TYPES.associate { t ->
+        t.label to (if (t.isLink) "Links starting with ${t.exts} (internet radio and streams) " else "${t.label} files (${t.exts}) ") +
+            "opened from another app. The switch says whether vlc interface is offered for them; the line under it says who opens them now: this app as the main app, Android's question each time, or another app.\n\n" +
+            "\"Make it the main app…\" shows the steps Android allows: clear the other app's default if there is one, then open one such " + (if (t.isLink) "link" else "file") +
+            " and choose vlc interface → \"Always\". Nothing is played during that test."
+    }
 
     /** The setting's own explanation (null when it has only the general one). */
     fun own(title: String): String? = texts[title]

@@ -64,13 +64,14 @@ import java.util.Locale
 /** Settings groups: id → name (the main page's links; their order is chosen in Look). */
 val SETTINGS_GROUPS: List<Pair<String, String>> = listOf("audio" to "Audio", "playback" to "Playback & gestures", "video" to "Video",
     "radio" to "Radio", "look" to "Look", "library" to "Library & files", "network" to "Network & NAS", "vpn" to "VPN",
-    "alarm" to "Alarm clock", "vis" to "Visualisation", "backup" to "Export / import", "logs" to "Logs", "folders" to "Find media folders")
+    "alarm" to "Alarm clock", "vis" to "Visualisation", "backup" to "Export / import", "logs" to "Logs", "folders" to "Find media folders", "assoc" to "File associations")
 
 private val GROUP_HINTS = mapOf("audio" to "Start volume, preamp, ReplayGain, sound engine", "playback" to "Gestures, resume, background playback",
     "video" to "Decoding, deinterlacing, subtitles", "radio" to "Saving songs, radio buffer, free space", "look" to "Colours, sizes, menus, order of these links",
     "library" to "Scanning, album pictures, deleting files", "network" to "SMB1, Spotify links", "vpn" to "Home NAS through ZeroTier / Tailscale",
     "alarm" to "Alarms, ringing, wake check, clock aspect", "vis" to "Patterns, colours, frequencies", "backup" to "Your whole setup in one file",
-    "logs" to "Errors, servers, indexing, crashes, caches", "folders" to "Search the phone, SD card and Downloads for music and videos")
+    "logs" to "Errors, servers, indexing, crashes, caches", "folders" to "Search the phone, SD card and Downloads for music and videos",
+    "assoc" to "Which media files and radio links open with this app")
 
 /** The main Settings page's links, in the chosen order (new groups added at the end). */
 fun orderedGroups(order: List<String>): List<Pair<String, String>> {
@@ -970,6 +971,9 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 Divider()
                 ValueRow("VPN log", "VPN on / off, servers found, LAN ↔ VPN switches", "Open") { nav.go(Screen.LogPage("vpn")) }
             }
+                }
+                "assoc" -> {
+            AssociationSettings()
                 }
                 "vis" -> {
             SectionTitle("Visualisation")

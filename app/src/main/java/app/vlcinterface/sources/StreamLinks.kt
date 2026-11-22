@@ -28,6 +28,8 @@ object StreamLinks {
         val s = uri.scheme?.lowercase()
         // A plain http stream with no media file name (e.g. http://host:8000/ or /stream, /;) is a station.
         if ((s == "http" || s == "https" || s == "icy") && ext !in VIDEO_EXT && ext !in AUDIO_EXT && ext != "m3u8") return true
+        // Dedicated stream links (08:24): mms / rtsp / rtmp without a media file name play as a station.
+        if ((s == "mms" || s == "mmsh" || s == "rtsp" || s == "rtmp") && ext !in VIDEO_EXT) return true
         return false
     }
 

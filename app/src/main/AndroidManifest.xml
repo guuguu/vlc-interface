@@ -32,6 +32,14 @@
     <!-- "Open Shazam" in the radio menu: Android 11+ only shows apps that are named here. -->
     <queries>
         <package android:name="com.shazam.android" />
+        <!-- File associations: which app opens each media type / link now. -->
+        <intent><action android:name="android.intent.action.VIEW" /><data android:mimeType="audio/*" /></intent>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:mimeType="video/*" /></intent>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:mimeType="application/*" /></intent>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="icy" /></intent>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="mms" /></intent>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="rtsp" /></intent>
+        <intent><action android:name="android.intent.action.VIEW" /><data android:scheme="rtmp" /></intent>
     </queries>
 
     <application
@@ -56,13 +64,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="content" android:mimeType="video/*" />
-                <data android:scheme="file" android:mimeType="video/*" />
-                <data android:scheme="content" android:mimeType="audio/*" />
-            </intent-filter>
             <!-- SHOUTcast / Icecast: links marked as radio playlists or streams (by type) open in the radio player. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -70,32 +71,18 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="http" android:mimeType="audio/x-scpls" />
                 <data android:scheme="https" android:mimeType="audio/x-scpls" />
-                <data android:scheme="content" android:mimeType="audio/x-scpls" />
-                <data android:scheme="file" android:mimeType="audio/x-scpls" />
                 <data android:scheme="http" android:mimeType="audio/scpls" />
                 <data android:scheme="https" android:mimeType="audio/scpls" />
-                <data android:scheme="content" android:mimeType="audio/scpls" />
-                <data android:scheme="file" android:mimeType="audio/scpls" />
                 <data android:scheme="http" android:mimeType="application/pls+xml" />
                 <data android:scheme="https" android:mimeType="application/pls+xml" />
-                <data android:scheme="content" android:mimeType="application/pls+xml" />
-                <data android:scheme="file" android:mimeType="application/pls+xml" />
                 <data android:scheme="http" android:mimeType="audio/x-mpegurl" />
                 <data android:scheme="https" android:mimeType="audio/x-mpegurl" />
-                <data android:scheme="content" android:mimeType="audio/x-mpegurl" />
-                <data android:scheme="file" android:mimeType="audio/x-mpegurl" />
                 <data android:scheme="http" android:mimeType="audio/mpegurl" />
                 <data android:scheme="https" android:mimeType="audio/mpegurl" />
-                <data android:scheme="content" android:mimeType="audio/mpegurl" />
-                <data android:scheme="file" android:mimeType="audio/mpegurl" />
                 <data android:scheme="http" android:mimeType="application/x-mpegurl" />
                 <data android:scheme="https" android:mimeType="application/x-mpegurl" />
-                <data android:scheme="content" android:mimeType="application/x-mpegurl" />
-                <data android:scheme="file" android:mimeType="application/x-mpegurl" />
                 <data android:scheme="http" android:mimeType="application/xspf+xml" />
                 <data android:scheme="https" android:mimeType="application/xspf+xml" />
-                <data android:scheme="content" android:mimeType="application/xspf+xml" />
-                <data android:scheme="file" android:mimeType="application/xspf+xml" />
                 <data android:scheme="http" android:mimeType="audio/mpeg" />
                 <data android:scheme="https" android:mimeType="audio/mpeg" />
                 <data android:scheme="http" android:mimeType="audio/aac" />
@@ -133,15 +120,339 @@
                 <data android:pathPattern=".*\\..*\\.xspf" />
                 <data android:pathPattern=".*\\..*\\..*\\.xspf" />
             </intent-filter>
-            <!-- SHOUTcast icy:// links. -->
+        </activity>
+
+        <!-- File / link association "mp3" (MP3): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_mp3" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/mpeg" />
+                <data android:scheme="file" android:mimeType="audio/mpeg" />
+                <data android:scheme="content" android:mimeType="audio/mp3" />
+                <data android:scheme="file" android:mimeType="audio/mp3" />
+                <data android:scheme="content" android:mimeType="audio/x-mp3" />
+                <data android:scheme="file" android:mimeType="audio/x-mp3" />
+                <data android:scheme="content" android:mimeType="audio/mpeg3" />
+                <data android:scheme="file" android:mimeType="audio/mpeg3" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "flac" (FLAC): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_flac" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/flac" />
+                <data android:scheme="file" android:mimeType="audio/flac" />
+                <data android:scheme="content" android:mimeType="audio/x-flac" />
+                <data android:scheme="file" android:mimeType="audio/x-flac" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "m4a" (AAC / M4A / ALAC): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_m4a" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/mp4" />
+                <data android:scheme="file" android:mimeType="audio/mp4" />
+                <data android:scheme="content" android:mimeType="audio/aac" />
+                <data android:scheme="file" android:mimeType="audio/aac" />
+                <data android:scheme="content" android:mimeType="audio/x-aac" />
+                <data android:scheme="file" android:mimeType="audio/x-aac" />
+                <data android:scheme="content" android:mimeType="audio/m4a" />
+                <data android:scheme="file" android:mimeType="audio/m4a" />
+                <data android:scheme="content" android:mimeType="audio/x-m4a" />
+                <data android:scheme="file" android:mimeType="audio/x-m4a" />
+                <data android:scheme="content" android:mimeType="audio/mp4a-latm" />
+                <data android:scheme="file" android:mimeType="audio/mp4a-latm" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "ogg" (Ogg / Opus): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_ogg" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/ogg" />
+                <data android:scheme="file" android:mimeType="audio/ogg" />
+                <data android:scheme="content" android:mimeType="audio/opus" />
+                <data android:scheme="file" android:mimeType="audio/opus" />
+                <data android:scheme="content" android:mimeType="audio/vorbis" />
+                <data android:scheme="file" android:mimeType="audio/vorbis" />
+                <data android:scheme="content" android:mimeType="audio/x-vorbis+ogg" />
+                <data android:scheme="file" android:mimeType="audio/x-vorbis+ogg" />
+                <data android:scheme="content" android:mimeType="application/ogg" />
+                <data android:scheme="file" android:mimeType="application/ogg" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "wav" (WAV / AIFF): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_wav" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/wav" />
+                <data android:scheme="file" android:mimeType="audio/wav" />
+                <data android:scheme="content" android:mimeType="audio/x-wav" />
+                <data android:scheme="file" android:mimeType="audio/x-wav" />
+                <data android:scheme="content" android:mimeType="audio/wave" />
+                <data android:scheme="file" android:mimeType="audio/wave" />
+                <data android:scheme="content" android:mimeType="audio/vnd.wave" />
+                <data android:scheme="file" android:mimeType="audio/vnd.wave" />
+                <data android:scheme="content" android:mimeType="audio/aiff" />
+                <data android:scheme="file" android:mimeType="audio/aiff" />
+                <data android:scheme="content" android:mimeType="audio/x-aiff" />
+                <data android:scheme="file" android:mimeType="audio/x-aiff" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "wma" (WMA): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_wma" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/x-ms-wma" />
+                <data android:scheme="file" android:mimeType="audio/x-ms-wma" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "hires" (APE / WavPack / DSD): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_hires" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/ape" />
+                <data android:scheme="file" android:mimeType="audio/ape" />
+                <data android:scheme="content" android:mimeType="audio/x-ape" />
+                <data android:scheme="file" android:mimeType="audio/x-ape" />
+                <data android:scheme="content" android:mimeType="audio/x-monkeys-audio" />
+                <data android:scheme="file" android:mimeType="audio/x-monkeys-audio" />
+                <data android:scheme="content" android:mimeType="audio/x-wavpack" />
+                <data android:scheme="file" android:mimeType="audio/x-wavpack" />
+                <data android:scheme="content" android:mimeType="audio/wavpack" />
+                <data android:scheme="file" android:mimeType="audio/wavpack" />
+                <data android:scheme="content" android:mimeType="audio/dsf" />
+                <data android:scheme="file" android:mimeType="audio/dsf" />
+                <data android:scheme="content" android:mimeType="audio/x-dsf" />
+                <data android:scheme="file" android:mimeType="audio/x-dsf" />
+                <data android:scheme="content" android:mimeType="audio/x-dff" />
+                <data android:scheme="file" android:mimeType="audio/x-dff" />
+                <data android:scheme="content" android:mimeType="audio/dff" />
+                <data android:scheme="file" android:mimeType="audio/dff" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "mka" (Matroska audio): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_mka" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/x-matroska" />
+                <data android:scheme="file" android:mimeType="audio/x-matroska" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "midi" (MIDI / AMR / other): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_midi" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/midi" />
+                <data android:scheme="file" android:mimeType="audio/midi" />
+                <data android:scheme="content" android:mimeType="audio/x-midi" />
+                <data android:scheme="file" android:mimeType="audio/x-midi" />
+                <data android:scheme="content" android:mimeType="audio/amr" />
+                <data android:scheme="file" android:mimeType="audio/amr" />
+                <data android:scheme="content" android:mimeType="audio/3gpp" />
+                <data android:scheme="file" android:mimeType="audio/3gpp" />
+                <data android:scheme="content" android:mimeType="audio/3gpp2" />
+                <data android:scheme="file" android:mimeType="audio/3gpp2" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "mp4" (MP4 / MOV): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_mp4" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/mp4" />
+                <data android:scheme="file" android:mimeType="video/mp4" />
+                <data android:scheme="content" android:mimeType="video/quicktime" />
+                <data android:scheme="file" android:mimeType="video/quicktime" />
+                <data android:scheme="content" android:mimeType="video/x-m4v" />
+                <data android:scheme="file" android:mimeType="video/x-m4v" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "mkv" (MKV): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_mkv" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/x-matroska" />
+                <data android:scheme="file" android:mimeType="video/x-matroska" />
+                <data android:scheme="content" android:mimeType="video/matroska" />
+                <data android:scheme="file" android:mimeType="video/matroska" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "avi" (AVI): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_avi" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/x-msvideo" />
+                <data android:scheme="file" android:mimeType="video/x-msvideo" />
+                <data android:scheme="content" android:mimeType="video/avi" />
+                <data android:scheme="file" android:mimeType="video/avi" />
+                <data android:scheme="content" android:mimeType="video/divx" />
+                <data android:scheme="file" android:mimeType="video/divx" />
+                <data android:scheme="content" android:mimeType="video/x-divx" />
+                <data android:scheme="file" android:mimeType="video/x-divx" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "webm" (WebM): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_webm" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/webm" />
+                <data android:scheme="file" android:mimeType="video/webm" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "ts" (TS / M2TS): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_ts" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/mp2t" />
+                <data android:scheme="file" android:mimeType="video/mp2t" />
+                <data android:scheme="content" android:mimeType="video/MP2T" />
+                <data android:scheme="file" android:mimeType="video/MP2T" />
+                <data android:scheme="content" android:mimeType="video/vnd.dlna.mpeg-tts" />
+                <data android:scheme="file" android:mimeType="video/vnd.dlna.mpeg-tts" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "mpeg" (MPEG / VOB): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_mpeg" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/mpeg" />
+                <data android:scheme="file" android:mimeType="video/mpeg" />
+                <data android:scheme="content" android:mimeType="video/x-mpeg" />
+                <data android:scheme="file" android:mimeType="video/x-mpeg" />
+                <data android:scheme="content" android:mimeType="video/dvd" />
+                <data android:scheme="file" android:mimeType="video/dvd" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "wmv" (WMV / ASF): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_wmv" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/x-ms-wmv" />
+                <data android:scheme="file" android:mimeType="video/x-ms-wmv" />
+                <data android:scheme="content" android:mimeType="video/x-ms-asf" />
+                <data android:scheme="file" android:mimeType="video/x-ms-asf" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "flv" (FLV): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_flv" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/x-flv" />
+                <data android:scheme="file" android:mimeType="video/x-flv" />
+                <data android:scheme="content" android:mimeType="video/flv" />
+                <data android:scheme="file" android:mimeType="video/flv" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "3gp" (3GP): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_3gp" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/3gpp" />
+                <data android:scheme="file" android:mimeType="video/3gpp" />
+                <data android:scheme="content" android:mimeType="video/3gpp2" />
+                <data android:scheme="file" android:mimeType="video/3gpp2" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "ogv" (Ogg video): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_ogv" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="video/ogg" />
+                <data android:scheme="file" android:mimeType="video/ogg" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "pls" (PLS radio playlists): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_pls" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/x-scpls" />
+                <data android:scheme="file" android:mimeType="audio/x-scpls" />
+                <data android:scheme="content" android:mimeType="audio/scpls" />
+                <data android:scheme="file" android:mimeType="audio/scpls" />
+                <data android:scheme="content" android:mimeType="application/pls+xml" />
+                <data android:scheme="file" android:mimeType="application/pls+xml" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "m3u" (M3U playlists): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_m3u" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="audio/x-mpegurl" />
+                <data android:scheme="file" android:mimeType="audio/x-mpegurl" />
+                <data android:scheme="content" android:mimeType="audio/mpegurl" />
+                <data android:scheme="file" android:mimeType="audio/mpegurl" />
+                <data android:scheme="content" android:mimeType="application/x-mpegurl" />
+                <data android:scheme="file" android:mimeType="application/x-mpegurl" />
+                <data android:scheme="content" android:mimeType="application/vnd.apple.mpegurl" />
+                <data android:scheme="file" android:mimeType="application/vnd.apple.mpegurl" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "xspf" (XSPF playlists): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_xspf" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="content" android:mimeType="application/xspf+xml" />
+                <data android:scheme="file" android:mimeType="application/xspf+xml" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "icy" (icy:// radio links): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_icy" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="icy" />
             </intent-filter>
-        </activity>
-
+        </activity-alias>
+        <!-- File / link association "mms" (mms:// streams): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_mms" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mms" />
+                <data android:scheme="mmsh" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "rtsp" (rtsp:// streams): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_rtsp" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="rtsp" />
+            </intent-filter>
+        </activity-alias>
+        <!-- File / link association "rtmp" (rtmp:// streams): switched on / off in Settings → File associations. -->
+        <activity-alias android:name=".Assoc_rtmp" android:targetActivity=".MainActivity" android:exported="true" android:enabled="true" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="rtmp" />
+            </intent-filter>
+        </activity-alias>
         <!-- Target of notification / lock-screen taps: does nothing while the phone is locked. -->
         <activity
             android:name=".OpenOriginActivity"
