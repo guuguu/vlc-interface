@@ -3,6 +3,7 @@ package app.vlcinterface.ui
 import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -890,6 +891,30 @@ fun VisualisationScreen(nav: Navigator) {
 
 // ---------------------------------------------------------------- clock full screen
 
+/** The playing item as one line: artist – title (song), station · what it plays (radio), the video's title. */
+fun playingLine(ps: app.vlcinterface.player.PlayerState): String {
+    val it = ps.item ?: return ""
+    return when {
+        it.isRadio -> listOf(ps.stationName.ifEmpty { it.title }, ps.nowPlaying).filter { x -> x.isNotBlank() }.distinct().joinToString("  ·  ")
+        it.isMusic -> listOf(ps.metaArtist.ifEmpty { it.artist }, it.title).filter { x -> x.isNotBlank() }.joinToString(" – ")
+        else -> it.title
+    }
+}
+
+/**
+ * The name gliding continuously right to left, even when it would fit (the line is repeated with a gap, so the band is
+ * never still), big and white, on the full-screen clock.
+ */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun FullScreenTicker(text: String, modifier: Modifier, size: androidx.compose.ui.unit.TextUnit) {
+    Box(modifier, contentAlignment = Alignment.CenterStart) {
+        Text(List(6) { text }.joinToString("        ●        "), color = Color.White.copy(alpha = 0.9f), fontSize = size, maxLines = 1, softWrap = false,
+            modifier = Modifier.fillMaxWidth().basicMarquee(iterations = Int.MAX_VALUE, initialDelayMillis = 0, repeatDelayMillis = 0,
+                spacing = androidx.compose.foundation.MarqueeSpacing(96.dp), velocity = 70.dp))
+    }
+}
+
 /** The player's floating play / pause on the full-screen visualisation and clock (2026-11-22 17:30), unless set to Off. */
 @Composable
 fun androidx.compose.foundation.layout.BoxScope.FullScreenPlayButton() {
@@ -941,8 +966,16 @@ fun ClockFullScreen(nav: Navigator) {
                 }
             }
         }, contentAlignment = Alignment.Center) {
-        val side = minOf(maxWidth, maxHeight) - 24.dp
-        ClockFace(st.aspect, Modifier.size(side.coerceAtLeast(60.dp)))
+        // What's playing (19:49): a band along the bottom with its name gliding continuously, big — no buttons, no labels.
+        val ps = app.vlcinterface.App.instance.player.state.collectAsState().value
+        val line = playingLine(ps)
+        val bandH = if (line.isEmpty()) 0.dp else (maxHeight * 0.13f).coerceIn(56.dp, 110.dp)
+        val side = (minOf(maxWidth, maxHeight - bandH) - 24.dp).coerceAtLeast(60.dp)
+        Box(Modifier.align(Alignment.TopCenter).padding(top = ((maxHeight - bandH - side) / 2).coerceAtLeast(0.dp))) {
+            ClockFace(st.aspect, Modifier.size(side))
+        }
+        if (line.isNotEmpty()) FullScreenTicker(line, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(bandH),
+            with(LocalDensity.current) { (bandH * 0.52f).toSp() })
         // The floating play / pause button, as on the player (its size, colour, place; dragging it moves it) — unless it's Off (17:30).
         FullScreenPlayButton()
         if (showB) Text("☀ ${(bright * 100).toInt()} %", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp))
