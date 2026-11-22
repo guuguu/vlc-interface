@@ -259,6 +259,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             // On-screen buttons size (2026-11-21 17:13): the video player's buttons (side columns sideways, under the
             // picture upright) — bigger or smaller together, always against the edges and touching each other.
             SectionTitle("On-screen buttons")
+            var vidHelp by remember { mutableStateOf("") }
+            val helpersV = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.helpers
             CardBox {
                 Column(Modifier.explain("On screen buttons size").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -270,7 +272,28 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     Text("The video player's buttons; never larger than the screen allows (they stay apart from each other and inside the edges).",
                         color = C.muted, fontSize = 12.sp)
                 }
+                Divider()
+                // Clock on the video picture (2026-11-22 13:23): time only, top-left, always while a video plays.
+                ToggleRow("Clock on the video", "The time in the top-left corner of the picture", s.videoClock) { v ->
+                    set(s.copy(videoClock = v)); if (helpersV) vidHelp = "Clock on the video" }
+                if (s.videoClock) Column(Modifier.padding(horizontal = 16.dp, vertical = (6 * sg()).dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Clock size", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Clock size").weight(1f).explain("Clock on the video"))
+                        Text("${s.videoClockPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(videoClockPct = 100)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.videoClockPct.toFloat(), { v -> set(s.copy(videoClockPct = (Math.round(v / 10f) * 10).coerceIn(50, 250))) }, valueRange = 50f..250f,
+                        onHoldStill = { if (helpersV) vidHelp = "Clock on the video" })
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Clock opacity", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Clock opacity").weight(1f).explain("Clock on the video"))
+                        Text("${s.videoClockAlpha} %", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(videoClockAlpha = 80)) }) { Text("Reset") }
+                    }
+                    ThinSlider(s.videoClockAlpha.toFloat(), { v -> set(s.copy(videoClockAlpha = (Math.round(v / 5f) * 5).coerceIn(20, 100))) }, valueRange = 20f..100f,
+                        onHoldStill = { if (helpersV) vidHelp = "Clock on the video" })
+                }
             }
+            if (vidHelp.isNotEmpty()) HelperDialog(vidHelp, SettingHelp.text(vidHelp, "")) { vidHelp = "" }
             SectionTitle("Picture")
             run {
                 var vHelp by remember { mutableStateOf("") }

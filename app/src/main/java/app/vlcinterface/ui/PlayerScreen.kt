@@ -286,6 +286,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 // left / right thirds still seek back / forward.
                 onCenterDouble = { MainActivity.instance?.enterPip() },
             )
+            // The time on the picture, top-left (13:23): always while a video plays (Settings → Video → On-screen buttons).
+            if (!inPip && st.settings.videoClock) VideoClock(st.settings.videoClockPct, st.settings.videoClockAlpha, Modifier.align(Alignment.TopStart))
             if (p.buffering < 100f && !p.isPlaying && p.error.isEmpty()) CircularProgressIndicator(Modifier.align(Alignment.Center), color = accent())
             if (p.error.isNotEmpty()) Text(p.error, color = C.bad, modifier = Modifier.align(Alignment.Center).background(Color(0xAA000000)).padding(12.dp))
             if (toast.isNotEmpty()) Text(toast, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
@@ -1832,4 +1834,19 @@ private fun BoxScope.VideoTopBar(p: PlayerState, nav: Navigator, locked: Boolean
 /** The video player's "🔎 Find" search (2026-11-22 08:13). */
 object VideoFindUi {
     var open by androidx.compose.runtime.mutableStateOf(false)
+}
+
+
+/** The time over the video (white with a soft shadow, see-through), following the clock's 24-hour setting. */
+@Composable
+private fun VideoClock(sizePct: Int, alphaPct: Int, modifier: Modifier) {
+    val h24 = app.vlcinterface.alarm.Alarms.state.collectAsState().value.aspect.h24
+    val now by androidx.compose.runtime.produceState(System.currentTimeMillis()) {
+        while (true) { value = System.currentTimeMillis(); kotlinx.coroutines.delay(1000L - value % 1000L + 5) }
+    }
+    val text = remember(now / 60_000, h24) { java.text.SimpleDateFormat(if (h24) "HH:mm" else "h:mm a", java.util.Locale.getDefault()).format(java.util.Date(now)) }
+    Text(text, color = Color.White.copy(alpha = alphaPct / 100f), fontSize = (18f * sizePct / 100f).sp, fontWeight = FontWeight.SemiBold,
+        style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.8f * alphaPct / 100f),
+            androidx.compose.ui.geometry.Offset(0f, 2f), 6f)),
+        modifier = modifier.padding(start = 12.dp, top = 8.dp))
 }
