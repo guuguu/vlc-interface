@@ -1449,7 +1449,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 if (fa.covered(context, item)) null else fa.folderToAsk(context, item)
             } ?: return@launch
             if (fa.declinedFor(f) || !rgWriteAsked.add(f)) return@launch
-            if (fa.ask.value == null) fa.ask.value = fa.Ask(f, null) else rgWriteAsked.remove(f)   // another question open: next song
+            if (fa.ask.value == null) fa.ask.value = app.vlcinterface.sources.MusicFolderAccess.Ask(f, null) else rgWriteAsked.remove(f)   // another question open: next song
         }
     }
 
