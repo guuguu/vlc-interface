@@ -345,8 +345,8 @@ fun RgFailureReport(nav: Navigator) {
                     Text("To save ReplayGain in the songs' tags, the app needs permission to change the music files in this folder:", color = C.text, fontSize = 14.sp)
                     Text(a.path.removePrefix("/storage/emulated/0").ifEmpty { "/" }, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Text("Android's folder picker opens on it: tap \"Use this folder\", then \"Allow\". The app gets this folder and its " +
-                        "subfolders only — not your mails, photos, messages or anything else. Asked once; it can be removed in " +
-                        "Settings → Audio → ReplayGain.", color = C.muted, fontSize = 13.sp)
+                        "subfolders only — not your mails, photos, messages or anything else. It can be removed in " +
+                        "Settings → Audio → ReplayGain. No: never asked again for this folder (it can still be added there).", color = C.muted, fontSize = 13.sp)
                 }
             },
             confirmButton = { STextButton({
@@ -354,9 +354,9 @@ fun RgFailureReport(nav: Navigator) {
                 catch (_: Exception) { a.answer?.complete(false); app.vlcinterface.sources.MusicFolderAccess.ask.value = null }
             }) { Text("Choose folder", color = accent()) } },
             dismissButton = { STextButton({
-                app.vlcinterface.sources.MusicFolderAccess.decline(a.path); a.answer?.complete(false)
+                app.vlcinterface.sources.MusicFolderAccess.refuse(a.path); a.answer?.complete(false)
                 app.vlcinterface.sources.MusicFolderAccess.ask.value = null
-            }) { Text("Not now") } })
+            }) { Text("No") } })
     }
     if (!s.reportPending || !s.finished) return
     val fails = s.results.filter { !it.ok }

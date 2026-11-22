@@ -76,15 +76,27 @@ object MusicFolderAccess {
     /** The folder picked: kept (read + write) for good. */
     fun keep(ctx: Context, tree: Uri) {
         try { ctx.contentResolver.takePersistableUriPermission(tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } catch (_: Exception) {}
+        try { DocumentsContract.getTreeDocumentId(tree).let { id -> pathOf(id)?.let { unrefuse(it) } } } catch (_: Exception) {}
     }
 
     fun remove(ctx: Context, g: Grant) {
         try { ctx.contentResolver.releasePersistableUriPermission(g.tree, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } catch (_: Exception) {}
     }
 
-    /** "Not now" for a folder: not asked again for it (until a scan is started from a menu). */
+    /**
+     * "No" for a folder (2026-11-22 07:41): a valid answer, kept for good — never asked again, by scans or while playing.
+     * Access can still be given by hand (Settings → Audio → ReplayGain → Music folders with write access), which
+     * clears it. Backing out of Android's folder picker only skips it until the app restarts.
+     */
     private val declined = HashSet<String>()
-    fun declinedFor(path: String) = synchronized(declined) { path in declined }
+    private fun prefs() = app.vlcinterface.App.instance.getSharedPreferences("music_folder_access", Context.MODE_PRIVATE)
+    private val refused: MutableSet<String> by lazy { HashSet(try { prefs().getStringSet("no", emptySet()) ?: emptySet() } catch (_: Exception) { emptySet() }) }
+    fun declinedFor(path: String) = synchronized(declined) { path in declined || path in refused }
     fun decline(path: String) = synchronized(declined) { declined += path }
+    fun refuse(path: String) = synchronized(declined) { refused += path; try { prefs().edit().putStringSet("no", HashSet(refused)).apply() } catch (_: Exception) {} }
+    private fun unrefuse(path: String) = synchronized(declined) {
+        if (refused.removeAll { it == path || it.startsWith(path.trimEnd('/') + "/") || path.startsWith(it.trimEnd('/') + "/") })
+            try { prefs().edit().putStringSet("no", HashSet(refused)).apply() } catch (_: Exception) {}
+    }
     fun clearDeclined() = synchronized(declined) { declined.clear() }
 }
