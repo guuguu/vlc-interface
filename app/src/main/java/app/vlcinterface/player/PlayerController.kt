@@ -607,6 +607,9 @@ class PlayerController(private val context: Context, private val store: Store) {
      * arrives, and that wait was wrongly taken as a failure — the app then switched to libVLC's output for the rest
      * of the run ("RG … (libVLC)"). Not ready yet → looked at again a little later (up to ~20 s).
      */
+    /** A video's first "no sound" verdict: checked once more before giving up the app's output (see below). */
+    private var videoDoubt: PlayItem? = null
+
     private fun watchSound(tries: Int = 0) {
         if (!NativeAudio.active) return
         val s0 = _state.value
@@ -642,6 +645,14 @@ class PlayerController(private val context: Context, private val store: Store) {
                 now.plays == before.plays -> "libVLC delivered no sound to the app"
                 now.heard <= before.heard -> "the phone did not play the sound (state ${now.state}, start ${now.startResult})"
                 else -> null
+            }
+            // A video starting (11:47: the output picked jumped to Bluetooth when a new episode began): its sound can
+            // take a while longer to start than a song's — and falling back to libVLC's output sends the sound where
+            // Android routes it, away from the device picked in the app. A video's first verdict is checked once more.
+            if (problem != null && s.item?.isMusic == false && videoDoubt !== s.item) {
+                videoDoubt = s.item
+                ServerLog.log("sound-engine", "sound", "AAudio", "", true, "Video sound not heard yet ($problem) — checked again before switching")
+                watchSound(tries); return@postDelayed
             }
             if (problem != null) {
                 val detail = now.toString()
