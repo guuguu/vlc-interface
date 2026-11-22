@@ -43,19 +43,33 @@ class OutputRouter(private val context: Context) {
     var onActiveChanged: ((OutputDevice?, OutputDevice?, Boolean) -> Unit)? = null
     @Volatile private var userPick = false
 
-    /** Device picked in the app's Sound output sheet (null = follow Android). */
+    /**
+     * Device picked in the app's Sound output sheet (null = follow Android). It stays until that device is
+     * disconnected or another one is picked (2026-11-22 11:45: it was dropped twice for a Bluetooth device that was
+     * still connected — Android's routing report flickering while our sound was moved, or the Bluetooth device being
+     * re-announced with a new number). Kept across app restarts.
+     */
     @Volatile private var chosen: String? = null
     private var lastRouted: String? = null
+    /** The device number the sound engine plays to (re-applied when the chosen device comes back with a new number). */
+    private var appliedId = 0
+    /** Android's output switcher opened from the app: a change made there in the next 60 s counts as picked by hand. */
+    private var switcherAt = 0L
+    private val prefs = context.getSharedPreferences("output", Context.MODE_PRIVATE)
+
+    private fun drop(why: String) {
+        if (chosen == null) return
+        try { app.vlcinterface.data.ServerLog.log("player", "output", "", "", true, "Sound output ${chosen!!.substringAfter(':')} released: $why") } catch (_: Exception) {}
+        chosen = null; appliedId = 0; NativeAudio.device(0)
+        prefs.edit().remove("chosen").apply()
+    }
 
     private val callback = object : AudioDeviceCallback() {
         override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>?) {
             // A device just connected (Bluetooth, headphones): follow Android's choice again, like other players.
             // Only a real new output (Bluetooth, headphones, USB) that wasn't there before counts.
-            val known = _devices.value.filter { it.connected }.map { it.id }.toSet()
-            val real = addedDevices?.any { it.isSink && it.id !in known && it.type in setOf(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP,
-                AudioDeviceInfo.TYPE_BLE_HEADSET, AudioDeviceInfo.TYPE_BLE_SPEAKER, AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-                AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_USB_DEVICE) } == true
-            if (chosen != null && real) { chosen = null; NativeAudio.device(0) }
+            // A device connecting no longer takes the sound away from the one picked in the app (11:45): the
+            // picked one stays until it's disconnected or another is picked. (Following Android, nothing changes.)
             refresh()
         }
         override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>?) = refresh()
@@ -71,8 +85,12 @@ class OutputRouter(private val context: Context) {
         }
     }
 
+    private var goneSince = 0L
+
     init {
         am.registerAudioDeviceCallback(callback, handler)
+        // The device picked last time (kept across restarts), used again when it's connected.
+        chosen = prefs.getString("chosen", null)
         refresh()
         handler.postDelayed(poller, 1500)
     }
@@ -124,11 +142,21 @@ class OutputRouter(private val context: Context) {
         // Android's own routing changed (output switcher, quick settings): its choice wins over the app's.
         val routedKey = list.firstOrNull { it.active }?.key
         // (When our own sound plays on the chosen device, Android reports that device: that's not a change by Android.)
-        if (chosen != null && lastRouted != null && routedKey != lastRouted && routedKey != chosen) { chosen = null; NativeAudio.device(0) }
+        // Only a change made in Android's output switcher opened from the app counts as a new pick; Android's own routing
+        // report flickers while the app's sound moves between devices and is otherwise ignored.
+        if (chosen != null && lastRouted != null && routedKey != lastRouted && routedKey != chosen &&
+            System.currentTimeMillis() - switcherAt < 60_000) drop("changed in Android's output switcher")
         lastRouted = routedKey
         // Output chosen in the app (our own sound output plays straight to it): that's where the sound is.
         val chosenDev = chosen?.let { k -> list.firstOrNull { it.key == k && it.connected } }
-        if (chosen != null && chosenDev == null) { chosen = null; NativeAudio.device(0) }   // chosen device went away: Android default again
+        // The chosen device went away: a few seconds' grace (a Bluetooth reconnect, the phone re-announcing it), then
+        // Android's default again.
+        if (chosen != null && chosenDev == null) {
+            if (goneSince == 0L) goneSince = System.currentTimeMillis()
+            else if (System.currentTimeMillis() - goneSince > 6_000) drop("disconnected")
+        } else goneSince = 0L
+        // Same device, new number (reconnected): the sound engine follows it.
+        if (chosenDev != null && chosenDev.id > 0 && chosenDev.id != appliedId && NativeAudio.active) { appliedId = chosenDev.id; NativeAudio.device(chosenDev.id) }
         if (chosenDev != null) for (i in list.indices) list[i] = list[i].copy(active = list[i].key == chosenDev.key)
         if (list.none { it.active }) {
             // Fallback: Bluetooth > wired > speaker, which is Android's usual media priority.
@@ -162,7 +190,8 @@ class OutputRouter(private val context: Context) {
     fun select(d: OutputDevice) {
         if (!d.connected) { openBluetoothSettings(); return }
         if (NativeAudio.active && d.id > 0) {
-            chosen = d.key
+            chosen = d.key; appliedId = d.id; goneSince = 0L
+            prefs.edit().putString("chosen", d.key).apply()
             NativeAudio.device(d.id)
             userPick = true
             refresh()
@@ -178,6 +207,7 @@ class OutputRouter(private val context: Context) {
 
     /** Opens Android's media output switcher for this app, or Bluetooth settings on older systems. */
     fun openSwitcher(): Boolean {
+        switcherAt = System.currentTimeMillis()
         if (Build.VERSION.SDK_INT >= 34) {
             try {
                 if (MediaRouter2.getInstance(context).showSystemOutputSwitcher()) return true

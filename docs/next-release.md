@@ -1335,3 +1335,11 @@
 
 ## Library searches wait for the typing to stop (requested 2026-11-22 11:40)
 - Every library search starts 2 s after the last letter typed; each new letter starts the 2 s again (emptying the box applies at once): Library → Songs, Library → Videos, the "Jump to…" box of long lists (folders, queue, playlists), Jump to / Play next / Find a video, and the song / folder search in file menus. The text shows at once; the list stops jumping and filtering on every key.
+
+## The sound output picked stays picked (reported 2026-11-22 11:45)
+- **Found, two ways the app dropped the output picked in the Sound output sheet** (phone speaker picked, Bluetooth device still connected → back to Bluetooth):
+  - Android's report of where media goes flickers while the app moves its own sound to the picked device; a flicker was taken as "changed in Android's output switcher" and the pick was dropped.
+  - a Bluetooth device re-announced by the phone (codec / profile change, short reconnect) comes back with a new number and was taken for a newly connected device, which took the sound.
+- **Now the picked output stays until it is disconnected or you pick another one** — in the app, or in Android's output switcher opened from the app (within a minute). A device connecting doesn't take the sound away; a short drop of the picked device (up to 6 s, a Bluetooth reconnect) keeps it, and when it comes back with a new number the sound follows it.
+- The pick is kept across app restarts (used again when that device is connected). Each release of the pick is written to the Player log with the reason ("disconnected", "changed in Android's output switcher").
+- With libVLC's own output (fallback), Android decides the output as before.
