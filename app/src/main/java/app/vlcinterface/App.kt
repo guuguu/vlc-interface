@@ -46,11 +46,13 @@ class App : Application() {
         app.vlcinterface.sources.CoverArt.init(this)
         app.vlcinterface.sources.NetIndex.init(this)
         app.vlcinterface.sources.NetIndex.autoStart()        // home-network pins not indexed yet, and interrupted ones: in the background
-        // The volume is kept only: after Exit and opened again (within 30 min), or when the app was restarted by a
+        // The volume is kept only: after Exit and opened again (within "Reset volume after"), or when the app was restarted by a
         // short hiccup of Bluetooth / the sound system (back within 2 min). Otherwise: the start volume.
         val vk = getSharedPreferences("volkeep", MODE_PRIVATE)
         val asleep = System.currentTimeMillis() - vk.getLong("alive", 0)
-        val keep = vk.getLong("alive", 0) > 0L && (if (vk.getBoolean("cleanExit", false)) asleep <= KEEP_MS else asleep <= BLIP_MS)
+        // After Exit: kept within Settings → Audio → "Reset volume after" (0 = never kept); a restart from the app: never kept.
+        val keepMs = store.current.settings.idleResetMin.let { if (it <= 0) 0L else it * 60_000L }
+        val keep = vk.getLong("alive", 0) > 0L && (if (vk.getBoolean("cleanExit", false)) asleep <= keepMs else asleep <= BLIP_MS)
         if (!keep) applyStartVolume()
         else vk.getInt("pct", -1).takeIf { it >= 0 }?.let { p -> try {
             val am = getSystemService(AudioManager::class.java); val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
@@ -76,7 +78,8 @@ class App : Application() {
         // Every minute: alive, and the volume now (kept over a restart / a Bluetooth drop shorter than 30 min).
         android.os.Handler(android.os.Looper.getMainLooper()).let { h ->
             h.post(object : Runnable { override fun run() {
-                try { vk.edit().putLong("alive", System.currentTimeMillis()).putInt("pct", output.volumePercent()).apply() } catch (_: Exception) {}
+                // Not after Exit / Restart: their own note must stay (a late write made a restart keep the old volume).
+                if (!exiting) try { vk.edit().putLong("alive", System.currentTimeMillis()).putInt("pct", output.volumePercent()).apply() } catch (_: Exception) {}
                 h.postDelayed(this, 60_000)
             } })
         }
@@ -124,6 +127,8 @@ class App : Application() {
         }
     }
 
+    /** Set by Exit / Restart the app: the minute "alive" note stops. */
+    @Volatile var exiting = false
     @Volatile private var lostName = ""
     @Volatile private var lostAt = 0L
     @Volatile private var lostPct = -1

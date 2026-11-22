@@ -903,9 +903,11 @@ fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
     val rc = app.vlcinterface.sources.RadioCapture
     if (rc.hasWork() && !rc.exiting.value) { rc.finishThen { exitApp(restart, keepNotice) }; return }
     val a = app.vlcinterface.App.instance
-    // Exit: the volume now is kept for a start within 30 min.
-    try { a.getSharedPreferences("volkeep", android.content.Context.MODE_PRIVATE).edit().putLong("alive", System.currentTimeMillis())
-        .putInt("pct", a.output.volumePercent()).putBoolean("cleanExit", true).commit() } catch (_: Exception) {}
+    // Exit: the volume now is kept for a start within the "Reset volume after" time. Restart the app (2026-11-22 18:41):
+    // a fresh start — the Start volume is set (it was kept, so the volume never changed on a restart).
+    a.exiting = true
+    try { a.getSharedPreferences("volkeep", android.content.Context.MODE_PRIVATE).edit().putLong("alive", if (restart) 0L else System.currentTimeMillis())
+        .putInt("pct", a.output.volumePercent()).putBoolean("cleanExit", !restart).commit() } catch (_: Exception) {}
     try { a.store.flush() } catch (_: Exception) {}
     try { app.vlcinterface.sources.RgScanner.cancel() } catch (_: Exception) {}
     // The radio buffer and any working copy: deleted.
