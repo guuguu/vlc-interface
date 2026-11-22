@@ -291,7 +291,27 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     ThinSlider(s.videoClockAlpha.toFloat(), { v -> set(s.copy(videoClockAlpha = (Math.round(v / 5f) * 5).coerceIn(20, 100))) }, valueRange = 20f..100f,
                         onHoldStill = { if (helpersV) vidHelp = "Clock on the video" })
+                    // 13:25: any corner, the digits' colour (full colour editor), a grey shadow.
+                    Text("Clock corner", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Clock corner").padding(top = 6.dp).explain("Clock on the video"))
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf("tl" to "↖ Top left", "tr" to "↗ Top right", "bl" to "↙ Bottom left", "br" to "↘ Bottom right").forEach { (k, l) ->
+                            Pill(l, selected = s.videoClockCorner == k, filled = s.videoClockCorner == k) { set(s.copy(videoClockCorner = k)); if (helpersV) vidHelp = "Clock on the video" }
+                        }
+                    }
+                    var clockColour by remember { mutableStateOf(false) }
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                        Text("Digits colour", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Digits colour").weight(1f).explain("Clock on the video"))
+                        Box(Modifier.size(22.dp).clip(CircleShape).background(Color(s.videoClockColor)).border(1.dp, C.muted, CircleShape))
+                        Text("+ Create", color = WIZ_GREEN, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(start = 10.dp).clip(RoundedCornerShape(10.dp)).border(1.dp, WIZ_GREEN, RoundedCornerShape(10.dp))
+                                .clickable { clockColour = true }.padding(horizontal = 10.dp, vertical = (4 * sg()).dp))
+                        STextButton({ set(s.copy(videoClockColor = 0xFFFFFFFFL)) }) { Text("White") }
+                    }
+                    if (clockColour) ColorPickDialog(s.videoClockColor, onDismiss = { clockColour = false }) { c ->
+                        set(s.copy(videoClockColor = c)); clockColour = false; if (helpersV) vidHelp = "Clock on the video" }
                 }
+                if (s.videoClock) ToggleRow("Clock shadow", "A grey shadow under the digits", s.videoClockShadow) { v ->
+                    set(s.copy(videoClockShadow = v)); if (helpersV) vidHelp = "Clock on the video" }
             }
             if (vidHelp.isNotEmpty()) HelperDialog(vidHelp, SettingHelp.text(vidHelp, "")) { vidHelp = "" }
             SectionTitle("Picture")

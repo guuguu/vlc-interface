@@ -287,7 +287,8 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
                 onCenterDouble = { MainActivity.instance?.enterPip() },
             )
             // The time on the picture, top-left (13:23): always while a video plays (Settings → Video → On-screen buttons).
-            if (!inPip && st.settings.videoClock) VideoClock(st.settings.videoClockPct, st.settings.videoClockAlpha, Modifier.align(Alignment.TopStart))
+            if (!inPip && st.settings.videoClock) VideoClock(st.settings, Modifier.align(when (st.settings.videoClockCorner) {
+                "tr" -> Alignment.TopEnd; "bl" -> Alignment.BottomStart; "br" -> Alignment.BottomEnd; else -> Alignment.TopStart }))
             if (p.buffering < 100f && !p.isPlaying && p.error.isEmpty()) CircularProgressIndicator(Modifier.align(Alignment.Center), color = accent())
             if (p.error.isNotEmpty()) Text(p.error, color = C.bad, modifier = Modifier.align(Alignment.Center).background(Color(0xAA000000)).padding(12.dp))
             if (toast.isNotEmpty()) Text(toast, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
@@ -1837,16 +1838,19 @@ object VideoFindUi {
 }
 
 
-/** The time over the video (white with a soft shadow, see-through), following the clock's 24-hour setting. */
+/** The time over the video — digital only — in the corner, colour, size and opacity set, with a grey shadow (13:25). */
 @Composable
-private fun VideoClock(sizePct: Int, alphaPct: Int, modifier: Modifier) {
+private fun VideoClock(set: app.vlcinterface.data.Settings, modifier: Modifier) {
+    val sizePct = set.videoClockPct; val alphaPct = set.videoClockAlpha
     val h24 = app.vlcinterface.alarm.Alarms.state.collectAsState().value.aspect.h24
     val now by androidx.compose.runtime.produceState(System.currentTimeMillis()) {
         while (true) { value = System.currentTimeMillis(); kotlinx.coroutines.delay(1000L - value % 1000L + 5) }
     }
     val text = remember(now / 60_000, h24) { java.text.SimpleDateFormat(if (h24) "HH:mm" else "h:mm a", java.util.Locale.getDefault()).format(java.util.Date(now)) }
-    Text(text, color = Color.White.copy(alpha = alphaPct / 100f), fontSize = (18f * sizePct / 100f).sp, fontWeight = FontWeight.SemiBold,
-        style = androidx.compose.ui.text.TextStyle(shadow = androidx.compose.ui.graphics.Shadow(Color.Black.copy(alpha = 0.8f * alphaPct / 100f),
-            androidx.compose.ui.geometry.Offset(0f, 2f), 6f)),
-        modifier = modifier.padding(start = 12.dp, top = 8.dp))
+    val bottom = set.videoClockCorner.startsWith("b")
+    Text(text, color = Color(set.videoClockColor).copy(alpha = alphaPct / 100f), fontSize = (18f * sizePct / 100f).sp, fontWeight = FontWeight.SemiBold,
+        style = androidx.compose.ui.text.TextStyle(shadow = if (!set.videoClockShadow) null else
+            androidx.compose.ui.graphics.Shadow(Color(0xFF808080).copy(alpha = 0.9f * alphaPct / 100f), androidx.compose.ui.geometry.Offset(2f, 2f), 4f)),
+        // Bottom corners: above the position bar.
+        modifier = modifier.padding(horizontal = 12.dp, vertical = if (bottom) 36.dp else 8.dp))
 }
