@@ -801,9 +801,9 @@ private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump0: (Long) -
  * The rows the Up next boxes show (2026-11-22 19:13): the item playing, then the next [count] items, round past the
  * end of the queue to its start (the queue circles); each with its place in the queue. Never the same item twice.
  */
-internal fun queueWindow(q: List<PlayItem>, index: Int, count: Int): List<Pair<Int, PlayItem>> {
+internal fun queueWindow(q: List<PlayItem>, index: Int, count: Int, round: Boolean = true): List<Pair<Int, PlayItem>> {
     if (index !in q.indices) return emptyList()
-    val n = minOf(count, q.size - 1).coerceAtLeast(0)
+    val n = minOf(count, if (round) q.size - 1 else q.size - 1 - index).coerceAtLeast(0)
     return (0..n).map { k -> ((index + k) % q.size).let { it to q[it] } }
 }
 
@@ -1743,13 +1743,21 @@ private fun RadioPanel(nav: Navigator) {
         else {
             // Compact one-line rows, no frame: name, then bitrate and codec; tap plays, ⋮ or long-press for the menu.
             val ls = androidx.compose.foundation.lazy.rememberLazyListState()
-            LaunchedEffect(Unit) { st.stations.indexOfFirst { it.url == cur }.takeIf { it > 2 }?.let { ls.scrollToItem(it - 2) } }
+            // The playing station stays in view (19:18, songs and radio): at opening and whenever the station changes (⏭ / ⏮
+            // going round the favourites), the list glides to it when its row isn't on screen — unless it's being scrolled.
+            LaunchedEffect(cur, st.stations.size) {
+                val i = st.stations.indexOfFirst { it.url == cur }
+                if (i < 0) return@LaunchedEffect
+                val inView = ls.layoutInfo.visibleItemsInfo.any { it.index == i && it.offset >= 0 && it.offset + it.size <= ls.layoutInfo.viewportEndOffset }
+                if (!inView && !ls.isScrollInProgress) ls.animateScrollToItem((i - 2).coerceAtLeast(0))
+            }
             androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp).scrollbar(ls), state = ls) {
                 items(st.stations.size) { i ->
                     val s = st.stations[i]
                     val on = s.url == cur
                     // Same tight rows as the search results (2026-11-21 02:58): flag (or globe) in front, no extra gap.
-                    Row(Modifier.fillMaxWidth().background(if (on) accent().copy(alpha = 0.14f) else Color.Transparent)
+                    // The playing station lit like the queue's playing item (accent band and edge).
+                    Row(Modifier.fillMaxWidth().playingBand(on)
                         .combinedClickable(onClick = { player.playStation(s.name, s.url) }, onLongClick = { menu = s.id })
                         .padding(start = 6.dp, top = lrDp(4), bottom = lrDp(4)), verticalAlignment = Alignment.CenterVertically) {
                         val rs = remember(s.url, s.meta) { app.vlcinterface.sources.RadioStation("", s.name, s.url, "", 0, stationCountry(s.meta), "", s.favicon) }

@@ -1807,6 +1807,11 @@ class PlayerController(private val context: Context, private val store: Store) {
         val item = s.item ?: return
         // Radio: previous station (round), never "back to the start".
         if (item.isRadio) { if (s.queue.size > 1) startItem(if (s.index <= 0) s.queue.size - 1 else s.index - 1, -1); return }
+        // Videos (19:18: the circling is for songs and radio): as before — back to the start after 4 s, or on the first one.
+        if (!item.isMusic) {
+            if (mp.time > 4000 || s.index <= 0) { seekTo(if (item.startMs >= 0) item.startMs else 0); return }
+            startItem(s.index - 1, -1); return
+        }
         // The queue circles (2026-11-22 19:13): ⏮ always goes to the item before, from the first to the last.
         if (s.queue.size <= 1) { seekTo(if (item.startMs >= 0) item.startMs else 0); return }
         startItem(otherThanCurrent(s, if (s.index <= 0) s.queue.size - 1 else s.index - 1, -1), -1)
@@ -1815,7 +1820,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun nextIndex(s: PlayerState, manual: Boolean): Int? {
         // The queue is never used up (19:13): after the last item comes the first — by ⏭ and at the end of the last item —
         // so a listening session circles round the queue; Repeat one still repeats the item.
-        val repeat = store.current.settings.repeat.let { if (it == "one") "one" else "all" }
+        // Songs only (19:18): videos don't go round (a series doesn't start over by itself); Repeat one still repeats.
+        val repeat = store.current.settings.repeat.let { if (it == "one") "one" else if (s.item?.isMusic == true) "all" else "off" }
         if (!manual && repeat == "one") return s.index
         // Radio stations: next one in the list, round.
         if (manual && s.item?.isRadio == true && s.queue.size > 1) return (s.index + 1) % s.queue.size
@@ -1833,7 +1839,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 _state.value = _state.value.copy(queue = q)
                 0
             }
-            // Sequential: round to the first item. A single item isn't looped (it ends; Repeat one loops it).
+            // Sequential: round to the first item. A single song isn't looped (it ends; Repeat one loops it).
             repeat == "all" && s.queue.size > 1 -> 0
             else -> null
         }

@@ -924,9 +924,9 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         val rowUpNext: @Composable () -> Unit = {
         // Up next (15:36): exactly like the song player's — "Up next" with "Queue › time left" (opens the whole queue),
         // then the next files (as many as Look → "Up next" count), numbered, gliding names, length; long press: menu.
-        // The queue as it is (19:13): the playing video first, lit in the accent colour, then the next ones, round past the
-        // end to the first ones (the queue circles).
-        val next = queueWindow(p.queue, p.index, st.settings.upNextCount)
+        // The playing video first, lit in the accent colour, then the next ones (19:18: videos don't go round — the list
+        // ends with the last one).
+        val next = queueWindow(p.queue, p.index, st.settings.upNextCount, round = false)
         val cur = p.item
         if (next.size > 1 && cur != null) Column(Modifier.fillMaxWidth()) {
             var upMenu by remember { mutableIntStateOf(-1) }
