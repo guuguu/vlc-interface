@@ -1357,3 +1357,9 @@
   - **Clock:** weather refreshed every 15 min (not 30); "Weather on the clock" mentions the time zone / temperatures line and the airport station; a doubled "the" removed in "Under the city".
   - **Visualisation:** the patterns described are the current ones (spectrum, analysers, Lava flow, MilkDrop); the "Frequency range" helper now answers on its setting, "Frequencies followed".
   - **Help guide:** new pages "Indexing" and "Files from other apps".
+
+## Player notification: one kind per phone, the same on every player (requested 2026-11-22 11:54)
+- **Modern (Android 13 and newer):** only Android's media player card (notification shade and lock screen), drawn from the app's media session — title, artist / station / the video's folder, picture, position bar and the buttons. The separate "Up next" notification isn't shown with it any more (the two were showing at once).
+- **Classic (Android 12, and whenever the modern one can't be used — the media session fails):** the app's own notification with its buttons, plus "Up next" under it, as before.
+- Never both: the app picks one when it starts (and switches to the classic one by itself if the media session fails).
+- **Same on every player (songs, videos, radio):** ⏮ ⏪ ⏯ ⏩ ⏭ — ⏪ ⏩ jump by the double-tap seek time; radio has no ⏪ ⏩ (a live stream has nothing to jump in) and its ⏮ ⏭ are the previous / next station; ⏮ ⏭ are now always there (also a single song or station). Videos show their folder (series / film) under the title instead of "Video", like the artist under a song.

@@ -73,6 +73,18 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
         }
     }
 
+    /**
+     * Which notification the phone gets (2026-11-22 11:54), one or the other, never both:
+     *  - modern (Android 13 and newer): Android's media player in the notification shade and on the lock screen, drawn by
+     *    the system from the app's media session — title, artist / station, picture, position bar and the buttons;
+     *  - classic (Android 12, and whenever the modern one can't be used — the media session failed): the app's own
+     *    notification with its buttons, plus the "Up next" notification under it.
+     * The same buttons on every player (songs, videos, radio): ⏮ ⏪ ⏯ ⏩ ⏭ — radio has no ⏪ ⏩ (nothing to jump in a live
+     * stream), ⏮ ⏭ are the previous / next station.
+     */
+    @Volatile private var sessionOk = true
+    private val modern get() = android.os.Build.VERSION.SDK_INT >= 33 && sessionOk
+
     private fun stepMs() = app.vlcinterface.App.instance.store.current.settings.doubleTapSeekSec * 1000L
 
     /** Tapping the notification / lock-screen player: opens the folder of the playing file, but never while the phone is locked. */
@@ -95,9 +107,8 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
         val posJump = kotlin.math.abs(expectedPos() - st.time) > 2500
         if (sig != lastSig) {
             lastSig = sig
-            session.isActive = true
-            updateMetadata(st)
-            updateState(st)
+            try { session.isActive = true; updateMetadata(st); updateState(st) }
+            catch (_: Exception) { sessionOk = false }      // media session refused: the classic notification is used
             nm.notify(ID, build(st))
             updateUpNext(st)
         } else if (posJump && st.time > 0) {
@@ -112,6 +123,9 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
         return ((st.length - st.time).coerceAtLeast(0) / 60_000L).toInt()
     }
 
+    private fun videoFolder(item: app.vlcinterface.player.PlayItem): String =
+        Uri.decode(item.folderKey.ifEmpty { item.uri.substringBeforeLast('/') }.trimEnd('/').substringAfterLast('/')).substringAfterLast(':')
+
     private fun expectedPos(): Long = if (lastPlaying) lastPos + (SystemClock.elapsedRealtime() - lastPosAt) else lastPos
 
     private fun updateState(st: PlayerState) {
@@ -119,7 +133,8 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
         lastPos = st.time; lastPosAt = SystemClock.elapsedRealtime(); lastPlaying = st.isPlaying
         var actions = PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE or PlaybackState.ACTION_STOP
         if (!item.isRadio) actions = actions or PlaybackState.ACTION_SEEK_TO or PlaybackState.ACTION_FAST_FORWARD or PlaybackState.ACTION_REWIND
-        if (st.queue.size > 1) actions = actions or PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
+        // ⏮ ⏭ on every player (a single song: ⏮ goes to its start, ⏭ ends the queue / plays what's next as set).
+        actions = actions or PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
         val b = PlaybackState.Builder()
             .setActions(actions)
             .setState(if (st.isPlaying) PlaybackState.STATE_PLAYING else if (st.buffering < 100f) PlaybackState.STATE_BUFFERING else PlaybackState.STATE_PAUSED,
@@ -148,7 +163,8 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
     private fun updateMetadata(st: PlayerState) {
         val item = st.item ?: return
         val title = if (item.isRadio && st.nowPlaying.isNotEmpty()) st.nowPlaying else item.title
-        val artist = if (item.isRadio) item.title else st.metaArtist
+        // Videos: their folder (the series / film) under the title, like an artist under a song — the same look on every player.
+        val artist = if (item.isRadio) item.title else st.metaArtist.ifEmpty { if (!item.isMusic) videoFolder(item) else item.artist }
         val b = MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, title)
             .putString(MediaMetadata.METADATA_KEY_ARTIST, artist)
@@ -172,6 +188,7 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
         val text = when {
             item == null -> ""
             item.isRadio -> item.title + " · Live"
+            !item.isMusic -> videoFolder(item)
             else -> listOf(st.metaArtist, st.metaAlbum).filter { it.isNotEmpty() }.joinToString(" · ")
         }
         // Header line next to the orange ▶ square (2026-11-21 11:48): who / what, and the time left — "Pink Floyd ·
@@ -179,7 +196,7 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
         val who = when {
             item == null -> ""
             item.isRadio -> item.title
-            !item.isMusic -> "Video"
+            !item.isMusic -> videoFolder(item).ifEmpty { "Video" }
             else -> st.metaArtist.ifEmpty { item.artist }.ifEmpty { st.metaAlbum.ifEmpty { item.album } }
         }
         val left = when {
@@ -205,20 +222,26 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
             .setOngoing(st.isPlaying)
             .setDeleteIntent(PendingIntent.getService(ctx, 9, Intent(ctx, PlaybackService::class.java).setAction(PlaybackService.ACTION_STOP), PendingIntent.FLAG_IMMUTABLE))
         artwork(st.artworkUrl)?.let { b.setLargeIcon(it) }
-        b.addAction(action(android.R.drawable.ic_media_previous, "Previous", PlaybackService.ACTION_PREV, 1))
-        b.addAction(action(android.R.drawable.ic_media_rew, "Back", PlaybackService.ACTION_BACK, 2))
+        // The same buttons on every player; radio without the jumps (a live stream has nothing to jump in).
+        val radio = item?.isRadio == true
+        b.addAction(action(android.R.drawable.ic_media_previous, if (radio) "Previous station" else "Previous", PlaybackService.ACTION_PREV, 1))
+        if (!radio) b.addAction(action(android.R.drawable.ic_media_rew, "Back", PlaybackService.ACTION_BACK, 2))
         b.addAction(if (st.isPlaying) action(android.R.drawable.ic_media_pause, "Pause", PlaybackService.ACTION_TOGGLE, 3)
             else action(android.R.drawable.ic_media_play, "Play", PlaybackService.ACTION_TOGGLE, 3))
-        b.addAction(action(android.R.drawable.ic_media_ff, "Forward", PlaybackService.ACTION_FWD, 4))
-        b.addAction(action(android.R.drawable.ic_media_next, "Next", PlaybackService.ACTION_NEXT, 5))
-        b.setStyle(Notification.MediaStyle().setMediaSession(session.sessionToken).setShowActionsInCompactView(1, 2, 3))
+        if (!radio) b.addAction(action(android.R.drawable.ic_media_ff, "Forward", PlaybackService.ACTION_FWD, 4))
+        b.addAction(action(android.R.drawable.ic_media_next, if (radio) "Next station" else "Next", PlaybackService.ACTION_NEXT, 5))
+        val style = Notification.MediaStyle().setShowActionsInCompactView(*(if (radio) intArrayOf(0, 1, 2) else intArrayOf(1, 2, 3)))
+        // Modern: tied to the media session, Android draws its media player. Classic: the app's notification as built.
+        if (modern) style.setMediaSession(session.sessionToken)
+        b.setStyle(style)
         return b.build()
     }
 
     /** Separate silent notification under the player listing the next two items (visible on the lock screen). */
     private fun updateUpNext(st: PlayerState) {
         val next = st.upNext
-        if (next.isEmpty() || st.item?.isRadio == true) { nm.cancel(ID_NEXT); return }
+        // Only with the classic notification: the modern media player is one card, nothing next to it.
+        if (modern || next.isEmpty() || st.item?.isRadio == true) { nm.cancel(ID_NEXT); return }
         val lines = next.mapIndexed { i, p -> "${i + 1}. ${p.title}" + if (p.artist.isNotEmpty()) " — ${p.artist}" else "" }
         val style = Notification.InboxStyle().setBigContentTitle("Up next")
         lines.forEach { style.addLine(it) }
