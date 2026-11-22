@@ -534,7 +534,7 @@ internal object SongsIo {
                         val folder = "/" + android.net.Uri.decode(u.substringAfter("://").substringAfter('/', "")).substringBeforeLast('/').trimEnd('/')
                         if (folder !in st.current.sources.first { it.id == src.id }.pins) {
                             st.update { x -> x.copy(sources = x.sources.map { if (it.id == src.id) it.copy(pins = it.pins + folder) else it }) }
-                            app.vlcinterface.sources.NetIndex.build(st.current.sources.first { it.id == src.id }, folder); pinned++
+                            app.vlcinterface.sources.NetIndex.buildManual(st.current.sources.first { it.id == src.id }, folder); pinned++
                         }
                     }
                     p != null && p.folderKey.isNotEmpty() -> {

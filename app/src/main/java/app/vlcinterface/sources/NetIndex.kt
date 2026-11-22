@@ -44,6 +44,8 @@ object NetIndex {
 
     fun init(ctx: Context) {
         file = File(ctx.filesDir, "netindex.json")
+        partFile = File(ctx.filesDir, "netindex-partial.json")
+        loadPartials()
         try {
             if (file.exists()) {
                 val o = JSONObject(file.readText())
@@ -58,7 +60,16 @@ object NetIndex {
     /** Every indexed song (pins of sources that still exist). */
     fun songs(): List<PlayItem> {
         val ids = App.instance.store.current.sources.map { it.id }.toHashSet()
-        return byPin.filterKeys { it.substringBefore('|') in ids }.values.flatten().map { MusicLibrary.fromPlEntry(it) }
+        return withPartial().filterKeys { it.substringBefore('|') in ids }.values.flatten().map { MusicLibrary.fromPlEntry(it) }
+    }
+
+    /**
+     * The finished indexes, plus what an interrupted run has gathered so far for a folder with no finished index yet
+     * (searches find those songs already; a folder indexed before keeps its whole old index until the new one ends).
+     */
+    private fun withPartial(): Map<String, List<PlEntry>> {
+        val extra = synchronized(parts) { parts.filterKeys { it !in byPin }.mapValues { (_, p) -> p.songs() } }
+        return if (extra.isEmpty()) byPin else byPin + extra
     }
 
     private val upAt = HashMap<String, Pair<Long, Boolean>>()   // source id → (checked at, reachable)
@@ -86,10 +97,12 @@ object NetIndex {
                 }
             }
         }.map { it.await() }.filter { it.second }.map { it.first }.toHashSet()
-        byPin.filterKeys { it.substringBefore('|') in up }.values.flatten().map { MusicLibrary.fromPlEntry(it) }
+        withPartial().filterKeys { it.substringBefore('|') in up }.values.flatten().map { MusicLibrary.fromPlEntry(it) }
     }
 
     fun has(src: Source, pin: String) = byPin.containsKey(key(src, pin))
+    /** Its last indexing was interrupted; what it gathered is kept (resumed by itself, or asked when started by hand). */
+    fun hasStopped(src: Source, pin: String) = synchronized(parts) { parts.containsKey(key(src, pin)) }
 
     /** (Re)builds the index of one pinned folder, in the background. */
     private val building = java.util.Collections.synchronizedSet(HashSet<String>())
@@ -107,7 +120,7 @@ object NetIndex {
     }
     /** Indexing a folder on a server outside the home network right now. */
     fun internetBusy(): Boolean = inWork.values.any { (s, p) -> try { app.vlcinterface.player.NetGuard.needsInternet(Urls.forSource(s.copy(path = ""), p)) } catch (_: Exception) { false } }
-    fun resume() { val l = held.values.toList(); held.clear(); l.forEach { (s, p) -> build(s, p) } }
+    fun resume() { val l = held.values.toList(); held.clear(); l.forEach { (s, p) -> build(s, p) }; resumeStopped() }
 
     /** Folders waiting because the VPN is on. */
     private val vpnHeld = java.util.concurrent.ConcurrentHashMap<String, Pair<Source, String>>()
@@ -126,6 +139,7 @@ object NetIndex {
     fun vpnOff() {
         val l = vpnHeld.values.toList(); vpnHeld.clear()
         l.forEach { (s, p) -> build(s, p) }
+        resumeStopped()
     }
 
     /** Low battery: every indexing run stops (what was already indexed is kept). */
@@ -135,6 +149,31 @@ object NetIndex {
         running.forEach { it.cancel() }
         busy.value = ""
         app.vlcinterface.data.ServerLog.log("battery", "index", "", "", false, "Indexing stopped: battery 15% or less")
+    }
+
+    /**
+     * Started by hand (pin, + Folder, ↻ Rescan): a folder whose last indexing was interrupted asks first — resume where
+     * it stopped, or start over. Started automatically, it always resumes without asking.
+     */
+    fun buildManual(src: Source, pins: List<String>) {
+        // (A folder being indexed right now isn't asked about: it simply goes on.)
+        val (stopped, fresh) = pins.partition { key(src, it) !in building && synchronized(parts) { parts.containsKey(key(src, it)) } }
+        fresh.forEach { build(src, it) }
+        if (stopped.isNotEmpty()) ask.value = Ask(src, stopped)
+    }
+    fun buildManual(src: Source, pin: String) = buildManual(src, listOf(pin))
+
+    /** The question for folders whose indexing was interrupted (answered in the app's pop-up). */
+    class Ask(val src: Source, val pins: List<String>) {
+        val songs: Int get() = pins.sumOf { p -> synchronized(parts) { parts[key(src, p)]?.count() ?: 0 } }
+        val at: Long get() = pins.maxOf { p -> synchronized(parts) { parts[key(src, p)]?.at ?: 0L } }
+    }
+    val ask = MutableStateFlow<Ask?>(null)
+    fun answer(resume: Boolean) {
+        val a = ask.value ?: return
+        ask.value = null
+        if (!resume) { synchronized(parts) { a.pins.forEach { parts.remove(key(a.src, it)) } }; scope.launch { savePartials() } }
+        a.pins.forEach { build(a.src, it) }
     }
 
     fun build(src: Source, pin: String) {
@@ -158,48 +197,168 @@ object NetIndex {
                 val files = gate.sem
                 val dirs = kotlinx.coroutines.sync.Semaphore(8)
                 val count = java.util.concurrent.atomic.AtomicInteger(0)
+                // What an interrupted run already gathered is kept and used: its folders aren't read again.
+                val part = synchronized(parts) { parts.getOrPut(k) { Partial(System.currentTimeMillis()) } }
+                if (part.count() > 0) app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, true,
+                    "Indexing $name resumed at ${part.count()} songs (${part.folders.size} folders already done)", url)
+                val saver = launch { while (true) { kotlinx.coroutines.delay(10_000); if (part.dirty) savePartials() } }
                 val songs = try {
-                    crawl(src, url, 0, files, dirs) { k -> done.addAndGet(k.toLong()); busy.value = "Indexing $name… ${count.addAndGet(k)} songs" }
+                    crawl(src, url, 0, files, dirs, part) { k -> done.addAndGet(k.toLong()); busy.value = "Indexing $name… ${count.addAndGet(k)} songs" }
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
                 } catch (e: Exception) {
                     app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, false,
-                        "Index of $name not made: ${e.message ?: e.javaClass.simpleName}", url)
+                        "Index of $name not finished: ${e.message ?: e.javaClass.simpleName}" +
+                            (if (part.count() > 0) " — ${part.count()} songs kept, it resumes from there" else ""), url)
                     null
-                } finally { gate.stop() }
+                } finally {
+                    gate.stop(); saver.cancel()
+                    if (part.folders.isEmpty()) synchronized(parts) { parts.remove(k) }     // nothing gathered: nothing to resume
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) { if (part.dirty || part.folders.isEmpty()) savePartials() }
+                }
                 if (songs != null) {
+                    synchronized(parts) { parts.remove(k) }
+                    savePartials()
                     byPin = byPin + (k to songs.map { MusicLibrary.toPlEntry(it) })
                     save(); version.value++
                     app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, true,
                         "Indexed $name: ${songs.size} songs", url)
                 }
                 busy.value = ""
-            } } finally { building.remove(k); inWork.remove(k); jobs.remove(job); if (job.isCancelled) busy.value = "" }
+            } } finally {
+                building.remove(k); inWork.remove(k); jobs.remove(job)
+                if (job.isCancelled) {
+                    busy.value = ""
+                    val n = synchronized(parts) { parts[k]?.count() ?: 0 }
+                    if (n > 0) app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, true,
+                        "Indexing ${pin.trim('/').substringAfterLast('/')} stopped at $n songs — kept, it resumes from there")
+                }
+            }
         }
         jobs.add(job); job.start()
     }
 
-    /** Pinned folders not indexed yet (pinned before indexing existed, or never reachable so far). */
+    /** Pinned folders not indexed yet (pinned before indexing existed, or never reachable so far), and interrupted ones. */
     fun buildMissing() {
         App.instance.store.current.sources.forEach { s -> s.pins.filterNot { has(s, it) }.forEach { build(s, it) } }
+        resumeStopped()
     }
 
-    /** Every pin of a source again (its ↻ Rescan). */
-    fun rebuild(src: Source) = src.pins.forEach { build(src, it) }
+    /** Every pin of a source again (its ↻ Rescan; interrupted ones ask first). */
+    fun rebuild(src: Source) = buildManual(src, src.pins)
 
     fun remove(src: Source, pin: String) {
-        scope.launch { lock.withLock { byPin = byPin - key(src, pin); save(); version.value++ } }
+        synchronized(parts) { parts.remove(key(src, pin)) }
+        scope.launch { lock.withLock { byPin = byPin - key(src, pin); save(); savePartials(); version.value++ } }
+    }
+
+    // ---------- interrupted indexing: kept and resumed ----------
+
+    /** One folder read during an interrupted run: its songs and its subfolders. */
+    class Done(val songs: List<PlEntry>, val subs: List<String>)
+    /** What a run gathered so far (folder → its songs and subfolders), kept across stops and app restarts. */
+    class Partial(val at: Long) {
+        val folders = java.util.concurrent.ConcurrentHashMap<String, Done>()
+        @Volatile var dirty = false
+        fun count() = folders.values.sumOf { it.songs.size }
+        fun songs() = folders.values.flatMap { it.songs }
+    }
+    private val parts = HashMap<String, Partial>()
+    private lateinit var partFile: File
+
+    private fun loadPartials() {
+        try {
+            if (!partFile.exists()) return
+            val o = JSONObject(partFile.readText())
+            synchronized(parts) {
+                o.keys().forEach { k ->
+                    val p = o.getJSONObject(k); val part = Partial(p.optLong("at"))
+                    val f = p.getJSONObject("folders")
+                    f.keys().forEach { u ->
+                        val d = f.getJSONObject(u); val sa = d.getJSONArray("s"); val da = d.getJSONArray("d")
+                        part.folders[u] = Done((0 until sa.length()).map { PlEntry.fromJson(sa.getJSONObject(it)) }, (0 until da.length()).map { da.getString(it) })
+                    }
+                    parts[k] = part
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private val partLock = Mutex()
+    private suspend fun savePartials() = withContext(Dispatchers.IO) {
+        partLock.withLock {
+            try {
+                val o = JSONObject()
+                synchronized(parts) {
+                    parts.forEach { (k, p) ->
+                        p.dirty = false
+                        val f = JSONObject()
+                        p.folders.forEach { (u, d) -> f.put(u, JSONObject().put("s", JSONArray().also { a -> d.songs.forEach { a.put(it.toJson()) } })
+                            .put("d", JSONArray().also { a -> d.subs.forEach { a.put(it) } })) }
+                        o.put(k, JSONObject().put("at", p.at).put("folders", f))
+                    }
+                }
+                val tmp = File(partFile.parentFile, partFile.name + ".tmp")
+                tmp.writeText(o.toString()); tmp.renameTo(partFile)
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Interrupted folders go on by themselves once conditions allow (no question): at app start, after background
+     * work is resumed, the VPN goes off, the battery is back above 15 %, or the server answers again. Checked every
+     * 5 minutes while some are waiting; a server that doesn't answer is skipped quietly until the next check.
+     */
+    fun resumeStopped() {
+        val waiting = synchronized(parts) { parts.keys.toList() }
+        if (waiting.isEmpty()) return
+        val srcs = App.instance.store.current.sources
+        scope.launch {
+            waiting.forEach { k ->
+                val s = srcs.firstOrNull { it.id == k.substringBefore('|') }
+                val pin = s?.pins?.firstOrNull { key(s, it) == k }
+                if (s == null || pin == null) { synchronized(parts) { parts.remove(k) }; savePartials(); return@forEach }   // pin gone
+                if (k in building) return@forEach
+                if (!Net.reachable(Urls.hostOnly(s.host), if (s.port > 0) s.port else s.defaultPort)) return@forEach
+                build(s, pin)
+            }
+        }
+        startWatch()
+    }
+    private var watch: kotlinx.coroutines.Job? = null
+    private fun startWatch() {
+        if (watch?.isActive == true) return
+        watch = scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(5 * 60_000L)
+                if (synchronized(parts) { parts.isEmpty() }) break
+                if (building.isEmpty()) resumeStopped()
+            }
+        }
     }
 
     private suspend fun crawl(src: Source, uri: String, depth: Int, files: kotlinx.coroutines.sync.Semaphore,
-                              dirs: kotlinx.coroutines.sync.Semaphore, progress: (Int) -> Unit): List<PlayItem> {
+                              dirs: kotlinx.coroutines.sync.Semaphore, part: Partial, progress: (Int) -> Unit): List<PlayItem> {
         if (depth > 12) return emptyList()
-        // The pinned folder itself can't be read (NAS off, no network): keep the old index, don't store an empty one.
-        val list = dirs.withPermit { Browse.list(src, uri) }.getOrElse { if (depth == 0) throw it else return emptyList() }
-        // Tags: read once and kept (the same cache the Libraries pages use), so a rescan is quick.
-        val tagged = MusicLibrary.scanTags(src, list, force = false, sem = files)
-        val here = MusicLibrary.playOrder(tagged.filter { it.isAudio }, Urls.nameOf(uri)).map { MusicLibrary.toPlayItem(it, src, uri) }
+        val fk = VpnLink.unroute(uri)
+        val (here, subs) = part.folders[fk]?.let { d -> d.songs.map { MusicLibrary.fromPlEntry(it) } to d.subs } ?: run {
+            // The pinned folder itself can't be read (NAS off, no network): keep the old index, don't store an empty one.
+            // A subfolder that can't be read while the server no longer answers: the run stops (kept, resumed later);
+            // the server answers but that folder can't be read: it's left out, as before.
+            val list = dirs.withPermit { Browse.list(src, uri) }.getOrElse { e ->
+                if (depth == 0 || !Net.reachable(Urls.hostOnly(src.host), if (src.port > 0) src.port else src.defaultPort)) throw e
+                else return emptyList()
+            }
+            // Tags: read once and kept (the same cache the Libraries pages use), so a rescan is quick.
+            val tagged = MusicLibrary.scanTags(src, list, force = false, sem = files)
+            val h = MusicLibrary.playOrder(tagged.filter { it.isAudio }, Urls.nameOf(uri)).map { MusicLibrary.toPlayItem(it, src, uri) }
+            val sd = tagged.filter { it.isDir }.map { it.uri }
+            part.folders[fk] = Done(h.map { MusicLibrary.toPlEntry(it) }, sd.map { VpnLink.unroute(it) }); part.dirty = true
+            h to sd
+        }
         progress(here.size)
         val sub = kotlinx.coroutines.coroutineScope {
-            tagged.filter { it.isDir }.map { d -> async { crawl(src, d.uri, depth + 1, files, dirs, progress) } }.map { it.await() }
+            subs.map { d -> async { crawl(src, VpnLink.route(d), depth + 1, files, dirs, part, progress) } }.map { it.await() }
         }
         return here + sub.flatten()
     }

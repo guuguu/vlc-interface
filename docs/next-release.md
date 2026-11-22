@@ -1209,3 +1209,14 @@
 - **Now:** the temperature now is the one measured at the nearest airport weather station within 35 km (its official half-hourly report, METAR, from aviationweather.gov; free, no account), if reported in the last 2 hours. No station near the city: the forecast's value, as before.
 - The temperature in 6 hours and the weather icon stay from Open-Meteo's forecast.
 - Weather refreshed every 15 min (was 30) so the measured value stays current. Helpers updated.
+
+## Interrupted indexing kept and resumed (requested 2026-11-22 07:36)
+- **Before:** indexing a NAS folder that stopped part-way (background work paused, VPN on, battery 15 % or less, the NAS or network gone, the app closed) kept nothing of that run. It started again from the top, and after a stop for low battery or the app closing it didn't start again at all.
+- **Now:** every folder read during a run is kept as it goes (saved every 10 s and when it stops), across app restarts.
+  - The songs gathered so far are found by searches at once. A folder indexed before keeps its whole old index for searches until the new run ends.
+  - A subfolder that can't be read while the server has stopped answering ends the run (kept, to resume). One that can't be read while the server answers is left out, as before.
+- **Resumed by itself, no question:** at app start, when background work is resumed, when the VPN goes off, and every 5 minutes while one is waiting. That covers the battery back above 15 % and the NAS answering again. A server that doesn't answer is skipped quietly until the next check.
+  - Only the folders not read yet are read; the Indexing log says "resumed at N songs (M folders already done)".
+- **Started by hand** (🔍 Index on the folder, ↻ Rescan, + Folder, pinning a folder) on a folder whose indexing was interrupted: a question, "Resume indexing?", with when it stopped and how many songs are kept. **Resume** reads only what's left; **Start over** reads everything again (tags come from the cache). Tap outside: nothing is started. A folder being indexed right now isn't asked about.
+- The folder's button shows "🔍 Resume" while an interrupted run is waiting.
+- The Indexing log notes each stop with the songs kept ("stopped at N songs — kept, it resumes from there").

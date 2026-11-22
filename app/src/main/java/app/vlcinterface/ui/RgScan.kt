@@ -306,6 +306,24 @@ fun RgFailureReport(nav: Navigator) {
             launcher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
         } catch (_: Exception) { RgScanner.phonePermissionResult(false) }
     }
+    // Indexing started by hand on a folder whose last indexing was interrupted (2026-11-22 07:36): resume or start over.
+    val idxAsk by app.vlcinterface.sources.NetIndex.ask.collectAsState()
+    idxAsk?.let { q ->
+        val names = q.pins.joinToString(", ") { "\"" + it.trim('/').substringAfterLast('/') + "\"" }
+        val whenT = remember(q) { java.text.SimpleDateFormat("EEE d MMM, HH:mm", java.util.Locale.getDefault()).format(java.util.Date(q.at)) }
+        androidx.compose.material3.AlertDialog(onDismissRequest = { app.vlcinterface.sources.NetIndex.ask.value = null }, containerColor = C.panel,
+            title = { Text("Resume indexing?", color = C.text) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Indexing of $names was interrupted ($whenT). ${q.songs} songs were already indexed; they're kept and found by searches.",
+                        color = C.text, fontSize = 14.sp)
+                    Text("Resume: only the folders not read yet are read. Start over: everything is read again (tags already read come from the cache, so it's still quicker).",
+                        color = C.muted, fontSize = 13.sp)
+                }
+            },
+            confirmButton = { STextButton({ app.vlcinterface.sources.NetIndex.answer(resume = true) }) { Text("Resume", color = accent()) } },
+            dismissButton = { STextButton({ app.vlcinterface.sources.NetIndex.answer(resume = false) }) { Text("Start over") } })
+    }
     // Write access to a music folder (22:57): asked as a question first, then Android's folder picker on that folder.
     val folderAsk by app.vlcinterface.sources.MusicFolderAccess.ask.collectAsState()
     val treeLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->

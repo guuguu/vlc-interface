@@ -616,11 +616,15 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
                 val indexed = remember(idxVer) { app.vlcinterface.sources.NetIndex.has(s, pin) }
                 val ctxIdx = androidx.compose.ui.platform.LocalContext.current
                 Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, if (indexed) a else C.line, RoundedCornerShape(8.dp)).clickable {
-                    app.vlcinterface.sources.NetIndex.build(s, pin)
+                    app.vlcinterface.sources.NetIndex.buildManual(s, pin)
                     android.widget.Toast.makeText(ctxIdx, "Indexing ${pin.trim('/').substringAfterLast('/')} for search…", android.widget.Toast.LENGTH_SHORT).show()
                 }.padding(horizontal = 10.dp, vertical = 7.dp), contentAlignment = Alignment.Center) {
                     if (idxBusy.contains(pin.trim('/').substringAfterLast('/'))) CircularProgressIndicator(color = a, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                    else Text(if (indexed) "🔍 Indexed" else "🔍 Index", color = if (indexed) a else C.muted, fontSize = 13.sp)
+                    else {
+                        // Interrupted indexing kept (07:36): "🔍 Resume" until it's finished.
+                        val stopped = remember(idxVer, idxBusy) { app.vlcinterface.sources.NetIndex.hasStopped(s, pin) }
+                        Text(if (stopped) "🔍 Resume" else if (indexed) "🔍 Indexed" else "🔍 Index", color = if (indexed || stopped) a else C.muted, fontSize = 13.sp)
+                    }
                 }
             }
             // Add a folder of this location (2026-11-21 16:57): pick it in a small folder browser; it's pinned and indexed.
@@ -678,7 +682,7 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
                     App.instance.store.update { s -> s.copy(sources = s.sources.map { if (it.id == src.id) it.copy(pins = if (pinned) it.pins - path else it.pins + path) else it }) }
                     // Pinned folders are indexed (songs searchable from the Songs list / player); unpinned → index dropped.
                     if (pinned) app.vlcinterface.sources.NetIndex.remove(src, path) else {
-                        app.vlcinterface.sources.NetIndex.build(src, path)
+                        app.vlcinterface.sources.NetIndex.buildManual(src, path)
                         android.widget.Toast.makeText(ctxPin, "Pinned — indexing its songs for search in the background", android.widget.Toast.LENGTH_SHORT).show()
                     }
                 }) { SymIcon(Icons.Filled.Star, if (pinned) "Unpin folder" else "Pin folder", tint = if (pinned) accent() else C.muted) }
@@ -686,7 +690,7 @@ fun BrowseScreen(nav: Navigator, b: Screen.Browse) {
                 val indexing by app.vlcinterface.sources.NetIndex.busy.collectAsState()
                 SymButton({
                     if (!pinned) App.instance.store.update { s -> s.copy(sources = s.sources.map { if (it.id == src.id) it.copy(pins = it.pins + path) else it }) }
-                    app.vlcinterface.sources.NetIndex.build(src, path)
+                    app.vlcinterface.sources.NetIndex.buildManual(src, path)
                     android.widget.Toast.makeText(ctxPin, "Indexing this folder for search…", android.widget.Toast.LENGTH_SHORT).show()
                 }) {
                     if (indexing.isNotEmpty()) CircularProgressIndicator(color = accent(), strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
@@ -1016,7 +1020,7 @@ private fun AddFolderDialog(src: app.vlcinterface.data.Source, onDone: () -> Uni
                 // A location found on the LAN and not saved yet is saved now, with this folder.
                 App.instance.store.update { st -> if (st.sources.any { it.id == src.id }) st.copy(sources = st.sources.map { if (it.id == src.id) it.copy(pins = it.pins + path) else it })
                     else st.copy(sources = st.sources + src.copy(pins = listOf(path))) }
-                app.vlcinterface.sources.NetIndex.build(App.instance.store.current.sources.firstOrNull { it.id == src.id } ?: src, path)
+                app.vlcinterface.sources.NetIndex.buildManual(App.instance.store.current.sources.firstOrNull { it.id == src.id } ?: src, path)
                 ShortNote.show("Added: " + path.trim('/').substringAfterLast('/').ifEmpty { path } + " — indexing for search")
             }
             onDone()
