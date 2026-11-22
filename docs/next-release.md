@@ -1385,6 +1385,6 @@
 - **Double tap on the clock** (17:37, was a long press) in the song / radio player (in the picture's place, pinned at the top, or on the left half sideways) opens it full screen, like the visualisation: black, bars hidden, the screen kept on, the clock as big as the screen allows, upright or sideways, ticking with its aspect, weather and alarms line as set.
 - The same pop-up on opening: "To exit back to application, double tap anywhere." A **double tap** anywhere goes back to the player.
 - Brightness as on the full-screen visualisation: the "Full-screen brightness" setting is used, and a swipe along the short side changes it (kept as that setting); leaving gives the phone its own brightness back.
-- The small ⚙ beside the clock still opens the alarm clock settings.
 - **Play / pause on the full screens (17:30):** the floating play / pause button is also on the full-screen clock and the full-screen visualisation — same size, colour and transparency as on the player, drag it anywhere (its place is kept), tap to pause / play. Not shown when the floating button is set Off (Look), or when nothing is loaded in the player. The button's helper says so.
-- **Long press on the clock (17:38)** in the song / radio player opens its settings page, Clock aspect (look, colours, digits, screen saver …); Back returns to the player. The small ⚙ beside it still opens the alarm clock settings.
+- **Long press on the clock (17:38)** in the song / radio player opens its settings page, Clock aspect (look, colours, digits, screen saver …); Back returns to the player.
+- **The small ⚙ beside the clock is removed (17:39).** Alarm clock settings stay reachable from Settings and the ⚙ on the alarms under the clock.

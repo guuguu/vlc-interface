@@ -2173,14 +2173,10 @@ fun KnobThumb(color: Color) {
 }
 
 
-/** The clock's square with a very small settings symbol in its top-right corner (outside the round face) → Alarm clock settings. */
+/** The player's clock (2026-11-22 17:39: the small ⚙ is gone — a long press on the clock opens Clock aspect, a double tap full screen). */
 @Composable
-fun ClockWithGear(nav: Navigator, clock: @Composable () -> Unit) {
-    Box {
-        clock()
-        Text("⚙", color = C.muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.TopEnd).clip(CircleShape)
-            .clickable { nav.go(Screen.AlarmSettings) }.padding(3.dp))
-    }
+fun ClockWithGear(@Suppress("UNUSED_PARAMETER") nav: Navigator, clock: @Composable () -> Unit) {
+    Box { clock() }
 }
 
 
