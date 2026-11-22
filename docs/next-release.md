@@ -1318,3 +1318,4 @@
 
 ## "Jump to" on the song player's position bar (reported 2026-11-22 09:01)
 - **Tap:** goes straight to that place in the song (09:02). **Slide:** the bubble shows the time, the song jumps there when the finger is lifted. **Long press (without sliding):** opens "Jump to" (minutes : seconds) — before, a long press was taken as a slide and the window never came.
+- **Video player too (09:03):** on the video's position bar a tap goes straight to that place, a slide shows the time in the bubble and jumps on release, and a long press without sliding opens "Jump to time" (hh : mm : ss) — replacing the double tap. Long press = held about half a second, on both players.

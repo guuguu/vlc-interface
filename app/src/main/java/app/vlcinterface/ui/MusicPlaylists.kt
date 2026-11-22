@@ -676,7 +676,7 @@ private fun SeekBlock(item: PlayItem) {
                     val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
                     val c = ev.changes.firstOrNull { it.id == down.id } ?: break
                     if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
-                    if (c.uptimeMillis - t0 > 300) held = true
+                    if (c.uptimeMillis - t0 > 450) held = true
                     if (!c.pressed) { tapped = !moved && c.uptimeMillis - t0 < 300; break }
                 }
             }

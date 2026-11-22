@@ -696,24 +696,35 @@ private fun SideChip(text: String, lit: Boolean, h: androidx.compose.ui.unit.Dp,
 private fun SeekRow(p: PlayerState, modifier: Modifier) {
     var dragging by remember { mutableStateOf<Float?>(null) }
     var jumpAsk by remember { mutableStateOf(false) }
-    var lastTap by remember { mutableLongStateOf(0L) }
+    // 09:03 (as on the song player): a tap or a slide goes there; a long press without sliding opens "Jump to time".
+    var moved by remember { mutableStateOf(false) }
+    var held by remember { mutableStateOf(false) }
     val frac = if (p.length > 0) (p.time.toFloat() / p.length).coerceIn(0f, 1f) else 0f
     if (jumpAsk) JumpToTimeDialog(p.length) { jumpAsk = false }
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(fmtTime(if (dragging != null) (dragging!! * p.length).toLong() else p.time), color = Color.White, fontSize = 13.sp)
+        Text(fmtTime(if (dragging != null && moved) (dragging!! * p.length).toLong() else p.time), color = Color.White, fontSize = 13.sp)
         // Thin track and small knob, like the song player's position bar.
         val sc = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = Color(0x55FFFFFF))
         androidx.compose.foundation.layout.BoxWithConstraints(Modifier.weight(1f).padding(horizontal = 10.dp)) {
             Slider(
                 value = dragging ?: frac, onValueChange = { dragging = it },
-                onValueChangeFinished = { dragging?.let { App.instance.player.seekFraction(it) }; dragging = null },
+                onValueChangeFinished = {
+                    if (held && !moved) { if (p.length > 0) jumpAsk = true } else dragging?.let { App.instance.player.seekFraction(it) }
+                    dragging = null
+                },
                 enabled = p.length > 0 || p.item != null,
-                // A double tap on the bar (17:22): "Jump to time" (the bar still moves to a single tap's place).
                 modifier = Modifier.fillMaxWidth().height(26.dp).pointerInput(Unit) {
                     awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
-                        val now = System.currentTimeMillis()
-                        if (now - lastTap < 350) { jumpAsk = true; lastTap = 0L } else lastTap = now
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                        moved = false; held = false
+                        val t0 = down.uptimeMillis
+                        while (true) {
+                            val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                            val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                            if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                            if (c.uptimeMillis - t0 > 450) held = true
+                            if (!c.pressed) break
+                        }
                     }
                 },
                 colors = sc, thumb = { KnobThumb(Color.White) },
@@ -721,7 +732,7 @@ private fun SeekRow(p: PlayerState, modifier: Modifier) {
                     drawStopIndicator = null, thumbTrackGapSize = 0.dp, trackInsideCornerSize = 0.dp) },
             )
             // While sliding (17:22): the time under the finger, in a bubble above the knob.
-            dragging?.let { f ->
+            dragging?.takeIf { moved }?.let { f ->
                 val x = (maxWidth * f - 34.dp).coerceIn(0.dp, (maxWidth - 68.dp).coerceAtLeast(0.dp))
                 Text(fmtTime((f * p.length).toLong()), color = Color(0xFF1A0E05), fontSize = 13.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
                     modifier = Modifier.offset(x = x, y = (-30).dp).width(68.dp).clip(RoundedCornerShape(8.dp)).background(accent()).padding(vertical = 3.dp))
