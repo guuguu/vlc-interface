@@ -44,8 +44,11 @@ data class Origin(
     val localFolderId: String = "",
 )
 
-/** Gain for songs that carry no ReplayGain at all (when ReplayGain is on). */
-const val NO_RG_DB = 0f
+/**
+ * Gain for songs that carry no ReplayGain at all (when ReplayGain is on): 3 dB under the current level (preamps and the
+ * player's Preamp slider as set), from the start of the song until its ReplayGain is measured (2026-11-22 18:58).
+ */
+const val NO_RG_DB = -3f
 /** Loudness and treble act 30 % deeper than their slider values (same logic, stronger effect). */
 const val TONE_DEPTH = 1.3f
 /** Songs without ReplayGain reached over the VPN: 6 dB lower (not scanned there). */
@@ -213,6 +216,10 @@ class PlayerController(private val context: Context, private val store: Store) {
         main.post {
             val s = _state.value; val item = s.item ?: return@post
             if (item.uri != uri) return@post
+            // One change only (18:58): the first measured value is used for the rest of this song; the scan's later
+            // reports for it (the same track value again, or the album value at the end of an album scan) are not —
+            // the next play of the song uses whatever was written.
+            if (scannedRg?.first == uri) return@post
             scannedRg = uri to rg
             loadReplayGain(item, s)
         }
@@ -220,11 +227,38 @@ class PlayerController(private val context: Context, private val store: Store) {
     private suspend fun rgFor(item: PlayItem) = scannedRg?.takeIf { it.first == item.uri }?.second
         ?: app.vlcinterface.sources.ReplayGain.read(context, item.uri, item.user, item.password, item.domain, item.smbVersion)
 
+    /** The song the level in [rgDb] belongs to. */
+    @Volatile private var rgUri = ""
+    private fun overVpnNoRg(item: PlayItem) = item.uri.startsWith("smb://") &&
+        try { android.net.Uri.parse(item.uri).host?.let { h -> app.vlcinterface.sources.VpnLink.routeHost(h) != h } == true } catch (_: Exception) { false }
+    /** A song without ReplayGain: 3 dB lower (6 dB over the VPN, where it isn't scanned). */
+    private fun noRgDb(item: PlayItem) = if (overVpnNoRg(item)) VPN_NO_RG_DB else NO_RG_DB
+
     private fun loadReplayGain(item: PlayItem, s: PlayerState) {
         if (scannedRg?.first != item.uri) scannedRg = null      // next song: back to its own value
-        rgDb = 0f; rgPeak = 0f
         rgJob?.cancel()
         val set = store.current.settings
+        // The level the song starts at is set right away, so it doesn't start at one level and move once its tags are read
+        // (18:58: one change at most — none for a song whose ReplayGain is known, one when a missing one gets measured):
+        // known ReplayGain (read before, or kept by a scan) → its value; otherwise the "no ReplayGain" level (3 dB lower).
+        // The same song again (ReplayGain just measured, RGain switched): the level stays until the new one is worked out.
+        if (rgUri != item.uri || !item.isMusic || set.rgMode == "off") {
+            rgUri = item.uri
+            rgPeak = 0f
+            rgDb = if (!item.isMusic || set.rgMode == "off" || !NativeAudio.active) 0f else {
+                val k = app.vlcinterface.sources.ReplayGain.known(item.uri)
+                val album = rgModeFor(s) == "album"
+                val g = if (album) k?.albumGain ?: k?.trackGain else k?.trackGain ?: k?.albumGain
+                val pk = if (album) k?.albumPeak ?: k?.trackPeak else k?.trackPeak ?: k?.albumPeak
+                if (g == null) noRgDb(item) else {
+                    var d = g + set.rgPreampDb
+                    if (set.rgClipProtect && pk != null && pk > 0f) { d = minOf(d, -20f * log10(pk)); rgPeak = pk }
+                    d
+                }
+            }
+            // Put on now, before the song is heard (the previous song's level used to stay until the tags were read).
+            applySoundChain()
+        }
         if (!item.isMusic || set.rgMode == "off") return
         askRgWriteAccess(item)
         if (!NativeAudio.active) {
@@ -239,7 +273,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val used = if (g == null) "" else if (album && rg?.albumGain != null || !album && rg?.trackGain == null) "album" else "track"
                 if (rg == null || g == null) askRgScan(item)
                 _state.value = _state.value.copy(rgInfo = when {
-                    rg == null || g == null -> "No RG · plays as is (libVLC)"
+                    rg == null || g == null -> "No RG · −3 dB (libVLC)"
                     else -> "RG $used " + (if (g >= 0) "+" else "−") + "%.2f".format(java.util.Locale.US, kotlin.math.abs(g)) + " dB (libVLC)"
                 })
             }
@@ -257,9 +291,8 @@ class PlayerController(private val context: Context, private val store: Store) {
             // player line says so.
             // Over the VPN (home NAS away from home) a missing ReplayGain isn't scanned (too slow there): the song
             // plays 6 dB lower instead, so untagged loud songs don't jump out; songs with ReplayGain play as usual.
-            val overVpn = gain == null && item.uri.startsWith("smb://") &&
-                try { android.net.Uri.parse(item.uri).host?.let { h -> app.vlcinterface.sources.VpnLink.routeHost(h) != h } == true } catch (_: Exception) { false }
-            var db = if (gain == null) (if (overVpn) VPN_NO_RG_DB else NO_RG_DB) else gain + set.rgPreampDb
+            val overVpn = gain == null && overVpnNoRg(item)
+            var db = if (gain == null) noRgDb(item) else gain + set.rgPreampDb
             var limited = false
             if (gain != null && set.rgClipProtect && peak != null && peak > 0f) { val cap = -20f * log10(peak); if (cap < db) { db = cap; limited = true } }
             rgDb = db
@@ -270,7 +303,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             // differs — preamp added, or lowered so the loudest peak can't clip — that is said separately.
             val info = when {
                 (rg == null || gain == null) && overVpn -> "No RG · −6 dB (over VPN, no scan)"
-                rg == null || gain == null -> "No RG · plays as is"
+                rg == null || gain == null -> "No RG · −3 dB until measured"
                 kotlin.math.abs(db - gain) < 0.005f -> "RG $used ${f(gain)}"
                 else -> "RG $used ${f(gain)} · plays ${f(db)}" + when {
                     limited && set.rgPreampDb != 0f -> " (preamp, peak limit)"
@@ -330,7 +363,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val mode = if (appOutputWanted()) "none" else when (s.rgMode) { "track" -> "track"; "album", "auto" -> "album"; else -> "none" }
         o += "--audio-replay-gain-mode=$mode"
         o += "--audio-replay-gain-preamp=${s.rgPreampDb}"
-        o += "--audio-replay-gain-default=$NO_RG_DB"      // songs without ReplayGain: as they are (as with the app's output)
+        o += "--audio-replay-gain-default=$NO_RG_DB"      // songs without ReplayGain: 3 dB lower (as with the app's output)
         o += if (s.rgClipProtect) "--audio-replay-gain-peak-protection" else "--no-audio-replay-gain-peak-protection"
         // libVLC never fetches album art from the internet itself (pictures are handled by the app, saved only in album folders).
         o += "--no-metadata-network-access"

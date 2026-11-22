@@ -32,6 +32,8 @@ object ReplayGain {
 
     /** After a scan wrote new values. */
     fun forget(uri: String) { cache.remove(uri) }
+    /** What is already known without reading the file: read before, or kept in the app by a scan. */
+    fun known(uri: String): Rg? = cache[uri] ?: RgStore.get(uri)
     private const val TAIL = 64 * 1024
 
     /**
