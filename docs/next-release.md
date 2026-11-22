@@ -1344,3 +1344,16 @@
 - The pick is kept across app restarts (used again when that device is connected). Each release of the pick is written to the Player log with the reason ("disconnected", "changed in Android's output switcher").
 - With libVLC's own output (fallback), Android decides the output as before.
 - **When a new video episode starts (11:47):** the likely path — the app's sound check judged the episode's sound as "not heard" while it was still starting, fell back to libVLC's output for a moment (which plays where Android routes media: the connected Bluetooth device), and the old routing check then dropped the pick for good. Now the pick survives such a fallback (only a disconnect or a pick by hand releases it, and the app's output comes back on the picked device), and a video's first "no sound" verdict is checked once more before switching (written to the Sound engine log as "Video sound not heard yet … checked again").
+
+## Helper texts checked against the app (requested 2026-11-22 11:49)
+- Every setting helper (151), the alarm / clock helpers (51) and the Help guide (12 chapters) were read against what the app does now. Fixed:
+  - **Removed:** "Hold for 2× speed" (the feature went at 21:38 on 20 Nov).
+  - **Video:** double tap in the middle = picture-in-picture; the video player's buttons (Subs/Change, Subs/Sync, Audio/Sync, Hue/Sat, Subs/Format, Browse, Find, format, Rotate); the Video page's contents (decoding, deinterlacing, subtitle format, on-screen buttons); position bars: tap goes, slide jumps on release, long press asks the time.
+  - **ReplayGain:** the automatic scan takes the whole album (disc folders); the write-access question is Yes / No / Choose location, asked also while playing, and No is kept.
+  - **Sound output:** "Remember last output per device" now says a pick in the Sound output sheet stays until that device disconnects or another is picked.
+  - **Logs:** Indexing (songs and videos, automatic starts and why they wait, ReplayGain pauses, resumes, background read errors), Player (output pick released, with the reason), Logs page summary (sound check, Collect error logs).
+  - **Export:** "Everything" and the Help guide list every part now exported (saved radio songs, visualisation, per-video choices, ReplayGain values, file associations).
+  - **Look / Library summaries:** list row spacing, page titles size, indexing; Up next also for videos (and the ≡ to move); the floating button's size helper no longer says it only shows when the buttons scroll away (default is Always).
+  - **Clock:** weather refreshed every 15 min (not 30); "Weather on the clock" mentions the time zone / temperatures line and the airport station; a doubled "the" removed in "Under the city".
+  - **Visualisation:** the patterns described are the current ones (spectrum, analysers, Lava flow, MilkDrop); the "Frequency range" helper now answers on its setting, "Frequencies followed".
+  - **Help guide:** new pages "Indexing" and "Files from other apps".

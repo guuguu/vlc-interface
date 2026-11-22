@@ -61,7 +61,12 @@ object HelpGuide {
         )),
         Chapter("library", "Library and files", listOf(
             "Your library" to "The Library gathers songs and videos from the phone and from every source you added. Folders are scanned automatically " +
-                "(or only when you tap Rescan) and can be watched for changes.",
+                "(or only when you tap Rescan) and can be watched for changes. Library → Songs (or Videos, with the Video switch) lists and searches them all.",
+            "Indexing" to "Pinned network folders (★) are indexed — songs and videos — so searches find them without reading the NAS each time. " +
+                "Home-network folders are indexed by themselves in the background when nothing prevents it, read again as set in Library & files → " +
+                "Indexing; an interrupted run is kept and resumed, and ReplayGain scans go first.",
+            "Files from other apps" to "Settings → File associations: which audio / video files, radio playlists and radio links (icy, mms, rtsp, rtmp) " +
+                "Android offers to open with the app, and the steps to make it the main app for a type.",
             "Album pictures" to "Albums without a picture can get one from MusicBrainz / Cover Art Archive, and artists a photo from Wikimedia. Pictures " +
                 "are resized and saved next to the songs when a folder holds one album, else in the app's pictures folder.",
             "Removing files" to "Files can be deleted from the phone or the NAS (when the share allows writing) or only removed from the lists; " +
@@ -83,7 +88,8 @@ object HelpGuide {
         )),
         Chapter("playback", "Playback and gestures", listOf(
             "Gestures" to "On videos: slide vertically on the right half for volume, on the left half for brightness, horizontally to seek. Double tap " +
-                "to skip. Each gesture can be switched off.",
+                "on the left / right third to skip back / forward, in the middle for picture-in-picture. On the position bar (songs and " +
+                "videos): a tap goes there, a slide jumps where you let go, a long press asks for the time. Each gesture can be switched off.",
             "Playback" to "Resume where you left off, keep playing in the background, the Up next list on the player, sleep timer and background work " +
                 "are set here.",
         )),
@@ -95,7 +101,8 @@ object HelpGuide {
         Chapter("video", "Video", listOf(
             "Subtitles and rotation" to "Preferred subtitle languages, subtitle style and per-file sync offsets; auto-rotate follows the phone or keeps " +
                 "the app upright (videos still turn with their rotate button).",
-            "Picture" to "In the video player: Audio and subtitles, hue and saturation, speed, lock and the settings symbol for this page.",
+            "Picture" to "In the video player: Subs/Change, Subs/Sync, Audio/Sync, Hue/Sat, Subs/Format, speed, Browse (every place, subtitles " +
+                "and season archives), Find, format and Rotate. Settings → Video: decoding, deinterlacing, subtitle format, on-screen button size.",
         )),
         Chapter("radio", "Radio", listOf(
             "Stations" to "Search and save stations; the radio player shows the song playing and its album picture when found.",
@@ -103,8 +110,8 @@ object HelpGuide {
                 "Free-space limits stop saving before the phone fills up.",
         )),
         Chapter("look", "Look", listOf(
-            "Colours and sizes" to "Accent colour (and a separate radio colour), button size, menu opacity, spacing and text size, pop-up opacity, " +
-                "scroll bar width, shadows on player buttons.",
+            "Colours and sizes" to "Accent colour (and a separate radio colour), button size, menu opacity, spacing and text size, page titles size, " +
+                "list row spacing (every list and queue), pop-up opacity, scroll bar width, shadows on player buttons.",
             "Settings order" to "The order of the links on the main Settings page is chosen on the Look page: drag a link by its ≡ (or long-press it) to move it; Reset order puts back the original order.",
         )),
         Chapter("alarm", "Alarm clock", listOf(
@@ -116,18 +123,19 @@ object HelpGuide {
                 "screen saver. Alarms can be shown in your phone calendar.",
         )),
         Chapter("vis", "Visualisation", listOf(
-            "Patterns" to "Colour clouds and mathematical patterns move with the music's chosen frequency range. Double tap to leave; slide along the " +
-                "long side for the colours, along the short side for the brightness.",
+            "Patterns" to "The spectrum, the analysers (LED bars, light bars, wave area, radial), Lava flow and the MilkDrop presets move with the " +
+                "music's beat. Double tap to leave the full screen; slide to change its brightness.",
         )),
         Chapter("backup", "Export and import", listOf(
             "Your setup in one file" to "Export saves the whole setup (Everything) or only the parts you tick: settings, NAS, VPN, Internet sources, " +
-                "passwords (encrypted with a passphrase), radio favourites, playlists, alarms, subtitles, resume positions.",
+                "passwords (encrypted with a passphrase), radio favourites and saved songs, playlists, alarms and clock, visualisation, subtitles, " +
+                "resume positions, per-video choices, ReplayGain values kept in the app, file associations.",
             "Import" to "Import shows the parts found in the file; only the ticked ones are applied. Merge adds what's new and keeps yours, Replace " +
                 "replaces the chosen parts. The current setup is backed up first.",
         )),
         Chapter("logs", "Logs", listOf(
-            "What's logged" to "Errors, server connections, indexing and crashes are kept in logs you can read, export or clear in Settings → Logs, " +
-                "together with the caches.",
+            "What's logged" to "Errors, server connections, indexing, ReplayGain, the sound engine, the player and crashes are kept in logs you can " +
+                "read, share, save to the NAS or clear in Settings → Logs, together with the sound check, Collect error logs and the caches.",
         )),
     )
 

@@ -15,10 +15,7 @@ object SettingHelp {
             "Lower brightness also saves battery during long videos. Default: on.",
         "Double-tap seek" to "In the video player, a double tap near the left or right edge jumps back or forward by the number of seconds shown.\n\n" +
             "Tap the value to choose the jump (for example 10 s for films, 5 s for clips). Several double taps in a row add up.\n\n" +
-            "The middle of the screen is never used for seeking, so a single tap still shows the controls. Default: 10 s.",
-        "Hold for 2× speed" to "Keep a finger pressed on the video: it plays twice as fast, with the sound sped up; lift the finger and it goes back to normal speed.\n\n" +
-            "Handy to get through slow scenes or speeches without losing your place. Off: a long press does nothing.\n\n" +
-            "The speed chosen in the player's menu is not changed. Default: on.",
+            "The middle of the screen is never used for seeking: a single tap there shows the controls, a double tap opens picture-in-picture. Default: 10 s.",
         "Resume where I left off" to "A video opened again starts where you stopped it last time; the position is kept per file, on the phone, together with its audio and subtitle choices.\n\n" +
             "Songs always start from their beginning (an album or playlist keeps its own place instead). Off: every video starts from 0.\n\n" +
             "Positions can be exported with the setup (Resume positions). Default: on.",
@@ -37,7 +34,7 @@ object SettingHelp {
             "(ReplayGain, preamp, volume), or more (tone, treble, limiter); and whether the sample rate is converted, and by whom.\n\n" +
             "Output: the output, the stream's rate and format, the Bluetooth codec and link rate, Bluetooth quality mode, the phone " +
             "volume. Share or copy the result to compare with other players.",
-        "Music folders with write access" to "The phone folders the app may write ReplayGain tags into, given with Android's own folder picker: the app gets those folders and their subfolders only — not mails, photos, messages or anything else. Add one with \"+ Add a music folder…\" (pick your music folder, then \"Use this folder\" and \"Allow\"), or answer the question the first time a phone folder gets ReplayGain. Remove takes the access back at once.",
+        "Music folders with write access" to "The phone folders the app may write ReplayGain tags into, given with Android's own folder picker: the app gets those folders and their subfolders only — not mails, photos, messages or anything else. Add one with \"+ Add a music folder…\" (pick your music folder, then \"Use this folder\" and \"Allow\"), or answer the question that comes the first time a phone folder gets ReplayGain or a song of it plays: Yes (Android's picker opens on that folder), No (never asked again for it — it can still be added here), or Choose location (another music folder from a list of those without access, or browsed in the app). Remove takes the access back at once.",
         "Treble band" to "The one filter the Treble slider on the players drives (double tap the Treble slider to come here).\n\n" +
             "Shelf: everything above the frequency is raised (Treble +) or lowered (Treble −) — like an amplifier's treble knob. " +
             "Peak: only a band around the frequency is raised or lowered — one band of a parametric equalizer.\n\n" +
@@ -57,7 +54,7 @@ object SettingHelp {
         "Bluetooth quality mode" to "On a Bluetooth output, the app keeps its own volume at 100 % and uses the device's volume instead, and sends the sound at the Bluetooth link's sample rate.\n\n" +
             "That avoids one volume scaling and one rate conversion, so the sound reaches the codec (SBC, AAC, LDAC…) as clean as possible. The volume keys then move the device volume.\n\n" +
             "Only for Bluetooth outputs; speaker and wired headphones are unchanged. Default: off.",
-        "Remember last output per device" to "When headphones or a Bluetooth speaker connect again, the app chooses them as the sound output by itself, with their own preamp, balance and loudness.\n\n" +
+        "Remember last output per device" to "When headphones or a Bluetooth speaker connect again, the app chooses them as the sound output by itself, with their own preamp, balance and loudness — unless you picked another output in the Sound output sheet: that pick stays until its device is disconnected or you pick another one.\n\n" +
             "Off: the app stays on the output you chose last, whatever connects.\n\nDefault: on.",
         "Pause when output disconnects" to "When headphones are unplugged or a Bluetooth device goes away, playback pauses instead of going on through the phone's speaker.\n\n" +
             "Off: the sound moves to the phone's speaker and keeps playing — fine at home, embarrassing on a bus.\n\nDefault: on.",
@@ -104,12 +101,12 @@ object SettingHelp {
         "All errors" to "Every failure from every log in one list, newest first, with the page it came from. Start here when something didn't work.",
         "Deleted files" to "Every file deleted from the app, with its full path and when — to check what went away, or find a file to restore from a backup.",
         "Network" to "One log page per server (home network and internet): connections, listings, plays, and the reason of every failure (password, unreachable, protocol…).",
-        "Indexing" to "Home-network folders indexed for search: how many songs were found in each, or why a folder couldn't be read.",
+        "Indexing" to "Folders indexed for search: how many songs and videos were found in each, every automatic start (and why it waits: server not answering, battery, VPN on, background work paused, a ReplayGain scan running), pauses for ReplayGain, interrupted runs resumed, and files that couldn't be read in the background.",
         "ReplayGain" to "Every ReplayGain scan (loudness measurement): files done, and each file that had a problem, with the reason.",
         "Crashes" to "App crashes with their technical details, and why the app ended last time as Android reports it (killed for memory, battery, crash…). Useful to report a problem.",
         "Sound engine" to "The app's own sound output (AAudio): output switches, sample rates and problems, such as a device that refused a format.",
         "Radio pictures" to "For each song a station announced: the picture found and from where, or what was searched without result.",
-        "Player" to "Songs skipped because they couldn't be found or reached, and phone files libVLC couldn't open (with the way it tried: path or file handle).",
+        "Player" to "Songs skipped because they couldn't be found or reached, phone files libVLC couldn't open (with the way it tried: path or file handle), and every time the sound output picked in the app was released, with the reason.",
         "Clear all caches" to "Deletes the radio buffer, songs being saved, radio pictures and temporary files, freeing their space now.\n\n" +
             "Settings, playlists, logs, saved songs and your files stay. Caches fill up again as you use the app.",
         // ---------------------------------------------------------------- Video
@@ -142,7 +139,7 @@ object SettingHelp {
         // ---------------------------------------------------------------- Look
         "Scroll bar width" to "Width of the bar on the right of long lists, in pixels. Drag the bar to scroll fast through thousands of songs.\n\nWider is easier to grab, narrower hides less of the rows.",
         "Button size" to "Size of every symbol button and its tap area, everywhere in the app. Bigger is easier to hit (in a car, with gloves); smaller shows more on screen.",
-        "Automatic ReplayGain for folders" to "On (default): when a song without any ReplayGain starts playing from the phone or from your network at home, every song of its folder that has none is measured in the background — no question, no notification, nothing to tap. Each song gets its own track gain (ReplayGain per song), written into the file's tags — on your NAS and on the phone. The song playing gets its tags as soon as it ends (a file can't be changed while it plays). Phone files: written in the music folders the app has write access to. The first time a phone folder gets ReplayGain, the app asks for its music folder (Android's folder picker opens on it — the app gets that folder and its subfolders only); \"No\" is kept: that folder is never asked again (it can still be added by hand under Music folders with write access). Without access the values are kept in the app; a read-only NAS share keeps them in the app too. The song playing uses its value as soon as it's measured. When the whole folder is done a short pop-up shows for 5 seconds: how many songs were scanned and each one's new gain. Songs that already have ReplayGain are left as they are. Network songs reached through the VPN (away from home) still ask first, as scanning over the VPN is slow. Off: the question for every folder, as before.",
+        "Automatic ReplayGain for folders" to "On (default): when a song without any ReplayGain starts playing from the phone or from your network at home, every song of its album that has none is measured in the background (its folder, and every disc folder of it when the album is split in CD1 / CD2 / Disc 1 …) — no question, no notification, nothing to tap. Each song gets its own track gain (ReplayGain per song), written into the file's tags — on your NAS and on the phone. The song playing gets its tags as soon as it ends (a file can't be changed while it plays). Phone files: written in the music folders the app has write access to. The first time a phone folder gets ReplayGain (or a song of it plays), the app asks for its music folder: Yes (Android's folder picker opens on it — the app gets that folder and its subfolders only), Choose location (another music folder), or No; \"No\" is kept: that folder is never asked again (it can still be added by hand under Music folders with write access). Without access the values are kept in the app; a read-only NAS share keeps them in the app too. The song playing uses its value as soon as it's measured. When the whole album is done a short pop-up shows for 5 seconds: how many songs were scanned and each one's new gain. Songs that already have ReplayGain are left as they are. Network songs reached through the VPN (away from home) still ask first, as scanning over the VPN is slow. Off: the question for every folder, as before.",
         "Songs list autoscroll" to "Long rows in Library → Songs (artist – album – title) that don't fit glide continuously one way, starting over seamlessly, so you can read them whole. Rows that fit stay still. This is their speed: 100 % normal, up to 300 %; 0 keeps them still (cut with …).",
         "Folder lists autoscroll" to "Long folder and song names in the phone and network folder lists glide continuously one way when they don't fit; names that fit stay still. This is their speed: 100 % normal, up to 300 %; 0 keeps them still (cut with …).",
         "Video lists autoscroll" to "Long video names in the phone and network folder lists glide continuously one way when they don't fit; names that fit stay still. This is their speed: 100 % normal, up to 300 %; 0 keeps them still (cut with …).",
@@ -150,9 +147,9 @@ object SettingHelp {
         "Find stations autoscroll" to "Long station names in the Find stations results and in station lists from playlists glide continuously one way when they don't fit; names that fit stay still. This is their speed: 100 % normal, up to 300 %; 0 keeps them still (cut with …).",
         "Up next autoscroll" to "Long names in the players' Up next lists glide continuously one way when they don't fit; names that fit stay still. This is their speed: 100 % normal, up to 300 %; 0 keeps them still.",
         "Player titles autoscroll" to "The title on the players — the song, the station and what it plays, the video — is on one line at full size; when it's too long it glides continuously one way, and a title that fits stays still and centred. This is its speed: 100 % normal, up to 300 %; 0 keeps it still (cut with …).",
-        "Up next songs on the player" to "How many of the coming songs the player shows under its controls (0–20). Tap one to jump to it.",
+        "Up next songs on the player" to "How many of the coming songs (or videos, on the video player) the player shows under its controls (0–20). Tap one to jump to it; hold its ≡ to move it.",
         "Pop-up opacity" to "How see-through pop-up windows are. More see-through shows what's behind; fully opaque is easier to read.",
-        "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players once their buttons have scrolled out of view.\n\n" +
+        "Floating button size" to "Size of the round play / pause button that floats over the audio and radio players (always, or only once their buttons have scrolled out of view — see Floating play / pause button).\n\n" +
             "Bigger is easier to hit without looking; smaller covers less of the list. Drag the button anywhere on the player — its place is kept. Default: 64 dp.",
         "Lava amplitude" to "Lava flow only: how far the lava blobs wander and how much they swell with the bass, separate from the bars' " +
             "amplitude. Small: the blobs stay near the middle and calm; big: they roam to the edges and swell strongly on the bass. " +
@@ -241,21 +238,21 @@ object SettingHelp {
         // ---------------------------------------------------------------- Export
         "Include saved passwords" to "The export file also holds the passwords of your servers, encrypted with the passphrase you type. Without a passphrase, passwords are left out.\n\n" +
             "Keep the file private anyway, and remember the passphrase: it can't be recovered.",
-        "Everything" to "Saves the whole setup: settings, NAS, VPN, Internet sources, passwords (with a passphrase), radio favourites, playlists, alarms, subtitles and resume positions.\n\n" +
+        "Everything" to "Saves the whole setup: settings, NAS, VPN, Internet sources, passwords (with a passphrase), radio favourites and saved radio songs, playlists, alarms and clock, visualisation, subtitles, resume positions, per-video choices, ReplayGain values kept in the app and file associations. Everything the app keeps is in one of these parts.\n\n" +
             "While ticked, the other boxes are greyed — they're all included. Untick it to choose part by part.",
         // ---------------------------------------------------------------- Settings groups (main page links)
         "Audio" to "Start volume, preamp, ReplayGain, loudness and treble, the sound engine and per-output settings (speaker, headphones, each Bluetooth device).",
         "Playback & gestures" to "Gestures in the video player, resuming videos, background playback and its battery setting.",
-        "Video" to "Subtitle languages and downloads, and rotation. Picture settings (hue, saturation) are in the video player.",
+        "Video" to "Picture (decoding, deinterlacing), subtitle format, subtitle languages and downloads, on-screen button size, video lists autoscroll and rotation. Hue and saturation are in the video player (Hue/Sat).",
         "Radio" to "Keeping the radio ready to save songs, the buffer, where and how saved songs are stored, free-space limits.",
-        "Look" to "Colours, button size, menus and pop-ups, lists, and the order of these links.",
-        "Library & files" to "Scanning, watching folders, album pictures, removed files.",
+        "Look" to "Colours, button size, menus and pop-ups, list row spacing, the order of the player rows and of these links.",
+        "Library & files" to "Indexing of network folders, scanning, watching folders, album pictures, removed files.",
         "Network & NAS" to "SMB1, Spotify links and how home servers are reached.",
         "VPN" to "Reaching your NAS away from home: VPN status, asking to start it, the VPN app and your servers' VPN addresses.",
         "Alarm clock" to "Alarms, what wakes you and how, snooze, wake check, the clock's look and the screen saver.",
         "Visualisation" to "Patterns and colours shown with the music, and the frequency range they follow.",
         "Export / import" to "Save your setup to one file, or bring one in — whole or part by part.",
-        "Logs" to "What the app did and why something failed, page by page; caches.",
+        "Logs" to "What the app did and why something failed, page by page; the sound check, collecting error logs to send, and caches.",
         // ---------------------------------------------------------------- Clock aspect
         "24-hour" to "The digital clock shows 0–23 h. Off: 12-hour with AM / PM.",
         "Seconds" to "Shows the seconds hand (analogue) or seconds digits (digital). Off: a calmer clock that changes once a minute — slightly less battery on the screen saver.",
@@ -278,7 +275,7 @@ object SettingHelp {
         "Colour speed" to "How fast the colours drift through your chosen colours.",
         "Definition" to "How fine the pattern is drawn: more definition is sharper but uses more battery on long sessions.",
         "Brightness" to "Overall brightness of the visualisation (also changed by sliding along the short side of the screen while it shows).",
-        "Frequency range" to "The part of the sound the pattern follows, from bass to treble. Narrow it to the bass to move with the beat; widen it for everything.",
+        "Frequencies followed" to "The part of the sound the pattern follows, from bass to treble. Narrow it to the bass to move with the beat; widen it for everything.",
         // ---------------------------------------------------------------- Permissions (setup wizard)
         "Notifications" to "Lets the app post notifications: the player's controls in the notification shade and on the lock screen, the alarm notice with Snooze / Stop, and the next alarm.\n\n" +
             "Without it, playback still works inside the app, but there are no controls outside it and alarms ring without their notice.",

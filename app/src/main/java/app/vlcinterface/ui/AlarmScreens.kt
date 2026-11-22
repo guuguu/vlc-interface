@@ -664,10 +664,10 @@ private val LocalHelp = androidx.compose.runtime.staticCompositionLocalOf<(Strin
 
 internal val HELP: Map<String, String> = mapOf(
     "Under the city" to "The small line under the city's name on the clock. All: the time zone (e.g. UTC+1) and the temperature at the " +
-        "city now > 6 hours later (e.g. 15°>18°), changing every 5 seconds. Time zone or Temperatures: always that one. The " +
-        "the temperature now is measured at the nearest airport weather station (within 35 km; else the forecast for the city), the one in 6 hours is the forecast; refreshed every 15 min. Until they're known the time zone is shown.",
+        "city now > 6 hours later (e.g. 15°>18°), changing every 5 seconds. Time zone or Temperatures: always that one. " +
+        "The temperature now is measured at the nearest airport weather station (within 35 km; else the forecast for the city), the one in 6 hours is the forecast; refreshed every 15 min. Until they're known the time zone is shown.",
     "Weather shows" to "What the weather icon on the clock shows for your city. 'At noon': today's forecast for 12:00 at the city (its own local time) — handy in the morning to see what the day will be; after midnight it moves to the new day's noon. " +
-        "'Now': the weather right now. Either way it's refreshed every 30 minutes (only with the weather on). Icons: sun, cloud, raindrops (light rain), cloud with rain, snowflakes (light snow), cloud with snow, storm. Default: At noon.",
+        "'Now': the weather right now. Either way it's refreshed every 15 minutes (only with the weather on). Icons: sun, cloud, raindrops (light rain), cloud with rain, snowflakes (light snow), cloud with snow, storm. Default: At noon.",
     "Alarm on" to "Switches this alarm on or off without deleting it. A one-time alarm switches itself off after ringing.",
     "Time" to "When the alarm rings, in the time zone of the city chosen in the alarm clock settings (or the phone's).",
     "Days" to "The days it repeats. No day selected: it rings once, at the next time shown.",
@@ -688,7 +688,7 @@ internal val HELP: Map<String, String> = mapOf(
     "Stop by itself after" to "The alarm stops on its own after this time if nobody stops it. Never: it rings until stopped.",
     "Output" to "Where the alarm plays: as it is now, the phone speaker, or a connected device.",
     "City" to "The clock, the alarm times and the weather follow this city, also when the phone's time zone isn't automatic. Not chosen: the phone's time zone.",
-    "Weather on the clock" to "A small icon (sunny, cloudy, rainy, storm) with the city's short name and time zone, refreshed every 15 min from Open-Meteo.",
+    "Weather on the clock" to "A small icon (sunny, cloudy, rainy, storm) with the city's short name and, under it, the time zone and / or the temperature now > in 6 hours (see Under the city), refreshed every 15 min: forecast from Open-Meteo, the temperature now from the nearest airport weather station.",
     "Maximum level" to "No alarm ever goes above this volume: not the target, not the ring after the wake check, not the alarm sound.",
     "Vibrate (default)" to "The phone vibrates while an alarm rings — for alarms that have no Vibrate choice of their own. An alarm's own Vibrate (on its page, under Volume) always wins.",
     "Vibrate (this alarm)" to "Vibrate while this alarm rings. Kept with this alarm and used instead of the alarm clock settings' Vibrate.",
