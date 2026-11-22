@@ -336,7 +336,15 @@ fun RgFailureReport(nav: Navigator) {
         a?.answer?.complete(r.resultCode == android.app.Activity.RESULT_OK)
         app.vlcinterface.sources.MusicFolderAccess.ask.value = null
     }
-    folderAsk?.let { a ->
+    val choosingNow by app.vlcinterface.sources.MusicFolderAccess.choosing.collectAsState()
+    if (choosingNow) folderAsk?.let { a ->
+        ChooseMusicLocation(a.path, onPick = { p ->
+            app.vlcinterface.sources.MusicFolderAccess.choosing.value = false
+            try { treeLauncher.launch(app.vlcinterface.sources.MusicFolderAccess.pickerIntent(p)) }
+            catch (_: Exception) { a.answer?.complete(false); app.vlcinterface.sources.MusicFolderAccess.ask.value = null }
+        }, onBack = { app.vlcinterface.sources.MusicFolderAccess.choosing.value = false })
+    }
+    if (!choosingNow) folderAsk?.let { a ->
         val name = a.path.substringAfterLast('/')
         androidx.compose.material3.AlertDialog(onDismissRequest = {}, containerColor = C.panel,
             title = { Text("Write ReplayGain into \"$name\"?", color = C.text) },
@@ -345,7 +353,7 @@ fun RgFailureReport(nav: Navigator) {
                     Text("To save ReplayGain in the songs' tags, the app needs permission to change the music files in this folder:", color = C.text, fontSize = 14.sp)
                     Text(a.path.removePrefix("/storage/emulated/0").ifEmpty { "/" }, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     Text("Yes: Android's folder picker opens on this folder — tap \"Use this folder\", then \"Allow\". " +
-                        "Choose location: the picker opens at the top of the phone's storage, to pick another folder (e.g. one holding all your music). " +
+                        "Choose location: pick another music folder from a list, or browse the phone's music folders in the app; then Android asks to allow it. " +
                         "The app gets the folder chosen and its subfolders only — not your mails, photos, messages or anything else; it can be removed in " +
                         "Settings → Audio → ReplayGain. No: never asked again for this folder (it can still be added there).", color = C.muted, fontSize = 13.sp)
                 }
@@ -360,8 +368,7 @@ fun RgFailureReport(nav: Navigator) {
                 androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End)) {
                     STextButton({ pick(a.path) }) { Text("Yes", color = accent(), fontWeight = FontWeight.SemiBold) }
                     STextButton({ fa.refuse(a.path); a.answer?.complete(false); fa.ask.value = null }) { Text("No") }
-                    val top = if (a.path.startsWith("/storage/emulated/0")) "/storage/emulated/0" else "/storage/" + a.path.removePrefix("/storage/").substringBefore('/')
-                    STextButton({ pick(top) }) {
+                    STextButton({ fa.choosing.value = true }) {
                         Text("Choose location", color = accent()) }
                 }
             })
@@ -407,4 +414,82 @@ fun RgFailureReport(nav: Navigator) {
         confirmButton = { STextButton({ RgScanner.reportSeen() }) { Text("OK", color = accent()) } },
         dismissButton = { STextButton({ RgScanner.reportSeen(); if (nav.top !is Screen.RgScan) nav.go(Screen.RgScan) }) { Text("Open scan page") } },
     )
+}
+
+
+/**
+ * "Choose location" (2026-11-22 07:44 / 07:45): the phone's music folders not approved yet for writing, with their songs,
+ * or a browser of them inside the app (only folders holding music). The folder picked opens Android's own picker on it,
+ * where it's approved ("Use this folder", "Allow") — Android allows write access only through that step.
+ */
+@Composable
+private fun ChooseMusicLocation(asked: String, onPick: (String) -> Unit, onBack: () -> Unit) {
+    val ctx = LocalContext.current
+    val fa = app.vlcinterface.sources.MusicFolderAccess
+    var places by remember { mutableStateOf<List<app.vlcinterface.sources.MusicFolderAccess.MusicPlace>?>(null) }
+    LaunchedEffect(Unit) { places = try { fa.musicPlaces(ctx) } catch (_: Exception) { emptyList() } }
+    var browse by remember { mutableStateOf<String?>(null) }      // null = the list; "" = storage tops; else a folder
+    val all = places.orEmpty()
+    val byPath = remember(all) { all.associateBy { it.path } }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onBack) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).background(C.panel, RoundedCornerShape(20.dp)).padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(if (browse == null) "Choose location" else "Browse music folders", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text("Music folders not approved for writing yet. Pick one: Android then asks to allow it.", color = C.muted, fontSize = 13.sp)
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
+                when {
+                    places == null -> Text("Looking for music folders…", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
+                    all.isEmpty() -> Text("Every music folder already has write access.", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(vertical = 12.dp))
+                    browse == null -> {
+                        // The usual choices: top folders, and the folder that holds the song asked about.
+                        val tops = all.filter { p -> p.path.count { it == '/' } == (if (p.path.startsWith("/storage/emulated/0")) 4 else 3) }
+                        val near = all.filter { asked == it.path || asked.startsWith(it.path + "/") || it.path.startsWith(asked + "/") }
+                            .filter { it !in tops }.sortedBy { it.path.length }.take(4)
+                        (tops + near).distinctBy { it.path }.forEach { p ->
+                            Row(Modifier.fillMaxWidth().clickable { onPick(p.path) }.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("📁", fontSize = 16.sp, modifier = Modifier.padding(end = 10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(p.label, color = if (p.path == asked) accent() else C.text, fontSize = 15.sp)
+                                    Text("${p.songs} songs" + if (p.path == asked) " · suggested" else "", color = C.muted, fontSize = 12.sp)
+                                }
+                            }
+                        }
+                        Row(Modifier.fillMaxWidth().clickable { browse = "" }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text("🔎", fontSize = 16.sp, modifier = Modifier.padding(end = 10.dp))
+                            Text("Browse the phone's music folders…", color = accent(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                    else -> {
+                        val here = browse!!
+                        // Children of [here] among the folders holding music ("" = the storages' top folders).
+                        val kids = all.filter { p ->
+                            if (here.isEmpty()) p.path.count { it == '/' } == (if (p.path.startsWith("/storage/emulated/0")) 4 else 3)
+                            else p.path.startsWith("$here/") && !p.path.removePrefix("$here/").contains('/')
+                        }
+                        Row(Modifier.fillMaxWidth().clickable {
+                            browse = if (here.isEmpty()) null else here.substringBeforeLast('/').takeIf { it in byPath } ?: ""
+                        }.padding(vertical = 9.dp)) {
+                            Text("⬆ " + (if (here.isEmpty()) "Back to the list" else "Up one level"), color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                        if (here.isNotEmpty()) {
+                            Text(byPath[here]?.label ?: here, color = C.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            STextButton({ onPick(here) }) { Text("✓ Use this folder (${byPath[here]?.songs ?: 0} songs)", color = accent()) }
+                        }
+                        kids.forEach { p ->
+                            Row(Modifier.fillMaxWidth().clickable { browse = p.path }.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("📁", fontSize = 16.sp, modifier = Modifier.padding(end = 10.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(p.path.substringAfterLast('/'), color = C.text, fontSize = 15.sp)
+                                    Text("${p.songs} songs", color = C.muted, fontSize = 12.sp)
+                                }
+                                Text("›", color = C.muted, fontSize = 18.sp)
+                            }
+                        }
+                        if (kids.isEmpty() && here.isNotEmpty()) Text("No folders with music inside.", color = C.muted, fontSize = 13.sp)
+                    }
+                }
+            }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { STextButton({ onBack() }) { Text("Back") } }
+        }
+    }
 }

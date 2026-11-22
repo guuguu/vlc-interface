@@ -22,6 +22,44 @@ object MusicFolderAccess {
     /** The folder the app asks for now (shown as a question at the app's root), and how it was answered. */
     data class Ask(val path: String, val answer: kotlinx.coroutines.CompletableDeferred<Boolean>?)
     val ask = MutableStateFlow<Ask?>(null)
+    /** "Choose location" pressed (07:44): the in-app chooser of music folders is open for the question being asked. */
+    val choosing = MutableStateFlow(false)
+
+    /** A phone folder holding music, for the chooser: its full path, how it's shown, and its songs (subfolders included). */
+    class MusicPlace(val path: String, val label: String, val songs: Int)
+
+    /** Path on the phone for a MediaStore volume + relative path ("external_primary", "Music/Albums/" → /storage/emulated/0/Music/Albums). */
+    fun pathFor(volume: String, rel: String): String {
+        val root = if (volume == android.provider.MediaStore.VOLUME_EXTERNAL_PRIMARY) "/storage/emulated/0" else "/storage/" + volume.uppercase()
+        return (root + "/" + rel.trim('/')).trimEnd('/')
+    }
+
+    /** Already writable: the folder itself or one above it was granted. */
+    fun granted(ctx: Context, path: String) = grants(ctx).any { path == it.path || path.startsWith(it.path.trimEnd('/') + "/") }
+
+    /**
+     * Every phone folder that holds songs, with the songs under it (07:44, only those not approved yet — 07:45): each
+     * folder and each folder above it (so a top folder such as Music collects everything under it). Storage roots and
+     * the Download folder itself aren't offered: Android's picker doesn't allow them.
+     */
+    suspend fun musicPlaces(ctx: Context): List<MusicPlace> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val count = HashMap<String, Int>()
+        InternalSource.folders(ctx, all = true).filter { it.songs > 0 }.forEach { f ->
+            val parts = f.relativePath.trim('/').split('/').filter { it.isNotEmpty() }
+            for (i in 1..parts.size) {
+                val p = pathFor(f.volume, parts.take(i).joinToString("/"))
+                count[p] = (count[p] ?: 0) + f.songs
+            }
+        }
+        val gs = grants(ctx)
+        count.filterKeys { p ->
+            gs.none { g -> p == g.path || p.startsWith(g.path.trimEnd('/') + "/") } &&
+                !p.endsWith("/Download") && !p.endsWith("/Downloads")
+        }.map { (p, n) ->
+            val where = if (p.startsWith("/storage/emulated/0")) "" else "SD card · "
+            MusicPlace(p, where + p.removePrefix("/storage/emulated/0/").removePrefix("/storage/"), n)
+        }.sortedBy { it.path.lowercase() }
+    }
 
     private fun pathOf(docId: String): String? {
         val vol = docId.substringBefore(':', ""); val rel = docId.substringAfter(':', "")
