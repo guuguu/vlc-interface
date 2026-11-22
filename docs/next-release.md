@@ -1191,3 +1191,14 @@
 - **Crashes in the sound / video code and "not responding":** the app can't catch these, so the notice is posted at the next start, from Android's record of why the app ended.
 - A tap opens Settings → Logs (where "Collect error logs" is). Always the same single notice, replaced, never piled up.
 - Its own channel, "App problems", in the app's notification settings.
+
+## Search in Settings (requested 2026-11-22 07:19, mock-up shown)
+- **Where:** a "Search settings" bar at the top of the main Settings page (the app's usual search bar: count and ✕).
+- **What it finds:** every settings page (the main page, Audio, Playback & gestures, Video, Radio, Look, Library & files, Network & NAS, VPN, Alarm clock, Clock aspect, Visualisation, Export / import, Logs, Find media folders), their sections and each setting by its name, its grey line, its page and section, or words of its explanation. Every typed word must match; accents and capitals don't matter.
+- **Results:** the setting's name with the typed words in the accent colour, "Page › Section" under it, its grey line; "Found in its explanation" when only the explanation matched. Best matches first (name starts with the word, then name, then page / section, then explanation).
+- **Every result is a link (07:20):** a tap opens its page scrolled to that setting, lit in the accent colour for 2 s. Settings that are only a title line open at their section, lit the same way.
+  - Only what a page can scroll to is offered. Parts shown only at times are left out (Alarm health, found folders, dialogs). With the alarm system off, only the clock's settings of the Alarm clock page are offered.
+  - Should a setting still not be on its page when opened (hidden by another setting), the page opens at its section, or says it isn't shown right now and drops it from the results for this session.
+- **Back** from a result returns to the search with the same words and results. ✕ clears it.
+- The players' shortcuts (Subs/Format → Subtitle format, double tap on Treble → Treble band) use the same way of opening a page at a place.
+- **Kept up to date:** the list of settings is rebuilt from the settings pages at every build.

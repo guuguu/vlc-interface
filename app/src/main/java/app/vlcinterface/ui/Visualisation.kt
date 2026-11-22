@@ -934,7 +934,7 @@ fun VisualisationSettings() {
         if (visHelp) HelperDialog("Visualisation instead of album pictures", SettingHelp.text("Visualisation instead of album pictures", "")) { visHelp = false }
         CardBox {
             Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
-                Text("Visualisation instead of album pictures", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Visualisation instead of album pictures"))
+                Text("Visualisation instead of album pictures", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Visualisation instead of album pictures").explain("Visualisation instead of album pictures"))
                 Text("Always in the picture's place on the players", color = C.muted, fontSize = 13.sp)
                 androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp),
                     verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
@@ -949,7 +949,7 @@ fun VisualisationSettings() {
         }
     }
     CardBox {
-        Text("Pattern", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 10.dp))
+        Text("Pattern", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Pattern").padding(start = 16.dp, top = 10.dp))
         Box {
             // Preview: above the pattern buttons, closes by itself after 3 s (another pick shows that one).
             preview?.let { k ->
@@ -966,7 +966,7 @@ fun VisualisationSettings() {
             }
         }
         Divider()
-        Text("Colours", color = C.text, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 10.dp))
+        Text("Colours", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Colours").padding(start = 16.dp, top = 10.dp))
         FlowRow(Modifier.padding(horizontal = 16.dp, vertical = (8 * sg()).dp), horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp), verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
             PALETTES.forEach { (key, label) ->
                 val cs = visColours(v.copy(palette = key))
@@ -999,7 +999,7 @@ fun VisualisationSettings() {
             var fbHelp by remember { mutableStateOf(false) }
             if (fbHelp) HelperDialog("Full-screen brightness", SettingHelp.text("Full-screen brightness", "")) { fbHelp = false }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Full-screen brightness", color = C.text, fontSize = 14.sp, modifier = Modifier.weight(1f).explain("Full-screen brightness"))
+                Text("Full-screen brightness", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Full-screen brightness").weight(1f).explain("Full-screen brightness"))
                 Pill("Phone's own", selected = v.fsBright <= 0f, filled = v.fsBright <= 0f) {
                     set(v.copy(fsBright = if (v.fsBright <= 0f) 0.6f else -1f)); if (Alarms.current.global.helpers) fbHelp = true }
             }
@@ -1029,7 +1029,7 @@ fun VisualisationSettings() {
                 VisCanvas(v, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)), live = true)
             }) { lavaHelp = false }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Lava amplitude", color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain("Lava amplitude"))
+                Text("Lava amplitude", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Lava amplitude").width(110.dp).explain("Lava amplitude"))
                 ThinSlider(v.lavaAmp, { set(v.copy(lavaAmp = (Math.round(it * 10f) / 10f))) }, Modifier.weight(1f), valueRange = 0.4f..2.5f,
                     onHoldStill = { if (Alarms.current.global.helpers) lavaHelp = true })
                 Text("×%.1f".format(v.lavaAmp), color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
@@ -1041,7 +1041,7 @@ fun VisualisationSettings() {
                 VisCanvas(v, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)), live = true)
             }) { gainHelp = false }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Sensitivity", color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain("Sensitivity"))
+                Text("Sensitivity", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Sensitivity").width(110.dp).explain("Sensitivity"))
                 ThinSlider(v.specGain, { set(v.copy(specGain = (Math.round(it * 10f) / 10f))) }, Modifier.weight(1f), valueRange = 0.5f..3f,
                     onHoldStill = { if (Alarms.current.global.helpers) gainHelp = true })
                 Text("×%.1f".format(v.specGain), color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
@@ -1055,7 +1055,7 @@ fun VisualisationSettings() {
                 VisCanvas(v, Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(8.dp)), live = true)
             }) { barHelp = false }
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Bar thickness", color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain("Bar thickness"))
+                Text("Bar thickness", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Bar thickness").width(110.dp).explain("Bar thickness"))
                 ThinSlider(v.specBar, { set(v.copy(specBar = Math.round(it).toFloat())) }, Modifier.weight(1f), valueRange = 3f..40f,
                     onHoldStill = { if (Alarms.current.global.helpers) barHelp = true })
                 Text("${v.specBar.toInt()} dp", color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
@@ -1064,7 +1064,7 @@ fun VisualisationSettings() {
         Divider()
         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Frequencies followed", color = C.text, fontSize = 15.sp)
+                Text("Frequencies followed", color = C.text, modifier = Modifier.anchor("Frequencies followed"), fontSize = 15.sp)
                 Text(hzText(v.fLo) + " – " + hzText(v.fHi) + if (v.fHi / v.fLo >= 4f) " · big spots: lower part, small spots: upper part" else " · all spots together",
                     color = C.muted, fontSize = 13.sp)
             }

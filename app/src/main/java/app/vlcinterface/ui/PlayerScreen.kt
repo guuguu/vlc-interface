@@ -817,12 +817,12 @@ private fun JumpToTimeDialog(lengthMs: Long, onDone: () -> Unit) {
         Box(Modifier.clip(RoundedCornerShape(20.dp)).background(C.panel).padding(16.dp)) {
             if (land) Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.width(leftW.dp)) {
-                    Text("Jump to time", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Jump to time", color = C.text, modifier = Modifier.anchor("Jump to time"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     cassette(); info(); buttons()
                 }
                 pad()
             } else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Jump to time", color = C.text, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text("Jump to time", color = C.text, modifier = Modifier.anchor("Jump to time"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 cassette(); pad(); info(); buttons()
             }
         }
@@ -975,7 +975,7 @@ private fun PicturePanel(onBack: () -> Unit) {
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Hue", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text("Hue", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Hue").weight(1f))
             Text("%+.1f°".format(java.util.Locale.US, hue), color = accent(), fontWeight = FontWeight.SemiBold)
         }
         // Fine range: −20° … +20° over the whole slider, steps of 0.1°.
@@ -983,7 +983,7 @@ private fun PicturePanel(onBack: () -> Unit) {
             onValueChangeFinished = { player.setPicture(hue, sat, true) }, valueRange = -20f..20f,
             colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Saturation", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text("Saturation", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Saturation").weight(1f))
             Text("${(sat * 100).toInt()} %", color = accent(), fontWeight = FontWeight.SemiBold)
         }
         Slider(sat, { sat = (if (kotlin.math.abs(it - 1f) < 0.03f) 1f else it); player.setPicture(hue, sat, false) },
@@ -991,7 +991,7 @@ private fun PicturePanel(onBack: () -> Unit) {
             colors = SliderDefaults.colors(thumbColor = Color.White, activeTrackColor = accent(), inactiveTrackColor = C.line))
         var hl by remember(st.settings.pictureHighlights) { mutableStateOf(st.settings.pictureHighlights) }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Bright areas", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text("Bright areas", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Bright areas").weight(1f))
             Text(if (hl < 0.01f) "Off" else "toned down ${(hl * 100).toInt()} %", color = accent(), fontWeight = FontWeight.SemiBold)
         }
         Slider(hl, { hl = (Math.round(it * 20f) / 20f); player.setHighlights(hl, false) },
@@ -1338,7 +1338,7 @@ fun SubtitleFormatSettings() {
                 colors = SliderDefaults.colors(activeTrackColor = accent(), thumbColor = Color.White))
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Dark box behind the text", color = C.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text("Dark box behind the text", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Dark box behind the text").weight(1f))
             AppSwitch(s.box, { set(s.copy(box = it)) })
         }
         // Position on the picture: 10 steps from the bottom up.
@@ -1511,7 +1511,7 @@ private fun VideoQueuePanel(p: PlayerState, nav: Navigator, onClose: () -> Unit)
     val next = if (p.index >= 0) p.queue.drop(p.index + 1) else emptyList()
     var menu by remember { mutableIntStateOf(-1) }
     Column(Modifier.fillMaxSize().padding(horizontal = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Queue", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text("Queue", color = C.text, modifier = Modifier.anchor("Queue"), fontSize = 18.sp, fontWeight = FontWeight.Bold)
         val from = p.origin.title.takeIf { it.isNotEmpty() && p.origin.kind != "single" }
         if (from != null) Text((if (p.origin.kind == "playlist") "Playlist: " else "Folder: ") + from, color = C.muted, fontSize = 13.sp, maxLines = 1)
         Text("Now playing", color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
@@ -1599,7 +1599,7 @@ private fun SubtitleChoiceDialog(p: PlayerState, onPick: (Int) -> Unit, onDismis
     val tracks = p.spuTracks.filter { it.id >= 0 }
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(C.panel).padding(vertical = 12.dp)) {
-            Text("Subtitles", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
+            Text("Subtitles", color = C.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.anchor("Subtitles").padding(horizontal = 20.dp, vertical = 6.dp))
             Text(if (tracks.isEmpty()) "No subtitles in this video yet (download or add one in Subs/Sync)." else "This video has subtitles. Choose one:",
                 color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 20.dp))
             Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).padding(top = 8.dp)) {
@@ -1663,7 +1663,7 @@ fun SubtitleBrowseDialog(onPicked: () -> Unit = {}, onDone: () -> Unit) {
     }
     val canUp = start != null && zipFiles == null && where.trimEnd('/') != start.third.trimEnd('/') && where.trimEnd('/').length > start.third.trimEnd('/').length
     androidx.compose.material3.AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text("Subtitles from a folder", color = C.text) },
+        title = { Text("Subtitles from a folder", color = C.text, modifier = Modifier.anchor("Subtitles from a folder")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (start == null) { Text("This video's folder can't be read from the app (no file path).", color = C.muted, fontSize = 13.sp); return@Column }
@@ -1718,7 +1718,7 @@ fun SubtitleBrowseDialog(onPicked: () -> Unit = {}, onDone: () -> Unit) {
 
 /** Opens Settings → Video at its "Subtitle format" section (the video player's buttons). */
 fun openSubtitleFormat(nav: Navigator) {
-    SettingsAnchor.want = "subformat"
+    SettingsAnchor.go("video", null, "Subtitle format")
     nav.go(Screen.SettingsGroup("video"))
 }
 

@@ -162,7 +162,7 @@ private fun <T> Choices(options: List<Pair<String, T>>, selected: T, onPick: (T)
 
 @Composable
 private fun Label(text: String, hint: String = "") {
-    Column(Modifier.fillMaxWidth().helpOn(text).padding(start = 16.dp, end = 16.dp, top = 10.dp)) {
+    Column(Modifier.anchor(text).fillMaxWidth().helpOn(text).padding(start = 16.dp, end = 16.dp, top = 10.dp)) {
         Text(text, color = C.text, fontSize = 15.sp)
         if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
     }
@@ -170,7 +170,7 @@ private fun Label(text: String, hint: String = "") {
 
 @Composable
 private fun SliderRow(label: String, value: Float, range: ClosedFloatingPointRange<Float>, shown: String, steps: Int = 0, onChange: (Float) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.anchor(label).fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).helpOn(label))
         ThinSlider(value, onChange, Modifier.weight(1f), valueRange = range, steps = steps)
         Text(shown, color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
@@ -230,7 +230,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
             CardBox {
                 HToggleRow("Alarm on", "", a.on) { a = a.copy(on = it) }; Divider()
                 Row(Modifier.fillMaxWidth().clickable { timeAsk = true }.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Time", color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                    Text("Time", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Time").weight(1f))
                     Text(a.timeText, color = accent(), fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Divider()
@@ -387,7 +387,7 @@ fun AlarmSettingsScreen(nav: Navigator) {
     HelpHost {
     Column(Modifier.fillMaxSize()) {
         BackHeader("Alarm clock", nav)
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+        Column(Modifier.weight(1f).anchorViewport(scroll, "alarm").verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             AlarmSettingsBody(nav)
             Box(Modifier.height(24.dp))
         }
@@ -557,7 +557,7 @@ fun ClockAspectScreen(nav: Navigator) {
             ClockFace(a, Modifier.padding(8.dp).size(190.dp).then(if (showDim) Modifier.alpha(1f - a.dim / 100f) else Modifier))
             if (showDim) Text("Charging screen preview", color = C.muted, fontSize = 11.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp))
         }
-        Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+        Column(Modifier.weight(1f).anchorViewport(scroll, "clock").verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             SectionTitle("Design")
             CardBox {
                 Choices(listOf("1" to 1, "2" to 2, "4" to 4, "5" to 5, "8" to 8, "Digital" to 0), if (a.analog) a.design else 0) {
@@ -574,7 +574,7 @@ fun ClockAspectScreen(nav: Navigator) {
                     HueSatBars("Date", a.dateHue, a.dateSat, ::clockMain) { h, s -> set(a.copy(dateHue = h, dateSat = s)) }
                     Text("Second hand", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 6.dp))
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Hue", color = C.text, fontSize = 13.sp, modifier = Modifier.width(78.dp))
+                        Text("Hue", color = C.text, fontSize = 13.sp, modifier = Modifier.anchor("Hue").width(78.dp))
                         GradientBar(a.secHue / 360f, androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(0f, 60f, 120f, 180f, 240f, 300f, 359f).map { Color.hsl(it, 0.9f, 0.62f) }),
                             Modifier.weight(1f)) { set(a.copy(secHue = it * 360f)) }
                         Box(Modifier.padding(start = 10.dp).size(26.dp).clip(RoundedCornerShape(6.dp)).background(Color.hsl(a.secHue.coerceAtMost(359.9f), 0.9f, 0.62f)))
@@ -628,7 +628,7 @@ private fun CityDialog(onDone: () -> Unit) {
     fun search() { if (q.isBlank()) return; busy = true; note = ""; scope.launch {
         res = app.vlcinterface.alarm.Weather.search(q); busy = false; if (res.isEmpty()) note = "Nothing found (or no internet)" } }
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text("City", color = C.text) },
+        title = { Text("City", color = C.text, modifier = Modifier.anchor("City")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -662,7 +662,7 @@ private fun CityDialog(onDone: () -> Unit) {
 
 private val LocalHelp = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Unit> { {} }
 
-private val HELP: Map<String, String> = mapOf(
+internal val HELP: Map<String, String> = mapOf(
     "Under the city" to "The small line under the city's name on the clock. Both: the time zone (e.g. UTC+1) and the temperature at the " +
         "city now > 6 hours later (e.g. 15°>18°), changing every 5 seconds. Time zone or Temperatures: always that one. The " +
         "temperatures come from the same weather service as the icon (refreshed with it); until they're known the time zone is shown.",
@@ -735,7 +735,7 @@ private fun Modifier.helpOn(key: String): Modifier {
 private fun HToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boolean) -> Unit) {
     val help = LocalHelp.current
     val has = true      // every setting explains itself (own text, or the general help texts)
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+    Row(Modifier.anchor(label).fillMaxWidth().heightIn(min = 56.dp)
         .then(if (has) Modifier.combinedClickable(onClick = { onChange(!checked) }, onDoubleClick = { help(label) }, onLongClick = { help(label) })
             else Modifier.clickable { onChange(!checked) })
         .padding(horizontal = 16.dp, vertical = (6 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
@@ -751,7 +751,7 @@ private fun HToggleRow(label: String, hint: String = "", checked: Boolean, onCha
 private fun HValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) {
     val help = LocalHelp.current
     val has = true      // every setting explains itself (own text, or the general help texts)
-    Row(Modifier.fillMaxWidth().heightIn(min = 56.dp)
+    Row(Modifier.anchor(label).fillMaxWidth().heightIn(min = 56.dp)
         .then(if (has) Modifier.combinedClickable(onClick = onClick, onDoubleClick = { help(label) }, onLongClick = { help(label) }) else Modifier.clickable(onClick = onClick))
         .padding(horizontal = 16.dp, vertical = (6 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
@@ -791,7 +791,7 @@ private fun RootFolderDialog(onDone: () -> Unit) {
     val roots = folders.orEmpty().groupBy { it.volume to (it.relativePath.substringBefore('/') + "/") }
         .map { (k, l) -> Triple(k.second, k.first, l.sumOf { it.songs }) }.sortedByDescending { it.third }
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text("Music folder for alarms", color = C.text) },
+        title = { Text("Music folder for alarms", color = C.text, modifier = Modifier.anchor("Music folder for alarms")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
                 Text("Alarms play songs stored on the phone from this folder and all its subfolders, in random order — no network needed. " +
@@ -858,7 +858,7 @@ private fun AlarmSoundDialog(onDone: () -> Unit) {
     }
     val own = g.toneUri.isNotEmpty() && g.toneUri.startsWith("content://") && !g.toneUri.startsWith("content://media/")
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text("Alarm sound", color = C.text) },
+        title = { Text("Alarm sound", color = C.text, modifier = Modifier.anchor("Alarm sound")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
                 Text("Rings when nothing else can play, when music was already playing, and with low battery (if chosen). " +
@@ -1010,7 +1010,7 @@ private fun HealthCard() {
         }
         Row(Modifier.fillMaxWidth().helpOn("Test alarm in 1 minute").padding(horizontal = 16.dp, vertical = (8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Test alarm in 1 minute", color = C.text, fontSize = 15.sp)
+                Text("Test alarm in 1 minute", color = C.text, modifier = Modifier.anchor("Test alarm in 1 minute"), fontSize = 15.sp)
                 Text(testNote.ifEmpty { "Then press Exit and lock the phone" }, color = if (testNote.isEmpty()) C.muted else accent(), fontSize = 12.sp)
             }
             Pill("Test") {
@@ -1098,7 +1098,7 @@ private fun CalendarPickDialog(onDone: () -> Unit) {
     val g = Alarms.current.global
     var sel by remember { mutableStateOf(cals.firstOrNull { it.id == g.calId } ?: cals.firstOrNull()) }
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
-        title = { Text("Show alarms in", color = C.text) },
+        title = { Text("Show alarms in", color = C.text, modifier = Modifier.anchor("Show alarms in")) },
         text = {
             Column(Modifier.heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
                 if (cals.isEmpty()) Text("No calendar on this phone can take events. Add your account in Android's settings first.", color = C.muted, fontSize = 13.sp)

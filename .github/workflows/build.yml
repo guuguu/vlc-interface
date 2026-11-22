@@ -40,6 +40,8 @@ jobs:
           fi
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
 
+      - name: Settings search index
+        run: python3 tools/gen_settings_index.py
       - name: Build release APK
         run: gradle :app:assembleRelease --stacktrace -PappVersionName=${{ steps.ver.outputs.name }} -PappVersionCode=${{ github.run_number }}
 

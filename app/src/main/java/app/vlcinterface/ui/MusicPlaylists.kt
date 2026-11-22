@@ -141,7 +141,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     if (item == null) { LaunchedEffect(Unit) { nav.back() }; return }
     LaunchedEffect(item.uri) { if (!item.isMusic && !item.isRadio) nav.replace(Screen.Player) }
     // Double tap on the Treble slider: Settings → Audio scrolled to the Treble band; Back returns here (21:50).
-    LaunchedEffect(TrebleBandNav.want) { if (TrebleBandNav.want) { TrebleBandNav.want = false; SettingsAnchor.want = "trebleband"; nav.go(Screen.SettingsGroup("audio")) } }
+    LaunchedEffect(TrebleBandNav.want) { if (TrebleBandNav.want) { TrebleBandNav.want = false; SettingsAnchor.go("audio", null, "Treble band"); nav.go(Screen.SettingsGroup("audio")) } }
     var sleepMenu by remember { mutableStateOf(false) }
     var jump by remember { mutableStateOf(false) }
     var playNextPick by remember { mutableStateOf(false) }

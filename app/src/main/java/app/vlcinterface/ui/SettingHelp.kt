@@ -292,6 +292,9 @@ object SettingHelp {
         "Screen saver" to "Android shows a screen saver while the phone charges; choose 'vlc interface clock' in Android's screen saver settings to see the app's clock there.\n\nNothing to grant: it's a choice in Android's settings.",
     )
 
+    /** The setting's own explanation (null when it has only the general one). */
+    fun own(title: String): String? = texts[title]
+
     fun text(title: String, hint: String): String {
         texts[title]?.let { return it }
         texts.entries.firstOrNull { title.startsWith(it.key) }?.let { return it.value }

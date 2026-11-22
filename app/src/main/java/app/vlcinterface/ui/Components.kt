@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.draw.drawBehind
 
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,6 +48,7 @@ import androidx.compose.ui.zIndex
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
@@ -276,7 +278,7 @@ fun SearchSteps(count: Int, at: Int, prev: () -> Unit, next: () -> Unit, clear: 
 
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(text.uppercase(), modifier = modifier.padding(top = (6 * sg()).dp, bottom = (4 * sg()).dp), color = C.muted,
+    Text(text.uppercase(), modifier = modifier.anchor(text).padding(top = (6 * sg()).dp, bottom = (4 * sg()).dp), color = C.muted,
         fontSize = 12.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.8.sp)
 }
 
@@ -341,7 +343,7 @@ private fun PillBody(text: String, selected: Boolean, modifier: Modifier, filled
 fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boolean) -> Unit) {
     val ex = LocalExplain.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = (48 * sg()).dp).combinedClickable(onClick = { onChange(!checked) }, onLongClick = { ex(label, hint) })
+        Modifier.anchor(label).fillMaxWidth().heightIn(min = (48 * sg()).dp).combinedClickable(onClick = { onChange(!checked) }, onLongClick = { ex(label, hint) })
             .padding(horizontal = 16.dp, vertical = (5 * sg()).dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -357,7 +359,7 @@ fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boo
 fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) {
     val ex = LocalExplain.current
     Row(
-        Modifier.fillMaxWidth().heightIn(min = (48 * sg()).dp).combinedClickable(onClick = onClick, onLongClick = { ex(label, hint) })
+        Modifier.anchor(label).fillMaxWidth().heightIn(min = (48 * sg()).dp).combinedClickable(onClick = onClick, onLongClick = { ex(label, hint) })
             .padding(horizontal = 16.dp, vertical = (5 * sg()).dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -517,7 +519,7 @@ val LocalExplain = androidx.compose.runtime.staticCompositionLocalOf<(String, St
 @Composable
 fun Modifier.explain(title: String, hint: String = ""): Modifier {
     val ex = LocalExplain.current
-    return this.combinedClickable(interactionSource = null, indication = null, onClick = {}, onLongClick = { ex(title, hint) })
+    return this.anchor(title).combinedClickable(interactionSource = null, indication = null, onClick = {}, onLongClick = { ex(title, hint) })
 }
 
 /** Around the whole app: shows the explanation of a long-pressed setting. */
@@ -1444,4 +1446,69 @@ fun PageTitle(text: String, modifier: Modifier = Modifier, maxLines: Int = 2) {
     val sp = 22f * pct * real / (d.density * d.fontScale)
     Text(text, color = C.text, fontSize = sp.sp, lineHeight = (sp * 1.2f).sp, fontWeight = FontWeight.Bold, maxLines = maxLines,
         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = modifier)
+}
+
+// ---------------------------------------------------------------- Settings search: open a page at a setting
+
+/**
+ * Where a settings page should scroll when it opens (Settings search, the players' shortcuts): a setting's name
+ * ([want]) and its section ([section]). The rows that carry that name report their place; the page scrolls there and
+ * lights the row for 2 s ([flash]). No row found: its section; neither: the page stays at its top.
+ */
+object SettingsAnchor {
+    var page by mutableStateOf<String?>(null)
+    var want by mutableStateOf<String?>(null)
+    var section by mutableStateOf<String?>(null)
+    var flash by mutableStateOf<String?>(null)
+    internal var wantY = Float.NaN
+    internal var sectionY = Float.NaN
+    fun go(page: String, setting: String?, section: String?) {
+        wantY = Float.NaN; sectionY = Float.NaN; this.page = page
+        want = setting?.takeIf { it.isNotEmpty() }; this.section = section?.takeIf { it.isNotEmpty() }
+    }
+}
+
+/** This row is the setting / section named [key]: it reports its place when a page is asked to open there, and lights up. */
+@Composable
+fun Modifier.anchor(key: String): Modifier {
+    val a = SettingsAnchor
+    var m = this
+    if (a.want == key || a.section == key) m = m.onGloballyPositioned { c ->
+        val y = c.positionInRoot().y
+        if (a.want == key) a.wantY = y
+        if (a.section == key && a.sectionY.isNaN()) a.sectionY = y     // the first one: the section's own title
+    }
+    if (a.flash == key) m = m.background(accent().copy(alpha = 0.25f), RoundedCornerShape(8.dp))
+    return m
+}
+
+/** On a settings page's scrolling column (before verticalScroll): scrolls to the asked setting once it's laid out. */
+@Composable
+fun Modifier.anchorViewport(scroll: androidx.compose.foundation.ScrollState, page: String): Modifier {
+    val a = SettingsAnchor
+    val top = remember { floatArrayOf(Float.NaN) }
+    val margin = with(androidx.compose.ui.platform.LocalDensity.current) { 12.dp.toPx() }
+    LaunchedEffect(a.page, a.want, a.section) {
+        val key = a.want; val sec = a.section
+        if (a.page != page || (key == null && sec == null)) return@LaunchedEffect
+        // Rows report while the page is laid out; give it a moment (the page may still be opening).
+        var waited = 0
+        while (waited < 1200 && (top[0].isNaN() || (key != null && a.wantY.isNaN()) || (key == null && a.sectionY.isNaN()))) {
+            kotlinx.coroutines.delay(40); waited += 40
+        }
+        kotlinx.coroutines.delay(60)
+        val ownY = a.wantY; val secY = a.sectionY
+        val (y, lit) = when {
+            key != null && !ownY.isNaN() -> ownY to key
+            sec != null && !secY.isNaN() -> secY to sec
+            else -> Float.NaN to null
+        }
+        a.want = null; a.section = null; a.page = null
+        if (lit == null || top[0].isNaN()) { if (key != null) SettingsSearch.notFound(key); return@LaunchedEffect }
+        scroll.animateScrollTo((scroll.value + y - top[0] - margin).toInt().coerceIn(0, scroll.maxValue))
+        a.flash = lit
+        kotlinx.coroutines.delay(2000)
+        if (a.flash == lit) a.flash = null
+    }
+    return this.onGloballyPositioned { top[0] = it.positionInRoot().y }
 }

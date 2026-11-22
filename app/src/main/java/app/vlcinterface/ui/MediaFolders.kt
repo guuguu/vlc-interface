@@ -39,7 +39,7 @@ fun MediaFoldersScreen(nav: Navigator) {
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
         BackHeader("Find media folders", nav)
-        Column(Modifier.weight(1f).scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
+        Column(Modifier.weight(1f).anchorViewport(scroll, "folders").scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
             Text("Searches internal storage, the SD card, USB storage and Downloads for songs and videos. Only ticked folders are added; folders already in the Library stay as they are.",
                 color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(top = 8.dp))
             MediaFoldersCard()
