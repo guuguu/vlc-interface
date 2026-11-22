@@ -1790,18 +1790,22 @@ class PlayerController(private val context: Context, private val store: Store) {
         val item = s.item ?: return
         // Radio: previous station (round), never "back to the start".
         if (item.isRadio) { if (s.queue.size > 1) startItem(if (s.index <= 0) s.queue.size - 1 else s.index - 1, -1); return }
-        if (mp.time > 4000 || s.index <= 0) { seekTo(if (item.startMs >= 0) item.startMs else 0); return }
-        startItem(s.index - 1, -1)
+        // The queue circles (2026-11-22 19:13): ⏮ always goes to the item before, from the first to the last.
+        if (s.queue.size <= 1) { seekTo(if (item.startMs >= 0) item.startMs else 0); return }
+        startItem(if (s.index <= 0) s.queue.size - 1 else s.index - 1, -1)
     }
 
     private fun nextIndex(s: PlayerState, manual: Boolean): Int? {
-        val repeat = store.current.settings.repeat
+        // The queue is never used up (19:13): after the last item comes the first — by ⏭ and at the end of the last item —
+        // so a listening session circles round the queue; Repeat one still repeats the item.
+        val repeat = store.current.settings.repeat.let { if (it == "one") "one" else "all" }
         if (!manual && repeat == "one") return s.index
         // Radio stations: next one in the list, round.
         if (manual && s.item?.isRadio == true && s.queue.size > 1) return (s.index + 1) % s.queue.size
         return when {
             s.index + 1 < s.queue.size -> s.index + 1
-            // Random + repeat all: a fresh random order for the next round (not starting with the song that just ended).
+            // Random (19:15: random stays random): past the last item a fresh random order for the next round, not the
+            // queue's first item again (and not starting with the item that just ended).
             repeat == "all" && store.current.settings.shuffle && s.queue.size > 1 -> {
                 val last = s.queue.getOrNull(s.index)
                 var q = (orderedQueue ?: s.queue).shuffled()
@@ -1809,7 +1813,8 @@ class PlayerController(private val context: Context, private val store: Store) {
                 _state.value = _state.value.copy(queue = q)
                 0
             }
-            repeat == "all" && s.queue.isNotEmpty() -> 0
+            // Sequential: round to the first item. A single item isn't looped (it ends; Repeat one loops it).
+            repeat == "all" && s.queue.size > 1 -> 0
             else -> null
         }
     }

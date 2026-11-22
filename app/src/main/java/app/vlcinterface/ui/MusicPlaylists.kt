@@ -535,8 +535,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             }
             AutoFitRow(spacing = 8.dp) {
                 if (!radio) Pill(if (st.settings.shuffle) "Random" else "Sequential", selected = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
-                if (!radio) Pill("Repeat: " + st.settings.repeat.replaceFirstChar { it.uppercase() }, selected = st.settings.repeat != "off") {
-                    val next = when (st.settings.repeat) { "off" -> "all"; "all" -> "one"; else -> "off" }
+                // The queue always circles (19:13), so Repeat is All (the whole queue, round) or One (this item again).
+                if (!radio) Pill(if (st.settings.repeat == "one") "Repeat: One" else "Repeat: All", selected = st.settings.repeat == "one") {
+                    val next = if (st.settings.repeat == "one") "all" else "one"
                     App.instance.store.update { it.copy(settings = it.settings.copy(repeat = next)) }
                 }
                 // ReplayGain on / off, applied at once (the song continues from where it is).
@@ -559,35 +560,36 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             val rowUpNext: @Composable () -> Unit = {
             // Radio: favourite stations and the station search instead of "Up next".
             if (radio) RadioPanel(nav)
-            val next0 = if (radio) emptyList() else if (p.index >= 0) p.queue.drop(p.index + 1).take(st.settings.upNextCount) else emptyList()
-            // Same number of songs upright and sideways (the side column scrolls if they don't fit).
-            val next = next0
-            if (next.isNotEmpty()) Column(Modifier.fillMaxWidth().onGloballyPositioned { upNextYpx = it.positionInParent().y.toInt() }) {
+            // The queue as it is (19:13): the item playing first, lit in the accent colour, then the ones after it —
+            // round past the end to the first ones (the queue circles), as many as Look → "Up next" count.
+            val next = if (radio) emptyList() else queueWindow(p.queue, p.index, st.settings.upNextCount)
+            if (next.size > 1) Column(Modifier.fillMaxWidth().onGloballyPositioned { upNextYpx = it.positionInParent().y.toInt() }) {
                 Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); 
 
                     SaveQueueButton(); QueueTimeLeft(item) { nav.go(Screen.Queue) } }
                 val upDrag = remember { QueueDrag() }
-                next.forEachIndexed { i, n -> androidx.compose.runtime.key(n.uri) {
-                    Row(Modifier.then(upDrag.row(n.uri)).fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
-                        .padding(vertical = if (landscape) lrDp(5) else lrDp(8)), verticalAlignment = Alignment.CenterVertically) {
-                        // Order number: fixed, outside the gliding text (which is clipped a little after it).
-                        Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
+                next.forEachIndexed { i, (qi, n) -> androidx.compose.runtime.key(n.uri) {
+                    val now = qi == p.index
+                    Row(Modifier.then(upDrag.row(n.uri)).fillMaxWidth().playingBand(now).combinedClickable(onClick = { if (!now) player.jumpTo(qi) }, onLongClick = { upMenu = i })
+                        .padding(horizontal = 4.dp, vertical = if (landscape) lrDp(5) else lrDp(8)), verticalAlignment = Alignment.CenterVertically) {
+                        // Order number in the queue: fixed, outside the gliding text (which is clipped a little after it).
+                        Text("${qi + 1}.", color = if (now) accent() else C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
                         Box(Modifier.width(6.dp))
                         // Artist - Album - Year - Song from the file's tags, gliding continuously in one direction
                         // (speed from the Songs list autoscroll setting).
                         val ctxN = LocalContext.current
                         var line by remember(n.uri) { mutableStateOf(listOf(n.artist, n.album, n.title).filter { it.isNotBlank() }.joinToString(" - ")) }
                         LaunchedEffect(n.uri) { app.vlcinterface.sources.MediaInfo.upNextLine(ctxN.applicationContext, n)?.let { line = it } }
-                        MarqueeText(line, C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp, lineHeight = lrLine(15f))
+                        MarqueeText(line, if (now) accent() else C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp, lineHeight = lrLine(15f))
                         // ≡ on the right, before the length, away from the screen edge (21:04): hold it a moment, then drag.
                         Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(upDrag.handle(n.uri,
                             { player.state.value.queue.indexOfFirst { it.uri == n.uri } }, { player.state.value.queue.size }) { a, d ->
-                                if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(horizontal = 10.dp, vertical = lrDp(4)))
-                        if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
+                                player.moveInQueue(a, d) }).padding(horizontal = 10.dp, vertical = lrDp(4)))
+                        if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = if (now) accent() else C.muted, fontSize = 13.sp)
                         Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
-                            onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
-                            onMoveDown = if (p.index + 2 + i < p.queue.size) ({ player.moveInQueue(p.index + 1 + i, 1) }) else null,
-                            removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
+                            onMoveUp = if (qi > 0) ({ player.moveInQueue(qi, -1) }) else null,
+                            onMoveDown = if (qi < p.queue.size - 1) ({ player.moveInQueue(qi, 1) }) else null,
+                            removeLabel = "Remove from queue", onRemove = if (now) null else ({ player.removeFromQueue(qi) }))) }
                     }
                 } }
             }
@@ -795,6 +797,21 @@ private fun JumpToTimeDialog(len: Long, onDismiss: () -> Unit, onJump0: (Long) -
     )
 }
 
+/**
+ * The rows the Up next boxes show (2026-11-22 19:13): the item playing, then the next [count] items, round past the
+ * end of the queue to its start (the queue circles); each with its place in the queue. Never the same item twice.
+ */
+internal fun queueWindow(q: List<PlayItem>, index: Int, count: Int): List<Pair<Int, PlayItem>> {
+    if (index !in q.indices) return emptyList()
+    val n = minOf(count, q.size - 1).coerceAtLeast(0)
+    return (0..n).map { k -> ((index + k) % q.size).let { it to q[it] } }
+}
+
+/** The playing item's row in the queue lists: lit in the accent colour (the player's and the buttons' main colour). */
+@Composable
+internal fun Modifier.playingBand(on: Boolean): Modifier = if (!on) this else
+    this.clip(RoundedCornerShape(8.dp)).background(accent().copy(alpha = 0.22f)).border(1.dp, accent(), RoundedCornerShape(8.dp))
+
 /** "Queue › 1h 23m 45s": time still to play in what's playing now (rest of this song + all after it), every second. */
 @Composable
 internal fun QueueTimeLeft(item: PlayItem, onClick: () -> Unit) {
@@ -882,11 +899,12 @@ fun QueueScreen(nav: Navigator) {
             if (p.queue.size > 20) stickyHeader { JumpToBox(state, p.queue.map { listOf(it.title, it.artist).joinToString(" ") }, offset = 1) }
             itemsIndexed(p.queue, key = { _, q -> q.uri }) { i, q ->
                 Row(Modifier.then(qDrag.row(q.uri)).fillMaxWidth().heightIn(min = lrDp(52)).clip(RoundedCornerShape(8.dp)).background(C.bg)
-                    .background(if (i == p.index) accent().copy(alpha = 0.12f) else Color.Transparent)
+                    .playingBand(i == p.index)
                     .combinedClickable(onClick = { player.jumpTo(i) }, onLongClick = { qMenu = i }).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("${i + 1}", color = if (i == p.index) accent() else C.muted, modifier = Modifier.width(36.dp), fontSize = 13.sp)
                     Column(Modifier.weight(1f)) {
-                        MarqueeText(q.title, if (i == p.index) accent() else C.text, Modifier.fillMaxWidth(), fontSize = 16.sp, list = "upnext", lineHeight = lrLine(16f))
+                        MarqueeText(q.title, if (i == p.index) accent() else C.text, Modifier.fillMaxWidth(), fontSize = 16.sp, list = "upnext", lineHeight = lrLine(16f),
+                            fontWeight = if (i == p.index) FontWeight.SemiBold else null)
                         if (q.artist.isNotEmpty()) Text(q.artist, color = C.muted, fontSize = 12.sp, maxLines = 1, lineHeight = lrLine(12f))
                     }
                     // ≡ on the right, before the length, away from the screen edge (21:04): hold it a moment, then drag,

@@ -1404,3 +1404,10 @@
 ## ⏭ greyed with a single item in the queue (requested 2026-11-22 19:06)
 - When the queue holds only the item playing, every ⏭ on the song player and the video player (upright, sideways, under the picture) is greyed; a tap shows a short pop-up "Add more items to the queue" (an ℹ hint, not the green ✓ of a done action) and nothing else happens. With two or more items it works as before. Radio is untouched (⏭ / ⏮ go to the next / previous station).
 - **⏮ too (19:09):** greyed the same way with a single item, the same pop-up on a tap (it no longer restarts the item there).
+
+## The queue circles, always shown whole (requested 2026-11-22 19:13 / 19:15)
+- **Never used up:** after the last item comes the first again — at the end of the last item and with ⏭ — and ⏮ on the first item goes to the last, so a listening session goes round the queue continuously. ⏮ always goes to the item before (it no longer restarts the item when it has played over 4 s; a tap on the position bar does that).
+- **Random stays random (19:15):** with Random on, going past the last item starts a fresh random round (another order, not starting with the item just heard) instead of going back to the queue's first item; Sequential goes round in the queue's order.
+- **Repeat** on the song player is now "Repeat: All" (the whole queue, round — the default) or "Repeat: One" (the item again); a saved "Off" counts as All. A queue of one item isn't looped (it ends; Repeat One loops it).
+- **Up next boxes (song and video players):** the item playing first, lit in the accent colour (tinted band with an accent edge, its number, name and length in the accent colour), then the items after it, round past the end to the first ones — as many as Look → "Up next" count; each numbered with its place in the queue. Shown whenever the queue has more than one item (it no longer empties near the end). Tap another item to play it; ≡ moves any item (the playing one too); its menu can't remove the playing item.
+- **Queue page:** every item as before, the playing one lit the same way (accent band and edge, bold accent title).

@@ -924,27 +924,30 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         val rowUpNext: @Composable () -> Unit = {
         // Up next (15:36): exactly like the song player's — "Up next" with "Queue › time left" (opens the whole queue),
         // then the next files (as many as Look → "Up next" count), numbered, gliding names, length; long press: menu.
-        val next = if (p.index >= 0) p.queue.drop(p.index + 1).take(st.settings.upNextCount) else emptyList()
+        // The queue as it is (19:13): the playing video first, lit in the accent colour, then the next ones, round past the
+        // end to the first ones (the queue circles).
+        val next = queueWindow(p.queue, p.index, st.settings.upNextCount)
         val cur = p.item
-        if (next.isNotEmpty() && cur != null) Column(Modifier.fillMaxWidth()) {
+        if (next.size > 1 && cur != null) Column(Modifier.fillMaxWidth()) {
             var upMenu by remember { mutableIntStateOf(-1) }
             Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); SaveQueueButton(); QueueTimeLeft(cur) { nav.go(Screen.Queue) } }
             val upDrag = remember { QueueDrag() }
-            next.forEachIndexed { i, n -> androidx.compose.runtime.key(n.uri) {
-                Row(Modifier.then(upDrag.row(n.uri)).fillMaxWidth().combinedClickable(onClick = { player.jumpTo(p.index + 1 + i) }, onLongClick = { upMenu = i })
-                    .padding(vertical = lrDp(8)), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${i + 1}.", color = C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
+            next.forEachIndexed { i, (qi, n) -> androidx.compose.runtime.key(n.uri) {
+                val now = qi == p.index
+                Row(Modifier.then(upDrag.row(n.uri)).fillMaxWidth().playingBand(now).combinedClickable(onClick = { if (!now) player.jumpTo(qi) }, onLongClick = { upMenu = i })
+                    .padding(horizontal = 4.dp, vertical = lrDp(8)), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${qi + 1}.", color = if (now) accent() else C.muted, maxLines = 1, softWrap = false, modifier = Modifier.width(30.dp))
                     Box(Modifier.width(6.dp))
-                    MarqueeText(n.title, C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp, list = "upnext", lineHeight = lrLine(15f))
+                    MarqueeText(n.title, if (now) accent() else C.text, Modifier.weight(1f).padding(end = 4.dp), fontSize = 15.sp, list = "upnext", lineHeight = lrLine(15f))
                     // ≡ on the right, before the length, away from the screen edge (21:04): hold it a moment, then drag.
                     Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(upDrag.handle(n.uri,
                         { player.state.value.queue.indexOfFirst { it.uri == n.uri } }, { player.state.value.queue.size }) { a, d ->
-                            if (a + d > player.state.value.index) player.moveInQueue(a, d) }).padding(horizontal = 10.dp, vertical = lrDp(4)))
-                    if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = C.muted, fontSize = 13.sp)
+                            player.moveInQueue(a, d) }).padding(horizontal = 10.dp, vertical = lrDp(4)))
+                    if (n.durationMs > 0) Text(fmtTime(n.durationMs), color = if (now) accent() else C.muted, fontSize = 13.sp)
                     Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
-                        onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
-                        onMoveDown = if (p.index + 2 + i < p.queue.size) ({ player.moveInQueue(p.index + 1 + i, 1) }) else null,
-                        removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
+                        onMoveUp = if (qi > 0) ({ player.moveInQueue(qi, -1) }) else null,
+                        onMoveDown = if (qi < p.queue.size - 1) ({ player.moveInQueue(qi, 1) }) else null,
+                        removeLabel = "Remove from queue", onRemove = if (now) null else ({ player.removeFromQueue(qi) }))) }
                 }
             } }
         }
