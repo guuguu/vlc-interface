@@ -1287,3 +1287,18 @@
 - Helpers: the page, every type, and each action (register / deregister one or all, stop being the main app).
 - **Any audio / video kept for compatibility (08:28):** two more switches, "Any other audio" (last of Audio files) and "Any other video" (last of Video files), on by default — the app is still offered for every audio / video type, also rare ones not listed. While one is on, a listed type of its kind switched off says "Switched off, but still offered through \"Any other …\""; switch both off to take the app away from that type completely. Helpers for both.
 - **On uninstall (08:30):** nothing is left behind — Android itself removes every association with the app's package (the per-type entries, their on / off state, and every "Always" choice for the app), and those types go back to the other apps or to Android's question. An update keeps them as set. Said in the page's helper.
+
+## Export / import brought up to date (requested 2026-11-22 08:32)
+- **Checked:** every setting (115) and every alarm / clock value was already in the setup file. What was missing were the things kept outside it.
+- **Now exported and imported, each with its category:**
+  - Settings: the choices left on the pages (Songs / Radio / All …), the Settings search history, the folders answered "No" for ReplayGain write access, the album pictures you rejected (plus every new setting: treble band, indexing, "Under the city", …).
+  - VPN: the extra subnets and the servers ignored for the VPN.
+  - Radio favourites: also the songs saved from the radio.
+  - Resume positions: also what each player played last.
+  - **New category "Per-video choices"**: per video file — format, decoder, deinterlacing, audio / subtitle tracks, colours, audio sync per sound device.
+  - **New category "ReplayGain values kept in the app"**: the values measured but not written into files, and when each network song was measured.
+  - **New category "File associations"**: which types are switched on (being the main app stays Android's choice on each phone).
+- Replace: those parts are replaced; merge: mine kept, new entries added. An older setup file imports as before; whatever it doesn't have keeps this phone's current value (new settings stay at their current / default values).
+- Parts the app reads when it starts: after the import a question offers "Restart now" (or Later: they apply next time).
+- Setup files are now format 2.
+- **Never forgotten again:** the build checks that every place the app stores data is classified (exported with a category, or this phone only: caches, logs, indexes, battery / crash notes, weather), and fails if something new isn't — so export / import always follows the app.
