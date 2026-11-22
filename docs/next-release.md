@@ -1309,3 +1309,9 @@
 - **Cause:** the folders indexed before 1.78 already had an index (songs only). 1.78 only started folders with no index or an interrupted one, and "Every 4 days" counted the old indexes from the update — so nothing ran, and their videos were never added.
 - **Fixed:** each index now records what it holds (songs and videos). An index made by an older version is indexed again once by itself — whatever "Index again" is set to — and the Indexing log says "(videos added)".
 - **Every automatic start is now in the Indexing log**, with each folder and why ("new", "resumed", "videos added", "every N days"); and when it can't start, why it waits, once per reason: the server doesn't answer, battery 15 % or less, background work paused, the VPN on, or a ReplayGain scan running. It starts by itself when that changes.
+
+# After 1.79.0
+
+## Another file's error shown under the playing song (screenshot 2026-11-22 08:57)
+- "VLC is unable to open the MRL 'smb://…/BLACK SABBATH Discography (Rema…'" showed in red under "Waterfall" (ELO). That file wasn't being played: the automatic indexing (running after the 1.79 update) was reading it in the background, and libVLC reports every file it can't open through the same message, which the player showed as its own error.
+- Now a libVLC message naming another file than the one playing goes to the Indexing log ("Could not open (background read): <file>", with its full path) instead of the player; messages about the song playing still show under it as before.

@@ -994,10 +994,28 @@ class PlayerController(private val context: Context, private val store: Store) {
     @Volatile private var pendingUser = ""
     @Volatile private var pendingPass = ""
 
+    /** The address libVLC names is the item playing (any form: routed through the VPN or not, encoded or not). */
+    private fun isCurrentMrl(mrl: String): Boolean {
+        val cur = _state.value.item?.uri ?: return false
+        fun n(u: String) = android.net.Uri.decode(app.vlcinterface.sources.VpnLink.unroute(u)).substringAfter("://").substringAfter('@').trimEnd('/').lowercase()
+        val a = n(mrl); val b = n(cur)
+        return a == b || a.substringAfter('/') == b.substringAfter('/')
+    }
+
     private fun installDialogs() {
         Dialog.setCallbacks(libVlc, object : Dialog.Callbacks {
             override fun onDisplay(dialog: Dialog.ErrorMessage) {
-                main.post { _state.value = _state.value.copy(error = dialog.text ?: "Playback error") }
+                val text = dialog.text ?: "Playback error"
+                // libVLC shows one message for everything it opens — also files read in the background (indexing,
+                // tags, covers). 08:57: a NAS file the indexing couldn't open was shown under the song playing as if
+                // that song had failed. A message naming another file goes to the Indexing log instead.
+                val mrl = Regex("""MRL '([^']+)'""").find(text)?.groupValues?.get(1)
+                if (mrl != null && !isCurrentMrl(mrl)) {
+                    try { app.vlcinterface.data.ServerLog.log(app.vlcinterface.data.ServerLog.keyOf(android.net.Uri.parse(mrl).host ?: "index"), "index", "libVLC", "", false,
+                        "Could not open (background read): " + android.net.Uri.decode(mrl).substringAfterLast('/'), android.net.Uri.decode(mrl)) } catch (_: Exception) {}
+                    return
+                }
+                main.post { _state.value = _state.value.copy(error = text) }
             }
 
             override fun onDisplay(dialog: Dialog.LoginDialog) {
