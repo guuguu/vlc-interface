@@ -70,7 +70,13 @@ object NetIndex {
     /** Every indexed song (pins of sources that still exist). */
     fun songs(): List<PlayItem> {
         val ids = App.instance.store.current.sources.map { it.id }.toHashSet()
-        return withPartial().filterKeys { it.substringBefore('|') in ids }.values.flatten().map { MusicLibrary.fromPlEntry(it) }
+        return withPartial().filterKeys { it.substringBefore('|') in ids }.values.flatten().map { MusicLibrary.fromPlEntry(it) }.filter { it.isMusic }
+    }
+
+    /** Every indexed video (pins of sources that still exist). */
+    fun videos(): List<PlayItem> {
+        val ids = App.instance.store.current.sources.map { it.id }.toHashSet()
+        return withPartial().filterKeys { it.substringBefore('|') in ids }.values.flatten().map { MusicLibrary.fromPlEntry(it) }.filter { !it.isMusic && !it.isRadio }
     }
 
     /**
@@ -107,7 +113,7 @@ object NetIndex {
                 }
             }
         }.map { it.await() }.filter { it.second }.map { it.first }.toHashSet()
-        withPartial().filterKeys { it.substringBefore('|') in up }.values.flatten().map { MusicLibrary.fromPlEntry(it) }
+        withPartial().filterKeys { it.substringBefore('|') in up }.values.flatten().map { MusicLibrary.fromPlEntry(it) }.filter { it.isMusic }
     }
 
     fun has(src: Source, pin: String) = byPin.containsKey(key(src, pin))
@@ -258,16 +264,16 @@ object NetIndex {
                 // What an interrupted run already gathered is kept and used: its folders aren't read again.
                 val part = synchronized(parts) { parts.getOrPut(k) { Partial(System.currentTimeMillis()) } }
                 if (part.count() > 0) app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, true,
-                    "Indexing $name resumed at ${part.count()} songs (${part.folders.size} folders already done)", url)
+                    "Indexing $name resumed at ${part.count()} files (${part.folders.size} folders already done)", url)
                 val saver = launch { while (true) { kotlinx.coroutines.delay(10_000); if (part.dirty) savePartials() } }
                 val songs = try {
-                    crawl(src, url, 0, files, dirs, part) { k -> done.addAndGet(k.toLong()); busy.value = "Indexing $name… ${count.addAndGet(k)} songs" }
+                    crawl(src, url, 0, files, dirs, part) { k -> done.addAndGet(k.toLong()); busy.value = "Indexing $name… ${count.addAndGet(k)} files" }
                 } catch (e: kotlinx.coroutines.CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, false,
                         "Index of $name not finished: ${e.message ?: e.javaClass.simpleName}" +
-                            (if (part.count() > 0) " — ${part.count()} songs kept, it resumes from there" else ""), url)
+                            (if (part.count() > 0) " — ${part.count()} files kept, it resumes from there" else ""), url)
                     null
                 } finally {
                     gate.stop(); saver.cancel()
@@ -280,7 +286,7 @@ object NetIndex {
                     byPin = byPin + (k to songs.map { MusicLibrary.toPlEntry(it) })
                     save(); version.value++
                     app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, true,
-                        "Indexed $name: ${songs.size} songs", url)
+                        "Indexed $name: ${songs.count { it.isMusic }} songs, ${songs.count { !it.isMusic }} videos", url)
                 }
                 busy.value = ""
             } } finally {
@@ -289,7 +295,7 @@ object NetIndex {
                     busy.value = ""
                     val n = synchronized(parts) { parts[k]?.count() ?: 0 }
                     if (n > 0) app.vlcinterface.data.ServerLog.log(Urls.hostOnly(src.host), "index", src.proto, src.user, true,
-                        "Indexing ${pin.trim('/').substringAfterLast('/')} stopped at $n songs — kept, it resumes from there")
+                        "Indexing ${pin.trim('/').substringAfterLast('/')} stopped at $n files — kept, it resumes from there")
                 }
             }
         }
@@ -408,7 +414,9 @@ object NetIndex {
             }
             // Tags: read once and kept (the same cache the Libraries pages use), so a rescan is quick.
             val tagged = MusicLibrary.scanTags(src, list, force = false, sem = files)
-            val h = MusicLibrary.playOrder(tagged.filter { it.isAudio }, Urls.nameOf(uri)).map { MusicLibrary.toPlayItem(it, src, uri) }
+            // Songs in album order, then the videos (08:13: indexed the same way), by name.
+            val h = MusicLibrary.playOrder(tagged.filter { it.isAudio }, Urls.nameOf(uri)).map { MusicLibrary.toPlayItem(it, src, uri) } +
+                tagged.filter { it.isVideo }.sortedBy { it.name.lowercase() }.map { MusicLibrary.toPlayItem(it, src, uri) }
             val sd = tagged.filter { it.isDir }.map { it.uri }
             part.folders[fk] = Done(h.map { MusicLibrary.toPlEntry(it) }, sd.map { VpnLink.unroute(it) }); part.dirty = true
             h to sd

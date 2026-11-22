@@ -315,7 +315,7 @@ fun RgFailureReport(nav: Navigator) {
             title = { Text("Resume indexing?", color = C.text) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Indexing of $names was interrupted ($whenT). ${q.songs} songs were already indexed; they're kept and found by searches.",
+                    Text("Indexing of $names was interrupted ($whenT). ${q.songs} files (songs and videos) were already indexed; they're kept and found by searches.",
                         color = C.text, fontSize = 14.sp)
                     Text("Resume: only the folders not read yet are read. Start over: everything is read again (tags already read come from the cache, so it's still quicker).",
                         color = C.muted, fontSize = 13.sp)

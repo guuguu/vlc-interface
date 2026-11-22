@@ -1255,3 +1255,7 @@
 - **Internet locations** are indexed when asked (pin, 🔍 Index, ↻ Rescan), so mobile data isn't used by itself; their interrupted runs still resume by themselves.
 - **ReplayGain has priority:** when a ReplayGain scan starts or is waiting (from a menu, the automatic folder scan, the player), the indexing running pauses at once — what it gathered is kept — and indexing asked meanwhile waits. 5 s after the last scan is done (nothing more queued), indexing resumes by itself from where it stopped. Both are noted in the Indexing log ("Indexing paused: ReplayGain scan running" / "Indexing resumed: ReplayGain scan done").
 - **Index button label (08:11):** on the LAN (and Internet) locations' folder rows the button always reads "🔍 Index" (no more "Indexed" / "Resume"); its colour shows the state — accent: indexed (or an interrupted run kept), grey: not indexed yet; a spinner while indexing.
+
+## Video files indexed too (requested 2026-11-22 08:13)
+- Indexing of pinned network folders now also keeps the video files (.mkv, .mp4, .avi …), with the very same logic as the songs: same pins and 🔍 Index buttons, automatic for the home network, interrupted runs kept and resumed (asked when started by hand), paused for ReplayGain and resumed after. Videos need no tag reading, so they add little time.
+- The song searches (Songs list, Jump to, Play next) stay songs only; the index keeps the videos apart for video searches. The Indexing log says "Indexed <folder>: N songs, M videos"; progress and the resume question count files.
