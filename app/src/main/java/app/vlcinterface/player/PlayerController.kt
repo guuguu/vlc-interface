@@ -840,6 +840,66 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (!playing) main.postDelayed({ pause() }, 400)
     }
 
+    // ---------- radio: no sound for 5 s → next station (2026-11-22 19:22) ----------
+
+    /** When the station playing last had sound (or the end of its 10 s to connect). */
+    @Volatile private var radioSoundAt = 0L
+    private var radioHeard = -1L
+    private var radioStream = -1L
+    /** Stations skipped one after another for having no sound (all of them silent → stop). */
+    private var radioSkips = 0
+    private val radioWatch: Runnable = object : Runnable {
+        override fun run() {
+            try { checkRadioSound() } catch (_: Exception) {}
+            main.postDelayed(this, 1000)
+        }
+    }
+    private val radioWatchStart = main.postDelayed(radioWatch, 1000)
+
+    /**
+     * A station whose sound is gone for more than 5 s, for any reason — the stream stalled or buffering, the server
+     * dropped it, an error, the stream sending only silence (below −66 dBFS), or nothing reaching the output — goes to the
+     * next station of the list (the favourites); a station played on its own is stopped. 10 s are allowed to connect at
+     * first. Not while paused by you, during an alarm, or while the sleep timer fades out. Every case goes to the Player log.
+     */
+    private fun checkRadioSound() {
+        val s = _state.value
+        val item = s.item
+        val now = System.currentTimeMillis()
+        if (item == null || !item.isRadio || s.userPaused || sleepClosing || app.vlcinterface.alarm.AlarmEngine.ui.value.phase != "idle") {
+            radioSoundAt = now; return
+        }
+        val st = NativeAudio.stats()
+        val heardMoving = st != null && st.stream == radioStream && st.heard > radioHeard
+        if (st != null) { radioHeard = st.heard; radioStream = st.stream }
+        val sound = s.isPlaying && s.buffering >= 100f && when {
+            st != null -> heardMoving && (st.mute || st.volume <= 0f || appVolume <= 0f || st.quietMs in 0..1500)
+            else -> lastTick > 0 && now - lastTick < 1_500          // libVLC's own output: the stream's clock moving
+        }
+        if (sound) { radioSoundAt = now; radioSkips = 0; return }
+        if (now - radioSoundAt <= 5_000) return
+        val why = when {
+            s.error.isNotEmpty() -> "error: ${s.error}"
+            !s.isPlaying -> "the stream stopped"
+            s.buffering < 100f -> "buffering ${s.buffering.toInt()} %"
+            st != null && !heardMoving -> "no sound reaching the output"
+            else -> "silence"
+        }
+        radioSoundAt = now + 10_000                                   // the next station gets its time to connect
+        val more = s.queue.count { it.isRadio } > 1
+        if (more && radioSkips < s.queue.size - 1) {
+            radioSkips++
+            ServerLog.log("player", "radio", "", "", false, "\"${item.title}\": no sound for 5 s ($why) — next station")
+            next()
+        } else {
+            radioSkips = 0
+            ServerLog.log("player", "radio", "", "", false, "\"${item.title}\": no sound for 5 s ($why) — stopped" +
+                if (more) " (no station of the list has sound)" else "")
+            stop()
+            try { app.vlcinterface.ui.ShortNote.hint(if (more) "No station has sound — stopped" else "\"${item.title}\" has no sound — stopped") } catch (_: Exception) {}
+        }
+    }
+
     // ---------- start volume after inactivity (2026-11-22 18:37) ----------
 
     /**
@@ -1982,6 +2042,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
         NativeAudio.deepBuffer(item.isMusic || item.isRadio)
         volumeAfterIdle()
+        radioSoundAt = System.currentTimeMillis() + 10_000           // a station gets 10 s to connect before the 5 s rule
         am.requestAudioFocus(focusRequest)
         endHandled = false; lastTick = 0L
         mp.play()
