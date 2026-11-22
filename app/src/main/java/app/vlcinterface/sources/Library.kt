@@ -63,6 +63,45 @@ object MusicLibrary {
         return r
     }
 
+    /** A disc folder of an album ("CD1", "CD 2", "Disc 1", "Disk2", "DVD 1", "Side A"…; not "Vol." / "Part": those are often albums). */
+    fun isDiscFolder(name: String) = Regex("""^\s*(cd|disc|disk|dvd|side)\s*[-_.]?\s*([0-9]{1,2}|[a-d])\b.*""", RegexOption.IGNORE_CASE)
+        .matches(android.net.Uri.decode(name).trim())
+
+    /**
+     * The whole album of a song for the automatic ReplayGain scan (2026-11-22 11:40): its folder, and when the album is
+     * split in disc folders (CD1 / CD2 / Disc 1 …) every disc of it — from a disc folder, its album folder above with all
+     * its disc folders; from the album folder, its own disc subfolders too. Other subfolders (another album) aren't taken.
+     */
+    suspend fun albumOf(ctx: Context, item: PlayItem): List<PlayItem> {
+        val here = folderOf(ctx, item)
+        val sources = App.instance.store.current.sources
+        return try {
+            if (item.uri.contains("://") && !item.uri.startsWith("content://")) {
+                val src = sources.firstOrNull { it.id == item.sourceId } ?: return here
+                val fk = item.folderKey.takeIf { it.isNotEmpty() && !it.startsWith("local:") } ?: Urls.parent(item.uri)
+                val name = fk.trimEnd('/').substringAfterLast('/')
+                val base = if (isDiscFolder(name)) Urls.parent(fk.trimEnd('/')) else fk
+                val list = Browse.list(src, base).getOrNull() ?: return here
+                val discs = list.filter { it.isDir && isDiscFolder(it.name) }
+                if (discs.isEmpty() && base == fk) return here
+                val top = playOrder(list, base.trimEnd('/').substringAfterLast('/')).map { toPlayItem(it, src, base) }
+                top + discs.sortedBy { it.name.lowercase() }.flatMap { d ->
+                    Browse.list(src, d.uri).getOrNull()?.let { l -> playOrder(l, d.name).map { toPlayItem(it, src, d.uri) } } ?: emptyList()
+                }
+            } else {
+                val fk = item.folderKey.takeIf { it.startsWith("local:") } ?: return here
+                val vol = fk.removePrefix("local:").substringBefore(':'); val rel = fk.removePrefix("local:").substringAfter(':')
+                val name = rel.trimEnd('/').substringAfterLast('/')
+                val baseRel = if (isDiscFolder(name)) rel.trimEnd('/').substringBeforeLast('/', "").let { if (it.isEmpty()) "" else "$it/" } else rel
+                val discs = InternalSource.folders(ctx, all = true).filter { f -> f.volume == vol && f.relativePath.startsWith(baseRel) &&
+                    f.relativePath.removePrefix(baseRel).trimEnd('/').let { r -> r.isNotEmpty() && !r.contains('/') && isDiscFolder(r) } }
+                if (discs.isEmpty() && baseRel == rel) return here
+                val top = if (baseRel.isEmpty()) emptyList() else collectLocal(ctx, LocalFolder("$vol:$baseRel", baseRel, baseRel, 0, vol), false)
+                top + discs.sortedBy { it.relativePath.lowercase() }.flatMap { collectLocal(ctx, it, false) }
+            }.filter { it.isMusic }.distinctBy { it.uri }.ifEmpty { here }
+        } catch (_: Exception) { here }
+    }
+
     private suspend fun folderOfKey(ctx: Context, fk: String, src: Source?): List<PlayItem> {
         return try {
             when {

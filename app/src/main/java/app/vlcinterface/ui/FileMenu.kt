@@ -159,6 +159,7 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var library by remember { mutableStateOf<List<PlayItem>?>(null) }
     var query by remember { mutableStateOf("") }
+    val dq = rememberDebounced(query)
     var pick by remember { mutableStateOf<PlayItem?>(null) }
     var note by remember { mutableStateOf("") }
     var done by remember { mutableStateOf<String?>(null) }          // full path of the file just deleted
@@ -170,13 +171,13 @@ fun DeleteFileDialog(onDone: () -> Unit) {
     var phoneDelete by remember { mutableStateOf<Pair<FolderHit, List<String>>?>(null) }
     androidx.compose.runtime.LaunchedEffect(Unit) { library = SongsCache.all(ctx.applicationContext) }
     androidx.compose.runtime.LaunchedEffect(folders) { if (folders && folderList == null) folderList = allFolders(ctx.applicationContext) }
-    val folderHits = remember(query, folderList) {
-        if (query.trim().length < 2) emptyList()
-        else (folderList ?: emptyList()).filter { f -> textMatch(normText(f.path), query) }.take(60)
+    val folderHits = remember(dq, folderList) {
+        if (dq.trim().length < 2) emptyList()
+        else (folderList ?: emptyList()).filter { f -> textMatch(normText(f.path), dq) }.take(60)
     }
     androidx.compose.runtime.LaunchedEffect(pick) { pickPath = pick?.let { fullPathOf(ctx, it) } ?: "" }
-    val hits = remember(query, library) {
-        if (query.trim().length < 2) emptyList() else (library ?: emptyList()).filter { songMatches(it, query) }.take(60)
+    val hits = remember(dq, library) {
+        if (dq.trim().length < 2) emptyList() else (library ?: emptyList()).filter { songMatches(it, dq) }.take(60)
     }
     fun forget(uri: String) {
         App.instance.store.update { s ->
@@ -203,7 +204,7 @@ fun DeleteFileDialog(onDone: () -> Unit) {
                     Pill("Folders", selected = folders) { folders = true }
                 }
                 val st = androidx.compose.foundation.lazy.rememberLazyListState()
-                var at by remember(query, folders) { mutableStateOf(-1) }
+                var at by remember(dq, folders) { mutableStateOf(-1) }
                 val n = if (folders) folderHits.size else hits.size
                 fun step(k: Int) { if (n == 0) return; at = (k + n) % n; scope.launch { st.animateScrollToItem(at) } }
                 SmallSearchBar(query, { query = it }, if (folders) "Folder name or path" else "Artist, album or song", n, at.coerceAtLeast(0), { step(at - 1) }, { step(at + 1) })

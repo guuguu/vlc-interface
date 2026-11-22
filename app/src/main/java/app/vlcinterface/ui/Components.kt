@@ -233,8 +233,10 @@ fun JumpToBox(state: LazyListState, labels: List<String>, offset: Int = 0) {
     val scope = rememberCoroutineScope()
     val keys = remember(labels) { labels.map { normText(it) } }
     // Every item holding exactly what's typed (spaces typed included, see textMatch); ‹ › step through them.
-    val found = remember(q, keys) { if (q.isBlank()) emptyList() else keys.indices.filter { textMatch(keys[it], q) } }
-    var at by remember(q) { mutableStateOf(0) }
+    // Searched 2 s after the last letter typed (11:40), like every library search.
+    val dq = rememberDebounced(q)
+    val found = remember(dq, keys) { if (dq.isBlank()) emptyList() else keys.indices.filter { textMatch(keys[it], dq) } }
+    var at by remember(dq) { mutableStateOf(0) }
     fun go(k: Int) { if (found.isEmpty()) return; at = (k + found.size) % found.size; scope.launch { state.scrollToItem(found[at] + offset) } }
     fun jump(t: String) { q = t; at = 0 }
     androidx.compose.runtime.LaunchedEffect(found) { if (found.isNotEmpty()) state.scrollToItem(found[0] + offset) }
@@ -1518,3 +1520,15 @@ fun Modifier.anchorViewport(scroll: androidx.compose.foundation.ScrollState, pag
 
 /** A list row's height / spacing scaled by Look → "List row spacing" (one value for every list and queue). */
 fun lrDp(base: Int): androidx.compose.ui.unit.Dp = (base * UiPrefs.listRowPct / 100f).dp
+
+
+/**
+ * Library searches (2026-11-22 11:40): the text typed is searched 2 s after the last letter — each new letter starts
+ * the wait again, so the list isn't filtered (and the phone doesn't work) on every key. Emptying the box applies at once.
+ */
+@Composable
+fun rememberDebounced(value: String, ms: Long = 2000): String {
+    var out by remember { mutableStateOf(value) }
+    LaunchedEffect(value) { if (value.isBlank()) out = value else { kotlinx.coroutines.delay(ms); out = value } }
+    return out
+}

@@ -1483,7 +1483,11 @@ class PlayerController(private val context: Context, private val store: Store) {
         val overVpn = net && try { android.net.Uri.parse(item.uri).host?.let { h -> app.vlcinterface.sources.VpnLink.routeHost(h) != h } == true } catch (_: Exception) { false }
         if (store.current.settings.rgAutoFolder && !overVpn) {
             bg.launch {
-                val folder = try { app.vlcinterface.sources.MusicLibrary.folderOf(context, item) } catch (_: Exception) { emptyList() }.ifEmpty { listOf(item) }
+                // The whole album, disc folders included (11:40: an album split in CD1 / CD2 was only scanned for one disc).
+                val found = try { app.vlcinterface.sources.MusicLibrary.albumOf(context, item) } catch (_: Exception) { emptyList() }
+                // Its folder couldn't be read now (server busy, network): tried again the next time a song of it plays.
+                if (found.size <= 1) rgAsked.remove(key)
+                val folder = found.ifEmpty { listOf(item) }
                 val name = item.folderKey.ifEmpty { android.net.Uri.decode(item.uri).substringBeforeLast('/') }.trimEnd('/').substringAfterLast('/')
                     .ifEmpty { item.album.ifEmpty { "this folder" } }
                 // ReplayGain per song — track gain (as asked at 12:01, confirmed 22:53).

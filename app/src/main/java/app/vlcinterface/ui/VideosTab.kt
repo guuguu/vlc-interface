@@ -45,13 +45,14 @@ fun VideosTab(nav: Navigator) {
     var all by remember { mutableStateOf<List<PlayItem>?>(null) }
     LaunchedEffect(indexVer) { all = SongsCache.allVideos(ctx.applicationContext) }
     var q by remember { mutableStateOf("") }
-    val shown = remember(all, q) { (all ?: emptyList()).let { l -> if (q.trim().length < 2) l else l.filter { songMatches(it, q) } } }
+    val dq = rememberDebounced(q)
+    val shown = remember(all, dq) { (all ?: emptyList()).let { l -> if (dq.trim().length < 2) l else l.filter { songMatches(it, dq) } } }
     val playing by App.instance.player.state.collectAsState()
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        SmallSearchBar(q, { q = it }, "Find a video: title, series or file name", count = if (q.trim().length < 2) 0 else shown.size, onClose = { q = "" })
+        SmallSearchBar(q, { q = it }, "Find a video: title, series or file name", count = if (dq.trim().length < 2) 0 else shown.size, onClose = { q = "" })
         Text(when {
             all == null -> "Reading the videos…"
-            else -> "${shown.size} videos" + if (q.trim().length >= 2) " found" else " · phone and indexed network folders"
+            else -> "${shown.size} videos" + if (dq.trim().length >= 2) " found" else " · phone and indexed network folders"
         }, color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
         if (indexing.isNotEmpty()) Text("★ $indexing — network videos appear when done", color = accent(), fontSize = 12.sp)
         val st = rememberLazyListState()

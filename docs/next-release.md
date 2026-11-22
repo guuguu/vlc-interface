@@ -1326,3 +1326,12 @@
 ## One spacing for every list and queue (requested 2026-11-22 09:12)
 - **Settings → Look → "List row spacing"** (under Player rows spacing): 30 %–160 % in 5 % steps, default 70 % (the rows were at 100 %, too far apart), Reset. Text helper (hold the setting; pops up on a still hold of the slider when Helpers are on). Saved with the settings and in export / import; found by the Settings search.
 - It sets the same row spacing everywhere: the Queue page, Up next on the song and video players, playlists, phone and network folder lists (folders, songs, videos, subtitle files), Library → Songs and Videos, the phone's folder list, radio favourites and Find stations results, the cue picker. Text sizes stay; at the low end the rows are as close as their text allows.
+
+# After 1.81.0
+
+## Automatic ReplayGain: the whole album (reported 2026-11-22 11:40)
+- **Found:** the automatic scan took only the playing song's own folder. An album split in disc folders (CD1 / CD2, "Disc 1", …) got only the disc playing; and when the folder couldn't be read at that moment (NAS busy), only the playing song was scanned and the folder wasn't tried again until the app restarted.
+- **Now:** the album: from a disc folder, the album folder above with every disc folder in it; from an album folder, its own disc subfolders too (CD / Disc / Disk / DVD / Side + number or letter). Other subfolders (another album) aren't taken. When the folder can't be read, it's tried again the next time a song of it plays. Phone and NAS alike.
+
+## Library searches wait for the typing to stop (requested 2026-11-22 11:40)
+- Every library search starts 2 s after the last letter typed; each new letter starts the 2 s again (emptying the box applies at once): Library → Songs, Library → Videos, the "Jump to…" box of long lists (folders, queue, playlists), Jump to / Play next / Find a video, and the song / folder search in file menus. The text shows at once; the list stops jumping and filtering on every key.

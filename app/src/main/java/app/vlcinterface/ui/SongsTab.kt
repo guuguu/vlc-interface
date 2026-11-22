@@ -212,14 +212,15 @@ fun SongsTab(nav: Navigator) {
         }
         // Search: instant results in a pop-up; picking one scrolls the list to it and marks it.
         var query by remember { mutableStateOf("") }
+        val dq = rememberDebounced(query)
         var focus by remember { mutableStateOf("") }
         val focusMgr = androidx.compose.ui.platform.LocalFocusManager.current
         // Only songs holding exactly what's typed, in that order (spaces typed before / after count: " rock ").
         val hay = remember(songs) { songs.map { normText(listOf(it.artist, it.album, it.title).joinToString(" ")) } }
-        val allHits = remember(query, songs) { if (query.trim().length < 2) emptyList() else songs.indices.filter { textMatch(hay[it], query) } }
+        val allHits = remember(dq, songs) { if (dq.trim().length < 2) emptyList() else songs.indices.filter { textMatch(hay[it], dq) } }
         // ‹ › step through every match in the list (the pop-up hides while stepping).
-        var at by remember(query) { mutableStateOf(0) }
-        var stepping by remember(query) { mutableStateOf(false) }
+        var at by remember(dq) { mutableStateOf(0) }
+        var stepping by remember(dq) { mutableStateOf(false) }
         val hits = if (stepping) emptyList() else allHits.take(50).map { songs[it] }
         fun step(k: Int) {
             if (allHits.isEmpty()) return

@@ -53,6 +53,7 @@ fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, videos: Boolea
     val player = App.instance.player
     var library by remember { mutableStateOf<List<PlayItem>?>(null) }
     var query by remember { mutableStateOf("") }
+    val dq = rememberDebounced(query)
     // Phone songs + indexed ★ LAN folders (servers reachable now); reloaded when the index changes.
     val indexVer by app.vlcinterface.sources.NetIndex.version.collectAsState()
     val indexing by app.vlcinterface.sources.NetIndex.busy.collectAsState()
@@ -61,9 +62,9 @@ fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, videos: Boolea
     LaunchedEffect(indexVer) { library = if (videos) SongsCache.allVideos(ctx.applicationContext) else SongsCache.all(ctx.applicationContext) }
     val queue = player.state.value.queue
     val inQueue = remember(queue) { queue.map { "${it.uri}#${it.startMs}" }.toHashSet() }
-    val hits = remember(query, library, queue) {
-        if (query.trim().length < 2) emptyList() else {
-            fun ok(p: PlayItem) = songMatches(p, query)
+    val hits = remember(dq, library, queue) {
+        if (dq.trim().length < 2) emptyList() else {
+            fun ok(p: PlayItem) = songMatches(p, dq)
             // Play next searches the whole Songs list; Jump to also looks in the queue first.
             ((if (playNext) emptyList() else queue.filter { videos == !it.isMusic }.filter(::ok)) + (library ?: emptyList()).filter(::ok)).distinctBy { "${it.uri}#${it.startMs}" }.take(60)
         }
@@ -82,7 +83,7 @@ fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, videos: Boolea
                 Text(if (videos) "Find a video" else if (playNext) "Play next" else "Jump to song", color = C.text, fontSize = 22.sp)
                 val st = rememberLazyListState()
                 val jscope = androidx.compose.runtime.rememberCoroutineScope()
-                var at by remember(query) { mutableStateOf(-1) }
+                var at by remember(dq) { mutableStateOf(-1) }
                 fun step(k: Int) { if (hits.isEmpty()) return; at = (k + hits.size) % hits.size; jscope.launch { st.animateScrollToItem(at) } }
                 SmallSearchBar(query, { query = it }, if (videos) "Title, series or file name" else "Artist, album or song", hits.size, at.coerceAtLeast(0), { step(at - 1) }, { step(at + 1) })
                 Text(when {
