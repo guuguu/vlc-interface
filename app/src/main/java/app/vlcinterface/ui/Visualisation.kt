@@ -969,13 +969,26 @@ fun ClockFullScreen(nav: Navigator) {
         // What's playing (19:49): a band along the bottom with its name gliding continuously, big — no buttons, no labels.
         val ps = app.vlcinterface.App.instance.player.state.collectAsState().value
         val line = playingLine(ps)
-        val bandH = if (line.isEmpty()) 0.dp else (maxHeight * 0.13f).coerceIn(56.dp, 110.dp)
-        val side = (minOf(maxWidth, maxHeight - bandH) - 24.dp).coerceAtLeast(60.dp)
-        Box(Modifier.align(Alignment.TopCenter).padding(top = ((maxHeight - bandH - side) / 2).coerceAtLeast(0.dp))) {
-            ClockFace(st.aspect, Modifier.size(side))
+        val land = maxWidth > maxHeight
+        if (land) {
+            // Sideways (19:51): the clock at its full size (the whole height) on the left; the name glides in the room
+            // beside it, along the bottom of that side — the clock is never made smaller for it.
+            val side = (maxHeight - 24.dp).coerceAtLeast(60.dp)
+            Box(Modifier.align(Alignment.CenterStart).padding(start = 12.dp)) { ClockFace(st.aspect, Modifier.size(side)) }
+            val restW = maxWidth - side - 36.dp
+            val bandH = (maxHeight * 0.16f).coerceIn(48.dp, 110.dp)
+            if (line.isNotEmpty() && restW > 80.dp) FullScreenTicker(line,
+                Modifier.align(Alignment.BottomEnd).padding(end = 12.dp, bottom = 12.dp).width(restW).height(bandH),
+                with(LocalDensity.current) { (bandH * 0.55f).toSp() })
+        } else {
+            val bandH = if (line.isEmpty()) 0.dp else (maxHeight * 0.13f).coerceIn(56.dp, 110.dp)
+            val side = (minOf(maxWidth, maxHeight - bandH) - 24.dp).coerceAtLeast(60.dp)
+            Box(Modifier.align(Alignment.TopCenter).padding(top = ((maxHeight - bandH - side) / 2).coerceAtLeast(0.dp))) {
+                ClockFace(st.aspect, Modifier.size(side))
+            }
+            if (line.isNotEmpty()) FullScreenTicker(line, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(bandH),
+                with(LocalDensity.current) { (bandH * 0.52f).toSp() })
         }
-        if (line.isNotEmpty()) FullScreenTicker(line, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(bandH),
-            with(LocalDensity.current) { (bandH * 0.52f).toSp() })
         // The floating play / pause button, as on the player (its size, colour, place; dragging it moves it) — unless it's Off (17:30).
         FullScreenPlayButton()
         if (showB) Text("☀ ${(bright * 100).toInt()} %", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp))
