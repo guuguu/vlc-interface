@@ -73,14 +73,14 @@ object Weather {
         } catch (_: Exception) { emptyList() }
     }
 
-    /** Refreshed at most every 30 min (or at once after a city change). */
+    /** Refreshed at most every 15 min (or at once after a city change). */
     fun refresh(force: Boolean = false) {
         val g = Alarms.current.global
         if (g.cityName.isEmpty() || !g.showWeather || busy) return
         val key = "${g.cityLat},${g.cityLon},${if (g.weatherNoon) "noon" else "now"}"
         val n = _now.value
         // Kept weather without the temperatures (from before 06:47): fetched again at once.
-        if (!force && n.key == key && !n.nowC.isNaN() && System.currentTimeMillis() - n.at < 30 * 60_000L) return
+        if (!force && n.key == key && !n.nowC.isNaN() && System.currentTimeMillis() - n.at < 15 * 60_000L) return
         busy = true
         scope.launch {
             try {
@@ -94,7 +94,10 @@ object Weather {
                     if (i != null) codes.getInt(i) else cur.getInt("weather_code")
                 }
                 // Temperature now and 6 hours later at the city (06:47: "now > in 6 hours"), from the hourly forecast.
-                val nowT = cur.optDouble("temperature_2m", Double.NaN)
+                // Now: measured at the nearest airport weather station when there's one near the city (07:29, as
+                // AccuWeather does); else the forecast model's value for the city.
+                val measured = try { measuredNow(g.cityLat, g.cityLon) } catch (_: Exception) { null }
+                val nowT = measured ?: cur.optDouble("temperature_2m", Double.NaN)
                 val hh = o.optJSONObject("hourly")
                 val in6 = try {
                     val times = hh!!.getJSONArray("time"); val temps = hh.getJSONArray("temperature_2m")
@@ -111,5 +114,32 @@ object Weather {
                 _now.value = n.copy(at = System.currentTimeMillis() - 25 * 60_000L)
             } finally { busy = false }
         }
+    }
+
+    /**
+     * Temperature measured now (°C) at the nearest airport weather station (its official half-hourly report, METAR,
+     * from aviationweather.gov — free, no account), when one is within 35 km of the city and reported in the last 2 h.
+     * Null otherwise (the forecast model's value is used).
+     */
+    private fun measuredNow(lat: Double, lon: Double): Double? {
+        val d = 0.35
+        val arr = org.json.JSONArray(get("https://aviationweather.gov/api/data/metar?format=json&bbox=" +
+            "${lat - d},${lon - d},${lat + d},${lon + d}"))
+        val nowS = System.currentTimeMillis() / 1000
+        var best: Double? = null; var bestKm = 35.0
+        for (i in 0 until arr.length()) {
+            val m = arr.getJSONObject(i)
+            val t = m.optDouble("temp", Double.NaN); if (t.isNaN()) continue
+            if (nowS - m.optLong("obsTime", 0) > 2 * 3600) continue
+            val km = distKm(lat, lon, m.optDouble("lat", 999.0), m.optDouble("lon", 999.0))
+            if (km < bestKm) { bestKm = km; best = t }
+        }
+        return best
+    }
+
+    private fun distKm(a: Double, b: Double, c: Double, d: Double): Double {
+        val r = Math.PI / 180
+        val x = (d - b) * r * Math.cos((a + c) / 2 * r); val y = (c - a) * r
+        return Math.sqrt(x * x + y * y) * 6371.0
     }
 }

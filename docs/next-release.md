@@ -1203,3 +1203,9 @@
 - The players' shortcuts (Subs/Format → Subtitle format, double tap on Treble → Treble band) use the same way of opening a page at a place.
 - **Kept up to date:** the list of settings is rebuilt from the settings pages at every build.
 - **Search history (07:26):** under the search bar, the last 6 searches as small buttons, newest first, kept across app restarts. A search is added when one of its results is opened. A tap on a button searches it again (the button is lit while shown); its ✕ removes it from the history.
+
+## Clock temperature "now" measured, not modelled (reported 2026-11-22 07:28, 2° off AccuWeather for Málaga)
+- **Why it differed:** the temperature now came from Open-Meteo's forecast models, a calculated value for a grid square around the city. AccuWeather corrects its value with real station readings (for Málaga, the airport).
+- **Now:** the temperature now is the one measured at the nearest airport weather station within 35 km (its official half-hourly report, METAR, from aviationweather.gov; free, no account), if reported in the last 2 hours. No station near the city: the forecast's value, as before.
+- The temperature in 6 hours and the weather icon stay from Open-Meteo's forecast.
+- Weather refreshed every 15 min (was 30) so the measured value stays current. Helpers updated.
