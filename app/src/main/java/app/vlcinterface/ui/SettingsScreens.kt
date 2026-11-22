@@ -555,7 +555,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         Text("${s.listRowPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(listRowPct = 70)) }) { Text("Reset") }
                     }
-                    ThinSlider(s.listRowPct.toFloat(), { v -> set(s.copy(listRowPct = (Math.round(v / 5f) * 5).coerceIn(15, 160))) }, valueRange = 15f..160f,
+                    ThinSlider(s.listRowPct.toFloat(), { v -> set(s.copy(listRowPct = (Math.round(v / 5f) * 5).coerceIn(5, 160))) }, valueRange = 5f..160f,
                         onHoldStill = { if (helpersOn) lookHelp = "List row spacing" })
                     Text("Every list and queue: queue, Up next (songs and videos), playlists, folders, Songs, Videos, radio stations", color = C.muted, fontSize = 12.sp)
                     // Upright player: the clock / album picture hide while scrolling (on) or not (off: clock pinned), and for how long.
