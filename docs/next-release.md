@@ -1180,3 +1180,7 @@
   - Until the temperatures are known, it shows the time zone.
 - **Settings → Alarm clock → Location → "Under the city":** Both (default, alternating) / Time zone / Temperatures. Text helper.
 - **Temperatures:** the current temperature and the hourly forecast 6 hours ahead (the city's own hours), from the same weather service as the icon, refreshed with it. Weather kept from before is fetched again once to get them.
+
+# After 1.74.0
+
+- **"Not responding" when picking a subtitle while the video was still opening (07:01):** the tap waited on libVLC, which was busy opening the file from the network. Subtitle and audio track picks, subtitle files added, the kept per-video tracks put back, and the subtitle/audio sync offsets now go to libVLC from their own thread. The choice shows at once; the screen never waits.

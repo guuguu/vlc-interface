@@ -2087,8 +2087,28 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun seekBy(ms: Long) { mp.setTime((mp.time + ms).coerceIn(0, if (mp.length > 0) mp.length else Long.MAX_VALUE)) }
     fun setRate(r: Float) { mp.setRate(r); _state.value = _state.value.copy(rate = r) }
 
-    fun selectAudio(id: Int) { mp.setAudioTrack(id); refreshTracks(); keepTrack("a", id, _state.value.audioTracks) }
-    fun selectSpu(id: Int) { mp.setSpuTrack(id); refreshTracks(); keepTrack("s", id, _state.value.spuTracks) }
+    /**
+     * Track switches go to libVLC from their own thread: libVLC waits for the opening file (a slow network read can
+     * take many seconds) and, done from a tap, that wait froze the screen until Android said "not responding".
+     * The choice shows at once; the real list is read back when libVLC is done.
+     */
+    private val ops by lazy { java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "vlc-ops").apply { isDaemon = true } } }
+    private fun trackOp(block: () -> Unit) {
+        ops.execute {
+            try { block() } catch (_: Throwable) {}
+            main.post { try { refreshTracks() } catch (_: Throwable) {} }
+        }
+    }
+    fun selectAudio(id: Int) {
+        _state.value = _state.value.copy(audioTrack = id)
+        keepTrack("a", id, _state.value.audioTracks)
+        trackOp { mp.setAudioTrack(id) }
+    }
+    fun selectSpu(id: Int) {
+        _state.value = _state.value.copy(spuTrack = id)
+        keepTrack("s", id, _state.value.spuTracks)
+        trackOp { mp.setSpuTrack(id) }
+    }
 
     /** The audio / subtitle track chosen by hand is kept for this video file. */
     private fun keepTrack(k: String, id: Int, list: List<Track>) {
@@ -2111,8 +2131,8 @@ class PlayerController(private val context: Context, private val store: Store) {
             return list.firstOrNull { name.isNotEmpty() && it.name == name }?.id ?: list.firstOrNull { it.id == id }?.id ?: if (id < 0) id else null
         }
         // Each kind once its tracks are listed (they arrive one by one while the file opens).
-        if (!audioRestored && s.audioTracks.isNotEmpty()) { audioRestored = true; pick("a", s.audioTracks)?.let { if (it != s.audioTrack) mp.setAudioTrack(it) } }
-        if (!spuRestored && s.spuTracks.any { it.id >= 0 }) { spuRestored = true; pick("s", s.spuTracks)?.let { if (it != s.spuTrack) mp.setSpuTrack(it) } }
+        if (!audioRestored && s.audioTracks.isNotEmpty()) { audioRestored = true; pick("a", s.audioTracks)?.let { if (it != s.audioTrack) { val t = it; trackOp { mp.setAudioTrack(t) } } } }
+        if (!spuRestored && s.spuTracks.any { it.id >= 0 }) { spuRestored = true; pick("s", s.spuTracks)?.let { if (it != s.spuTrack) { val t = it; trackOp { mp.setSpuTrack(t) } } } }
         if (audioRestored && spuRestored) tracksRestored = true
     }
 
@@ -2125,12 +2145,14 @@ class PlayerController(private val context: Context, private val store: Store) {
             val use = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 app.vlcinterface.sources.SubColors.cleanedCopy(context, uri, st.color, st.outlineColor)
             } ?: uri
-            mp.addSlave(IMedia.Slave.Type.Subtitle, use, select || keep)
-            main.postDelayed({
-                refreshTracks()
-                // [keep]: the new track is shown and saved silently as this video's subtitles.
-                if (keep) _state.value.spuTracks.filter { it.id >= 0 && it.id !in before }.maxByOrNull { it.id }?.let { selectSpu(it.id) }
-            }, 800)
+            ops.execute {
+                try { mp.addSlave(IMedia.Slave.Type.Subtitle, use, select || keep) } catch (_: Throwable) {}
+                main.postDelayed({
+                    refreshTracks()
+                    // [keep]: the new track is shown and saved silently as this video's subtitles.
+                    if (keep) _state.value.spuTracks.filter { it.id >= 0 && it.id !in before }.maxByOrNull { it.id }?.let { selectSpu(it.id) }
+                }, 800)
+            }
         }
     }
 
@@ -2256,13 +2278,13 @@ class PlayerController(private val context: Context, private val store: Store) {
     // ---------- sync offsets ----------
 
     fun setSpuDelay(ms: Long) {
-        mp.setSpuDelay(ms * 1000)
         _state.value = _state.value.copy(spuDelayMs = ms)
+        ops.execute { try { mp.setSpuDelay(ms * 1000) } catch (_: Throwable) {} }
     }
 
     fun setAudioDelay(ms: Long) {
-        mp.setAudioDelay(ms * 1000)
         _state.value = _state.value.copy(audioDelayMs = ms)
+        ops.execute { try { mp.setAudioDelay(ms * 1000) } catch (_: Throwable) {} }
     }
 
     /** scope: "file" or "folder" */
