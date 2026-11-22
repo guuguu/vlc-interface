@@ -91,10 +91,10 @@ fun ClockFace(a: ClockAspect, modifier: Modifier, now: Long = 0L) {
     // Weather for the chosen city: checked every 10 min while the clock is shown (refreshed at most every 30 min).
     LaunchedEffect(g.cityLat, g.cityLon, g.showWeather, g.weatherNoon) { while (true) { app.vlcinterface.alarm.Weather.refresh(); delay(10 * 60_000L) } }
     val zone = app.vlcinterface.alarm.Alarms.zone()
-    // The line under the city (06:44): the time zone, today's low › high temperature, or both alternating every 5 s.
+    // The line under the city (06:44 / 06:47): the time zone, the temperature now → in 6 hours, or both alternating every 5 s.
     val tzText = tzLabel(zone, if (now != 0L) now else t)
     val sameCity = w.key == "${g.cityLat},${g.cityLon},${if (g.weatherNoon) "noon" else "now"}"
-    val tempText = if (sameCity && !w.minC.isNaN() && !w.maxC.isNaN()) "${Math.round(w.minC)}°C › ${Math.round(w.maxC)}°C" else ""
+    val tempText = if (sameCity && !w.nowC.isNaN() && !w.in6C.isNaN()) "${Math.round(w.nowC)}°C → ${Math.round(w.in6C)}°C" else ""
     val line2 = when {
         tempText.isEmpty() || g.wxLine == "tz" -> tzText
         g.wxLine == "temp" -> tempText
