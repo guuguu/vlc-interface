@@ -1582,6 +1582,21 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun play(item: PlayItem, startAt: Long = -1, origin: Origin = Origin(if (item.isRadio) "radio" else "single", item.sourceId, item.uri, item.title)) =
         playQueue(listOf(item), 0, origin, startAt)
 
+    /**
+     * The rest of a list being loaded (2026-11-22 19:37), added at the end of the queue once its NAS items were checked —
+     * not an addition by hand (today's session list isn't touched). Only while that list is still what's playing.
+     */
+    fun appendLoaded(items0: List<PlayItem>, origin: Origin) = main.post {
+        val s = _state.value
+        if (s.origin != origin || s.item == null) return@post
+        val have = s.queue.map { qKey(it) }.toHashSet()
+        val items = items0.filter { !nasOff(it) && have.add(qKey(it)) }
+        if (items.isEmpty()) return@post
+        orderedQueue = orderedQueue?.plus(items)
+        fullList = (fullList + items.filter { !it.isRadio }).distinctBy { qKey(it) }
+        _state.value = s.copy(queue = s.queue + items)
+    }
+
     fun playNext(items0: List<PlayItem>) {
         val s = _state.value
         if (s.item == null) { playQueue(items0, 0, Origin("single")); return }

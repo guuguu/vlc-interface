@@ -149,6 +149,15 @@ object NetIndex {
         return c != null && !c.second && now - c.first < 60_000
     }
 
+    /** Can go into the queue at once, without waiting on the network: a phone item, or a NAS that answered in the last 20 s. */
+    fun knownUsable(item: PlayItem): Boolean {
+        if (item.isRadio || !item.uri.contains("://") || item.uri.startsWith("content://") || item.uri.startsWith("file://")) return true
+        val s = MusicLibrary.sourceOf(item) ?: return true
+        if (blockedNow(item)) return false
+        val c = synchronized(upAt) { upAt[s.id] }
+        return c != null && c.second && System.currentTimeMillis() - c.first < 20_000
+    }
+
     /**
      * Of [ids], the saved locations that can be used right now (2026-11-22 19:34): a home-network one only at home or over
      * the VPN when it's on (not while it's ignored for this session), and its server answering (checked at most every 20 s).

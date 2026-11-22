@@ -1041,16 +1041,46 @@ fun PlaylistsScreen(nav: Navigator, openOutput: () -> Unit) {
 fun playPlaylist(nav: Navigator, pl: Playlist, index: Int, random: Boolean? = null) {
     if (pl.items.isEmpty()) return
     val all = pl.items.map { MusicLibrary.fromPlEntry(it) }
-    kotlinx.coroutines.MainScope().launch {
-        // NAS items are ignored when the NAS can't be used now (19:34): away from home without the VPN, the VPN ignored
-        // for this session, or the server not answering — the list plays its phone (and reachable) items only.
-        val items = withoutUnusableNas(all)
-        if (items.isEmpty()) { ShortNote.hint("Nothing in \"${pl.name}\" can be played now (NAS not reachable)"); return@launch }
-        val start = all.getOrNull(index)?.let { t -> items.indexOfFirst { it.uri == t.uri } }?.takeIf { it >= 0 }
-            ?: if (random == true) items.indices.random() else 0
-        App.instance.player.playQueue(items, start, Origin("playlist", playlistId = pl.id, title = pl.name), random = random, wholeList = true)
-        val started = App.instance.player.state.value.item ?: items[start]
+    playListFast(all, index, random, Origin("playlist", playlistId = pl.id, title = pl.name), pl.name) { started ->
         nav.go(if (started.isMusic || started.isRadio) Screen.Music else Screen.Player)
+    }
+}
+
+/**
+ * A whole list played (2026-11-22 19:34 / 19:37): it starts at once with the first items that can surely be played — phone
+ * items and NAS items whose NAS answered just now — enough to fill the visible queue (Up next count + the one playing);
+ * the rest is checked in the background (NAS answering, at home or over the VPN) and added after them, so the NAS check
+ * never holds the start back and NAS items that can't be played never get in. Random: the list is shuffled first.
+ */
+fun playListFast(all0: List<PlayItem>, index: Int, random: Boolean?, origin: Origin, name: String, onStarted: (PlayItem) -> Unit = {}) {
+    if (all0.isEmpty()) return
+    val player = App.instance.player
+    val shuffleIt = random ?: App.instance.store.current.settings.shuffle
+    val songs = all0.all { it.isMusic }
+    // The order to play in: from the item asked for; Random (songs only): a random order, the one asked for first if any.
+    val first = all0.getOrNull(index)
+    val order = if (shuffleIt && songs) (listOfNotNull(first) + all0.filterIndexed { i, _ -> i != index }.shuffled())
+        else all0.drop(index.coerceIn(0, all0.size - 1)) + all0.take(index.coerceIn(0, all0.size - 1))
+    val visible = App.instance.store.current.settings.upNextCount + 1
+    val now = order.filter { app.vlcinterface.sources.NetIndex.knownUsable(it) }.take(visible)
+    val later = order.filter { o -> now.none { it.uri == o.uri } }
+    kotlinx.coroutines.MainScope().launch {
+        var head = now
+        if (head.isEmpty()) {
+            // Nothing known to be playable at once (a NAS list): wait for the check this time.
+            head = withoutUnusableNas(order).take(visible)
+            if (head.isEmpty()) { ShortNote.hint("Nothing in \"$name\" can be played now (NAS not reachable)"); return@launch }
+        }
+        // In the order built above (Random already applied): no second shuffle; the Random / Sequential choice is kept as asked.
+        if (random != null && random != App.instance.store.current.settings.shuffle)
+            App.instance.store.update { it.copy(settings = it.settings.copy(shuffle = random)) }
+        player.playQueue(head, 0, origin, keepOrder = true, wholeList = true)
+        onStarted(player.state.value.item ?: head[0])
+        val rest = later.filter { r -> head.none { it.uri == r.uri } }
+        if (rest.isNotEmpty()) {
+            val ok = withoutUnusableNas(rest)
+            player.appendLoaded(ok, origin)
+        }
     }
 }
 
@@ -1637,10 +1667,8 @@ fun OriginPickDialog(fromLabel: String, onOpen: () -> Unit, onDismiss: () -> Uni
                         Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             val items = { pl.items.map { MusicLibrary.fromPlEntry(it) } }
                             val origin = Origin("playlist", playlistId = pl.id, title = pl.name)
-                            Pill("▶ Play", filled = true) { onDismiss(); kotlinx.coroutines.MainScope().launch {
-                                val l = withoutUnusableNas(items()); if (l.isNotEmpty()) player.playQueue(l, 0, origin, random = false, wholeList = true) } }
-                            Pill("Random") { onDismiss(); kotlinx.coroutines.MainScope().launch {
-                                val l = withoutUnusableNas(items()); if (l.isNotEmpty()) player.playQueue(l, l.indices.random(), origin, random = true, wholeList = true) } }
+                            Pill("▶ Play", filled = true) { onDismiss(); val l = items(); playListFast(l, 0, false, origin, pl.name) }
+                            Pill("Random") { onDismiss(); val l = items(); playListFast(l, l.indices.random(), true, origin, pl.name) }
                             Pill("Load") { onDismiss(); player.loadQueue(items(), origin) }
                         }
                     }
