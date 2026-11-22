@@ -45,6 +45,10 @@ object SettingHelp {
             "shows Treble +5 at the volume now.\n\n" +
             "The curve shows the result: solid line Treble +5, dashed −5. One setting for all songs and stations; each song's own " +
             "Treble value works on top of it. Works with the app's own sound output. Default: Shelf, 4000 Hz, slope 0.6, ±10 dB.",
+        "Start volume" to "The phone's media volume the app sets before any sound: when the app starts (unless you left it with Exit less than 30 minutes ago, or it was restarted by a short Bluetooth drop), and after the quiet time set in \"Reset volume after\". It's set on the output in use at that moment (speaker, headphones or the Bluetooth device).\n\n" +
+            "Default: 40 %.",
+        "Reset volume after" to "How many minutes with nothing playing (paused, stopped, or the app idle) before the volume goes back to the Start volume. It happens right before the next song, station or video starts — not while the phone is quiet, so other apps' sound isn't changed. The Preamp (everything) is a setting and stays as set; the app's own volume on a device it picked goes back to 100 %. An alarm never triggers it (it sets its own volume).\n\n" +
+            "Typed with the digit pad, 0–999 minutes. 0 = never (the start volume only when the app starts). Default: 30 minutes.",
         "Loudness, Treble and Preamp sliders" to "Shows three sliders on the audio and radio players: Loudness (more bass and treble at low volume, like a hi-fi's loudness button), Treble, and Preamp (overall gain before the volume).\n\n" +
             "Off: the sliders are hidden, but their last values still apply. Loudness fades away by itself as the volume goes up, so loud listening is never boomy.\n\n" +
             "Each output (speaker, headphones, Bluetooth) keeps its own values. Default: shown.",

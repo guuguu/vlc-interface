@@ -18,6 +18,7 @@ val SETTINGS_INDEX: List<SettingsEntry> = listOf(
     E("audio", "Audio", "Sound", "Sound", "", true),
     E("audio", "Audio", "Sound", "Start volume", "", true),
     E("audio", "Audio", "Sound", "Preamp (everything)", "", true),
+    E("audio", "Audio", "Sound", "Reset volume after", "", true),
     E("audio", "Audio", "Sound", "Loudness, Treble and Preamp sliders", "On the audio and radio players", true),
     E("audio", "Audio", "Treble band", "Treble band", "", true),
     E("audio", "Audio", "Treble band", "Frequency", "", true),

@@ -807,6 +807,34 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (!playing) main.postDelayed({ pause() }, 400)
     }
 
+    // ---------- start volume after inactivity (2026-11-22 18:37) ----------
+
+    /**
+     * Since when nothing plays (0 = something is playing). Starts at the app's start (the start volume, or the volume kept
+     * after Exit / a Bluetooth hiccup, has just been set then).
+     */
+    @Volatile private var idleSince = System.currentTimeMillis()
+    private val idleWatch = bg.launch {
+        _state.collect { st -> val p = st.isPlaying; if ((idleSince == 0L) == p) return@collect; idleSince = if (p) 0L else System.currentTimeMillis() }
+    }
+
+    /**
+     * Settings → Audio → "Reset volume after": nothing played for that many minutes → right before the next sound the
+     * volume goes back to the Start volume on the output in use (and the app's own volume on a device it picked to 100 %);
+     * the Preamp (everything) is a setting and stays as set. Never while an alarm rings (it sets its own volume).
+     * Done at the next sound, not while idle, so other apps' sound on the phone isn't changed meanwhile.
+     */
+    private fun volumeAfterIdle() {
+        val min = store.current.settings.idleResetMin
+        val since = idleSince
+        if (min <= 0 || since == 0L || System.currentTimeMillis() - since < min * 60_000L) return
+        if (app.vlcinterface.alarm.AlarmEngine.ui.value.phase != "idle") return
+        idleSince = System.currentTimeMillis()
+        try { app.vlcinterface.App.instance.applyStartVolume() } catch (_: Exception) {}
+        setAppVolume(1f)
+        ServerLog.log("player", "volume", "", "", true, "Nothing played for $min min or more: volume set back to the start volume (${store.current.settings.startVolume} %)")
+    }
+
     // ---------- volume on a device the app picked itself ----------
 
     /** App volume 0…2 (1 = as the device is set), used only while [OutputRouter.overriding]. */
@@ -1884,6 +1912,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             if (r?.bitmap != null) useDownloadedArtwork(item, "mem:" + item.uri)
         }
         NativeAudio.deepBuffer(item.isMusic || item.isRadio)
+        volumeAfterIdle()
         am.requestAudioFocus(focusRequest)
         endHandled = false; lastTick = 0L
         mp.play()
@@ -2075,9 +2104,9 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     fun togglePause() {
         if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() }
-        else { if (BatteryGuard.blocked()) return; _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() }
+        else { if (BatteryGuard.blocked()) return; volumeAfterIdle(); _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() }
     }
-    fun resume() { if (!mp.isPlaying && _state.value.item != null && !BatteryGuard.blocked()) { _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() } }
+    fun resume() { if (!mp.isPlaying && _state.value.item != null && !BatteryGuard.blocked()) { volumeAfterIdle(); _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() } }
     fun pause() { if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() } }
     /**
      * Set when the sleep timer closed the player. Kept across the app being closed, so the pop-up shows when the app

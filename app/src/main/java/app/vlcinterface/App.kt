@@ -114,7 +114,7 @@ class App : Application() {
     }
 
     /** Fresh app start: set the phone's media volume to the chosen start volume before any sound plays. */
-    private fun applyStartVolume() {
+    fun applyStartVolume() {
         try {
             val am = getSystemService(AudioManager::class.java)
             val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)

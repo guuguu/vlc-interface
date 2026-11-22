@@ -1361,8 +1361,8 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Start volume", color = C.text, modifier = Modifier.anchor("Start volume"), fontSize = 15.sp)
-                    Text("Set every time the app starts, before any sound", color = C.muted, fontSize = 13.sp)
+                    Text("Start volume", color = C.text, modifier = Modifier.anchor("Start volume").explain("Start volume"), fontSize = 15.sp)
+                    Text("Set when the app starts and after the quiet time below, before any sound", color = C.muted, fontSize = 13.sp)
                 }
                 Text("${s.startVolume}%", color = accent(), fontWeight = FontWeight.SemiBold)
             }
@@ -1377,6 +1377,17 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
                 STextButton({ set(s.copy(preampDb = 0f)); App.instance.player.applySoundChain() }) { Text("Reset") }
             }
             ThinSlider(s.preampDb, { v -> set(s.copy(preampDb = Math.round(v * 2) / 2f)); App.instance.player.applySoundChain() }, valueRange = -12f..12f)
+            Divider()
+            // 2026-11-22 18:37: minutes with nothing playing → the next sound starts at the Start volume (0 = never).
+            Text("Reset volume after", color = C.text, modifier = Modifier.anchor("Reset volume after").explain("Reset volume after"), fontSize = 15.sp)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                DigitField(s.idleResetMin.toString(), "minutes", 3, Modifier.width(90.dp)) { v -> v.toIntOrNull()?.takeIf { it in 0..999 }?.let { set(s.copy(idleResetMin = it)) } }
+                Text("minutes with nothing playing", color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f).padding(start = 10.dp))
+                STextButton({ set(s.copy(idleResetMin = 30)) }) { Text("Reset") }
+            }
+            Text(if (s.idleResetMin == 0) "Never: the volume stays as you left it (the start volume is set only when the app starts)."
+                else "After ${s.idleResetMin} min with nothing playing, the next song, station or video starts at ${s.startVolume} % (Preamp as set: " + "%+.1f".format(s.preampDb) + " dB).",
+                color = C.muted, fontSize = 13.sp)
         }
         Divider()
         // All three player sliders on / off: off takes them off the players and stops their processing.
