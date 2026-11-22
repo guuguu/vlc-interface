@@ -1161,3 +1161,12 @@
 - **The two 1.72 changes that can run as the app opens are removed,** so the start is the same as 1.71's (which started fine):
   - The file-sharing component added to the manifest for log sharing. It checked out correct in the built APK, but it was the only new piece Android loads at start. Logs are now shared by saving the .txt into Download/vlc_interface (like "Collect error logs") and sharing that file; the selection and the app picker stay the same.
   - The layout inflater handed to libVLC's video view. The upright picture size is made right by the size check's backstop instead, which stays.
+
+# After 1.73.0
+
+## The real start-up crash (from the error pack of 2026-11-22 00:53)
+- **Trace:** "Unable to create application … lateinit property output has not been initialized" in App.getOutput ← volumeNowPct ← trebleFlatten ← currentToneGains ← applySoundChain.
+- **Cause:** "Flatten at volume" (Treble band, since 1.70). Once it was set, the treble calculation asked for the output volume while the app was still starting, before the output router existed, so every start crashed (1.72, 1.73, and 1.70 / 1.71 alike). Going back to 1.71 worked only because the downgrade needed an uninstall, which wiped the settings.
+- **Fixed:** the volume is read safely at any point of the start (no output router yet → the phone volume alone), and the flattening can never take the app down (on any error: the whole correction).
+- **The 1.73 guesses** (file-sharing component, video view inflater) were not the cause. The inflater for libVLC's video view is put back (upright picture size); logs stay shared from Download/vlc_interface.
+- **Also in the pack, separate:** one "not responding" at 00:46. The screen's thread waited on libVLC while it closed a video that was stuck (reopening after a picture-colour change). To be looked at separately.

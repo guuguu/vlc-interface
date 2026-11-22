@@ -514,7 +514,8 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun volumeNowPct(): Float {
         val max = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1)
         val pct = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) * 100f / max
-        return if (app.vlcinterface.App.instance.output.overriding) pct * appVolume else pct
+        // The output router is made after the player at start: not there yet → not overriding (1.70–1.73 start-up crash).
+        return if (app.vlcinterface.App.instance.outputOrNull()?.overriding == true) pct * appVolume else pct
     }
 
     /**
@@ -522,11 +523,10 @@ class PlayerController(private val context: Context, private val store: Store) {
      * volume 0, none at Settings → Audio → Treble band → "Flatten at" (e.g. 150 %: two thirds left at 50 %, a third at
      * 100 %). 1 = whole correction (flattening off).
      */
-    fun trebleFlatten(): Float {
+    fun trebleFlatten(): Float = try {
         val target = store.current.settings.trebleFlatPct
-        if (target <= 0) return 1f
-        return (1f - volumeNowPct() / target).coerceIn(0f, 1f)
-    }
+        if (target <= 0) 1f else (1f - volumeNowPct() / target).coerceIn(0f, 1f)
+    } catch (_: Throwable) { 1f }     // never takes the app down: the whole correction then
 
     /** Phone volume changed (buttons, speaker): Auto loudness follows at once. */
     private val volumeRx = object : android.content.BroadcastReceiver() {

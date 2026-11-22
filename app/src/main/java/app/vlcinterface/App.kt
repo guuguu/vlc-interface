@@ -20,6 +20,8 @@ class App : Application() {
         private set
     lateinit var output: OutputRouter
         private set
+    /** The output router, or null while the app is still starting (the player is made before it). */
+    fun outputOrNull(): OutputRouter? = if (::output.isInitialized) output else null
     lateinit var media: MediaCenter
         private set
 
