@@ -58,6 +58,7 @@ sealed interface Screen {
     data object AlarmSettings : Screen
     data object ClockAspect : Screen
     data object Visualisation : Screen
+    data object ClockFull : Screen
     data object Logs : Screen
     data class LogPage(val key: String) : Screen
     /** A log made of entries from all logs: "errors", "indexing", "lan" (servers). */
@@ -113,7 +114,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
             // the player page is shown; any other page lets the screen time out as usual.
             // Not at 10 % battery or less (unless charging).
             val lowBat by app.vlcinterface.player.BatteryGuard.low.collectAsState()
-            val keepOn = ((isPlayer || top is Screen.Music) && !lowBat) || top is Screen.Visualisation   // visualisation: always on
+            val keepOn = ((isPlayer || top is Screen.Music) && !lowBat) || top is Screen.Visualisation || top is Screen.ClockFull   // visualisation / full-screen clock: always on
             // Also off as soon as the app goes to the background (and back on when it returns to the player).
             val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
             androidx.compose.runtime.DisposableEffect(keepOn, owner) {
@@ -135,8 +136,8 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                 onDispose { owner.lifecycle.removeObserver(obs); apply(false) }
             }
             Box(
-                Modifier.fillMaxSize().background(if (isPlayer || top is Screen.Visualisation) Color.Black else C.bg)
-                    .then(if (isPlayer || top is Screen.Visualisation) Modifier else Modifier.safeDrawingPadding())
+                Modifier.fillMaxSize().background(if (isPlayer || top is Screen.Visualisation || top is Screen.ClockFull) Color.Black else C.bg)
+                    .then(if (isPlayer || top is Screen.Visualisation || top is Screen.ClockFull) Modifier else Modifier.safeDrawingPadding())
             ) {
                 // Every page keeps its own scroll position (and other small state) while it stays in the back stack:
                 // coming back shows the same area, not the top of the page.
@@ -203,6 +204,7 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     is Screen.AlarmSettings -> SettingsText { AlarmSettingsScreen(nav) }
                     is Screen.ClockAspect -> SettingsText { ClockAspectScreen(nav) }
                     is Screen.Visualisation -> SettingsText { VisualisationScreen(nav) }
+                    is Screen.ClockFull -> ClockFullScreen(nav)
                     is Screen.Logs -> LogsScreen(nav)
                     is Screen.LogPage -> LogPageScreen(nav, top.key)
                     is Screen.LogView -> LogViewScreen(nav, top.kind)

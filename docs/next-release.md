@@ -1380,3 +1380,9 @@
 ## Automatic ReplayGain still took one song of an album (reported 2026-11-22 16:20)
 - **Found:** the album was looked for where the song was *played from*, not where the file is. A song played from a pinned folder, a folder played with its subfolders, the Songs list / a search, the queue or a playlist carries that place, so the scan listed the wrong folder (often the artist / pin folder above, with no songs in it) and fell back to the playing song alone. The "already scanned this folder" note used the same place, so one album played from a pin also blocked every other album under that pin until the app restarted.
 - **Now:** the album is always found from the file itself: on the network, the folder in the song's own address (its saved location found by the server when the song doesn't carry it); on the phone, its folder in the phone's song list. Disc folders (CD1 / CD2 …) are added from there as before, and the "already scanned" note is per real folder.
+
+## Clock full screen (requested 2026-11-22 17:28)
+- **Long press on the clock** in the song / radio player (in the picture's place, pinned at the top, or on the left half sideways) opens it full screen, like the visualisation: black, bars hidden, the screen kept on, the clock as big as the screen allows, upright or sideways, ticking with its aspect, weather and alarms line as set.
+- The same pop-up on opening: "To exit back to application, double tap anywhere." A **double tap** anywhere goes back to the player.
+- Brightness as on the full-screen visualisation: the "Full-screen brightness" setting is used, and a swipe along the short side changes it (kept as that setting); leaving gives the phone its own brightness back.
+- The small ⚙ beside the clock still opens the alarm clock settings.
