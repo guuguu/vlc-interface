@@ -1095,6 +1095,13 @@ fun BackupScreen(nav: Navigator) {
     var replace by remember { mutableStateOf(false) }
     var status by remember { mutableStateOf("") }
     var preview by remember { mutableStateOf<Store.ImportPreview?>(null) }
+    // Parts read when the app starts were imported (per-video choices, ReplayGain values, saved songs…): restart offered.
+    var askRestart by remember { mutableStateOf(false) }
+    if (askRestart) androidx.compose.material3.AlertDialog(onDismissRequest = { askRestart = false }, containerColor = C.panel,
+        title = { Text("Restart to finish the import?", color = C.text) },
+        text = { Text("Some imported parts (per-video choices, ReplayGain values, saved radio songs, page choices…) are read when the app starts. Restart now to use them; otherwise they apply the next time the app opens.", color = C.text, fontSize = 14.sp) },
+        confirmButton = { STextButton({ askRestart = false; exitApp(restart = true) }) { Text("Restart now", color = accent()) } },
+        dismissButton = { STextButton({ askRestart = false }) { Text("Later") } })
     var importCats by remember { mutableStateOf(emptySet<String>()) }
     var importPass by remember { mutableStateOf("") }
     val all = ExportCat.ALL in cats
@@ -1180,6 +1187,7 @@ fun BackupScreen(nav: Navigator) {
                 val err = store.applyImport(pv, replace, importPass, importCats)
                 status = err ?: "Imported. Previous setup backed up."
                 if (err == null) preview = null
+                if (err == null && store.lastImportNeedsRestart) askRestart = true
             }, enabled = importCats.isNotEmpty()) { Text("Import") }
         },
         dismissButton = { STextButton({ preview = null }) { Text("Cancel") } },

@@ -90,6 +90,8 @@ class Store(private val context: Context) {
         if (ExportCat.RESUME in c) listOf("recent", "scanned").forEach { st.put(it, full.get(it)) }
         if (ExportCat.ALARMS in c) try { st.put("alarms", app.vlcinterface.alarm.Alarms.exportJson()) } catch (_: Exception) {}
         if (ExportCat.VIS in c) try { st.put("vis", app.vlcinterface.alarm.Alarms.exportVis()) } catch (_: Exception) {}
+        // Everything kept outside the main settings file (2026-11-22 08:32): each part goes with its category.
+        try { st.put("extras", ExportExtras.export(context, c)) } catch (_: Exception) {}
         return JSONObject()
             .put("format", "vlc-interface-setup")
             .put("formatVersion", FORMAT_VERSION)
@@ -121,6 +123,7 @@ class Store(private val context: Context) {
                 ?: (ExportCat.ALL_IDS.toSet() - ExportCat.ALARMS - (if (pw) emptySet() else setOf(ExportCat.PASSWORDS)))   // older files
             // Files from before the split carry the visualisation inside the alarms section.
             val catsV = cats.let { if (ExportCat.ALARMS in it && ExportCat.VIS !in it && st.optJSONObject("alarms")?.has("vis") == true) it + ExportCat.VIS else it }
+                .filter { it in ExportCat.ALL_IDS }.toSet()
             ImportPreview(
                 true,
                 sources = st.optJSONArray("sources")?.length() ?: 0,
@@ -194,8 +197,13 @@ class Store(private val context: Context) {
         if (ExportCat.ALARMS in c) stJ.optJSONObject("alarms")?.let { try { app.vlcinterface.alarm.Alarms.importJson(it, replace) } catch (_: Exception) {} }
         // Visualisation: its own section; older files kept it inside the alarms section.
         if (ExportCat.VIS in c) (stJ.optJSONObject("vis") ?: stJ.optJSONObject("alarms"))?.let { try { app.vlcinterface.alarm.Alarms.importVis(it) } catch (_: Exception) {} }
+        // Parts kept outside the settings file: written back; some take effect after the app restarts.
+        lastImportNeedsRestart = try { stJ.optJSONObject("extras")?.let { ExportExtras.import(context, it, c, replace) } ?: false } catch (_: Exception) { false }
         return null
     }
+
+    /** The last import wrote parts that are read when the app starts (it offers a restart). */
+    var lastImportNeedsRestart = false
 
     fun backup(): File {
         val dir = File(context.filesDir, "backups").apply { mkdirs() }
@@ -208,7 +216,8 @@ class Store(private val context: Context) {
     }
 
     companion object {
-        const val FORMAT_VERSION = 1
+        /** 2 (2026-11-22): + "extras" (per-video choices, ReplayGain kept in the app, file associations, …). */
+        const val FORMAT_VERSION = 2
 
         fun toJson(s: AppState, pw: (String) -> String): JSONObject = JSONObject()
             .put("settings", s.settings.toJson(pw))
@@ -264,11 +273,133 @@ object ExportCat {
     const val SUBS = "subs"
     const val RESUME = "resume"
     const val VIS = "vis"
+    const val VIDEOS = "videos"
+    const val RG = "rg"
+    const val ASSOC = "assoc"
     /** id → name, in the order shown. */
     val LIST = listOf(SETTINGS to "Settings", NAS to "NAS (servers, shares, addresses)", VPN to "VPN (app, home servers, retry)",
         INTERNET to "Internet sources", PASSWORDS to "Saved passwords", RADIO to "Radio favourites", PLAYLISTS to "Playlists",
-        ALARMS to "Alarms and clock", VIS to "Visualisation (all patterns' settings)", SUBS to "Subtitle style and sync offsets", RESUME to "Resume positions and scanned folders")
+        ALARMS to "Alarms and clock", VIS to "Visualisation (all patterns' settings)", SUBS to "Subtitle style and sync offsets", RESUME to "Resume positions and scanned folders",
+        VIDEOS to "Per-video choices (format, decoder, tracks, colours, audio sync)", RG to "ReplayGain values kept in the app",
+        ASSOC to "File associations")
     val ALL_IDS = LIST.map { it.first }
     /** Settings that belong to the VPN category. */
     val VPN_KEYS = setOf("vpnNas", "vpnAskStart", "vpnApp", "vpnRetrySec")
+}
+
+
+/**
+ * Everything the app keeps outside the main settings file, for export / import (2026-11-22 08:32), each with the
+ * category it belongs to. Device-only data (caches, logs, the index, battery and crash notes…) is listed in
+ * [LOCAL_PREFS] / [LOCAL_FILES] on purpose. The build checks that every stored preference file and data file is in
+ * one of these lists (tools/check_export.py), so nothing new is ever left out of the export by accident.
+ */
+object ExportExtras {
+    /** Preference files → category. */
+    val PREFS = mapOf(
+        "uiChoices" to ExportCat.SETTINGS,            // choices left on the pages (Songs / Radio / All …)
+        "settings_search" to ExportCat.SETTINGS,      // the Settings search history
+        "music_folder_access" to ExportCat.SETTINGS,  // folders answered "No" for ReplayGain write access
+        "playerSwitch" to ExportCat.RESUME,           // what each player played last
+        "videoFiles" to ExportCat.VIDEOS,             // per video: format, decoder, deinterlacing, tracks, colours, audio sync
+        "rgScanDates2" to ExportCat.RG,               // when each network song was measured, and where its values went
+    )
+    /** Data files in the app's storage → category. */
+    val FILES = mapOf(
+        "vpn-extra-subnets.txt" to ExportCat.VPN,
+        "vpn-ignored-servers.txt" to ExportCat.VPN,
+        "covers-banned.json" to ExportCat.SETTINGS,   // album pictures you rejected
+        "saved-songs.json" to ExportCat.RADIO,        // songs saved from the radio
+        "replaygain.json" to ExportCat.RG,            // ReplayGain values kept in the app
+    )
+    /** Never exported (this phone only): caches, logs, indexes, battery / crash / sleep notes, weather. */
+    val LOCAL_PREFS = setOf("alarms", "battery", "crashlog", "netindex_at", "sleep", "volkeep")
+    val LOCAL_FILES = setOf("state.json", "backups", "covers", "logs", "netindex-partial.json", "netindex.json", "pictures", "rg-pending",
+        "rgpatch", "subtitles-undo", "subtitles/", "tags.json", "tone.bin")
+
+    fun export(ctx: android.content.Context, cats: Set<String>): JSONObject {
+        val o = JSONObject()
+        val prefs = JSONObject()
+        PREFS.filterValues { it in cats }.keys.forEach { name ->
+            val p = JSONObject()
+            ctx.getSharedPreferences(name, android.content.Context.MODE_PRIVATE).all.forEach { (k, v) ->
+                when (v) {
+                    is Boolean -> p.put(k, JSONObject().put("t", "b").put("v", v))
+                    is Int -> p.put(k, JSONObject().put("t", "i").put("v", v))
+                    is Long -> p.put(k, JSONObject().put("t", "l").put("v", v))
+                    is Float -> p.put(k, JSONObject().put("t", "f").put("v", v.toDouble()))
+                    is String -> p.put(k, JSONObject().put("t", "s").put("v", v))
+                    is Set<*> -> p.put(k, JSONObject().put("t", "ss").put("v", JSONArray(v.map { it.toString() })))
+                }
+            }
+            prefs.put(name, p)
+        }
+        o.put("prefs", prefs)
+        val files = JSONObject()
+        FILES.filterValues { it in cats }.keys.forEach { name ->
+            val f = File(ctx.filesDir, name)
+            if (f.exists() && f.length() < 8_000_000) files.put(name, f.readText())
+        }
+        o.put("files", files)
+        // File associations: which types are switched on (being the main app is Android's choice, set on the phone).
+        if (ExportCat.ASSOC in cats) o.put("assoc", JSONObject().also { a ->
+            app.vlcinterface.ui.Associations.TYPES.forEach { t -> a.put(t.key, app.vlcinterface.ui.Associations.registered(ctx, t)) }
+        })
+        return o
+    }
+
+    /** Returns true when something was written that the app reads at start (a restart finishes the import). */
+    fun import(ctx: android.content.Context, o: JSONObject, cats: Set<String>, replace: Boolean): Boolean {
+        var restart = false
+        o.optJSONObject("prefs")?.let { all ->
+            all.keys().forEach { name ->
+                if (PREFS[name]?.let { it in cats } != true) return@forEach
+                val p = all.getJSONObject(name)
+                val sp = ctx.getSharedPreferences(name, android.content.Context.MODE_PRIVATE)
+                val e = sp.edit()
+                if (replace) e.clear()
+                p.keys().forEach { k ->
+                    if (!replace && sp.contains(k)) return@forEach          // merge: mine kept, new ones added
+                    val x = p.getJSONObject(k)
+                    when (x.optString("t")) {
+                        "b" -> e.putBoolean(k, x.getBoolean("v"))
+                        "i" -> e.putInt(k, x.getInt("v"))
+                        "l" -> e.putLong(k, x.getLong("v"))
+                        "f" -> e.putFloat(k, x.getDouble("v").toFloat())
+                        "s" -> e.putString(k, x.getString("v"))
+                        "ss" -> e.putStringSet(k, x.getJSONArray("v").let { a -> (0 until a.length()).map { a.getString(it) }.toSet() })
+                    }
+                }
+                e.commit(); restart = true
+            }
+        }
+        o.optJSONObject("files")?.let { all ->
+            all.keys().forEach { name ->
+                if (FILES[name]?.let { it in cats } != true) return@forEach
+                val text = all.getString(name)
+                val f = File(ctx.filesDir, name)
+                val out = if (replace || !f.exists()) text else mergeText(f.readText(), text)
+                File(ctx.filesDir, "$name.tmp").apply { writeText(out); renameTo(f) }
+                restart = true
+            }
+        }
+        if (ExportCat.ASSOC in cats) o.optJSONObject("assoc")?.let { a ->
+            app.vlcinterface.ui.Associations.TYPES.forEach { t -> if (a.has(t.key)) app.vlcinterface.ui.Associations.setRegistered(ctx, t, a.getBoolean(t.key)) }
+        }
+        return restart
+    }
+
+    /** Merge: a JSON object keeps mine and adds the new keys; a JSON array or a text adds the new entries / lines. */
+    private fun mergeText(mine: String, inc: String): String = try {
+        val m = JSONObject(mine); val n = JSONObject(inc)
+        n.keys().forEach { k -> if (!m.has(k)) m.put(k, n.get(k)) }; m.toString()
+    } catch (_: Exception) {
+        try {
+            val m = JSONArray(mine); val n = JSONArray(inc)
+            val have = (0 until m.length()).map { m.get(it).toString() }.toHashSet()
+            (0 until n.length()).forEach { i -> if (n.get(i).toString() !in have) m.put(n.get(i)) }; m.toString()
+        } catch (_: Exception) {
+            (mine.lines() + inc.lines().filter { it.isNotBlank() && it !in mine.lines() }).joinToString("\n")
+        }
+    }
 }
