@@ -103,7 +103,9 @@ class App : Application() {
                 // device at the wrong level).
                 lostName = before.name; lostAt = now; lostPct = volByOutput.getOrDefault(before.name, -1); lostApp = player.appVolume
             }
-            val back = after != null && after.name == lostName && now - lostAt < BLIP_MS     // a short drop only
+            // A short drop only — and not when the start volume was set meanwhile (2026-11-23 00:55: the old level, noted
+            // before the reset, was put back over it).
+            val back = after != null && after.name == lostName && now - lostAt < BLIP_MS && startVolumeAt < lostAt
             if (back) {
                 val want = lostPct
                 if (want >= 0) {
@@ -117,6 +119,13 @@ class App : Application() {
                 player.setAppVolume(lostApp)
                 lostName = ""
             } else if (!output.overriding) player.setAppVolume(1f)   // back on Android's routing: Android's volume again
+            // The start volume was just set (a reset after the quiet time, or the app's start) and the sound moved to another
+            // output within 15 s — e.g. Bluetooth connecting when playback started: that output gets the start volume too,
+            // so it doesn't play at its old level (2026-11-23 00:55).
+            if (!back && after != null && before?.name != after.name && startVolumeAt > 0 && now - startVolumeAt < 15_000 && !output.overriding) {
+                applyStartVolume()
+                ServerLog.log("player", "volume", "", "", true, after.name + " came in right after the start volume was set: set to it too")
+            }
             // Picked in the app: the sound was already moved to it (outputChanged would send it back to Android's default).
             if (before?.name != after?.name && !picked) player.outputChanged()
             if (after != null) store.update { it.copy(lastOutput = after.name) }
@@ -135,12 +144,17 @@ class App : Application() {
     }
 
     /** Fresh app start: set the phone's media volume to the chosen start volume before any sound plays. */
+    /** When the start volume was last set (an output coming back right after doesn't get its older level back). */
+    @Volatile var startVolumeAt = 0L
     fun applyStartVolume() {
         try {
             val am = getSystemService(AudioManager::class.java)
             val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-            val v = Math.round(store.current.settings.startVolume.coerceIn(0, 100) * max / 100f)
+            val pct = store.current.settings.startVolume.coerceIn(0, 100)
+            val v = Math.round(pct * max / 100f)
             am.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0)
+            startVolumeAt = System.currentTimeMillis()
+            try { output.active?.name?.let { n -> volByOutput.put(n, pct) } } catch (_: Exception) {}
         } catch (_: Exception) {
         }
     }

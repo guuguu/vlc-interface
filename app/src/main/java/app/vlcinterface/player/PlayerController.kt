@@ -923,9 +923,21 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (min <= 0 || since == 0L || System.currentTimeMillis() - since < min * 60_000L) return
         if (app.vlcinterface.alarm.AlarmEngine.ui.value.phase != "idle") return
         idleSince = System.currentTimeMillis()
-        try { app.vlcinterface.App.instance.applyStartVolume() } catch (_: Exception) {}
-        setAppVolume(1f)
-        ServerLog.log("player", "volume", "", "", true, "Nothing played for $min min or more: volume set back to the start volume (${store.current.settings.startVolume} %)")
+        val start = store.current.settings.startVolume.coerceIn(0, 100)
+        val out = app.vlcinterface.App.instance.output
+        val name = try { out.active?.name ?: "" } catch (_: Exception) { "" }
+        // 2026-11-23 00:55 (it worked once, then never): on an output the app picked itself (not the one Android routes
+        // media to) the phone's volume belongs to Android's output, so setting it changed nothing heard — and the app's own
+        // volume was even put up to 100 %. There the app's own volume now takes the level instead.
+        if (out.overriding) {
+            val streamPct = try { out.volumePercent() } catch (_: Exception) { 100 }
+            setAppVolume(if (streamPct <= 0) 1f else start / streamPct.toFloat())
+            ServerLog.log("player", "volume", "", "", true, "Nothing played for $min min or more: $name (picked in the app) set back to the start volume ($start %) with the app's own volume")
+        } else {
+            try { app.vlcinterface.App.instance.applyStartVolume() } catch (_: Exception) {}
+            setAppVolume(1f)
+            ServerLog.log("player", "volume", "", "", true, "Nothing played for $min min or more: ${name.ifEmpty { "the output" }} set back to the start volume ($start %)")
+        }
     }
 
     // ---------- volume on a device the app picked itself ----------

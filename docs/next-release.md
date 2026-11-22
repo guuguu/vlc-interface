@@ -1453,3 +1453,10 @@
 
 ## Digit pad squeezed into one column (screenshot 2026-11-22 20:38)
 - "Reset volume after" had its minutes field in a narrow box beside the text, so its digit pad opened squeezed into one column (only 1, 4, 7, ⌫). The field is now on its own line across the full width (the text and Reset above it), so the pad opens whole. Fixed the same way: Library & files → Indexing → "Every N days", and the radio recording's "Continue for … minutes".
+
+## Reset volume after: worked once, then not (reported 2026-11-23 00:55)
+- **Three ways the reset was lost, fixed:**
+  - **The old level put back over it:** an output that drops for a moment and comes back gets its previous volume back (since 1.87). That previous volume was noted before the reset, so when the output re-announced itself right after the song started (Bluetooth often does after a long pause), the old level came back over the start volume. Now a reset made after the drop wins: nothing older is put back.
+  - **Bluetooth connecting just after:** the reset is made on the output in use when the sound starts; when another output (Bluetooth waking up) takes the sound within 15 s, it now gets the start volume too.
+  - **An output picked in the app** (not the one Android sends media to): the phone's volume belongs to Android's output, so setting it changed nothing you heard — and the app's own volume was even put up to 100 %. There the app's own volume now takes the level (start volume ÷ the phone's volume).
+- Every reset is written to the Player log with the output ("… set back to the start volume (10 %)", "… came in right after the start volume was set: set to it too").
