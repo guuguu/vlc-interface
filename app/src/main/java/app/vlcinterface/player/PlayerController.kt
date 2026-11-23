@@ -2132,9 +2132,11 @@ class PlayerController(private val context: Context, private val store: Store) {
             if (r?.bitmap != null) useDownloadedArtwork(item, "mem:" + item.uri)
         }
         NativeAudio.deepBuffer(item.isMusic || item.isRadio)
+        // The sound is taken first (another app playing is paused by Android), then the volume reset — so the other app's
+        // last moment isn't played at the start volume (2026-11-23 01:04).
+        am.requestAudioFocus(focusRequest)
         volumeAfterIdle()
         radioSoundAt = System.currentTimeMillis() + 10_000           // a station gets 10 s to connect before the 5 s rule
-        am.requestAudioFocus(focusRequest)
         endHandled = false; lastTick = 0L
         mp.play()
         main.postDelayed({ stopping = false }, 500)
@@ -2325,9 +2327,9 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     fun togglePause() {
         if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() }
-        else { if (BatteryGuard.blocked()) return; volumeAfterIdle(); _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() }
+        else { if (BatteryGuard.blocked()) return; am.requestAudioFocus(focusRequest); volumeAfterIdle(); _state.value = _state.value.copy(userPaused = false); mp.play() }
     }
-    fun resume() { if (!mp.isPlaying && _state.value.item != null && !BatteryGuard.blocked()) { volumeAfterIdle(); _state.value = _state.value.copy(userPaused = false); am.requestAudioFocus(focusRequest); mp.play() } }
+    fun resume() { if (!mp.isPlaying && _state.value.item != null && !BatteryGuard.blocked()) { am.requestAudioFocus(focusRequest); volumeAfterIdle(); _state.value = _state.value.copy(userPaused = false); mp.play() } }
     fun pause() { if (mp.isPlaying) { _state.value = _state.value.copy(userPaused = true); mp.pause() } }
     /**
      * Set when the sleep timer closed the player. Kept across the app being closed, so the pop-up shows when the app
