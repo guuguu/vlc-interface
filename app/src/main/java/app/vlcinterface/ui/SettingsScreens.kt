@@ -873,7 +873,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             CardBox {
                 var afTick by remember { mutableIntStateOf(0) }
                 val afOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-                DisposableEffect(afOwner) {
+                androidx.compose.runtime.DisposableEffect(afOwner) {
                     val obs = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) afTick++ }
                     afOwner.lifecycle.addObserver(obs); onDispose { afOwner.lifecycle.removeObserver(obs) }
                 }
