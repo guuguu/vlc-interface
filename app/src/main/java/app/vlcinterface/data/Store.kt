@@ -313,7 +313,7 @@ object ExportExtras {
         "replaygain.json" to ExportCat.RG,            // ReplayGain values kept in the app
     )
     /** Never exported (this phone only): caches, logs, indexes, battery / crash / sleep notes, weather. */
-    val LOCAL_PREFS = setOf("output", "alarms", "battery", "crashlog", "netindex_at", "sleep", "volkeep")
+    val LOCAL_PREFS = setOf("output", "alarms", "battery", "crashlog", "netindex_at", "sleep", "volkeep", "unreadable")
     val LOCAL_FILES = setOf("state.json", "backups", "covers", "logs", "netindex-partial.json", "netindex.json", "pictures", "rg-pending",
         "rgpatch", "subtitles-undo", "subtitles/", "tags.json", "tone.bin")
 

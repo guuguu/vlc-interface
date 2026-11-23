@@ -1199,8 +1199,8 @@ class PlayerController(private val context: Context, private val store: Store) {
      * Silent while it gets ready.
      */
     fun loadQueue(items0: List<PlayItem>, origin: Origin) {
-        // NAS items never go into the queue while the NAS can't be used (19:35).
-        val items = items0.filterNot { nasOff(it) }
+        // NAS items never go into the queue while the NAS can't be used (19:35); unreadable files never (01:08).
+        val items = items0.filterNot { nasOff(it) || !readable(it) }
         if (items.isEmpty()) { if (items0.isNotEmpty()) nasOfflineToast(); return }
         // A song is playing: it plays to its end; the new list comes right after it (nothing cut off).
         val s = _state.value
@@ -1268,8 +1268,15 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun originalOrder(): List<PlayItem>? = orderedQueue
 
     /** App start: the queue kept over the restart, its song ready and paused at [time]. */
-    fun restoreQueue(q: List<PlayItem>, index: Int, time: Long, origin: Origin, ordered: List<PlayItem>?, force: Boolean = false) = main.post {
+    fun restoreQueue(q0: List<PlayItem>, index0: Int, time0: Long, origin: Origin, ordered0: List<PlayItem>?, force: Boolean = false) = main.post {
         if (_state.value.item != null && !force) return@post        // something was started meanwhile: kept
+        // Unreadable files kept from last time are dropped (01:08); the playing one gone → the next one, from its start.
+        val q = q0.filter { readable(it) }
+        if (q.isEmpty()) return@post
+        val cur0 = q0.getOrNull(index0)
+        val index = cur0?.let { c -> q.indexOf(c).takeIf { it >= 0 } } ?: q0.take(index0).count { readable(it) }.coerceAtMost(q.size - 1)
+        val time = if (cur0 != null && q.getOrNull(index) === cur0) time0 else 0L
+        val ordered = ordered0?.filter { readable(it) }
         _state.value.let { pv -> if (pv.item != null) { QueueKeeper.save(pv, orderedQueue); mp.pause() } }
         orderedQueue = ordered
         fullList = (ordered ?: q).filter { !it.isRadio }
@@ -1320,8 +1327,16 @@ class PlayerController(private val context: Context, private val store: Store) {
      * its items are left out and the list starts on a playable one (Random: a random one), never "NAS offline" while the
      * list has playable (phone) items.
      */
-    fun playQueue(items00: List<PlayItem>, index00: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null, keepOrder: Boolean = false,
+    /** Not an unreadable file (01:08): encrypted downloads of streaming apps, scrambled names / titles, files found unplayable. */
+    private fun readable(i: PlayItem) = i.isRadio || !app.vlcinterface.sources.Ignore.unreadable(i.uri, i.fileName.ifEmpty { i.uri.substringAfterLast('/') }, i.title)
+
+    fun playQueue(items0x: List<PlayItem>, index0x: Int, origin: Origin, startAt: Long = -1, random: Boolean? = null, keepOrder: Boolean = false,
                   wholeList: Boolean = false) {
+        // Unreadable files never go into the queue; the item asked for keeps its place among the others.
+        val tappedX = items0x.getOrNull(index0x)
+        val items00 = items0x.filter { readable(it) }
+        if (items00.isEmpty()) { encryptedNote(); return }
+        val index00 = tappedX?.let { t -> items00.indexOf(t).takeIf { it >= 0 } } ?: items0x.take(index0x).count { readable(it) }.coerceAtMost(items00.size - 1)
         if (items00.isEmpty()) return
         // An episode played from a folder (16:48): the queue is the whole succession of its series, in episode order
         // (never shuffled), starting at the one tapped.
@@ -1613,7 +1628,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val s = _state.value
         if (s.origin != origin || s.item == null) return@post
         val have = s.queue.map { qKey(it) }.toHashSet()
-        val items = items0.filter { !nasOff(it) && have.add(qKey(it)) }
+        val items = items0.filter { !nasOff(it) && readable(it) && have.add(qKey(it)) }
         if (items.isEmpty()) return@post
         orderedQueue = orderedQueue?.plus(items)
         fullList = (fullList + items.filter { !it.isRadio }).distinctBy { qKey(it) }
@@ -1621,6 +1636,11 @@ class PlayerController(private val context: Context, private val store: Store) {
     }
 
     fun playNext(items0: List<PlayItem>) {
+        // Unreadable files never go into the queue (01:08).
+        if (items0.any { !readable(it) }) {
+            if (items0.all { !readable(it) }) encryptedNote() else playNext(items0.filter { readable(it) })
+            return
+        }
         val s = _state.value
         if (s.item == null) { playQueue(items0, 0, Origin("single")); return }
         // Songs already in the queue aren't added twice.
@@ -1789,6 +1809,11 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** Adds to the end of the queue; returns how many were new (songs already in the queue aren't added twice). */
     fun addToQueue(items0: List<PlayItem>): Int {
+        // Unreadable files never go into the queue (01:08).
+        if (items0.any { !readable(it) }) {
+            if (items0.all { !readable(it) }) { encryptedNote(); return 0 }
+            return addToQueue(items0.filter { readable(it) })
+        }
         val s = _state.value
         if (s.item == null) { playQueue(items0, 0, Origin("single")); return items0.distinctBy { qKey(it) }.size }
         val have = s.queue.map { qKey(it) }.toHashSet()
@@ -1808,6 +1833,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         orderedQueue = orderedQueue?.filterNot { it === gone }
         _state.value = s.copy(queue = q, index = if (i < s.index) s.index - 1 else s.index)
     }
+
+    private fun encryptedNote() = main.post { try { app.vlcinterface.ui.ShortNote.hint("Encrypted or unreadable file — can't be played") } catch (_: Exception) {} }
 
     /** The pop-up when an item can't be reached (2026-11-22 19:41): videos the "NAS is inaccessible" hint, songs as before. */
     private fun nasBlockedNote(item: PlayItem) {
@@ -1871,6 +1898,7 @@ class PlayerController(private val context: Context, private val store: Store) {
      * queue → moved there). The playlist itself isn't changed; nothing else moves.
      */
     fun queueNext(item: PlayItem) {
+        if (!readable(item)) { encryptedNote(); return }
         if (nasOff(item)) { nasOfflineToast(); return }                // never a NAS item while the NAS can't be used (19:35)
         val s = _state.value
         session(null, listOf(item))
@@ -1891,6 +1919,7 @@ class PlayerController(private val context: Context, private val store: Store) {
      * after the current song (unless already in it).
      */
     fun jumpToSong(item: PlayItem) {
+        if (!readable(item)) { encryptedNote(); return }
         if (nasOff(item)) { nasOfflineToast(); return }                // never a NAS item while the NAS can't be used (19:35)
         val s = _state.value
         sessionManualChoice()
@@ -2005,6 +2034,23 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     private fun startItem(i0: Int, startAt: Long) {
         if (BatteryGuard.blocked()) return              // battery 10 % or less: nothing is played
+        // An unreadable file still in a queue (from before 1.89): taken out, and the next one plays instead (01:08).
+        run {
+            val st = _state.value
+            val q = st.queue
+            if (q.isNotEmpty() && q.any { !readable(it) }) {
+                val target = q.getOrNull(i0)
+                val clean = q.filter { readable(it) }
+                orderedQueue = orderedQueue?.filter { readable(it) }
+                fullList = fullList.filter { readable(it) }
+                if (clean.isEmpty()) { _state.value = st.copy(queue = emptyList(), index = -1); stop(); encryptedNote(); return }
+                val ni = target?.let { t -> clean.indexOf(t).takeIf { it >= 0 } } ?: q.take(i0 + 1).count { readable(it) }.coerceAtMost(clean.size - 1)
+                val curIdx = st.item?.let { c -> clean.indexOf(c) } ?: -1
+                _state.value = st.copy(queue = clean, index = curIdx)
+                if (target != null && !readable(target)) encryptedNote()
+                return startItem(ni, if (target != null && readable(target)) startAt else -1)
+            }
+        }
         toneLeaving()                                   // loudness / treble changed during the last song: kept with it
         saveProgress()
         // ReplayGain values waiting for a file the player had open: written now that it moves on.
@@ -2928,6 +2974,11 @@ class PlayerController(private val context: Context, private val store: Store) {
                     if (item != null && item.uri.startsWith("content://")) ServerLog.log("phone", "play", "FILE", "", false,
                         "libVLC could not open ${item.title} (by path and by file handle)" + if (cardMissing(item)) ": SD card not available" else "",
                         app.vlcinterface.sources.PhysicalPath.of(context, item))
+                    // A phone file that can't be opened either way (card present): unreadable — hidden from now on (01:08).
+                    if (item != null && item.uri.startsWith("content://") && !cardMissing(item)) {
+                        app.vlcinterface.sources.Ignore.markUnreadable(item.uri)
+                        encryptedNote()
+                    }
                     if (item != null && !item.uri.startsWith("content://")) ServerLog.log(item.uri, "play", item.uri.substringBefore("://").uppercase(), item.user, false, "Could not play ${item.title}")
                     _state.value = s.copy(isPlaying = false, error = "Could not play this item")
                     // A song that fails (can't open, or breaks near its end) doesn't halt the queue: go on with the next one.

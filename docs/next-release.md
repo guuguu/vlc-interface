@@ -1461,3 +1461,11 @@
   - **An output picked in the app** (not the one Android sends media to): the phone's volume belongs to Android's output, so setting it changed nothing you heard — and the app's own volume was even put up to 100 %. There the app's own volume now takes the level (start volume ÷ the phone's volume).
 - Every reset is written to the Player log with the output ("… set back to the start volume (10 %)", "… came in right after the start volume was set: set to it too").
 - **Taking over from another app (01:04):** when the app starts playing while another app plays, it now first takes the sound (Android pauses the other app), then sets the start volume, then starts — so the other app's last moment isn't played at the start volume. The reset stays on the phone's media volume (asked 01:02 / 01:04: kept as it is).
+
+## Unreadable files never shown (requested 2026-11-23 01:07 / 01:08, screenshot: a scrambled "video")
+- **Not possible:** playing the encrypted offline downloads of Spotify (or any streaming app) — they're DRM-protected and only their own app can decrypt them.
+- **Now hidden everywhere instead** (folder lists, Library → Songs / Videos, searches, indexing, the queue, Up next):
+  - the offline-download folders of streaming apps — Spotify, Deezer, Tidal, Apple Music, YouTube Music, Amazon Music, SoundCloud, Qobuz (Android/data / Android/media);
+  - files whose name or title isn't text (scrambled bytes, "�", control characters) — every script and emoji still count as text;
+  - phone files the player tried to open both ways and couldn't (the card being present): remembered on this phone and hidden from then on.
+- They never go into the queue (Play, Add to queue, Play next, Load playlist, Jump to, the queue kept from last time); one still in a queue is taken out when its turn comes and the next item plays. Asked for on its own: a short "Encrypted or unreadable file — can't be played".

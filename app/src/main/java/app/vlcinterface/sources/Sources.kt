@@ -171,11 +171,51 @@ object VlcBrowse {
  * and anything the user took out with "Remove from lists" (blacklist kept in the settings; the files themselves stay).
  */
 object Ignore {
+    /**
+     * Unreadable files are never shown (2026-11-23 01:08): the offline downloads of streaming apps — encrypted, only their
+     * own app can play them (Spotify, Deezer, Tidal, Apple Music, YouTube Music, Amazon Music, SoundCloud, Qobuz) — names
+     * or titles that aren't text (scrambled bytes, "�"), and phone files the player found it can't open at all.
+     */
+    private val DRM_DIRS = listOf("com.spotify.", "com.deezer.", "com.aspiro.tidal", "com.apple.android.music", "com.google.android.apps.youtube.music",
+        "com.amazon.mp3", "com.soundcloud.", "com.qobuz.")
+    fun encryptedPath(uri: String): Boolean {
+        val d = android.net.Uri.decode(uri)
+        return d.contains("/Android/data/") && DRM_DIRS.any { d.contains("/Android/data/$it") } ||
+            DRM_DIRS.any { d.contains("/Android/media/$it") }
+    }
+    /** Text that isn't really text: the replacement sign, control characters, or mostly unusual symbols. */
+    fun garbled(t: String): Boolean {
+        if (t.isEmpty()) return false
+        if (t.contains('\uFFFD')) return true
+        // By code point, so emoji and every script (Chinese, Arabic, Cyrillic …) count as text; only control characters,
+        // private-use, unassigned and broken surrogate halves count as scrambled.
+        var odd = 0; var n = 0
+        var i = 0
+        while (i < t.length) {
+            val cp = t.codePointAt(i)
+            val type = Character.getType(cp)
+            if ((Character.isISOControl(cp) && cp != 9) || type == Character.PRIVATE_USE.toInt() || type == Character.UNASSIGNED.toInt() ||
+                type == Character.SURROGATE.toInt()) odd++
+            n++
+            i += Character.charCount(cp)
+        }
+        return odd >= 3 || (odd > 0 && odd * 5 >= n)
+    }
+    /** The phone files the player couldn't open by any way (kept, so they stay hidden). */
+    private val prefs get() = app.vlcinterface.App.instance.getSharedPreferences("unreadable", android.content.Context.MODE_PRIVATE)
+    @Volatile private var bad: Set<String>? = null
+    fun markUnreadable(uri: String) {
+        val now = (bad ?: prefs.getStringSet("uris", emptySet())!!.toSet()) + uri
+        bad = now; prefs.edit().putStringSet("uris", now).apply()
+    }
+    fun markedUnreadable(uri: String) = uri in (bad ?: prefs.getStringSet("uris", emptySet())!!.toSet().also { bad = it })
+    fun unreadable(uri: String, name: String, title: String = "") =
+        encryptedPath(uri) || garbled(android.net.Uri.decode(name)) || garbled(title) || markedUnreadable(uri)
     fun dotName(name: String) = name.trimStart().startsWith(".")
     /** A path with any hidden part ("Music/.thumbnails/x.mp3"). */
     fun dotPath(path: String) = android.net.Uri.decode(path).split('/').any { it.startsWith(".") }
     fun blacklisted(uri: String) = uri in app.vlcinterface.App.instance.store.current.settings.hiddenUris
-    fun entry(e: Entry) = dotName(e.name) || blacklisted(e.uri)
+    fun entry(e: Entry) = dotName(e.name) || blacklisted(e.uri) || unreadable(e.uri, e.name, e.display)
 }
 
 /** Browses any saved source with the right backend. */

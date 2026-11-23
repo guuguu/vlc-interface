@@ -126,7 +126,7 @@ object InternalSource {
         }
         // Hidden (".name" files, files inside ".folders") and blacklisted files never come back.
         if (includeHidden) out.filter { isPlayable(it.name) }
-        else out.filter { isPlayable(it.name) && !Ignore.dotName(it.name) && !Ignore.dotPath(it.meta) && !Ignore.blacklisted(it.uri) }
+        else out.filter { isPlayable(it.name) && !Ignore.unreadable(it.uri, it.name, it.display) && !Ignore.dotName(it.name) && !Ignore.dotPath(it.meta) && !Ignore.blacklisted(it.uri) }
     }
 
     /** Asks Android to re-index one folder (manual rescan). */

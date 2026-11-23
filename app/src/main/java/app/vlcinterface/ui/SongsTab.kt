@@ -86,7 +86,7 @@ internal object SongsCache {
         if (phoneVideos == null) phoneVideos = InternalSource.folders(ctx).flatMap { f -> MusicLibrary.collectLocal(ctx, f, false) }.filter { !it.isMusic && !it.isRadio }
         val hidden = App.instance.store.current.settings.hiddenUris
         return (phoneVideos!! + app.vlcinterface.sources.NetIndex.videosReachable()).distinctBy { it.uri }
-            .filter { it.uri !in hidden && it.folderKey !in hidden && !app.vlcinterface.sources.Ignore.dotName(it.fileName) }
+            .filter { it.uri !in hidden && it.folderKey !in hidden && !app.vlcinterface.sources.Ignore.dotName(it.fileName) && !app.vlcinterface.sources.Ignore.unreadable(it.uri, it.fileName, it.title) }
             .sortedBy { it.title.ifEmpty { it.fileName }.lowercase() }
     }
 
@@ -98,7 +98,7 @@ internal object SongsCache {
     suspend fun phoneOnly(ctx: android.content.Context): List<PlayItem> {
         val hidden = App.instance.store.current.settings.hiddenUris
         return loadPhone(ctx).filter { it.uri !in hidden && it.folderKey !in hidden && "local:" + it.folderKey.removePrefix("local:") !in hidden &&
-            !app.vlcinterface.sources.Ignore.dotName(it.fileName) && !app.vlcinterface.sources.Ignore.dotPath(it.uri.substringAfter("://")) }
+            !app.vlcinterface.sources.Ignore.dotName(it.fileName) && !app.vlcinterface.sources.Ignore.unreadable(it.uri, it.fileName, it.title) && !app.vlcinterface.sources.Ignore.dotPath(it.uri.substringAfter("://")) }
     }
 
     suspend fun all(ctx: android.content.Context): List<PlayItem> {
@@ -107,7 +107,7 @@ internal object SongsCache {
         val net = if (network.isEmpty()) network else app.vlcinterface.ui.withoutUnusableNas(network)
         return app.vlcinterface.sources.NetIndex.preferLocal(loadPhone(ctx) + app.vlcinterface.sources.NetIndex.songsReachable() + net)
             .filter { it.uri !in hidden && it.folderKey !in hidden && "local:" + it.folderKey.removePrefix("local:") !in hidden &&
-                !app.vlcinterface.sources.Ignore.dotName(it.fileName) && !app.vlcinterface.sources.Ignore.dotPath(it.uri.substringAfter("://")) }
+                !app.vlcinterface.sources.Ignore.dotName(it.fileName) && !app.vlcinterface.sources.Ignore.unreadable(it.uri, it.fileName, it.title) && !app.vlcinterface.sources.Ignore.dotPath(it.uri.substringAfter("://")) }
     }
 }
 
