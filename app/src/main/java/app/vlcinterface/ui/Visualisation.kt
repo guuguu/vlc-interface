@@ -811,7 +811,8 @@ private fun DrawScope.drawBackground(effect: String, bg0: List<Color>, t: Float,
 
 /**
  * Full screen: the screen stays on, Android's navigation bar stays usable. Double tap anywhere: back.
- * Slide along the long side: next / previous colour combination; along the short side: screen brightness.
+ * Slide left / right: next / previous colour combination; up / down on the left half: screen brightness, on the right half:
+ * sound volume (2026-11-23 02:00).
  */
 @Composable
 fun VisualisationScreen(nav: Navigator) {
@@ -837,6 +838,7 @@ fun VisualisationScreen(nav: Navigator) {
             w?.attributes = w?.attributes?.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
         }
     }
+    var volShownAt by remember { mutableLongStateOf(0L) }
     fun setBright(b: Float) {
         bright = b.coerceIn(0.01f, 1f); shownAt = System.currentTimeMillis(); showB = true
         act?.window?.let { w -> w.attributes = w.attributes.apply { screenBrightness = bright } }
@@ -850,13 +852,19 @@ fun VisualisationScreen(nav: Navigator) {
             var acc = 0f
             var sx = 0f
             var sy = 0f
-            detectDragGestures(onDragStart = { axis = 0; acc = 0f; sx = 0f; sy = 0f }) { ch, d ->
+            var right = false
+            var vol = 0f
+            detectDragGestures(onDragStart = { o -> axis = 0; acc = 0f; sx = 0f; sy = 0f; right = o.x > size.width / 2f; vol = volNow() }) { ch, d ->
                 ch.consume()
-                val portrait = size.height >= size.width
                 sx += d.x; sy += d.y
-                if (axis == 0 && (abs(sx) > 24f || abs(sy) > 24f)) axis = if ((abs(sy) > abs(sx)) == portrait) 1 else 2
-                if (axis == 1) {
-                    acc += if (portrait) d.y else d.x
+                // 2026-11-23 02:00: up / down on the left half = brightness, on the right half = sound volume;
+                // left / right = the colour combinations.
+                if (axis == 0 && (abs(sx) > 24f || abs(sy) > 24f)) axis = if (abs(sx) > abs(sy)) 1 else 2
+                if (axis == 2) {
+                    if (right) { vol = (vol - d.y / (size.height * 0.8f) * 100f).coerceIn(0f, 100f); setVolNow(vol); volShownAt = System.currentTimeMillis() }
+                    else setBright(bright - d.y / (size.height * 0.8f))
+                } else if (axis == 1) {
+                    acc += d.x
                     if (abs(acc) > 140.dp.toPx()) {
                         val dir = if (acc > 0) 1 else -1
                         acc = 0f
@@ -866,10 +874,11 @@ fun VisualisationScreen(nav: Navigator) {
                         Alarms.setVis(cur.copy(palette = next))
                         note = PALETTES.first { it.first == next }.second; noteAt = System.currentTimeMillis()
                     }
-                } else if (axis == 2) setBright(bright + (if (portrait) d.x else -d.y) / 700f)
+                }
             }
         }) {
         VisCanvas(v, Modifier.fillMaxSize(), live = true)
+        VolumeNote(volShownAt)
         // The floating play / pause button, as on the player (its size, colour, place; dragging it moves it) — unless it's Off (17:30).
         FullScreenPlayButton()
         if (showB) Text("☀ ${(bright * 100).toInt()} %", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp, modifier = Modifier.align(Alignment.Center))
@@ -890,6 +899,26 @@ fun VisualisationScreen(nav: Navigator) {
 }
 
 // ---------------------------------------------------------------- clock full screen
+
+/** The sound volume as the player shows it (2026-11-23 02:00): the phone's media volume, or the app's own on a device picked in the app. */
+fun volNow(): Float = try {
+    val a = app.vlcinterface.App.instance
+    if (a.output.overriding) (a.output.volumePercent() * a.player.appVolume).coerceIn(0f, 100f) else a.output.volumePercent().toFloat()
+} catch (_: Exception) { 50f }
+fun setVolNow(pct: Float) {
+    try {
+        val a = app.vlcinterface.App.instance
+        if (a.output.overriding) a.player.setAppVolume(pct / a.output.volumePercent().coerceAtLeast(1))
+        else a.output.setVolumePercent(Math.round(pct))
+    } catch (_: Exception) {}
+}
+/** "🔊 N %" in the middle for a moment after a volume swipe. */
+@Composable
+fun androidx.compose.foundation.layout.BoxScope.VolumeNote(at: Long) {
+    var show by remember { mutableStateOf(false) }
+    LaunchedEffect(at) { if (at > 0) { show = true; kotlinx.coroutines.delay(1300); show = false } }
+    if (show) Text("🔊 ${volNow().toInt()} %", color = Color.White.copy(alpha = 0.85f), fontSize = 18.sp, modifier = Modifier.align(Alignment.Center))
+}
 
 /** The playing item as one line: artist – title (song), station · what it plays (radio), the video's title. */
 fun playingLine(ps: app.vlcinterface.player.PlayerState): String {
@@ -927,7 +956,7 @@ fun androidx.compose.foundation.layout.BoxScope.FullScreenPlayButton() {
 /**
  * The player's clock full screen (2026-11-22 17:28), like the visualisation's: opened with a double tap on the clock in
  * the song / radio player, the clock as big as the screen allows (upright and sideways), bars hidden, the screen kept
- * on (19:27) at Clock aspect → "Full-screen brightness" (a swipe along the short side changes it and is kept); a double tap
+ * on (19:27) at Clock aspect → "Full-screen brightness" (up / down on the left half changes it and is kept; the right half sets the sound volume); a double tap
  * anywhere goes back to the player. The same exit pop-up on opening.
  */
 @Composable
@@ -941,6 +970,7 @@ fun ClockFullScreen(nav: Navigator) {
     var bright by remember { mutableFloatStateOf(st.aspect.fsBright.takeIf { it > 0f } ?: act?.window?.attributes?.screenBrightness?.takeIf { it >= 0f } ?: 0.5f) }
     var shownAt by remember { mutableLongStateOf(0L) }
     var showB by remember { mutableStateOf(false) }
+    var volAt by remember { mutableLongStateOf(0L) }
     DisposableEffect(Unit) {
         val w = act?.window
         w?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -956,16 +986,19 @@ fun ClockFullScreen(nav: Navigator) {
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)
         .pointerInput(Unit) { detectTapGestures(onDoubleTap = { nav.back() }) }
         .pointerInput(Unit) {
-            detectDragGestures { ch, d ->
+            // 2026-11-23 02:00: up / down on the left half = brightness (kept as the setting), on the right half = sound volume.
+            var right = false
+            var vol = 0f
+            detectDragGestures(onDragStart = { o -> right = o.x > size.width / 2f; vol = volNow() }) { ch, d ->
                 ch.consume()
-                val portrait = size.height >= size.width
-                val step = if (portrait) d.x else -d.y
-                if (abs(step) > 0f) {
-                    bright = (bright + step / 700f).coerceIn(0.01f, 1f); shownAt = System.currentTimeMillis(); showB = true
+                if (right) { vol = (vol - d.y / (size.height * 0.8f) * 100f).coerceIn(0f, 100f); setVolNow(vol); volAt = System.currentTimeMillis() }
+                else if (abs(d.y) > 0f) {
+                    bright = (bright - d.y / (size.height * 0.8f)).coerceIn(0.01f, 1f); shownAt = System.currentTimeMillis(); showB = true
                     act?.window?.let { w -> w.attributes = w.attributes.apply { screenBrightness = bright } }
                 }
             }
         }, contentAlignment = Alignment.Center) {
+        VolumeNote(volAt)
         // What's playing (19:49): a band along the bottom with its name gliding continuously, big — no buttons, no labels.
         val ps = app.vlcinterface.App.instance.player.state.collectAsState().value
         val line = playingLine(ps)
@@ -1211,7 +1244,7 @@ fun VisualisationSettings() {
             Text("450 Hz", color = C.muted, fontSize = 11.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             Text("10 kHz", color = C.muted, fontSize = 11.sp, modifier = Modifier.weight(1f), textAlign = androidx.compose.ui.text.style.TextAlign.End)
         }
-        Text("On the visualisation: double tap to leave · slide along the long side for the colours, along the short side for the brightness. " +
+        Text("On the visualisation: double tap to leave · slide up / down on the left half for the brightness, on the right half for the sound volume, left / right for the colours. " +
             "Movements follow only the chosen frequencies and stay gentle (no flashing).", color = C.muted, fontSize = 13.sp,
             modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 10.dp))
         Box(Modifier.height(2.dp))

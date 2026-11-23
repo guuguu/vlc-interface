@@ -167,7 +167,7 @@ object SettingHelp {
             "The preview shows it live while you hold the slider still.",
         "Full-screen brightness" to "How bright the screen is while the visualisation fills the screen. " +
             "Phone's own: the phone's usual brightness. Otherwise the level set here, from 1 % (a dim night light) to 100 %. " +
-            "Swiping left or right on the full-screen visualisation (up or down when the phone is sideways) changes it too, and that level is kept for next time. " +
+            "Sliding up or down on the left half of the full-screen visualisation changes it too, and that level is kept for next time (the right half sets the sound volume). " +
             "Leaving full screen always gives the phone its own brightness back. Default: Phone's own.",
         "Sensitivity" to "How strongly the spectrum and analyser pictures react. Higher: the bars, rows, rays and wave reach the edges of " +
             "the frame (fill it) on the loud parts; lower: they stay calmer and rarely touch the edges. Quiet passages are lifted too. " +
@@ -284,7 +284,7 @@ object SettingHelp {
         "Colour mixing" to "How much neighbouring colours blend into each other: low keeps clear patches, high gives soft gradients.",
         "Colour speed" to "How fast the colours drift through your chosen colours.",
         "Definition" to "How fine the pattern is drawn: more definition is sharper but uses more battery on long sessions.",
-        "Brightness" to "Overall brightness of the visualisation (also changed by sliding along the short side of the screen while it shows).",
+        "Brightness" to "Overall brightness of the visualisation (the full-screen visualisation's own brightness is changed by sliding up / down on the left half of the screen; the right half sets the sound volume).",
         "Frequencies followed" to "The part of the sound the pattern follows, from bass to treble. Narrow it to the bass to move with the beat; widen it for everything.",
         // ---------------------------------------------------------------- Permissions (setup wizard)
         "Notifications" to "Lets the app post notifications: the player's controls in the notification shade and on the lock screen, the alarm notice with Snooze / Stop, and the next alarm.\n\n" +

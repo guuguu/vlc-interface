@@ -1483,3 +1483,9 @@
   - Audio → Start volume: on a still hold of the slider; Reset volume after: on the first change (once per visit, not on every digit typed).
   - Library & files → All files access (like VLC): its helper first, Android's page opens when it's closed.
   - Clock aspect → Full screen: Full-screen brightness, Scrolling name size and colour — on their first change; the helper now also explains the full-screen clock itself (double tap to open / close, long press for Clock aspect, turning with the phone, screen on, play / pause, the name, alarms over it, night dimming).
+
+# After 1.89.0
+
+## Full-screen clock and visualisation: brightness left, volume right (requested 2026-11-23 02:00)
+- On the full-screen clock and the full-screen visualisation, slide up / down: on the left half of the screen the brightness (up = brighter; kept as that screen's full-screen brightness), on the right half the sound volume (up = louder; the phone's media volume, or the app's own on an output picked in the app). A short "☀ N %" / "🔊 N %" shows the level. Upright and sideways alike.
+- The visualisation's colour combinations move to sliding left / right. Helpers and the settings' lines say so.
