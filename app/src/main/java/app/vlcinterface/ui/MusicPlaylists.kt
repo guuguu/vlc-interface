@@ -2282,22 +2282,47 @@ fun BoxScope.FloatingPlayButton(playing: Boolean, onToggle: () -> Unit) {
     val dens = LocalDensity.current
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.matchParentSize()) {
         val sizePx = with(dens) { s.floatBtnSize.dp.toPx() }
+        // 2026-11-23 02:26: a ⏭ button stitched to the play button's lower right — 2/3 of its size, same colour and look.
+        // The two move together (drag either one), and the pair always stays whole on the screen.
+        val skipPx = sizePx * 2f / 3f
+        val skipAt = sizePx * 0.74f                                  // its top-left, from the play button's top-left
+        val spanPx = skipAt + skipPx                                 // the pair's width and height
         val wPx = constraints.maxWidth.toFloat(); val hPx = constraints.maxHeight.toFloat()
-        var x by remember { mutableFloatStateOf(if (s.floatBtnX >= 0f) s.floatBtnX * wPx else wPx - sizePx - with(dens) { 28.dp.toPx() }) }
-        var y by remember { mutableFloatStateOf(if (s.floatBtnY >= 0f) s.floatBtnY * hPx else hPx - sizePx - with(dens) { 96.dp.toPx() }) }
-        x = x.coerceIn(0f, (wPx - sizePx).coerceAtLeast(0f)); y = y.coerceIn(0f, (hPx - sizePx).coerceAtLeast(0f))
+        var x by remember { mutableFloatStateOf(if (s.floatBtnX >= 0f) s.floatBtnX * wPx else wPx - spanPx - with(dens) { 20.dp.toPx() }) }
+        var y by remember { mutableFloatStateOf(if (s.floatBtnY >= 0f) s.floatBtnY * hPx else hPx - spanPx - with(dens) { 88.dp.toPx() }) }
+        x = x.coerceIn(0f, (wPx - spanPx).coerceAtLeast(0f)); y = y.coerceIn(0f, (hPx - spanPx).coerceAtLeast(0f))
+        val bg = if (s.floatBtnColor != 0L) Color(s.floatBtnColor) else accent()
+        val drag = Modifier.pointerInput(wPx, hPx) {
+            detectDragGestures(onDragStart = { FloatBtnTap.at = System.currentTimeMillis() }, onDragEnd = {
+                store.update { it.copy(settings = it.settings.copy(floatBtnX = x / wPx, floatBtnY = y / hPx)) }
+            }) { ch, d -> ch.consume(); x = (x + d.x).coerceIn(0f, (wPx - spanPx).coerceAtLeast(0f)); y = (y + d.y).coerceIn(0f, (hPx - spanPx).coerceAtLeast(0f)) }
+        }
+        // A tap on either button never counts toward a double tap on the screen behind (leaving a full screen).
+        val noteTap = Modifier.pointerInput(Unit) {
+            awaitPointerEventScope { while (true) { val e = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                if (e.changes.any { it.pressed }) FloatBtnTap.at = System.currentTimeMillis() } }
+        }
+        Box(Modifier.offset { androidx.compose.ui.unit.IntOffset((x + skipAt).toInt(), (y + skipAt).toInt()) }.size(with(dens) { skipPx.toDp() })
+            .graphicsLayer { alpha = s.floatBtnAlpha / 100f }
+            .liteShadow(CircleShape).clip(CircleShape).background(bg)
+            .then(noteTap).then(drag)
+            .clickable { FloatBtnTap.at = System.currentTimeMillis(); NextBtn.tap() }, contentAlignment = Alignment.Center) {
+            Text("⏭", color = floatSymbolColor(s.floatBtnColor), fontSize = (s.floatBtnSize * 0.36f * 2f / 3f).sp, fontWeight = FontWeight.Bold)
+        }
         Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(x.toInt(), y.toInt()) }.size(s.floatBtnSize.dp)
             .graphicsLayer { alpha = s.floatBtnAlpha / 100f }
-            .liteShadow(CircleShape).clip(CircleShape).background(if (s.floatBtnColor != 0L) Color(s.floatBtnColor) else accent())
-            .pointerInput(Unit) {
-                detectDragGestures(onDragEnd = {
-                    store.update { it.copy(settings = it.settings.copy(floatBtnX = x / wPx, floatBtnY = y / hPx)) }
-                }) { ch, d -> ch.consume(); x = (x + d.x).coerceIn(0f, (wPx - sizePx).coerceAtLeast(0f)); y = (y + d.y).coerceIn(0f, (hPx - sizePx).coerceAtLeast(0f)) }
-            }
-            .clickable { onToggle() }, contentAlignment = Alignment.Center) {
+            .liteShadow(CircleShape).clip(CircleShape).background(bg)
+            .then(noteTap).then(drag)
+            .clickable { FloatBtnTap.at = System.currentTimeMillis(); onToggle() }, contentAlignment = Alignment.Center) {
             Text(if (playing) "❚❚" else "▶", color = floatSymbolColor(s.floatBtnColor), fontSize = (s.floatBtnSize * 0.36f).sp, fontWeight = FontWeight.Bold)
         }
     }
+}
+
+/** When the floating buttons were last touched: a double tap there isn't a double tap on the screen behind. */
+object FloatBtnTap {
+    @Volatile var at = 0L
+    fun recent() = System.currentTimeMillis() - at < 700
 }
 
 /** Symbol colour readable on the floating button's colour: dark on light colours, white on dark ones. */

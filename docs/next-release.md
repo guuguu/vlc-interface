@@ -1489,3 +1489,9 @@
 ## Full-screen clock and visualisation: brightness left, volume right (requested 2026-11-23 02:00)
 - On the full-screen clock and the full-screen visualisation, slide up / down: on the left half of the screen the brightness (up = brighter; kept as that screen's full-screen brightness), on the right half the sound volume (up = louder; the phone's media volume, or the app's own on an output picked in the app). A short "☀ N %" / "🔊 N %" shows the level. Upright and sideways alike.
 - The visualisation's colour combinations move to sliding left / right. Helpers and the settings' lines say so.
+
+## Floating buttons, charging on the full screens (requested 2026-11-23 02:26)
+- **⏭ stitched to the floating play button:** a second round button, 2/3 of the play button's size, same colour, transparency and shadow, attached at its lower right. It skips to the next item of the queue (radio: the next station; a single item: the "Add more items to the queue" hint). Dragging either one moves both, and the pair always stays whole inside the visible area. On the players and on the full-screen clock and visualisation.
+- **Taps on the buttons don't leave a full screen:** a double tap on the floating buttons is never taken as the double tap that goes back to the player.
+- **Visualisation:** the floating buttons are shown on the full-screen visualisation like on the clock (unless the floating button is set Off).
+- **Charging while a full screen shows:** plugging in no longer changes the screen: the full screen's own brightness is put back at once, and only a small "⚡ N %" appears at the top, as dim as the rest of the screen (the clock's night dimming included). Unplugged, it goes away. (Android's own charging animation, where the phone shows one, is Android's and can't be hidden by the app.)

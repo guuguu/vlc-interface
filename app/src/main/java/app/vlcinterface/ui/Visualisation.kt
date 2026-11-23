@@ -28,6 +28,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -846,7 +847,7 @@ fun VisualisationScreen(nav: Navigator) {
     // A swipe's brightness is kept as the setting (saved once the finger has rested a moment).
     LaunchedEffect(shownAt) { if (shownAt > 0) { kotlinx.coroutines.delay(700); Alarms.setVis(Alarms.current.vis.copy(fsBright = bright)) } }
     Box(Modifier.fillMaxSize().background(Color.Black)
-        .pointerInput(Unit) { detectTapGestures(onDoubleTap = { nav.back() }) }
+        .pointerInput(Unit) { detectTapGestures(onDoubleTap = { if (!FloatBtnTap.recent()) nav.back() }) }
         .pointerInput(Unit) {
             var axis = 0
             var acc = 0f
@@ -879,6 +880,7 @@ fun VisualisationScreen(nav: Navigator) {
         }) {
         VisCanvas(v, Modifier.fillMaxSize(), live = true)
         VolumeNote(volShownAt)
+        ChargingMark(1f) { if (bright > 0f && Alarms.current.vis.fsBright > 0f) setBright(bright) }
         // The floating play / pause button, as on the player (its size, colour, place; dragging it moves it) — unless it's Off (17:30).
         FullScreenPlayButton()
         if (showB) Text("☀ ${(bright * 100).toInt()} %", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp, modifier = Modifier.align(Alignment.Center))
@@ -899,6 +901,32 @@ fun VisualisationScreen(nav: Navigator) {
 }
 
 // ---------------------------------------------------------------- clock full screen
+
+/**
+ * Charging while a full screen shows (2026-11-23 02:26): only a small "⚡ N %" at the top, as dim as the rest of the screen
+ * ([alpha]); the screen stays as it is — its own brightness is put back at once (plugging in can make the phone change it).
+ */
+@Composable
+fun androidx.compose.foundation.layout.BoxScope.ChargingMark(alpha: Float, reapply: () -> Unit) {
+    val ctx = LocalContext.current
+    var plugged by remember { mutableStateOf(false) }
+    var level by remember { mutableIntStateOf(-1) }
+    DisposableEffect(Unit) {
+        val rx = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context, i: android.content.Intent) {
+                val p = i.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0
+                val l = i.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1); val sc = i.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100)
+                level = if (l >= 0 && sc > 0) l * 100 / sc else -1
+                if (p != plugged) { plugged = p; reapply() }
+            }
+        }
+        val sticky = try { ctx.registerReceiver(rx, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)) } catch (_: Exception) { null }
+        sticky?.let { i -> plugged = i.getIntExtra(android.os.BatteryManager.EXTRA_PLUGGED, 0) != 0 }
+        onDispose { try { ctx.unregisterReceiver(rx) } catch (_: Exception) {} }
+    }
+    if (plugged) Text("⚡" + if (level >= 0) " $level %" else "", color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp,
+        modifier = Modifier.align(Alignment.TopCenter).padding(top = 14.dp).graphicsLayer { this.alpha = alpha })
+}
 
 /** The sound volume as the player shows it (2026-11-23 02:00): the phone's media volume, or the app's own on a device picked in the app. */
 fun volNow(): Float = try {
@@ -984,7 +1012,7 @@ fun ClockFullScreen(nav: Navigator) {
     LaunchedEffect(shownAt) { if (shownAt > 0) { kotlinx.coroutines.delay(700); Alarms.setAspect(Alarms.current.aspect.copy(fsBright = bright)) } }
     LaunchedEffect(shownAt) { kotlinx.coroutines.delay(1300); showB = false }
     androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)
-        .pointerInput(Unit) { detectTapGestures(onDoubleTap = { nav.back() }) }
+        .pointerInput(Unit) { detectTapGestures(onDoubleTap = { if (!FloatBtnTap.recent()) nav.back() }) }
         .pointerInput(Unit) {
             // 2026-11-23 02:00: up / down on the left half = brightness (kept as the setting), on the right half = sound volume.
             var right = false
@@ -1034,6 +1062,7 @@ fun ClockFullScreen(nav: Navigator) {
         }
         // The floating play / pause button, as on the player (its size, colour, place; dragging it moves it) — unless it's Off (17:30).
         Box(Modifier.matchParentSize().graphicsLayer { alpha = dimK }) { FullScreenPlayButton() }
+        ChargingMark(dimK) { if (st.aspect.fsBright > 0f) act?.window?.let { w -> w.attributes = w.attributes.apply { screenBrightness = bright } } }
         if (showB) Text("☀ ${(bright * 100).toInt()} %", color = Color.White.copy(alpha = 0.8f), fontSize = 18.sp, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 40.dp))
         var exitHint by remember { mutableStateOf(true) }
         LaunchedEffect(Unit) { kotlinx.coroutines.delay(2500); exitHint = false }
