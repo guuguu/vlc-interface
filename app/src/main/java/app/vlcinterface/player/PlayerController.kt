@@ -869,20 +869,22 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (item == null || !item.isRadio || s.userPaused || sleepClosing || app.vlcinterface.alarm.AlarmEngine.ui.value.phase != "idle") {
             radioSoundAt = now; return
         }
-        val st = NativeAudio.stats()
+        // 2026-11-23 08:39 (every station skipped after 15 s): the engine's figures were read even when the sound didn't go
+        // through the app's engine (libVLC's own output, e.g. after a fallback) — they stood still, read as "no sound".
+        // Now: sound = the stream moving (libVLC's clock) or the engine's output moving; silence only when the engine is
+        // the output and has measured the level, and it stayed under −66 dBFS for more than 5 s.
+        val st = if (NativeAudio.active) NativeAudio.stats() else null
         val heardMoving = st != null && st.stream == radioStream && st.heard > radioHeard
         if (st != null) { radioHeard = st.heard; radioStream = st.stream }
-        val sound = s.isPlaying && s.buffering >= 100f && when {
-            st != null -> heardMoving && (st.mute || st.volume <= 0f || appVolume <= 0f || st.quietMs in 0..1500)
-            else -> lastTick > 0 && now - lastTick < 1_500          // libVLC's own output: the stream's clock moving
-        }
+        val clockMoving = lastTick > 0 && now - lastTick < 2_500
+        val silent = st != null && !st.mute && st.volume > 0f && appVolume > 0f && st.quietMs > 5_000
+        val sound = s.isPlaying && s.error.isEmpty() && (clockMoving || heardMoving) && !silent
         if (sound) { radioSoundAt = now; radioSkips = 0; return }
         if (now - radioSoundAt <= 5_000) return
         val why = when {
             s.error.isNotEmpty() -> "error: ${s.error}"
             !s.isPlaying -> "the stream stopped"
-            s.buffering < 100f -> "buffering ${s.buffering.toInt()} %"
-            st != null && !heardMoving -> "no sound reaching the output"
+            !clockMoving && !heardMoving -> if (s.buffering < 100f) "buffering ${s.buffering.toInt()} %" else "the stream doesn't move"
             else -> "silence"
         }
         radioSoundAt = now + 10_000                                   // the next station gets its time to connect

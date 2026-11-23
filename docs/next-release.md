@@ -1495,3 +1495,9 @@
 - **Taps on the buttons don't leave a full screen:** a double tap on the floating buttons is never taken as the double tap that goes back to the player.
 - **Visualisation:** the floating buttons are shown on the full-screen visualisation like on the clock (unless the floating button is set Off).
 - **Charging while a full screen shows:** plugging in no longer changes the screen: the full screen's own brightness is put back at once, and only a small "⚡ N %" appears at the top, as dim as the rest of the screen (the clock's night dimming included). Unplugged, it goes away. (Android's own charging animation, where the phone shows one, is Android's and can't be hidden by the app.)
+
+# After 1.91.0
+
+## Radio skipped to the next station every 15 s (reported 2026-11-23 08:39)
+- **Cause:** the "no sound for 5 s" check read the app's sound-engine figures even when the sound wasn't going through the engine (libVLC's own output, e.g. after a fallback, or before the engine took over); those figures stood still, so every station looked silent after its 10 s to connect + 5 s.
+- **Now:** a station counts as playing while its stream moves (libVLC's play clock) or the engine's output moves; it counts as silent only when the engine is the output, has measured the level, and it stayed under −66 dBFS for more than 5 s. Short buffering no longer counts while the stream still moves. Each skip still goes to the Player log with its reason.
