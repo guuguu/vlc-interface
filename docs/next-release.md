@@ -1477,3 +1477,9 @@
 - Every one of these formats is now played, listed, searched and indexed — on the phone and on the network.
 - **Still different from VLC:** VLC has "All files access", so it also reads folders Android itself keeps out of its media list (folders with a ".nomedia" file, e.g. some messaging apps' audio). The app only sees what Android lists, without that access.
 - **All files access, like VLC (01:14):** Settings → Library & files → new section "Phone storage" → "All files access (like VLC)". The switch opens Android's page for the app ("Allow access to manage all files"); its line says whether it's on (read again when you come back). With it on, the app reads the phone's storage itself (internal storage, SD card, USB) and adds the media files Android's own media list leaves out — folders with a ".nomedia" file (messaging apps' audio and voice notes …), files Android didn't index — to Library → Songs, Library → Videos and the searches. Hidden ".folders", the apps' private data (Android/data, obb) and unreadable files (streaming apps' encrypted downloads, scrambled names) stay out. Off: as before, what Android lists. Helper on a hold; found by the Settings search.
+
+## Helpers on the new settings (requested 2026-11-23 01:16)
+- With Helpers on, the new settings show their helper like the others (and always on a long press):
+  - Audio → Start volume: on a still hold of the slider; Reset volume after: on the first change (once per visit, not on every digit typed).
+  - Library & files → All files access (like VLC): its helper first, Android's page opens when it's closed.
+  - Clock aspect → Full screen: Full-screen brightness, Scrolling name size and colour — on their first change; the helper now also explains the full-screen clock itself (double tap to open / close, long press for Clock aspect, turning with the phone, screen on, play / pause, the name, alarms over it, night dimming).

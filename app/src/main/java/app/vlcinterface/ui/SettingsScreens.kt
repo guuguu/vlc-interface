@@ -880,8 +880,13 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 val granted = remember(afTick) { app.vlcinterface.sources.AllFiles.granted() }
                 var was by remember { mutableStateOf(granted) }
                 LaunchedEffect(granted) { if (granted != was) { was = granted; app.vlcinterface.sources.AllFiles.forget(); SongsCache.phone = null; SongsCache.phoneVideos = null } }
+                // Helpers on: the helper first, Android's page when it's closed.
+                val helpersAF = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.helpers
+                var afHelp by remember { mutableStateOf(false) }
                 ToggleRow("All files access (like VLC)", if (granted) "On: the whole storage is read — also folders Android leaves out of its media list"
-                    else "Off: the app sees what Android lists as media", granted) { _ -> app.vlcinterface.sources.AllFiles.open(ctxV) }
+                    else "Off: the app sees what Android lists as media", granted) { _ -> if (helpersAF) afHelp = true else app.vlcinterface.sources.AllFiles.open(ctxV) }
+                if (afHelp) HelperDialog("All files access (like VLC)", SettingHelp.text("All files access (like VLC)", "")) {
+                    afHelp = false; app.vlcinterface.sources.AllFiles.open(ctxV) }
             }
             // Indexing again (2026-11-22 08:19): how pinned network folders are kept up to date.
             SectionTitle("Indexing")
@@ -1374,6 +1379,10 @@ fun DeviceSoundControls(name: String) {
 /** Sound section: used in Settings and on its own page (gear button in the music player). */
 @Composable
 fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
+    // Helpers (2026-11-23 01:16): with Helpers on, a change or a still hold on the slider shows the setting's helper.
+    val helpersS = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.helpers
+    var sndHelp by remember { mutableStateOf("") }
+    if (sndHelp.isNotEmpty()) HelperDialog(sndHelp, SettingHelp.text(sndHelp, "")) { sndHelp = "" }
     SectionTitle("Sound")
     CardBox {
         Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((4 * sg()).dp)) {
@@ -1384,7 +1393,8 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
                 }
                 Text("${s.startVolume}%", color = accent(), fontWeight = FontWeight.SemiBold)
             }
-            ThinSlider(s.startVolume.toFloat(), { set(s.copy(startVolume = it.toInt())) }, valueRange = 0f..100f)
+            ThinSlider(s.startVolume.toFloat(), { set(s.copy(startVolume = it.toInt())) }, valueRange = 0f..100f,
+                onHoldStill = { if (helpersS) sndHelp = "Start volume" })
             Divider()
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -1398,12 +1408,15 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
             Divider()
             // 2026-11-22 18:37: minutes with nothing playing → the next sound starts at the Start volume (0 = never).
             Text("Reset volume after", color = C.text, modifier = Modifier.anchor("Reset volume after").explain("Reset volume after"), fontSize = 15.sp)
+            var idleHelpShown by remember { mutableStateOf(false) }      // once per visit, not on every digit typed
             // The field across the full width (20:38: beside other things the digit pad opened squeezed into one column).
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Minutes with nothing playing", color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
                 STextButton({ set(s.copy(idleResetMin = 30)) }) { Text("Reset") }
             }
-            DigitField(s.idleResetMin.toString(), "minutes", 3, Modifier.fillMaxWidth()) { v -> v.toIntOrNull()?.takeIf { it in 0..999 }?.let { set(s.copy(idleResetMin = it)) } }
+            DigitField(s.idleResetMin.toString(), "minutes", 3, Modifier.fillMaxWidth()) { v -> v.toIntOrNull()?.takeIf { it in 0..999 }?.let {
+                val first = it != s.idleResetMin
+                set(s.copy(idleResetMin = it)); if (helpersS && first && sndHelp.isEmpty() && !idleHelpShown) { idleHelpShown = true; sndHelp = "Reset volume after" } } }
             Text(if (s.idleResetMin == 0) "Never: the volume stays as you left it (the start volume is set only when the app starts)."
                 else "After ${s.idleResetMin} min with nothing playing, the next song, station or video starts at ${s.startVolume} % (Preamp as set: " + "%+.1f".format(s.preampDb) + " dB).",
                 color = C.muted, fontSize = 13.sp)

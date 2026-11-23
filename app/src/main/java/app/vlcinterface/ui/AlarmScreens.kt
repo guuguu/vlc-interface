@@ -613,17 +613,23 @@ fun ClockAspectScreen(nav: Navigator) {
             }
             // 2026-11-22 19:27: the full-screen clock (double tap on the player's clock) keeps the screen on at this brightness.
             SectionTitle("Full screen")
+            // Helpers on (2026-11-23 01:16): the first change of each of these shows its helper.
+            val fsHelp = LocalHelp.current
+            val fsHelpers = Alarms.state.collectAsState().value.global.helpers
+            val fsShown = remember { mutableSetOf<String>() }
+            fun fsHint(k: String) { if (fsHelpers && fsShown.add(k)) fsHelp(k) }
             CardBox {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Full-screen brightness", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Full-screen clock brightness").weight(1f).helpOn("Full-screen clock brightness"))
-                    Pill("Phone's own", selected = a.fsBright <= 0f, filled = a.fsBright <= 0f) { set(a.copy(fsBright = if (a.fsBright <= 0f) 0.6f else -1f)) }
+                    Pill("Phone's own", selected = a.fsBright <= 0f, filled = a.fsBright <= 0f) { set(a.copy(fsBright = if (a.fsBright <= 0f) 0.6f else -1f)); fsHint("Full-screen clock brightness") }
                 }
-                if (a.fsBright > 0f) SliderRow("Brightness", a.fsBright, 0.01f..1f, "${(a.fsBright * 100).toInt()} %") { set(a.copy(fsBright = (Math.round(it * 100f) / 100f).coerceIn(0.01f, 1f))) }
+                if (a.fsBright > 0f) SliderRow("Full-screen clock brightness", a.fsBright, 0.01f..1f, "${(a.fsBright * 100).toInt()} %") {
+                    set(a.copy(fsBright = (Math.round(it * 100f) / 100f).coerceIn(0.01f, 1f))); fsHint("Full-screen clock brightness") }
                 Text("The screen stays on while the clock is full screen. A swipe along the short side there changes it too (kept here).",
                     color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 10.dp))
                 Divider()
                 // 19:52: the playing name gliding along the full-screen clock — its letter size (same upright and sideways) and colour.
-                SliderRow("Scrolling name size", a.tickerSp.toFloat(), 16f..96f, "${a.tickerSp} sp") { set(a.copy(tickerSp = (Math.round(it / 2f) * 2).coerceIn(16, 96))) }
+                SliderRow("Scrolling name size", a.tickerSp.toFloat(), 16f..96f, "${a.tickerSp} sp") { set(a.copy(tickerSp = (Math.round(it / 2f) * 2).coerceIn(16, 96))); fsHint("Scrolling name") }
                 var tickColour by remember { mutableStateOf(false) }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Scrolling name colour", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Scrolling name colour").weight(1f).helpOn("Scrolling name"))
@@ -631,7 +637,7 @@ fun ClockAspectScreen(nav: Navigator) {
                     STextButton({ tickColour = true }) { Text("Change") }
                     STextButton({ set(a.copy(tickerColor = 0xFFFFFFFFL, tickerSp = 36)) }) { Text("Reset") }
                 }
-                if (tickColour) ColorPickDialog(a.tickerColor, onDismiss = { tickColour = false }) { c -> set(a.copy(tickerColor = c)); tickColour = false }
+                if (tickColour) ColorPickDialog(a.tickerColor, onDismiss = { tickColour = false }) { c -> set(a.copy(tickerColor = c)); tickColour = false; fsHint("Scrolling name") }
                 // Preview of the name at its size and colour.
                 Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black).padding(horizontal = 10.dp, vertical = 6.dp)) {
                     Text("Artist – Title", color = Color(a.tickerColor), fontSize = a.tickerSp.sp, maxLines = 1, softWrap = false)
@@ -689,8 +695,9 @@ private fun CityDialog(onDone: () -> Unit) {
 private val LocalHelp = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Unit> { {} }
 
 internal val HELP: Map<String, String> = mapOf(
+    "Scrolling name size" to "The letter size of the name of what's playing gliding along the full-screen clock — the same upright and sideways (16–96 sp, default 36). Its colour is set just under it; Reset puts back white and 36 sp.",
     "Scrolling name" to "The name of what's playing gliding along the full-screen clock (double tap on the clock in the song or radio player): \"Scrolling name size\" is its letter size, the same upright and sideways (16–96 sp, default 36), and \"Scrolling name colour\" its colour (any colour from the colour editor; default white). No frame and no background. Upright it runs along the bottom under the clock; sideways in the space beside the clock, which keeps its full size. Reset puts back white and 36 sp.",
-    "Full-screen clock brightness" to "The screen's brightness while the clock is full screen (double tap on the clock in the song or radio player). \"Phone's own\" keeps the phone's brightness; otherwise a level of its own, 1–100 %. The screen stays on while the full-screen clock is shown, and the clock turns with the phone. A swipe along the short side on the full screen changes it too, and is kept here. Leaving gives the phone its own brightness back.",
+    "Full-screen clock brightness" to "The full-screen clock: a double tap on the clock in the song or radio player opens it (a double tap there goes back; a long press on the clock opens Clock aspect). It turns with the phone, keeps the screen on, carries the play / pause button and the name of what's playing, and closes by itself when an alarm rings; the night dimming dims all of it.\n\nFull-screen brightness: the screen's brightness while the clock is full screen. \"Phone's own\" keeps the phone's brightness; otherwise a level of its own, 1–100 %. The screen stays on while the full-screen clock is shown, and the clock turns with the phone. A swipe along the short side on the full screen changes it too, and is kept here. Leaving gives the phone its own brightness back.",
     "Under the city" to "The small line under the city's name on the clock. All: the time zone (e.g. UTC+1) and the temperature at the " +
         "city now > 6 hours later (e.g. 15°>18°), changing every 5 seconds. Time zone or Temperatures: always that one. " +
         "The temperature now is measured at the nearest airport weather station (within 35 km; else the forecast for the city), the one in 6 hours is the forecast; refreshed every 15 min. Until they're known the time zone is shown.",

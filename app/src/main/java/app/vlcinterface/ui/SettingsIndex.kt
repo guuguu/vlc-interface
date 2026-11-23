@@ -231,7 +231,7 @@ val SETTINGS_INDEX: List<SettingsEntry> = listOf(
     E("clock", "Clock aspect", "Night", "Dimming", "", true),
     E("clock", "Clock aspect", "Full screen", "Full screen", "", true),
     E("clock", "Clock aspect", "Full screen", "Full-screen brightness", "", false),
-    E("clock", "Clock aspect", "Full screen", "Brightness", "", true),
+    E("clock", "Clock aspect", "Full screen", "Full-screen clock brightness", "", true),
     E("clock", "Clock aspect", "Full screen", "Scrolling name size", "", true),
     E("clock", "Clock aspect", "Full screen", "Scrolling name colour", "", true),
     E("clock", "Clock aspect", "Full screen", "Custom colour", "", true),
