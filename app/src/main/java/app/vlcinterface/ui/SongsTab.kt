@@ -284,6 +284,18 @@ fun SongsTab(nav: Navigator) {
         if (indexing.isNotEmpty()) Text("★ $indexing", color = accent(), fontSize = 11.sp)
         Text("Tap songs to select them · long-press: the song's menu (with songs selected: play time and a new playlist)", color = C.muted, fontSize = 11.sp)
         if (loading) Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = accent()) }
+        // Songs on the phone in places not added to the Library (01:11: "VLC shows more music"): VLC shows every place, the
+        // app only the places you added. A line says how many there are and opens Find media folders to add them.
+        var notAdded by remember { mutableStateOf(0) }
+        LaunchedEffect(Unit) {
+            notAdded = try {
+                app.vlcinterface.sources.InternalSource.roots(ctx.applicationContext).filter { r ->
+                    !app.vlcinterface.sources.InternalSource.approved(r.key) }.sumOf { it.songs }
+            } catch (_: Exception) { 0 }
+        }
+        if (notAdded > 0) Text("+ $notAdded more songs on the phone in places not in the Library — add them",
+            color = accent(), fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable { nav.go(Screen.MediaFolders) }.padding(vertical = 8.dp))
         LazyColumn(Modifier.weight(1f).scrollbar(state), state = state) {
             items(songs, key = { it.uri }) { s ->
                 val on = s.uri in selected

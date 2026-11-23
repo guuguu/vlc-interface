@@ -1469,3 +1469,10 @@
   - files whose name or title isn't text (scrambled bytes, "�", control characters) — every script and emoji still count as text;
   - phone files the player tried to open both ways and couldn't (the card being present): remembered on this phone and hidden from then on.
 - They never go into the queue (Play, Add to queue, Play next, Load playlist, Jump to, the queue kept from last time); one still in a queue is taken out when its turn comes and the next item plays. Asked for on its own: a short "Encrypted or unreadable file — can't be played".
+
+## More music on the phone, like VLC (reported 2026-11-23 01:11)
+- **Found, two reasons VLC showed more:**
+  - **Formats:** the app only took a short list of file types; Android lists more audio, which was dropped — audiobooks (.m4b), voice notes and recordings (.amr, .awb, .3ga), MIDI (.mid), Dolby / DTS (.ac3, .eac3, .dts), .oga, .caf, .tta, .mp2, .spx, .tak, ringtone files (.m4r), tracker music (.mod, .xm, .it, .s3m) and others; and video types like .mts, .m2t, .divx, .asf, .rm / .rmvb, .f4v, .mxf, .ogm, .3g2.
+  - **Places:** VLC shows every place on the phone; the app shows the places added to the Library (Music, Download …, chosen in the wizard or Find media folders). Library → Songs now says when there are more: "+ N more songs on the phone in places not in the Library — add them", which opens Find media folders.
+- Every one of these formats is now played, listed, searched and indexed — on the phone and on the network.
+- **Still different from VLC:** VLC has "All files access", so it also reads folders Android itself keeps out of its media list (folders with a ".nomedia" file, e.g. some messaging apps' audio). The app only sees what Android lists, without that access.

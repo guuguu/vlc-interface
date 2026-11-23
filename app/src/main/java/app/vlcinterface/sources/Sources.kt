@@ -41,8 +41,14 @@ data class Entry(
     val display: String get() = title.ifEmpty { name }
 }
 
-val VIDEO_EXT = setOf("mkv", "mp4", "avi", "mov", "m4v", "wmv", "ts", "m2ts", "webm", "mpg", "mpeg", "flv", "3gp", "ogv", "vob", "iso")
-val AUDIO_EXT = setOf("mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "wma", "ape", "alac", "aiff", "aif", "dsf", "dff", "mka", "wv", "mpc")
+// Every format VLC plays (2026-11-23 01:11: VLC showed more music on another phone — audiobooks .m4b, voice notes / recordings
+// .amr .3ga .awb, MIDI, Dolby / DTS, tracker modules … were left out here).
+val VIDEO_EXT = setOf("mkv", "mp4", "avi", "mov", "m4v", "wmv", "ts", "m2ts", "webm", "mpg", "mpeg", "flv", "3gp", "ogv", "vob", "iso",
+    "mts", "m2t", "divx", "xvid", "asf", "rm", "rmvb", "f4v", "mxf", "ogm", "dv", "3g2", "m2v", "mp4v", "h264", "hevc", "264", "265", "wtv",
+    "trp", "tp", "evo", "vro", "nut", "mpe", "mpv")
+val AUDIO_EXT = setOf("mp3", "flac", "m4a", "aac", "ogg", "opus", "wav", "wma", "ape", "alac", "aiff", "aif", "dsf", "dff", "mka", "wv", "mpc",
+    "m4b", "m4r", "amr", "awb", "3ga", "mid", "midi", "kar", "rmi", "oga", "ogx", "weba", "aifc", "caf", "ac3", "eac3", "ec3", "dts", "tta", "mp2",
+    "mp1", "mpga", "spx", "ra", "tak", "xm", "it", "s3m", "mod", "au", "snd", "voc", "w64", "rf64", "dts", "mlp", "thd", "shn", "ofr", "xa")
 val SUB_EXT = setOf("srt", "ass", "ssa", "sub", "vtt", "idx")
 
 fun String.ext(): String = substringAfterLast('/').substringAfterLast('.', "").lowercase()
