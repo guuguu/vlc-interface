@@ -76,14 +76,16 @@ internal object SongsCache {
         loadPhone(ctx).firstOrNull { it.uri == uri }?.folderKey?.takeIf { it.isNotEmpty() }
 
         suspend fun loadPhone(ctx: android.content.Context): List<PlayItem> {
-        if (phone == null) phone = InternalSource.folders(ctx).flatMap { f -> MusicLibrary.collectLocal(ctx, f, false) }.filter { it.isMusic }
+        if (phone == null) phone = (InternalSource.folders(ctx).flatMap { f -> MusicLibrary.collectLocal(ctx, f, false) } +
+            app.vlcinterface.sources.AllFiles.extras(ctx)).filter { it.isMusic }         // + what only All files access finds (01:14)
         return phone!!
     }
 
     /** The phone's videos (the Library's places, read once) + indexed network videos from servers that answer now. */
     var phoneVideos: List<PlayItem>? = null
     suspend fun allVideos(ctx: android.content.Context): List<PlayItem> {
-        if (phoneVideos == null) phoneVideos = InternalSource.folders(ctx).flatMap { f -> MusicLibrary.collectLocal(ctx, f, false) }.filter { !it.isMusic && !it.isRadio }
+        if (phoneVideos == null) phoneVideos = (InternalSource.folders(ctx).flatMap { f -> MusicLibrary.collectLocal(ctx, f, false) } +
+            app.vlcinterface.sources.AllFiles.extras(ctx)).filter { !it.isMusic && !it.isRadio }
         val hidden = App.instance.store.current.settings.hiddenUris
         return (phoneVideos!! + app.vlcinterface.sources.NetIndex.videosReachable()).distinctBy { it.uri }
             .filter { it.uri !in hidden && it.folderKey !in hidden && !app.vlcinterface.sources.Ignore.dotName(it.fileName) && !app.vlcinterface.sources.Ignore.unreadable(it.uri, it.fileName, it.title) }

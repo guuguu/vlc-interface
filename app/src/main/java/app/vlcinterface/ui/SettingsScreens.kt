@@ -868,6 +868,21 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             SectionTitle("Horizontal autoscroll")
             ScrollSpeedCard("Songs list autoscroll", "Long rows in Library → Songs, playlists and saved radio songs", "songs")
             ScrollSpeedCard("Folder lists autoscroll", "Long folder and song names in the phone and network folder lists", "folders")
+            // All files access (2026-11-23 01:14): read the storage itself, like VLC, for what Android's media list leaves out.
+            SectionTitle("Phone storage")
+            CardBox {
+                var afTick by remember { mutableIntStateOf(0) }
+                val afOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+                DisposableEffect(afOwner) {
+                    val obs = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) afTick++ }
+                    afOwner.lifecycle.addObserver(obs); onDispose { afOwner.lifecycle.removeObserver(obs) }
+                }
+                val granted = remember(afTick) { app.vlcinterface.sources.AllFiles.granted() }
+                var was by remember { mutableStateOf(granted) }
+                LaunchedEffect(granted) { if (granted != was) { was = granted; app.vlcinterface.sources.AllFiles.forget(); SongsCache.phone = null; SongsCache.phoneVideos = null } }
+                ToggleRow("All files access (like VLC)", if (granted) "On: the whole storage is read — also folders Android leaves out of its media list"
+                    else "Off: the app sees what Android lists as media", granted) { _ -> app.vlcinterface.sources.AllFiles.open(ctxV) }
+            }
             // Indexing again (2026-11-22 08:19): how pinned network folders are kept up to date.
             SectionTitle("Indexing")
             CardBox {

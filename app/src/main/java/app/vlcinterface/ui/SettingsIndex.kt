@@ -113,6 +113,8 @@ val SETTINGS_INDEX: List<SettingsEntry> = listOf(
     E("library", "Library & files", "Horizontal autoscroll", "Horizontal autoscroll", "", true),
     E("library", "Library & files", "Horizontal autoscroll", "Songs list autoscroll", "Long rows in Library → Songs, playlists and saved radio songs", true),
     E("library", "Library & files", "Horizontal autoscroll", "Folder lists autoscroll", "Long folder and song names in the phone and network folder lists", true),
+    E("library", "Library & files", "Phone storage", "Phone storage", "", true),
+    E("library", "Library & files", "Phone storage", "All files access (like VLC)", "", true),
     E("library", "Library & files", "Indexing", "Indexing", "", true),
     E("library", "Library & files", "Indexing", "Index again", "", true),
     E("library", "Library & files", "Library scanning", "Library scanning", "", true),
