@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.RingtoneManager
+import app.vlcinterface.data.ServerLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
@@ -88,9 +89,9 @@ object ShortAlarms {
                     break
                 } catch (e: Exception) { why = "${e.javaClass.simpleName}: ${e.message}"; try { mp?.release() } catch (_: Exception) {}; mp = null }
             }
-            if (mp == null) app.vlcinterface.data.ServerLog.log("alarm", "short", "", "", false, "Short alarm: no sound could be played ($why)")
+            if (mp == null) ServerLog.log("alarm", "short", "", "", false, "Short alarm: no sound could be played ($why)")
             else if (am.getStreamVolume(android.media.AudioManager.STREAM_ALARM) == 0)
-                app.vlcinterface.data.ServerLog.log("alarm", "short", "", "", false, "Short alarm: the phone's alarm volume is 0 — the sound plays, but can't be heard")
+                ServerLog.log("alarm", "short", "", "", false, "Short alarm: the phone's alarm volume is 0 — the sound plays, but can't be heard")
         }
         val ms = s.seconds * 1000L
         try {
