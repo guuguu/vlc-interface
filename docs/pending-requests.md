@@ -55,3 +55,9 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 30. **2026-11-28 01:59 — Throttling completed (request 6 was partial):** 1.93.0 throttles only the ReplayGain network reads. To add:
     - indexing: its tag reads (libVLC opening up to 8 files at once over SMB) count against the same 60 % limit — 2 parallel reads until the network maximum is found, then paced to the limit;
     - CPU: ReplayGain decoding on one low-priority thread with a short pause between files, slowing down further if playback stutters or the phone heats up.
+31. **2026-11-28 02:02 — Order and coherence on the location cards (Library → LAN / Internet), screenshot of "192.168.5.1 · Transcend":** tidy the whole card (mock-up first). Seen on the screenshot:
+    - title broken over two lines ("192.168.5.1 ·" / "Transcend"); the address is repeated under it (smb://192.168.5.1/Tran…);
+    - Address chips: "LAN 192.168.5.1" and a plain "192.168.5.1" are the same address twice; Auto / LAN / VPN / remembered / + mixed with no grouping;
+    - folders and their 🔍 Index buttons wrap together in one flow (muzica_flac, Index, muvi / Index on the next line), so it's unclear which Index belongs to which folder; + Folder and ↻ Rescan in the same flow;
+    - "Write access: read / write" and "Check write access" not aligned; the button runs past the card's right edge;
+    - sizes and paddings differ from chip to chip.
