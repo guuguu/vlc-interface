@@ -120,7 +120,17 @@ object UiPrefs {
     /** 4 menu text sizes; the biggest still fits a menu (max 340 dp wide, long entries wrap). */
     val menuSizes = listOf("small" to "S", "medium" to "M", "large" to "L", "xlarge" to "XL")
     fun spOf(k: String) = when (k) { "small" -> 13; "large" -> 18; "xlarge" -> 21; else -> 15 }
-    val menuFontSp get() = spOf(menuFont)
+    /** Menu text size (sp), font and row height (dp, 0 = as the text needs) — Look → Long-press menus (14:59). */
+    var menuSp by androidx.compose.runtime.mutableIntStateOf(15)
+    var menuFace by androidx.compose.runtime.mutableStateOf("default")
+    var menuRowDp by androidx.compose.runtime.mutableIntStateOf(0)
+    val menuFontSp get() = menuSp
+    fun faceOf(k: String): androidx.compose.ui.text.font.FontFamily = when (k) {
+        "serif" -> androidx.compose.ui.text.font.FontFamily.Serif; "mono" -> androidx.compose.ui.text.font.FontFamily.Monospace
+        "condensed" -> androidx.compose.ui.text.font.FontFamily(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.NORMAL))
+        "light" -> androidx.compose.ui.text.font.FontFamily(android.graphics.Typeface.create("sans-serif-light", android.graphics.Typeface.NORMAL))
+        else -> androidx.compose.ui.text.font.FontFamily.Default }
+    val faces = listOf("default" to "Standard", "condensed" to "Condensed", "light" to "Light", "serif" to "Serif", "mono" to "Mono")
     /** Long-press on any menu entry: the size choice shows at the top of that menu. */
     var sizePick by androidx.compose.runtime.mutableStateOf(false)
 }
@@ -858,10 +868,11 @@ fun SMenuItem(text: @Composable () -> Unit, onClick: () -> Unit, modifier: Modif
                 }
             }
         }
-    }.padding(horizontal = 16.dp, vertical = gap.dp), verticalAlignment = Alignment.CenterVertically) {
+    }.heightIn(min = UiPrefs.menuRowDp.dp).padding(horizontal = 16.dp, vertical = gap.dp), verticalAlignment = Alignment.CenterVertically) {
         leadingIcon?.let { it(); androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp)) }
         Box(Modifier.weight(1f)) {
             androidx.compose.material3.ProvideTextStyle(androidx.compose.material3.LocalTextStyle.current.copy(fontSize = sp.sp, lineHeight = (sp + 4).sp,
+                fontFamily = UiPrefs.faceOf(UiPrefs.menuFace),
                 color = if (enabled) C.text else C.muted)) {
                 androidx.compose.runtime.CompositionLocalProvider(androidx.compose.material3.LocalContentColor provides (if (enabled) C.text else C.muted)) { text() }
             }
@@ -970,7 +981,10 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
     val bars = androidx.compose.foundation.layout.WindowInsets.Companion.systemBars
     val freeH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp -
         with(dens) { (bars.getTop(dens) + bars.getBottom(dens)).toDp() } - 104.dp
-    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = 340.dp).heightIn(max = freeH.coerceAtLeast(160.dp)),
+    // The menu grows with its entries (15:00): as wide as the longest entry needs at the chosen text size and font, up to
+    // the screen's width less a margin (entries wrap only beyond that); as tall as they need up to the free height (then it scrolls).
+    val maxW = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 32).coerceAtLeast(200).dp
+    androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = maxW).heightIn(max = freeH.coerceAtLeast(160.dp)),
         containerColor = C.menu, tonalElevation = 0.dp, shadowElevation = 0.dp,
         border = androidx.compose.foundation.BorderStroke(0.5.dp, C.line)) {
         if (!expanded) UiPrefs.sizePick = false
@@ -980,8 +994,9 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
                 horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 UiPrefs.menuSizes.forEach { (k, l) ->
-                    Pill(l, selected = UiPrefs.menuFont == k, filled = UiPrefs.menuFont == k) {
-                        App.instance.store.update { it.copy(settings = it.settings.copy(menuFont = k)) }
+                    val sz = UiPrefs.spOf(k)
+                    Pill(l, selected = UiPrefs.menuSp == sz, filled = UiPrefs.menuSp == sz) {
+                        App.instance.store.update { it.copy(settings = it.settings.copy(menuTextSp = sz)) }
                     }
                 }
                 Text("✓", color = C.text, fontSize = 20.sp, modifier = Modifier.clickable { UiPrefs.sizePick = false }.padding(horizontal = 8.dp))

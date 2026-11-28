@@ -762,26 +762,35 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         Text("${s.menuOpacity}%", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(menuOpacity = 90)) }) { Text("Reset") }
                     }
-                    OpacityPreview(s.menuOpacity / 100f, "Menu entry", UiPrefs.spOf(s.menuFont))
+                    OpacityPreview(s.menuOpacity / 100f, "Menu entry", s.menuTextSp)
                     ThinSlider(s.menuOpacity.toFloat(), { v -> set(s.copy(menuOpacity = (Math.round(v / 5f) * 5).coerceIn(30, 100))) }, valueRange = 30f..100f)
-                    // Menu row spacing: how close menu (and search result) rows are; preview of three rows.
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Menu row spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Menu row spacing").weight(1f).explain("Menu row spacing"))
-                        Text("${s.menuGap} dp", color = accent(), fontWeight = FontWeight.SemiBold)
-                        STextButton({ set(s.copy(menuGap = 6)) }) { Text("Reset") }
-                    }
+                    // Long-press menus (2026-11-28 14:59): text size, font, row height and vertical spacing, with a preview of
+                    // three rows as they'll look in every long-press menu (and the search results).
+                    Text("Long-press menus", color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.anchor("Long-press menus").padding(top = 6.dp).explain("Long-press menus"))
                     Column(Modifier.padding(vertical = (4 * sg()).dp).clip(RoundedCornerShape(8.dp)).background(Color(0xFF14171C).copy(alpha = s.menuOpacity / 100f))) {
-                        listOf("Play now", "Add to queue", "Go to folder").forEach { t ->
-                            Text(t, color = C.text, fontSize = UiPrefs.spOf(s.menuFont).sp, lineHeight = (UiPrefs.spOf(s.menuFont) + 4).sp,
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = s.menuGap.dp))
+                        listOf("▶  Play now", "Add to queue", "Open song folder").forEach { t ->
+                            Box(Modifier.fillMaxWidth().heightIn(min = s.menuRowDp.dp).padding(horizontal = 16.dp, vertical = s.menuGap.dp), contentAlignment = Alignment.CenterStart) {
+                                Text(t, color = C.text, fontSize = s.menuTextSp.sp, lineHeight = (s.menuTextSp + 4).sp, fontFamily = UiPrefs.faceOf(s.menuFace))
+                            }
                         }
                     }
-                    ThinSlider(s.menuGap.toFloat(), { v -> set(s.copy(menuGap = Math.round(v).coerceIn(0, 16))) }, valueRange = 0f..16f, steps = 15)
-                    Text("Menu text", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Menu text").explain("Menu text"))
-                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp)) {
-                        listOf("small" to "Small", "medium" to "Medium", "large" to "Large", "xlarge" to "Extra large").forEach { (k, l) ->
-                            Pill(l, selected = s.menuFont == k, filled = s.menuFont == k) { set(s.copy(menuFont = k)) }
+                    // Choice buttons, no sliders (15:00).
+                    @Composable fun choices(label: String, opts: List<Pair<String, String>>, cur: String, pick: (String) -> Unit) {
+                        Text(label, color = C.text, fontSize = 15.sp, modifier = Modifier.anchor(label).padding(top = 4.dp).explain(label))
+                        androidx.compose.foundation.layout.FlowRow(Modifier.padding(top = 6.dp, bottom = 6.dp), horizontalArrangement = Arrangement.spacedBy((8 * sg()).dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            opts.forEach { (k, l) -> Pill(l, selected = cur == k, filled = cur == k) { pick(k) } }
                         }
+                    }
+                    choices("Menu text size", listOf("13" to "Small", "15" to "Medium", "18" to "Large", "21" to "Extra large", "24" to "Huge"), s.menuTextSp.toString()) {
+                        set(s.copy(menuTextSp = it.toInt())) }
+                    choices("Menu font", UiPrefs.faces, s.menuFace) { set(s.copy(menuFace = it)) }
+                    choices("Menu row height", listOf("0" to "Auto", "36" to "Compact", "48" to "Normal", "60" to "Tall", "72" to "Extra tall"), s.menuRowDp.toString()) {
+                        set(s.copy(menuRowDp = it.toInt())) }
+                    choices("Menu vertical spacing", listOf("0" to "None", "3" to "Small", "6" to "Medium", "10" to "Large", "16" to "Extra large"), s.menuGap.toString()) {
+                        set(s.copy(menuGap = it.toInt())) }
+                    STextButton({ set(s.copy(menuTextSp = 15, menuFace = "default", menuRowDp = 0, menuGap = 6)) }) { Text("Reset menus") }
                     }
                 }
             }

@@ -92,6 +92,9 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
     UiPrefs.listRowPct = st.settings.listRowPct
     UiPrefs.controlShadow = st.settings.controlShadow
     UiPrefs.menuFont = st.settings.menuFont
+    UiPrefs.menuSp = st.settings.menuTextSp
+    UiPrefs.menuFace = st.settings.menuFace
+    UiPrefs.menuRowDp = st.settings.menuRowDp
     // Battery 15 % or less (not charging): every accent-coloured item turns bright red as a warning.
     val lowColour by app.vlcinterface.player.BatteryGuard.warnColour.collectAsState()
     UiPrefs.lowBattery = lowColour

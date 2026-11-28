@@ -1771,3 +1771,14 @@
 
 ## Crash on a playlist page with nothing playing (error log 14:43, 1.108.0)
 - "ForegroundServiceDidNotStartInTimeException": the playback service, asked to start in the foreground, found the player empty (a list loading, a stop) and ended without going to the foreground first — Android closes an app for that. It now always goes to the foreground first, then ends.
+
+## Long-press menus: text size, font, row height, vertical spacing (requested 2026-11-28 14:57 / 14:59 / 15:00 / 15:01)
+- Settings → Look → "Long-press menus", with a preview of three entries — choice buttons, no sliders, no reordering or hiding of entries:
+  - **Menu text size:** Small / Medium / Large / Extra large / Huge (the old Small … Extra large carry over).
+  - **Menu font:** Standard / Condensed / Light / Serif / Mono.
+  - **Menu row height:** Auto / Compact / Normal / Tall / Extra tall (each entry at least that tall, text centred).
+  - **Menu vertical spacing:** None / Small / Medium / Large / Extra large (space above and below each entry's text).
+  - Reset menus.
+- Applies to every long-press menu (songs, videos, folders, stations, the player's menus) and the search results.
+- **The menu grows with its entries:** as wide as the longest entry needs at the chosen size and font, up to the screen's width (was 340 dp at most, so entries wrapped), and as tall as they need (it scrolls only when the screen is full).
+- Helpers on a long press; saved and exported with the settings.

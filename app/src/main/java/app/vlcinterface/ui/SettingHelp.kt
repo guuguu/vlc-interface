@@ -64,6 +64,8 @@ object SettingHelp {
             "App's own sound output only (libVLC's output doesn't apply it). Exported with \"Per output device sound\".",
         "Short alarm sound" to "The sound every short notification alarm plays: any of the phone's sounds (notification, alarm or ringtone sounds, and your own added to them), the default notification sound, or none. It plays on the phone's alarm volume (heard also with the phone on vibrate or silent), for the time set under it; music playing is lowered meanwhile.",
         "Short alarm vibration" to "How every short notification alarm vibrates: Off, Short (one 0.3 s buzz), Long (one 1.5 s buzz) or Pulses (short buzzes for as long as the sound plays). \"Try it\" plays the sound and the vibration as they are set.",
+        "Long-press menus" to "How every long-press menu looks (songs, videos, folders, stations, the player's menus — and the search results): the text size, the font, how tall each entry is at least, and the space above and below each entry's text. The preview shows three entries as they'll look; Reset menus puts back the original look. The menu grows with its entries: as wide as the longest one needs (up to the screen's width) and as tall as they need (it scrolls only when the screen is full).\n\nA long press on any entry of an open menu still shows quick S / M / L / XL text sizes at its top.",
+        "Menu font" to "The font of every long-press menu: Standard, Condensed (narrower — long entries fit on one line), Light, Serif or Mono.",
         "Prevent clipping" to "Loud songs boosted by Preamp or ReplayGain can go beyond the maximum and distort ('clip'). This lowers the gain just enough that the song's loudest peak stays clean.\n\n" +
             "It uses the peak values stored in the song's tags (written by ReplayGain scans). Songs without peak tags play as they are.\n\n" +
             "No battery or data cost. Default: on.",
@@ -270,6 +272,9 @@ object SettingHelp {
         "Menu opacity" to "How see-through menus and search results are — set apart from pop-ups, since menus often sit over lists.",
         "Menu row spacing" to "How close the rows of menus and search results are: tighter shows more rows, looser is easier to tap.",
         "Menu text" to "Text size in menus and search results.",
+        "Menu text size" to "Text size of every long-press menu (and the search results): Small, Medium, Large, Extra large or Huge. Long entries wrap onto more lines instead of being cut. A long press on an entry of an open menu shows quick S / M / L / XL sizes too.",
+        "Menu row height" to "How tall each menu entry is at least: Auto (as tall as its text and spacing need), Compact, Normal, Tall or Extra tall. Taller entries are easier to hit; the text stays centred in them.",
+        "Menu vertical spacing" to "The space above and below each menu entry's text, None to Extra large: less brings the entries closer, more spreads them out (the touch area grows with it).",
         "Colour for" to "The app's accent colour: one for files, one for the radio (so you see at a glance what's playing).\n\n" +
             "Tap a circle to use it, long-press to edit it, '+' adds one (up to 5).",
         "Order of the Settings links" to "The order of the links on the main Settings page, for example your most used groups first. Drag a link by its ≡ (or long-press it) to move it; 'Reset order' puts back the original order.",
