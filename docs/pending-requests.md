@@ -47,6 +47,6 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 
 ## Status — 1.93.0 (2026-11-28)
 - Done: 1–13, 15–19, 21, 23–26, 28.
-- 27: mock-up shown, waiting for approval before building.
+- 27: mock-up approved 01:48 — done for the next release (after 1.93.0).
 - 14: needs a decision — the app requires Android 12 (API 31); that Huawei's "12.0.0.2" is EMUI 12, which runs on Android 10.
 - 20, 22: Android doesn't let normal apps pick the active Bluetooth (A2DP) device or disconnect one; explained.

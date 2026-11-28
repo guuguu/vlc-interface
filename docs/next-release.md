@@ -1544,3 +1544,11 @@
 
 ## Not done in this release — see the notes
 - 14 (Huawei install), 20 (choose between two Bluetooth outputs), 22 (disconnect idle Bluetooth), 27 (Sleep / reset button: mock-up first).
+
+# After 1.93.0
+
+## Sleep under play, a reset-sound button (request 27, mock-up approved 2026-11-28 01:48)
+- **Under the play button, close to it:** ♪ Identify and Sleep side by side on one row, centred under play (between −10 and +10). Sleep is ringed in the accent colour while set and shows what's left ("Sleep · 25 min", "Sleep · 2 songs"); a tap opens the same Sleep menu as before. Song and radio players.
+- **Reset sound:** a new round button under the sine button, the same size and look, crossed by a red diagonal line (shown with the sine button, when the tone sliders are on).
+  - Slightly long press: Loudness, Treble and Preamp back to 0 at once, and the sound profile kept for the song (or station) playing is removed. A short note confirms; written to the Player log.
+  - Short tap: only a short hint ("Hold to reset Loudness, Treble and Preamp to 0 …"), nothing changes.

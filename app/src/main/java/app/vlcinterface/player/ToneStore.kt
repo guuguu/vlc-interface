@@ -47,6 +47,15 @@ object ToneStore {
 
     fun put(item: PlayItem, loud: Float, treble: Float) = putRaw(keyOf(item), loud, treble)
 
+    /** Reset button: the song's / station's own sound profile (loudness, treble, preamp) is forgotten. */
+    fun remove(item: PlayItem) {
+        synchronized(map) {
+            val a = map.remove(keyOf(item)); val b = map.remove(hash("pre|${item.uri}"))
+            if (a == null && b == null) return
+        }
+        rewrite()
+    }
+
     private fun putRaw(h: Long, loud: Float, treble: Float) {
         val v = (((Math.round(loud * 2).coerceIn(-127, 127) and 0xFF) shl 8) or (Math.round(treble * 2).coerceIn(-127, 127) and 0xFF)).toShort()
         synchronized(map) {

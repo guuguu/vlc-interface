@@ -397,13 +397,38 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 Box(Modifier.size((76 * btnScale()).dp).liteShadow(CircleShape).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
                     Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (26 * btnScale()).sp, fontWeight = FontWeight.Bold)
                 }
-                // Identify song (MusicBrainz): only when pressed. Radio: the result goes to the log; songs: tags written.
+                // Under play, close to it (2026-11-28 mock-up v3): ♪ Identify and Sleep side by side; the row may be wider than
+                // the play button and is centred under it (between −10 and +10; the row's width is counted, so every part stays tappable).
                 val idCtx = androidx.compose.ui.platform.LocalContext.current
                 val idStatus by app.vlcinterface.sources.SongId.status.collectAsState()
-                Box(Modifier.padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x24FFFFFF))
-                    .clickable { sleepScope.launch { app.vlcinterface.sources.SongId.identify(idCtx, item, p.nowPlaying) } }
-                    .padding(horizontal = 8.dp, vertical = 3.dp)) {
-                    Text(idStatus.ifEmpty { "♪ Identify" }, color = if (idStatus.isEmpty()) C.muted else accent(), fontSize = 10.sp, maxLines = 1)
+                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x24FFFFFF))
+                        .clickable { sleepScope.launch { app.vlcinterface.sources.SongId.identify(idCtx, item, p.nowPlaying) } }
+                        .padding(horizontal = 8.dp, vertical = 3.dp)) {
+                        Text(idStatus.ifEmpty { "♪ Identify" }, color = if (idStatus.isEmpty()) C.muted else accent(), fontSize = 10.sp, maxLines = 1)
+                    }
+                    Box {
+                        val on = p.sleepUntil > 0 || p.sleepSongs > 0
+                        val ac = accent()
+                        val left = if (p.sleepUntil > 0) "${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min"
+                            else if (p.sleepSongs > 0) "${p.sleepSongs} song" + (if (p.sleepSongs == 1) "" else "s") else ""
+                        Box(Modifier.clip(RoundedCornerShape(10.dp)).background(if (on) ac.copy(alpha = 0.25f) else Color(0x24FFFFFF))
+                            .border(1.dp, if (on) ac else Color.Transparent, RoundedCornerShape(10.dp)).clickable { sleepMenu = true }
+                            .padding(horizontal = 10.dp, vertical = 3.dp)) {
+                            Text(if (left.isEmpty()) "Sleep" else "Sleep · $left", color = if (on) ac else C.text, fontSize = 10.sp, maxLines = 1)
+                        }
+                        SDropdownMenu(sleepMenu, { sleepMenu = false }) {
+                            // Radio: time only (a station has no songs to count).
+                            if (!radio) {
+                            SMenuItem({ Text("After 1 song (this one)") }, { player.setSleepSongs(1); sleepMenu = false })
+                            SMenuItem({ Text("After this album") }, { sleepMenu = false; sleepScope.launch { val n = player.sleepAfterAlbum(); if (n <= 1) sleepNote = "No more songs of this album after this one: stops after this song" } })
+                            SMenuItem({ Text("After … songs") }, { sleepMenu = false; sleepAsk = "songs" })
+                            }
+                            SMenuItem({ Text("30 minutes") }, { player.setSleep(30); sleepMenu = false })
+                            SMenuItem({ Text("Custom minutes…") }, { sleepMenu = false; sleepAsk = "minutes" })
+                            if (p.sleepUntil > 0 || p.sleepSongs > 0) SMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
+                        }
+                    }
                 }
                 }
                 if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("+${st.settings.doubleTapSeekSec}", 44) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) } }
@@ -414,8 +439,8 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 }
             }
             }
-            // Sleep: on the right of the player buttons (mirroring the clock / visualisation buttons); what's left under it.
-            // Above it, the sine button: scrolls the page to the tone sliders (centred in the free space; as far as
+            // Right of the player buttons (mirroring the clock / visualisation buttons): the sine button, and under it the
+            // reset-sound button (Sleep is under the play button since the 2026-11-28 mock-up). The sine button: scrolls the page to the tone sliders (centred in the free space; as far as
             // the page goes when they're near its end). Shown only when the tone sliders are on.
             Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (st.settings.toneSliders && "tone" in playerRowOrder(setsP, radio)) Box(Modifier.size(30.dp).liteShadow(CircleShape).clip(CircleShape)
@@ -451,31 +476,27 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                         drawPath(path, wave, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
                     }
                 }
-                Box {
-                    val on = p.sleepUntil > 0 || p.sleepSongs > 0
-                    // Same round button as the clock / visualisation ones on the left (symmetry), with the word "Sleep" inside;
-                    // the word shrinks to fit the circle so the buttons keep their order, size and spacing. Ringed in the accent when set.
-                    val ac = accent()
-                    Box(Modifier.size(30.dp).liteShadow(CircleShape).clip(CircleShape).background(if (on) ac.copy(alpha = 0.25f) else Color(0x24FFFFFF))
-                        .border(1.dp, if (on) ac else Color.Transparent, CircleShape).clickable { sleepMenu = true }, contentAlignment = Alignment.Center) {
-                        FitText("Sleep", color = if (on) ac else C.text, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                            textAlign = TextAlign.Center, minSize = 5.sp, modifier = Modifier.padding(horizontal = 5.dp))   // clear of the circle's edge
-                    }
-                    SDropdownMenu(sleepMenu, { sleepMenu = false }) {
-                        // Radio: time only (a station has no songs to count).
-                        if (!radio) {
-                        SMenuItem({ Text("After 1 song (this one)") }, { player.setSleepSongs(1); sleepMenu = false })
-                        SMenuItem({ Text("After this album") }, { sleepMenu = false; sleepScope.launch { val n = player.sleepAfterAlbum(); if (n <= 1) sleepNote = "No more songs of this album after this one: stops after this song" } })
-                        SMenuItem({ Text("After … songs") }, { sleepMenu = false; sleepAsk = "songs" })
+                // Reset sound (2026-11-28 mock-up v3): the sine button crossed by a red line. A slightly long press puts
+                // Loudness, Treble and Preamp back to 0 and removes the item's own sound profile; a tap only says so.
+                if (st.settings.toneSliders && "tone" in playerRowOrder(setsP, radio)) Box(Modifier.size(30.dp).liteShadow(CircleShape).clip(CircleShape)
+                    .background(Color(0x24FFFFFF)).combinedClickable(
+                        onClick = { ShortNote.hint("Hold to reset Loudness, Treble and Preamp to 0 (and forget this " + (if (radio) "station" else "song") + "'s sound profile)") },
+                        onLongClick = { player.resetTone(); ShortNote.show("Sound reset: Loudness, Treble and Preamp at 0") }),
+                    contentAlignment = Alignment.Center) {
+                    val wave = accent()
+                    androidx.compose.foundation.Canvas(Modifier.size(20.dp)) {
+                        val path = androidx.compose.ui.graphics.Path()
+                        val w = size.width; val h = size.height
+                        for (i in 0..40) {
+                            val x = w * i / 40f
+                            val y = h / 2f - kotlin.math.sin(i / 40f * 2f * Math.PI.toFloat()) * h * 0.32f
+                            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                         }
-                        SMenuItem({ Text("30 minutes") }, { player.setSleep(30); sleepMenu = false })
-                        SMenuItem({ Text("Custom minutes…") }, { sleepMenu = false; sleepAsk = "minutes" })
-                        if (p.sleepUntil > 0 || p.sleepSongs > 0) SMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
+                        drawPath(path, wave, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                        drawLine(Color(0xFFE24B4A), androidx.compose.ui.geometry.Offset(w * 0.05f, h * 0.95f), androidx.compose.ui.geometry.Offset(w * 0.95f, h * 0.05f),
+                            strokeWidth = 2.2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
                     }
                 }
-                val left = if (p.sleepUntil > 0) "${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min"
-                    else if (p.sleepSongs > 0) "${p.sleepSongs} song" + (if (p.sleepSongs == 1) "" else "s") else ""
-                if (left.isNotEmpty()) Text(left, color = C.muted, fontSize = 10.sp, maxLines = 1, modifier = Modifier.padding(top = 2.dp))
             }
             }
             }

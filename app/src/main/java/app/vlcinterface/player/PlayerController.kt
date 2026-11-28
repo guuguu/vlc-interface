@@ -602,6 +602,18 @@ class PlayerController(private val context: Context, private val store: Store) {
         }
     }
 
+    /** Reset button (long press): Loudness, Treble and Preamp back to 0; the item's own sound profile removed. */
+    fun resetTone() {
+        val item = _state.value.item ?: return
+        toneDirty = false
+        _state.value = _state.value.copy(loudDb = 0f, trebleDb = 0f, radioPreDb = 0f, toneSaved = false)
+        applySoundChain()
+        ToneStore.remove(item)
+        store.update { it.copy(settings = it.settings.copy(toneLoud = 0f, toneTreble = 0f).let { st ->
+            if (item.isRadio) st.copy(radioPreLast = 0f) else st.copy(songPreLast = 0f) }) }
+        ServerLog.log("player", "tone", "", "", true, "\"${item.title}\": Loudness, Treble and Preamp reset to 0 — its sound profile removed")
+    }
+
     /** Back to this song's own saved values (if it has some). */
     fun recallTone() {
         val item = _state.value.item ?: return
