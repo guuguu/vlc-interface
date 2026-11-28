@@ -1552,3 +1552,4 @@
 - **Reset sound:** a new round button under the sine button, the same size and look, crossed by a red diagonal line (shown with the sine button, when the tone sliders are on).
   - Slightly long press: Loudness, Treble and Preamp back to 0 at once, and the sound profile kept for the song (or station) playing is removed. A short note confirms; written to the Player log.
   - Short tap: only a short hint ("Hold to reset Loudness, Treble and Preamp to 0 …"), nothing changes.
+- **Radio player the same (confirmed 2026-11-28 02:22):** ♪ Identify (result to the log), Sleep (time choices only) and the reset button sit in the same places on the radio player; the reset removes the station's own sound profile, and a station left at 0 / 0 / 0 isn't given a new one when you switch stations.

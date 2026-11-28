@@ -630,7 +630,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         val s = _state.value
         val item = s.item ?: return
         // Radio: every station played keeps its settings (loudness, treble, pre-amp), changed or not.
-        if (item.isRadio) { ToneStore.put(item, s.loudDb, s.trebleDb); ToneStore.putPre(item.uri, s.radioPreDb) }
+        // (A station reset to 0 with the reset button keeps no profile: nothing is written back for it.)
+        if (item.isRadio) { if (s.loudDb != 0f || s.trebleDb != 0f || s.radioPreDb != 0f) { ToneStore.put(item, s.loudDb, s.trebleDb); ToneStore.putPre(item.uri, s.radioPreDb) } }
         else if (toneDirty) ToneStore.put(item, s.loudDb, s.trebleDb)
         toneDirty = false
     }
