@@ -588,8 +588,16 @@ object RgScanner {
             val info = MediaCodec.BufferInfo()
             var inDone = false
             var lastOut = System.currentTimeMillis()
+            // CPU share (2026-11-28 requests 30 / 34): the measuring thread runs at background priority and rests a fifth of
+            // the time it worked (every ~200 ms of decoding) — the phone stays cool and playback first, the scan at ~83 % of
+            // its full speed (never below the 70 % floor).
+            val oldPrio = try { android.os.Process.getThreadPriority(android.os.Process.myTid()) } catch (_: Throwable) { 0 }
+            try { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) } catch (_: Throwable) {}
+            var busyFrom = System.nanoTime()
             try {
                 while (true) {
+                    val busyMs = (System.nanoTime() - busyFrom) / 1_000_000
+                    if (busyMs >= 200) { try { Thread.sleep(busyMs / 5) } catch (_: InterruptedException) {}; busyFrom = System.nanoTime() }
                     // Safety: a decoder that stops answering after the end of the file must not hang the scan.
                     if (inDone && System.currentTimeMillis() - lastOut > 5000) break
                     if (!inDone) {
@@ -646,7 +654,7 @@ object RgScanner {
                         }
                     }
                 }
-            } finally { try { codec.stop() } catch (_: Exception) {}; codec.release() }
+            } finally { try { codec.stop() } catch (_: Exception) {}; codec.release(); try { android.os.Process.setThreadPriority(oldPrio) } catch (_: Throwable) {} }
             return meter ?: throw IllegalStateException("no audio decoded")
         } finally {
             ex.release(); ds?.close()

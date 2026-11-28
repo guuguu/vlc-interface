@@ -19,7 +19,11 @@ import java.io.File
  * videos. Without it, the app sees what Android lists (as before). Hidden ".folders" and unreadable files stay out.
  */
 object AllFiles {
-    fun granted(): Boolean = try { Environment.isExternalStorageManager() } catch (_: Exception) { false }
+    // Android 10: no "All files access" page; the storage permission (with legacy storage) already reads every folder.
+    fun granted(): Boolean = try {
+        if (android.os.Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager()
+        else app.vlcinterface.App.instance.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    } catch (_: Exception) { false }
 
     /** Android's page where "All files access" is given or taken back for this app. */
     fun open(ctx: Context) {
@@ -44,7 +48,8 @@ object AllFiles {
         } catch (_: Exception) {}
         val roots = LinkedHashSet<File>()
         roots += Environment.getExternalStorageDirectory()
-        try { ctx.getSystemService(StorageManager::class.java).storageVolumes.mapNotNullTo(roots) { it.directory } } catch (_: Exception) {}
+        if (android.os.Build.VERSION.SDK_INT >= 30) try { ctx.getSystemService(StorageManager::class.java).storageVolumes.mapNotNullTo(roots) { it.directory } } catch (_: Exception) {}
+        else try { ctx.getExternalFilesDirs(null).filterNotNull().mapNotNullTo(roots) { f -> f.path.substringBefore("/Android/").takeIf { it != f.path }?.let { File(it) } } } catch (_: Exception) {}
         val out = ArrayList<PlayItem>()
         var seen = 0
         fun walk(d: File, depth: Int) {

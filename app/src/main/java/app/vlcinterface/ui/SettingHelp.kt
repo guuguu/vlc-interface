@@ -87,6 +87,15 @@ object SettingHelp {
         "Identify song" to "The small ♪ Identify button under the play button looks the song up on MusicBrainz — only when you press it, with a second try with a simpler search when the first finds nothing.\n\n" +
             "Radio: the station's song name is looked up and the result is written to the Server log (no pop-ups).\n\n" +
             "Songs: the file's tags (or its name) are looked up and the found title, artist and album are written to the file. When the file already has other names, you're asked first; the question closes after this many seconds with nothing written. A song that is playing gets its new names when it's over.",
+        "Address: Auto" to "The app picks this location's address by itself, every time it connects:\n\n" +
+            "• at home (the phone on the same network as the server): the LAN address;\n" +
+            "• on another network where one of the other saved addresses is reachable: that one;\n" +
+            "• away from home with the VPN on: the VPN address;\n" +
+            "• otherwise: the LAN address.\n\n" +
+            "It follows Wi-Fi and VPN changes on its own. \"In use\" under the addresses says which one is used now. Tap an address instead to always use that one.",
+        "Address: +" to "Adds another address for the same server by hand — an IP or a name, e.g. its address on ZeroTier / Tailscale or a second LAN address. " +
+            "Its folders, files and index stay the same; only the way to reach it changes.\n\n" +
+            "The new address joins the list on the right (tap it to always use it; Auto may pick it too). Long-press an added address to remove it.",
         "Radio buffer" to "How many minutes of the playing station are kept. A song that started up to this long ago can still be saved whole, and a connection lost and back within this time keeps the recording going.\n\n" +
             "Longer buffers use more phone storage (about 1 MB per minute for MP3 stations, much more for FLAC). The buffer is deleted when you stop the radio or clear caches.",
         // ---------------------------------------------------------------- Network & VPN

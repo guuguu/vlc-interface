@@ -168,6 +168,7 @@ object MusicLibrary {
                     size = e.size,
                 )
                 m.release()
+                if (sem != null) IndexPace.pass()           // indexing (the only caller with a semaphore): its share of the NAS
                 TagCache.put(e.uri, t)
                 e.applyTags(t)
             } catch (ex: Exception) {

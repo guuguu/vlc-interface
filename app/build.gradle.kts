@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "app.vlcinterface"
-        minSdk = 31          // Android 12 and newer
+        minSdk = 29          // Android 10 and newer (2026-11-28: Huawei / EMUI 12 = Android 10)
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName

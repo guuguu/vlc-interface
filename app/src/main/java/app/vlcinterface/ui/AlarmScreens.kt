@@ -1048,14 +1048,14 @@ private fun HealthCard() {
         val sleepList = when {
             "samsung" in brand -> "Samsung: Settings → Battery → Background usage limits — keep the app out of \"Sleeping\" / \"Deep sleeping\" apps."
             brand in listOf("xiaomi", "redmi", "poco") -> "Xiaomi: allow \"Autostart\" and set Battery saver to \"No restrictions\" for the app."
-            brand in listOf("huawei", "honor") -> "Huawei / Honor: App launch → manage manually, allow all for the app."
+            brand in listOf("huawei", "honor") -> "Huawei / Honor: Phone Manager (or Settings → Battery) → App launch → vlc interface → switch off \"Manage automatically\", then allow Auto-launch, Secondary launch and Run in background. Without it, playback, alarms and indexing can be stopped when the screen is off."
             brand in listOf("oppo", "realme", "oneplus", "vivo") -> "Allow auto-launch / background activity for the app in the phone's battery settings."
             else -> ""
         }
         if (sleepList.isNotEmpty()) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = (8 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(sleepList, color = C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                Pill("Open") { try { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName))) } catch (_: Exception) {} }
+                Pill("Open") { BrandBattery.open(ctx) }
             }
             Divider()
         }
@@ -1404,4 +1404,23 @@ private fun ShortAlarmDialog(a0: ShortAlarm, onClose: () -> Unit) {
             if (exists) STextButton({ ShortAlarms.remove(ctx, a0.id); onClose() }) { Text("Delete", color = C.bad) }
             STextButton(onClose) { Text("Cancel") }
         } })
+}
+
+
+/** The phone maker's own "keep this app running" page (Huawei / Honor App launch …), else the app's Android page. */
+object BrandBattery {
+    private val pages = mapOf(
+        "huawei" to listOf("com.huawei.systemmanager/.startupmgr.ui.StartupNormalAppListActivity",
+            "com.huawei.systemmanager/.appcontrol.activity.StartupAppControlActivity", "com.huawei.systemmanager/.optimize.process.ProtectActivity"),
+        "honor" to listOf("com.hihonor.systemmanager/.startupmgr.ui.StartupNormalAppListActivity",
+            "com.huawei.systemmanager/.startupmgr.ui.StartupNormalAppListActivity"),
+        "xiaomi" to listOf("com.miui.securitycenter/com.miui.permcenter.autostart.AutoStartManagementActivity"),
+    )
+    fun open(ctx: android.content.Context) {
+        val brand = Build.MANUFACTURER.lowercase()
+        for (c in pages[brand].orEmpty()) {
+            try { ctx.startActivity(Intent().setComponent(android.content.ComponentName.unflattenFromString(c)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); return } catch (_: Exception) {}
+        }
+        try { ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {}
+    }
 }

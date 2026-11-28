@@ -92,10 +92,18 @@ fun Modifier.dialogBarsPadding(): Modifier {
     val dens = androidx.compose.ui.platform.LocalDensity.current
     val act = androidx.compose.ui.platform.LocalContext.current.let { c ->
         var x = c; while (x is android.content.ContextWrapper && x !is android.app.Activity) x = x.baseContext; x as? android.app.Activity }
-    val bars = act?.window?.decorView?.rootWindowInsets?.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+    // Android 10: the older inset fields (getInsets(type) is Android 11+).
+    val ri = act?.window?.decorView?.rootWindowInsets
+    val barTop: Int; val barBottom: Int
+    if (android.os.Build.VERSION.SDK_INT >= 30) {
+        val bars = ri?.getInsets(android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout())
+        barTop = bars?.top ?: 0; barBottom = bars?.bottom ?: 0
+    } else {
+        @Suppress("DEPRECATION") run { barTop = maxOf(ri?.systemWindowInsetTop ?: 0, ri?.displayCutout?.safeInsetTop ?: 0); barBottom = ri?.systemWindowInsetBottom ?: 0 }
+    }
     val own = WindowInsets.safeDrawing.union(WindowInsets.ime)
-    val top = with(dens) { maxOf(own.getTop(dens), bars?.top ?: 0).toDp() }
-    val bottom = with(dens) { maxOf(own.getBottom(dens), bars?.bottom ?: 0).toDp() }
+    val top = with(dens) { maxOf(own.getTop(dens), barTop).toDp() }
+    val bottom = with(dens) { maxOf(own.getBottom(dens), barBottom).toDp() }
     return this.padding(top = top, bottom = bottom)
         .windowInsetsPadding(WindowInsets.safeDrawing.only(androidx.compose.foundation.layout.WindowInsetsSides.Horizontal))
 }

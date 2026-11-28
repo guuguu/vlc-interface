@@ -164,7 +164,7 @@ class OutputRouter(private val context: Context) {
             if (guess != null) list[list.indexOf(guess)] = guess.copy(active = true)
         }
         // Paired but not connected Bluetooth devices.
-        if (context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
+        if (android.os.Build.VERSION.SDK_INT < 31 || context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
             try {
                 val bonded = context.getSystemService(BluetoothManager::class.java)?.adapter?.bondedDevices ?: emptySet()
                 for (b in bonded) {

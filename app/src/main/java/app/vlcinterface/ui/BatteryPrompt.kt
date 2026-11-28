@@ -78,10 +78,15 @@ fun BatteryPromptHost() {
     AlertDialog(onDismissRequest = { done() }, containerColor = C.panel,
         title = { Text("Keep playing in the background", color = C.text) },
         text = {
+            val hw = android.os.Build.MANUFACTURER.lowercase() in listOf("huawei", "honor")
             Text("Android's battery saver can stop the app between two songs while you use other apps. " +
-                "Allow it to run in the background (battery: Unrestricted) so playlists go on to the end.", color = C.text)
+                "Allow it to run in the background (battery: Unrestricted) so playlists go on to the end." +
+                (if (hw) "\n\nHuawei / Honor: then also App launch → vlc interface → switch off \"Manage automatically\" and allow Auto-launch, Secondary launch and Run in background (\"App launch\" opens it)." else ""),
+                color = C.text)
         },
-        confirmButton = { STextButton({ done(); Battery.ask(ctx) }) { Text("Allow", color = accent()) } },
+        confirmButton = { Row {
+            if (android.os.Build.MANUFACTURER.lowercase() in listOf("huawei", "honor")) STextButton({ BrandBattery.open(ctx) }) { Text("App launch", color = accent()) }
+            STextButton({ done(); Battery.ask(ctx) }) { Text("Allow", color = accent()) } } },
         dismissButton = { STextButton({ done() }) { Text("Not now") } },
     )
 }

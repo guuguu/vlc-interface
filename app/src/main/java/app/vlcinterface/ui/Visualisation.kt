@@ -833,9 +833,9 @@ fun VisualisationScreen(nav: Navigator) {
         w?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (v.fsBright > 0f) w?.let { it.attributes = it.attributes.apply { screenBrightness = v.fsBright.coerceIn(0.01f, 1f) } }
         // Bars hidden like a full-screen app; Android's usual swipe from the edge brings them back for a moment.
-        try { w?.insetsController?.let { it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; it.hide(WindowInsets.Type.systemBars()) } } catch (_: Exception) {}
+        try { w?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView).apply { systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; hide(androidx.core.view.WindowInsetsCompat.Type.systemBars()) } } } catch (_: Exception) {}
         onDispose {
-            try { w?.insetsController?.show(WindowInsets.Type.systemBars()) } catch (_: Exception) {}
+            try { w?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView).show(androidx.core.view.WindowInsetsCompat.Type.systemBars()) } } catch (_: Exception) {}
             w?.attributes = w?.attributes?.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
         }
     }
@@ -1003,9 +1003,9 @@ fun ClockFullScreen(nav: Navigator) {
         val w = act?.window
         w?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         if (st.aspect.fsBright > 0f) w?.let { it.attributes = it.attributes.apply { screenBrightness = st.aspect.fsBright.coerceIn(0.01f, 1f) } }
-        try { w?.insetsController?.let { it.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; it.hide(WindowInsets.Type.systemBars()) } } catch (_: Exception) {}
+        try { w?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView).apply { systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE; hide(androidx.core.view.WindowInsetsCompat.Type.systemBars()) } } } catch (_: Exception) {}
         onDispose {
-            try { w?.insetsController?.show(WindowInsets.Type.systemBars()) } catch (_: Exception) {}
+            try { w?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView).show(androidx.core.view.WindowInsetsCompat.Type.systemBars()) } } catch (_: Exception) {}
             w?.attributes = w?.attributes?.apply { screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE }
         }
     }

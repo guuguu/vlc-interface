@@ -216,7 +216,7 @@ class MediaCenter(private val ctx: Context, private val player: PlayerController
             .setShowWhen(false)
             .setOnlyAlertOnce(true)
             .setCategory(Notification.CATEGORY_TRANSPORT)
-            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)   // Android 12 would wait up to 10 s
+            .apply { if (android.os.Build.VERSION.SDK_INT >= 31) setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE) }   // Android 12 would wait up to 10 s
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setContentIntent(openIntent())
             // Classic notification (11:57): at the top of the notification bar, with its status-bar icon, whenever a player is on —

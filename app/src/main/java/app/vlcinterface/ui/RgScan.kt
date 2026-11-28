@@ -301,7 +301,9 @@ fun RgFailureReport(nav: Navigator) {
         RgScanner.phonePermissionResult(r.resultCode == android.app.Activity.RESULT_OK)
     }
     LaunchedEffect(s.needsPhonePermission) {
-        if (s.needsPhonePermission.isNotEmpty()) try {
+        // Android 10 has no write request: those songs keep their values in the app.
+        if (s.needsPhonePermission.isNotEmpty() && android.os.Build.VERSION.SDK_INT < 30) RgScanner.phonePermissionResult(false)
+        else if (s.needsPhonePermission.isNotEmpty()) try {
             val pi = MediaStore.createWriteRequest(ctx.contentResolver, s.needsPhonePermission.map { Uri.parse(it) })
             launcher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
         } catch (_: Exception) { RgScanner.phonePermissionResult(false) }

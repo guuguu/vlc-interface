@@ -366,16 +366,20 @@ object AlarmEngine {
         }
     }
 
+    /** Android 12+: the vibrator manager's default; Android 10 / 11: the plain vibrator. */
+    private fun vibrator(): android.os.Vibrator = if (Build.VERSION.SDK_INT >= 31) app.getSystemService(VibratorManager::class.java).defaultVibrator
+        else app.getSystemService(android.os.Vibrator::class.java)
+
     private fun vibrate(pattern: LongArray) {
         try {
-            app.getSystemService(VibratorManager::class.java).defaultVibrator.vibrate(VibrationEffect.createWaveform(pattern, 0),
+            vibrator().vibrate(VibrationEffect.createWaveform(pattern, 0),
                 AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).build())
         } catch (_: Exception) {}
     }
 
     private fun stopEffects() {
         stopLights()
-        try { app.getSystemService(VibratorManager::class.java).defaultVibrator.cancel() } catch (_: Exception) {}
+        try { vibrator().cancel() } catch (_: Exception) {}
         tone?.let { try { it.stop(); it.release() } catch (_: Exception) {} }
         tone = null
     }

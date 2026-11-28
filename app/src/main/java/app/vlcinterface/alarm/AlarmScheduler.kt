@@ -91,12 +91,13 @@ object AlarmScheduler {
     private fun showIntent(ctx: Context): PendingIntent = PendingIntent.getActivity(ctx, 7300,
         Intent(ctx, app.vlcinterface.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)
 
-    fun canExact(ctx: Context): Boolean = ctx.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
+    // Android 10 / 11: exact alarms need no permission.
+    fun canExact(ctx: Context): Boolean = android.os.Build.VERSION.SDK_INT < 31 || ctx.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
 
     private fun setAt(ctx: Context, at: Long, pi: PendingIntent) {
         val am = ctx.getSystemService(AlarmManager::class.java)
         try {
-            if (am.canScheduleExactAlarms()) am.setAlarmClock(AlarmManager.AlarmClockInfo(at, showIntent(ctx)), pi)
+            if (canExact(ctx)) am.setAlarmClock(AlarmManager.AlarmClockInfo(at, showIntent(ctx)), pi)
             else am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
         } catch (_: Exception) { try { am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi) } catch (_: Exception) {} }
     }

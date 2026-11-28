@@ -612,10 +612,13 @@ object PlacesReach {
 fun SourcesTab(nav: Navigator, zone: Zone) {
     val st by App.instance.store.state.collectAsState()
     val list = st.sources.filter { it.zone == zone && it.proto != "m3u" }
+    // 2026-11-28 02:08 (request 32): every LAN location that also has a VPN address shows again under Internet, as a
+    // linked twin — the same location (folders, index, login), reached at its VPN address; edited / deleted with it.
+    val twins = if (zone == Zone.INTERNET) st.sources.filter { it.zone == Zone.LAN && it.proto != "upnp" && it.vpnHost.isNotBlank() } else emptyList()
     val online = remember { mutableStateMapOf<String, Boolean>() }
     var found by remember { mutableStateOf<List<Entry>?>(null) }
     // Re-check reachability every 20 s while the tab is visible.
-    LaunchedEffect(list.map { it.id }) {
+    LaunchedEffect(list.map { it.id } + twins.map { "twin:" + it.id + it.vpnHost }) {
         while (true) {
             list.forEach { s ->
                 launch {
@@ -623,6 +626,7 @@ fun SourcesTab(nav: Navigator, zone: Zone) {
                     online[s.id] = if (s.proto == "upnp") true else Net.reachable(host, if (s.port > 0) s.port else s.defaultPort)
                 }
             }
+            twins.forEach { s -> launch { online["twin:" + s.id] = Net.reachable(Urls.hostOnly(s.vpnHost), if (s.port > 0) s.port else s.defaultPort) } }
             kotlinx.coroutines.delay(20_000)
         }
     }
@@ -646,12 +650,13 @@ fun SourcesTab(nav: Navigator, zone: Zone) {
             }
         }
         SectionTitle(if (zone == Zone.LAN) "Saved on your LAN" else "Remote storage")
-        if (list.isEmpty()) Text(
+        if (list.isEmpty() && twins.isEmpty()) Text(
             if (zone == Zone.LAN) "No LAN sources yet. Tap + to add your NAS, or save one found below."
             else "No remote storage yet. Tap + or a preset below to add a seedbox, Nextcloud or FTP server.",
             color = C.muted, fontSize = 14.sp
         )
         list.forEach { s -> SourceCard(nav, s, online[s.id]) }
+        twins.forEach { s -> SourceCard(nav, s, online["twin:" + s.id], twin = true) }
         if (zone == Zone.LAN) {
             SectionTitle("Found on your LAN")
             CardBox {
@@ -704,19 +709,50 @@ fun SourcesTab(nav: Navigator, zone: Zone) {
     }
 }
 
+/** Thin divider and a small muted label: the card's sections (2026-11-28 request 31, mock-up v2). */
 @Composable
-fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
+private fun CardSection(label: String) {
+    Box(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 10.dp).height(1.dp).background(C.line))
+    if (label.isNotEmpty()) Text(label, color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 6.dp, bottom = 4.dp))
+}
+
+/** One button of the card: same corner, padding and text size everywhere. */
+@Composable
+private fun CardBtn(text: String, color: Color, border: Color, modifier: Modifier = Modifier, fill: Color = Color.Transparent,
+                    center: Boolean = true, onLong: (() -> Unit)? = null, onClick: () -> Unit) {
+    Box(modifier.clip(RoundedCornerShape(8.dp)).background(fill).border(1.dp, border, RoundedCornerShape(8.dp))
+        .combinedClickable(onClick = onClick, onLongClick = onLong).padding(horizontal = 10.dp, vertical = 7.dp),
+        contentAlignment = if (center) Alignment.Center else Alignment.CenterStart) {
+        Text(text, color = color, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/**
+ * A saved LAN / Internet location (2026-11-28 02:02–02:05, request 31, mock-up v2): header (share name on one line, the
+ * address under it), Address (left column Auto and + under it; right column one address per row, kind on the left and
+ * the IP on the right, each address once), Folders (one row per folder with its own 🔍 Index), the actions (+ Folder,
+ * ↻ Rescan, 🗑 Delete, equal buttons), Write access (state left, Check right).
+ * [twin]: the LAN location shown again under Internet at its VPN address (request 32) — same folders and index; its
+ * address and deleting stay on the LAN card.
+ */
+@Composable
+fun SourceCard(nav: Navigator, s: Source, online: Boolean?, twin: Boolean = false) {
     val a = accent()
+    var help by remember { mutableStateOf("") }
+    if (help.isNotEmpty()) HelperDialog(help, SettingHelp.text(help, "")) { help = "" }
     CardBox {
         Row(Modifier.padding(start = 14.dp, end = 4.dp, top = 10.dp).clickable {
             nav.go(Screen.Browse(s.id, Urls.forSource(s), s.name))
         }, verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(C.card2), contentAlignment = Alignment.Center) {
-                Text(if (s.smbVersion == "SMB1") "SMB1" else s.proto.uppercase().take(6), color = a, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Text(if (twin) "VPN" else if (s.smbVersion == "SMB1") "SMB1" else s.proto.uppercase().take(6), color = a, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             }
             Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                Text(s.name.ifEmpty { s.host }, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text(Urls.forSource(s), color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                // The share's name alone on one line ("192.168.5.1 · Transcend" → "Transcend"); the address is under it.
+                val title = s.name.ifEmpty { s.host }.let { n -> if (n.startsWith(s.host + " · ")) n.removePrefix(s.host + " · ") else n }.ifEmpty { s.host }
+                Text(title, color = C.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val addr = if (twin) Urls.forSource(s).replaceFirst(s.host, s.vpnHost) else Urls.forSource(s)
+                Text(addr, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             val (label, col) = when (online) { null -> "…" to C.muted; true -> "Online" to C.ok; false -> "Offline" to C.muted }
             Text(label, color = col, fontSize = 12.sp)
@@ -724,27 +760,48 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
             SymButton({ nav.go(Screen.LogPage(ServerLog.keyOf(s.host))) }) { SymIcon(Icons.Filled.Info, "Log for ${s.name}", tint = C.muted) }
             SymButton({ nav.go(Screen.EditSource(s.zone, s.id)) }) { SymIcon(Icons.Filled.MoreVert, "Edit ${s.name}", tint = C.muted) }
         }
-        // LAN servers: which address to use — Auto, the LAN one or any stored one (VPN …); + stores another,
-        // long-press an address to remove it.
-        if (s.zone == Zone.LAN && s.proto != "upnp") {
+        if (twin) Text("🔗 Linked to the LAN location — same folders, index and login, reached through the VPN. Its addresses and Delete are on the LAN card.",
+            color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 6.dp))
+        // LAN servers: which address to use. Long-press an added address to remove it.
+        if (s.zone == Zone.LAN && s.proto != "upnp" && !twin) {
             val vl = app.vlcinterface.sources.VpnLink
             val vpnOn by vl.vpnUp.collectAsState()
             val inUse = remember(s, vpnOn, online) { vl.hostNow(s) }
             var adding by remember { mutableStateOf(false) }
             var removing by remember { mutableStateOf<String?>(null) }
-            FlowRow(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Address", color = C.muted, fontSize = 12.sp)
-                if (s.vpnHost.isNotBlank()) Pill("Auto", selected = s.addrMode == "auto" || s.addrMode.isBlank()) { vl.setMode(s, "auto") }
-                Pill("LAN ${s.host}", selected = s.addrMode == "lan" || (s.vpnHost.isBlank() && (s.addrMode == "auto" || s.addrMode.isBlank()))) { vl.setMode(s, "lan") }
-                s.altHosts.forEach { h ->
-                    Box(Modifier.combinedClickable(onClick = { vl.setMode(s, h) }, onLongClick = { removing = h })) {
-                        Pill((if (h == s.vpnHost) "VPN " else "") + h, selected = s.addrMode == h || (s.addrMode == "vpn" && h == s.vpnHost)) { vl.setMode(s, h) }
+            CardSection("Address")
+            // Each address once: the LAN one, then the others (the VPN one marked), the LAN one never repeated.
+            val others = s.altHosts.filter { !it.equals(s.host, true) }.distinctBy { it.lowercase() }
+            val rows: List<Pair<String, String>> = listOf("LAN" to s.host) + others.map { h -> (if (h == s.vpnHost) "VPN" else "Other") to h }
+            val auto = s.addrMode == "auto" || s.addrMode.isBlank()
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(Modifier.width(64.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (s.vpnHost.isNotBlank() || others.isNotEmpty())
+                        CardBtn("Auto", if (auto) a else C.text, if (auto) a else C.line, Modifier.fillMaxWidth(), fill = if (auto) a.copy(alpha = 0.15f) else Color.Transparent,
+                            onLong = { help = "Address: Auto" }) { vl.setMode(s, "auto"); if (AutoHelp.ok("library", "Address: Auto")) help = "Address: Auto" }
+                    CardBtn("+", C.text, C.line, Modifier.fillMaxWidth(), onLong = { help = "Address: +" }) {
+                        if (AutoHelp.ok("library", "Address: +")) help = "Address: +"
+                        adding = true
                     }
                 }
-                Pill("+") { adding = true }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    rows.forEach { (kind, h) ->
+                        val sel = when (kind) {
+                            "LAN" -> s.addrMode == "lan" || (s.vpnHost.isBlank() && others.isEmpty() && auto)
+                            else -> s.addrMode == h || (s.addrMode == "vpn" && h == s.vpnHost)
+                        }
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(if (sel) a.copy(alpha = 0.15f) else Color.Transparent)
+                            .border(1.dp, if (sel) a else C.line, RoundedCornerShape(8.dp))
+                            .combinedClickable(onClick = { vl.setMode(s, if (kind == "LAN") "lan" else h) }, onLongClick = { if (kind != "LAN") removing = h })
+                            .padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(kind, color = if (sel) a else C.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            Text(h, color = if (sel) a else C.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                }
             }
-            if (s.vpnHost.isNotBlank() || s.altHosts.isNotEmpty())
-                Text("In use: $inUse" + if (inUse != s.host) " (instead of ${s.host})" else "", color = a, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 2.dp))
+            val kindNow = when { inUse.equals(s.host, true) -> "LAN"; inUse == s.vpnHost -> "VPN"; else -> "other" }
+            Text("In use: $inUse ($kindNow)", color = a, fontSize = 12.sp, modifier = Modifier.padding(start = 14.dp, top = 6.dp))
             if (adding) {
                 var ip by remember { mutableStateOf("") }
                 AlertDialog(onDismissRequest = { adding = false }, containerColor = C.panel,
@@ -767,55 +824,57 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
                     dismissButton = { STextButton({ removing = null }) { Text("Cancel") } })
             }
         }
-        FlowRow(Modifier.padding(start = 14.dp, end = 8.dp, top = 6.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            s.pins.forEach { pin ->
-                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xFF252A32)).clickable {
-                    // A pin holds the folder's full path on the server (share included): built from the server
-                    // alone, so the share isn't put in twice (".../Transcend/Transcend/...").
-                    nav.go(Screen.Browse(s.id, Urls.forSource(s.copy(path = ""), pin), pin.trim('/').substringAfterLast('/')))
-                }.padding(horizontal = 12.dp, vertical = 7.dp)) { Text("▤ " + pin.trim('/').substringAfterLast('/'), color = C.text, fontSize = 13.sp) }
-                // Right beside the bookmark: index it now for search (orange = indexed; spinner while indexing).
-                val idxBusy by app.vlcinterface.sources.NetIndex.busy.collectAsState()
-                val idxVer by app.vlcinterface.sources.NetIndex.version.collectAsState()
+        // Folders: one row each, its own 🔍 Index on the right.
+        if (s.pins.isNotEmpty()) CardSection("Folders")
+        val idxBusy by app.vlcinterface.sources.NetIndex.busy.collectAsState()
+        val idxVer by app.vlcinterface.sources.NetIndex.version.collectAsState()
+        val ctxIdx = androidx.compose.ui.platform.LocalContext.current
+        s.pins.forEachIndexed { i, pin ->
+            val name = pin.trim('/').substringAfterLast('/')
+            if (i > 0) Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp).height(1.dp).background(C.line.copy(alpha = 0.5f)))
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                // A pin holds the folder's full path on the server (share included): built from the server alone.
+                Text("▤ $name", color = C.text, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f).clickable { nav.go(Screen.Browse(s.id, Urls.forSource(s.copy(path = ""), pin), name)) }.padding(vertical = 6.dp))
                 val indexed = remember(idxVer) { app.vlcinterface.sources.NetIndex.has(s, pin) }
-                val ctxIdx = androidx.compose.ui.platform.LocalContext.current
-                Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, if (indexed) a else C.line, RoundedCornerShape(8.dp)).clickable {
+                val stopped = remember(idxVer, idxBusy) { app.vlcinterface.sources.NetIndex.hasStopped(s, pin) }
+                Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, if (indexed || stopped) a else C.line, RoundedCornerShape(8.dp)).clickable {
                     app.vlcinterface.sources.NetIndex.buildManual(s, pin)
-                    android.widget.Toast.makeText(ctxIdx, "Indexing ${pin.trim('/').substringAfterLast('/')} for search…", android.widget.Toast.LENGTH_SHORT).show()
-                }.padding(horizontal = 10.dp, vertical = 7.dp), contentAlignment = Alignment.Center) {
-                    if (idxBusy.contains(pin.trim('/').substringAfterLast('/'))) CircularProgressIndicator(color = a, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                    else {
-                        // Always "Index" (08:11); the state shows by its colour: accent = indexed (or interrupted, kept), grey = not yet.
-                        val stopped = remember(idxVer, idxBusy) { app.vlcinterface.sources.NetIndex.hasStopped(s, pin) }
-                        Text("🔍 Index", color = if (indexed || stopped) a else C.muted, fontSize = 13.sp)
-                    }
+                    android.widget.Toast.makeText(ctxIdx, "Indexing $name for search…", android.widget.Toast.LENGTH_SHORT).show()
+                }.padding(horizontal = 10.dp, vertical = 6.dp), contentAlignment = Alignment.Center) {
+                    if (idxBusy.contains(name)) CircularProgressIndicator(color = a, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                    // Always "Index" (08:11); accent = indexed (or interrupted, kept), grey = not yet.
+                    else Text("🔍 Index", color = if (indexed || stopped) a else C.muted, fontSize = 13.sp)
                 }
             }
-            // Add a folder of this location (2026-11-21 16:57): pick it in a small folder browser; it's pinned and indexed.
-            var pickFolder by remember { mutableStateOf(false) }
-            if (s.proto != "upnp") Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, a, RoundedCornerShape(8.dp)).clickable { pickFolder = true }
-                .padding(horizontal = 12.dp, vertical = 7.dp)) { Text("+ Folder", color = a, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-            if (pickFolder) AddFolderDialog(s) { pickFolder = false }
-            Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable {
+        }
+        // Actions: equal buttons in one row.
+        var pickFolder by remember { mutableStateOf(false) }
+        var askDel by remember { mutableStateOf(false) }
+        Row(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (s.proto != "upnp") CardBtn("+ Folder", a, a, Modifier.weight(1f)) { pickFolder = true }
+            CardBtn("↻ Rescan", a, C.line, Modifier.weight(1f)) {
                 App.instance.store.update { st -> st.copy(sources = st.sources.map { if (it.id == s.id) it.copy(lastScan = System.currentTimeMillis()) else it }) }
                 app.vlcinterface.sources.NetIndex.rebuild(s)          // its pinned folders' index too
                 nav.go(Screen.Browse(s.id, Urls.forSource(s), s.name, highlight = "\u0000rescan"))
-            }.padding(horizontal = 12.dp, vertical = 7.dp)) { Text("↻ Rescan", color = a, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-            // Delete the location from the app (2026-11-28 01:14), after a question. Its index, pins and kept state go with it.
-            var askDel by remember { mutableStateOf(false) }
-            Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.bad, RoundedCornerShape(8.dp)).clickable { askDel = true }
-                .padding(horizontal = 12.dp, vertical = 7.dp)) { Text("🗑 Delete", color = C.bad, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
-            if (askDel) AlertDialog(onDismissRequest = { askDel = false }, containerColor = C.panel,
-                title = { Text("Delete \"${s.name}\"?") },
-                text = { Text("The location is removed from the app with its folders, its index for search and its settings. The files on it aren't touched. Songs from it stay in playlists but can't be played until it's added again.") },
-                confirmButton = { STextButton({
-                    askDel = false
-                    App.instance.store.update { st -> st.copy(sources = st.sources.filterNot { it.id == s.id }) }
-                    try { app.vlcinterface.sources.NetIndex.forgetSource(s.id) } catch (_: Exception) {}
-                }) { Text("Delete", color = C.bad) } },
-                dismissButton = { STextButton({ askDel = false }) { Text("Cancel") } })
+            }
+            // Delete the location from the app (01:14), after a question; the twin is deleted with its LAN card.
+            if (!twin) CardBtn("🗑 Delete", C.bad, C.bad, Modifier.weight(1f)) { askDel = true }
         }
-        if (s.proto == "smb") WriteAccessRow(s)
+        if (pickFolder) AddFolderDialog(s) { pickFolder = false }
+        if (askDel) AlertDialog(onDismissRequest = { askDel = false }, containerColor = C.panel,
+            title = { Text("Delete \"${s.name}\"?") },
+            text = { Text("The location is removed from the app with its folders, its index for search and its settings" +
+                (if (s.vpnHost.isNotBlank()) " (and its linked card under Internet)" else "") +
+                ". The files on it aren't touched. Songs from it stay in playlists but can't be played until it's added again.") },
+            confirmButton = { STextButton({
+                askDel = false
+                App.instance.store.update { st -> st.copy(sources = st.sources.filterNot { it.id == s.id }) }
+                try { app.vlcinterface.sources.NetIndex.forgetSource(s.id) } catch (_: Exception) {}
+            }) { Text("Delete", color = C.bad) } },
+            dismissButton = { STextButton({ askDel = false }) { Text("Cancel") } })
+        if (s.proto == "smb" && !twin) { CardSection(""); WriteAccessRow(s) }
+        Box(Modifier.height(12.dp))
     }
 }
 
@@ -1147,16 +1206,19 @@ private fun WriteAccessRow(s: Source) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+    Column(Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (s.readOnly.isEmpty()) "Write access: read / write" else "Read-only: " + s.readOnly.joinToString(", ") { if (it == "*") "whole server" else it },
-                color = if (s.readOnly.isEmpty()) C.muted else C.bad, fontSize = 12.sp, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Text("Write access", color = C.muted, fontSize = 12.sp)
+                Text(if (s.readOnly.isEmpty()) "Read / write" else "Read-only: " + s.readOnly.joinToString(", ") { if (it == "*") "whole server" else it },
+                    color = if (s.readOnly.isEmpty()) C.text else C.bad, fontSize = 14.sp)
+            }
             Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.line, RoundedCornerShape(8.dp)).clickable(enabled = !busy) {
                 busy = true; result = ""
                 scope.launch { result = app.vlcinterface.sources.WriteGuard.check(s).joinToString("\n"); busy = false }
-            }.padding(horizontal = 10.dp, vertical = 6.dp)) {
+            }.padding(horizontal = 12.dp, vertical = 7.dp)) {
                 if (busy) CircularProgressIndicator(color = accent(), strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
-                else Text("Check write access", color = accent(), fontSize = 12.sp)
+                else Text("Check", color = accent(), fontSize = 13.sp)
             }
         }
         if (result.isNotEmpty()) Text(result, color = C.text, fontSize = 12.sp)
