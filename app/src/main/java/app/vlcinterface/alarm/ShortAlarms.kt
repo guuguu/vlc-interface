@@ -63,16 +63,35 @@ object ShortAlarms {
         val s = sound.value
         val app = ctx.applicationContext
         val h = android.os.Handler(android.os.Looper.getMainLooper())
-        var rt: android.media.Ringtone? = null
-        if (!s.silent) try {
-            val u = if (s.uri.isEmpty()) RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) else android.net.Uri.parse(s.uri)
-            rt = RingtoneManager.getRingtone(app, u)?.apply {
-                audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
-                if (android.os.Build.VERSION.SDK_INT >= 28) isLooping = true     // a short sound repeats until its time is up
-                play()
+        // 14:25 (no sound heard): played on the ALARM stream with a MediaPlayer — the notification stream is silent when the
+        // phone is on vibrate / silent and often turned low, and a Ringtone's errors were swallowed. The alarm stream
+        // sounds whatever the ringer mode (its volume is the phone's alarm volume); music playing is lowered meanwhile.
+        // If the chosen sound can't be opened, the default alarm, then notification sound is used; failures are logged.
+        var mp: android.media.MediaPlayer? = null
+        val am = app.getSystemService(android.media.AudioManager::class.java)
+        val attrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ALARM).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+        val focus = try { android.media.AudioFocusRequest.Builder(android.media.AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK).setAudioAttributes(attrs).build() } catch (_: Exception) { null }
+        if (!s.silent) {
+            val tries = listOfNotNull(
+                if (s.uri.isNotEmpty()) android.net.Uri.parse(s.uri) else null,
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+                RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM),
+                RingtoneManager.getActualDefaultRingtoneUri(app, RingtoneManager.TYPE_NOTIFICATION))
+            var why = ""
+            for (u in tries) {
+                try {
+                    mp = android.media.MediaPlayer().apply {
+                        setAudioAttributes(attrs); setDataSource(app, u); isLooping = true; prepare()
+                    }
+                    try { focus?.let { am.requestAudioFocus(it) } } catch (_: Exception) {}
+                    mp?.start()
+                    break
+                } catch (e: Exception) { why = "${e.javaClass.simpleName}: ${e.message}"; try { mp?.release() } catch (_: Exception) {}; mp = null }
             }
-        } catch (_: Exception) {}
+            if (mp == null) app.vlcinterface.data.ServerLog.log("alarm", "short", "", "", false, "Short alarm: no sound could be played ($why)")
+            else if (am.getStreamVolume(android.media.AudioManager.STREAM_ALARM) == 0)
+                app.vlcinterface.data.ServerLog.log("alarm", "short", "", "", false, "Short alarm: the phone's alarm volume is 0 — the sound plays, but can't be heard")
+        }
         val ms = s.seconds * 1000L
         try {
             val vib = if (android.os.Build.VERSION.SDK_INT >= 31) app.getSystemService(android.os.VibratorManager::class.java).defaultVibrator
@@ -85,7 +104,11 @@ object ShortAlarms {
             }
             if (effect != null) vib?.vibrate(effect)
         } catch (_: Exception) {}
-        h.postDelayed({ try { rt?.stop() } catch (_: Exception) {}; done() }, ms)
+        h.postDelayed({
+            try { mp?.stop() } catch (_: Exception) {}; try { mp?.release() } catch (_: Exception) {}
+            try { focus?.let { am.abandonAudioFocusRequest(it) } } catch (_: Exception) {}
+            done()
+        }, ms)
     }
     val list = MutableStateFlow<List<ShortAlarm>>(emptyList())
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("short_alarms", Context.MODE_PRIVATE)
