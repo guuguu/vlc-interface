@@ -112,6 +112,11 @@ data class PlayerState(
     val trebleDb: Float = 0f,
     /** Pre-amp of this song / station (−12…+12 dB), on top of ReplayGain for songs; kept per song / station. */
     val radioPreDb: Float = 0f,
+    /**
+     * The "Songs without ReplayGain" correction in use on this song (0 when it has ReplayGain, for radio and videos).
+     * The front Preamp slider shows it added to the song's own Preamp, so the slider shows the real level (2026-11-28 10:58).
+     */
+    val noRgShownDb: Float = 0f,
     /** This song (station) has its own saved loudness / treble (Recall brings them back). */
     val toneSaved: Boolean = false,
     /** Radio: the name the station announces about itself (ICY name), if any. */
@@ -259,12 +264,13 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (rgUri != item.uri || !item.isMusic || set.rgMode == "off") {
             rgUri = item.uri
             rgPeak = 0f
+            _state.value = _state.value.copy(noRgShownDb = 0f)
             rgDb = if (!item.isMusic || set.rgMode == "off" || !NativeAudio.active) 0f else {
                 val k = app.vlcinterface.sources.ReplayGain.known(item.uri)
                 val album = rgModeFor(s) == "album"
                 val g = if (album) k?.albumGain ?: k?.trackGain else k?.trackGain ?: k?.albumGain
                 val pk = if (album) k?.albumPeak ?: k?.trackPeak else k?.trackPeak ?: k?.albumPeak
-                if (g == null) noRgDb(item) else {
+                if (g == null) noRgDb(item).also { nr -> _state.value = _state.value.copy(noRgShownDb = nr) } else {
                     var d = g + set.rgPreampDb
                     if (set.rgClipProtect && pk != null && pk > 0f) { d = minOf(d, -20f * log10(pk)); rgPeak = pk }
                     d
@@ -286,7 +292,7 @@ class PlayerController(private val context: Context, private val store: Store) {
                 val g = if (album) rg?.albumGain ?: rg?.trackGain else rg?.trackGain ?: rg?.albumGain
                 val used = if (g == null) "" else if (album && rg?.albumGain != null || !album && rg?.trackGain == null) "album" else "track"
                 if (rg == null || g == null) askRgScan(item)
-                _state.value = _state.value.copy(rgInfo = when {
+                _state.value = _state.value.copy(noRgShownDb = if (g == null) set.noRgDb else 0f, rgInfo = when {
                     rg == null || g == null -> "No RG · ${dbText(set.noRgDb)} (libVLC)"
                     else -> "RG $used " + (if (g >= 0) "+" else "−") + "%.2f".format(java.util.Locale.US, kotlin.math.abs(g)) + " dB (libVLC)"
                 })
@@ -310,6 +316,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             var limited = false
             if (gain != null && set.rgClipProtect && peak != null && peak > 0f) { val cap = -20f * log10(peak); if (cap < db) { db = cap; limited = true } }
             rgDb = db
+            _state.value = _state.value.copy(noRgShownDb = if (gain == null) db else 0f)
             rgPeak = if (gain != null && peak != null && peak > 0f) peak else 0f
             if (gain == null && !overVpn) askRgScan(item)
             fun f(v: Float) = (if (v >= 0) "+" else "−") + "%.2f".format(java.util.Locale.US, kotlin.math.abs(v)) + " dB"
