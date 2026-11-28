@@ -1073,6 +1073,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     private var reloadGen = 0
     /** Item starts waiting for a slow network close (startItem): a newer start drops the older one. */
     private var startGen = 0
+    private var nasSeenAt = 0L
     private var startAfterClose = false
 
     /**
@@ -3058,7 +3059,14 @@ class PlayerController(private val context: Context, private val store: Store) {
                 if (!endHandled && !stopping && s.item != null && !s.item.isRadio) handleEnd(s)
             }
             MediaPlayer.Event.EndReached -> { adoptSessionSync(); handleEnd(s) }
-            MediaPlayer.Event.TimeChanged -> { lastTick = System.currentTimeMillis(); _state.value = s.copy(time = ev.timeChanged) }
+            MediaPlayer.Event.TimeChanged -> {
+                lastTick = System.currentTimeMillis(); _state.value = s.copy(time = ev.timeChanged)
+                // A NAS song playing on is proof its NAS answers (08:54): noted every 10 s, no network check needed.
+                val it0 = s.item
+                if (it0 != null && it0.uri.startsWith("smb://") && lastTick - nasSeenAt > 10_000) {
+                    nasSeenAt = lastTick; try { app.vlcinterface.sources.NetIndex.sawWorking(it0) } catch (_: Exception) {}
+                }
+            }
             MediaPlayer.Event.LengthChanged -> _state.value = s.copy(length = ev.lengthChanged)
             MediaPlayer.Event.Buffering -> _state.value = s.copy(buffering = ev.buffering)
             MediaPlayer.Event.ESAdded, MediaPlayer.Event.ESSelected -> refreshTracks()

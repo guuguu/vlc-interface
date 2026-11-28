@@ -138,7 +138,9 @@ object NetIndex {
         if (VpnLink.ignoreSession && s.zone == app.vlcinterface.data.Zone.LAN) return true
         val c = synchronized(upAt) { upAt[s.id] }
         val now = System.currentTimeMillis()
-        if (c == null || now - c.first > 20_000) scope.launch { try { usableSources(setOf(s.id)) } catch (_: Exception) {} }
+        // One background check at a time per location (2026-11-28 08:54, error log: thousands of checks a minute — every
+        // queue item asked for its own while the last answer was older than 20 s — "6631 failures in a row").
+        if ((c == null || now - c.first > 20_000) && checking.add(s.id)) scope.launch { try { usableSources(setOf(s.id)) } catch (_: Exception) {} finally { checking.remove(s.id) } }
         return c != null && !c.second && now - c.first < 60_000
     }
 
@@ -197,6 +199,20 @@ object NetIndex {
      * Of [ids], the saved locations that can be used right now (2026-11-22 19:34): a home-network one only at home or over
      * the VPN when it's on (not while it's ignored for this session), and its server answering (checked at most every 20 s).
      */
+    private val checking: MutableSet<String> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+    /** Checks running now, per location: a second caller waits for the same answer instead of starting another. */
+    private val inFlight = java.util.concurrent.ConcurrentHashMap<String, kotlinx.coroutines.Deferred<Boolean>>()
+
+    /**
+     * A NAS song playing whose clock moves proves its location answers (08:54): counted as a good check, no network
+     * check needed meanwhile.
+     */
+    fun sawWorking(item: PlayItem) {
+        val s = MusicLibrary.sourceOf(item) ?: return
+        failCount.remove(s.id)
+        synchronized(upAt) { upAt[s.id] = System.currentTimeMillis() to true }
+    }
+
     suspend fun usableSources(ids: Set<String>): Set<String> = kotlinx.coroutines.coroutineScope {
         val now = System.currentTimeMillis()
         App.instance.store.current.sources.filter { it.id in ids }
@@ -206,7 +222,8 @@ object NetIndex {
                 async(Dispatchers.IO) {
                     val c = synchronized(upAt) { upAt[s.id] }
                     if (c != null && now - c.first < 20_000) s.id to c.second
-                    else {
+                    else inFlight[s.id]?.takeIf { it.isActive }?.let { s.id to it.await() } ?: run {
+                    val job = async(start = kotlinx.coroutines.CoroutineStart.LAZY) {
                         // 2026-11-28 01:24 (false reachable / unreachable flapping while a ReplayGain scan ran): one failed
                         // check no longer makes a NAS "unreachable". A failure is tried again at once with more time; only
                         // 3 failed checks in a row turn it off, and failures don't count while this app's own ReplayGain
@@ -219,9 +236,15 @@ object NetIndex {
                         val fails = if (ok) 0 else if (busy && was == true) (failCount[s.id] ?: 0) else (failCount[s.id] ?: 0) + 1
                         failCount[s.id] = fails
                         val state = ok || (was != false && fails < 3)
-                        if (!ok) app.vlcinterface.data.ServerLog.log("index", "check", s.name, "", false, "${s.name} didn't answer (${fails} in a row" + (if (busy) ", network busy with a scan" else "") + ")" + if (state) " — still counted as on line" else " — off line")
-                        synchronized(upAt) { upAt[s.id] = now to state }
-                        s.id to state
+                        // Logged when it changes and then once every 30 failures (not on every check).
+                        if (!ok && (fails <= 3 || fails % 30 == 0)) app.vlcinterface.data.ServerLog.log("index", "check", s.name, "", false, "${s.name} didn't answer (${fails} in a row" + (if (busy) ", network busy with a scan" else "") + ")" + if (state) " — still counted as on line" else " — off line")
+                        if (ok && (was == false)) app.vlcinterface.data.ServerLog.log("index", "check", s.name, "", true, "${s.name} answers again — on line")
+                        synchronized(upAt) { upAt[s.id] = System.currentTimeMillis() to state }
+                        state
+                    }
+                    val mine = inFlight.putIfAbsent(s.id, job)
+                    if (mine != null && mine.isActive) { job.cancel(); s.id to mine.await() }
+                    else { if (mine != null) inFlight[s.id] = job; job.start(); try { s.id to job.await() } finally { inFlight.remove(s.id, job) } }
                     }
                 }
             }.map { it.await() }.filter { it.second }.map { it.first }.toHashSet()

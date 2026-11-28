@@ -1614,3 +1614,7 @@
 - **Likely cause:** all slow work shared Android's one pool of 64 threads. Each list row (Up next, the queue) reads its album folder's picture from the NAS; with the NAS slow (busy copying), each read can wait 15–25 s, the threads ran out, and everything else waiting for a thread — the NAS checks (then timing out → "unreachable"), the picture search, the player's picture, ReplayGain — queued behind them.
 - **Now:** the lists' folder pictures use at most 4 threads; the NAS checks and the internet lookups (picture search, MusicBrainz) have their own threads — a slow NAS can't hold them up.
 - **Picture search limited to 45 s:** after that it shows what it found or "nothing found", and the Server log says the sites answered too slowly.
+
+## The NAS check storm (from the error log of 2026-11-28 08:53, 1.96.0)
+- **Found in the log:** "Transcend didn't answer (6631 in a row)", dozens of times in the same second, while a NAS song was playing. Every queue item (a 93-hour queue) asked for its own NAS check whenever the last answer was older than 20 s, so thousands of checks ran at once; they used up the shared threads, so they themselves failed (and so did pictures, the picture search and scans) — a NAS that worked looked off line.
+- **Now:** one check at a time per location — everyone else waits for that answer; a NAS song playing on counts as proof the NAS answers (noted every 10 s, no check needed); the checks have their own threads (1.97); failures are logged when the state changes and then once every 30, not on every check.
