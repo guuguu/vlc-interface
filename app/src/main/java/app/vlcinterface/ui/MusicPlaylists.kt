@@ -412,20 +412,35 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 val idCtx = androidx.compose.ui.platform.LocalContext.current
                 val idStatus by app.vlcinterface.sources.SongId.status.collectAsState()
                 Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.width(92.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x24FFFFFF))
+                    // The label never changes; what the button is doing shows by a strong colour (02:53): working — the
+                    // accent, pulsing; found / written — solid green; not found / not written / timed out — solid red
+                    // (for a few seconds; the details are in the log). Same size and place in every state.
+                    val idPhase = when {
+                        idStatus.isEmpty() -> ""
+                        idStatus.endsWith("…") -> "busy"
+                        idStatus.startsWith("Not") || idStatus.startsWith("Timed") -> "fail"
+                        else -> "ok"
+                    }
+                    val pulse = if (idPhase == "busy") androidx.compose.animation.core.rememberInfiniteTransition(label = "idPulse").animateFloat(0.55f, 1f,
+                        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse), label = "idA").value else 1f
+                    val idBg = when (idPhase) { "busy" -> accent().copy(alpha = pulse); "ok" -> Color(0xFF2E9E5B); "fail" -> Color(0xFFD64541); else -> Color(0x24FFFFFF) }
+                    val idFg = if (idPhase.isEmpty()) C.muted else Color(0xFF101010)
+                    Box(Modifier.width(92.dp).clip(RoundedCornerShape(10.dp)).background(idBg)
                         .guardClick("identify") { sleepScope.launch { app.vlcinterface.sources.SongId.identify(idCtx, item, p.nowPlaying) } }
                         .padding(horizontal = 6.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
-                        Text(idStatus.ifEmpty { "♪ Identify" }, color = if (idStatus.isEmpty()) C.muted else accent(), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("♪ Identify", color = idFg, fontSize = 11.sp, fontWeight = if (idPhase.isEmpty()) FontWeight.Normal else FontWeight.Bold, maxLines = 1)
                     }
                     Box {
                         val on = p.sleepUntil > 0 || p.sleepSongs > 0
                         val ac = accent()
                         val left = if (p.sleepUntil > 0) "${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min"
                             else if (p.sleepSongs > 0) "${p.sleepSongs} song" + (if (p.sleepSongs == 1) "" else "s") else ""
-                        Box(Modifier.width(92.dp).clip(RoundedCornerShape(10.dp)).background(if (on) ac.copy(alpha = 0.25f) else Color(0x24FFFFFF))
-                            .border(1.dp, if (on) ac else Color.Transparent, RoundedCornerShape(10.dp)).guardClick("sleep") { sleepMenu = true }
+                        // Set: solid accent (02:53, a strong sign it's acting); the time left stays in its fixed width.
+                        Box(Modifier.width(92.dp).clip(RoundedCornerShape(10.dp)).background(if (on) ac else Color(0x24FFFFFF))
+                            .guardClick("sleep") { sleepMenu = true }
                             .padding(horizontal = 6.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
-                            Text(if (left.isEmpty()) "Sleep" else "Sleep · $left", color = if (on) ac else C.text, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(if (left.isEmpty()) "Sleep" else "Sleep · $left", color = if (on) Color(0xFF101010) else C.text, fontSize = 11.sp,
+                                fontWeight = if (on) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         SDropdownMenu(sleepMenu, { sleepMenu = false }) {
                             // Radio: time only (a station has no songs to count).
@@ -479,12 +494,15 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                         drawPath(path, wave, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
                     }
                 }
+                // Acting: solid red for a moment after the reset (02:53).
+                var resetFlash by remember { mutableStateOf(false) }
+                if (resetFlash) LaunchedEffect(Unit) { kotlinx.coroutines.delay(1200); resetFlash = false }
                 // Reset sound (2026-11-28 mock-up v3): the sine button crossed by a red line. A slightly long press puts
                 // Loudness, Treble and Preamp back to 0 and removes the item's own sound profile; a tap only says so.
                 if (st.settings.toneSliders && "tone" in playerRowOrder(setsP, radio)) Box(Modifier.size(30.dp).liteShadow(CircleShape).clip(CircleShape)
-                    .background(Color(0x24FFFFFF)).combinedClickable(
+                    .background(if (resetFlash) Color(0xFFD64541) else Color(0x24FFFFFF)).combinedClickable(
                         onClick = { ShortNote.hint("Hold to reset Loudness, Treble and Preamp to 0 (and forget this " + (if (radio) "station" else "song") + "'s sound profile)") },
-                        onLongClick = { player.resetTone(); ShortNote.show("Sound reset: Loudness, Treble and Preamp at 0") }),
+                        onLongClick = { player.resetTone(); resetFlash = true; ShortNote.show("Sound reset: Loudness, Treble and Preamp at 0") }),
                     contentAlignment = Alignment.Center) {
                     val wave = accent()
                     androidx.compose.foundation.Canvas(Modifier.size(20.dp)) {
@@ -496,7 +514,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
                         }
                         drawPath(path, wave, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
-                        drawLine(Color(0xFFE24B4A), androidx.compose.ui.geometry.Offset(w * 0.05f, h * 0.95f), androidx.compose.ui.geometry.Offset(w * 0.95f, h * 0.05f),
+                        drawLine(if (resetFlash) Color.White else Color(0xFFE24B4A), androidx.compose.ui.geometry.Offset(w * 0.05f, h * 0.95f), androidx.compose.ui.geometry.Offset(w * 0.95f, h * 0.05f),
                             strokeWidth = 2.2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
                     }
                 }
