@@ -59,9 +59,14 @@ fun CoverPicker(item: PlayItem, onNone: () -> Unit, onDone: (note: String, chang
         if (CoverArt.onMobile()) { onDone("Pictures are downloaded only on Wi-Fi", false); return@LaunchedEffect }
         fun ok(c: CoverArt.Candidate) = CoverArt.notBanned(item.artist, item.album, if (c.kind == "web") c.id else "https://coverartarchive.org/${c.kind}/${c.id}/front-500")
         // The list fills as pictures arrive (2026-11-28 08:31); the search goes on meanwhile ("still looking" under it).
-        val l = CoverArt.candidates(item.artist, item.album) { c ->
-            if (ok(c)) scope.launch(kotlinx.coroutines.Dispatchers.Main) { list = (list ?: emptyList()) + c }
-        }.filter { ok(it) }
+        // At most 45 s: then what was found is shown (or "nothing found"), never an endless spinner (08:51).
+        val l = (kotlinx.coroutines.withTimeoutOrNull(45_000) {
+            CoverArt.candidates(item.artist, item.album) { c ->
+                if (ok(c)) scope.launch(kotlinx.coroutines.Dispatchers.Main) { list = (list ?: emptyList()) + c }
+            }
+        } ?: (list ?: emptyList()).also {
+            app.vlcinterface.data.ServerLog.log("covers", "search", "", "", false, "Picture search for \"${item.album}\" stopped after 45 s (${it.size} found) — the picture sites answered too slowly")
+        }).filter { ok(it) }
         searching = false
         when (l.size) {
             0 -> if (onBan != null && (CoverArt.canBan(item.uri, artPath) || CoverArt.hasBans(item.artist, item.album))) list = l else onNone()

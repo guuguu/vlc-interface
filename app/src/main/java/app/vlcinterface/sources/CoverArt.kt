@@ -250,7 +250,7 @@ object CoverArt {
     // ---------- the lookups ----------
 
     /** Folder picture only (no internet): for Library album headers. */
-    suspend fun folderOnly(ctx: Context, item: PlayItem): Bitmap? = withContext(Dispatchers.IO) {
+    suspend fun folderOnly(ctx: Context, item: PlayItem): Bitmap? = withContext(Pools.listPictures)   /* at most 4 at once — see Pools */ {
         val pl = place(ctx, item)
         if (!inAlbumFolder(ctx, item, pl)) {
             val f = storeFind(item, item.artist, item.album) ?: return@withContext null
@@ -405,7 +405,7 @@ object CoverArt {
             lastCall = System.currentTimeMillis()
         }
         // Always off the screen's thread, whoever asks.
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        return kotlinx.coroutines.withContext(Pools.web) {
             http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) JSONObject(r.body!!.string()) else null }
         }
     }
@@ -649,7 +649,7 @@ object CoverArt {
      * MusicBrainz are asked at the same time, previews are fetched 6 at a time with short time limits, and each picture
      * is handed to [onFound] as soon as it's there — the list fills while the search goes on.
      */
-    suspend fun candidates(artist0: String, album: String, onFound: (Candidate) -> Unit = {}): List<Candidate> = withContext(Dispatchers.IO) {
+    suspend fun candidates(artist0: String, album: String, onFound: (Candidate) -> Unit = {}): List<Candidate> = withContext(Pools.web) {
         val artist = canonicalArtist(artist0)
         if (album.isBlank() && artist.isBlank()) return@withContext emptyList()
         if (onMobile()) return@withContext emptyList()       // only on Wi-Fi

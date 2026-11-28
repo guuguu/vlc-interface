@@ -54,6 +54,23 @@ val SUB_EXT = setOf("srt", "ass", "ssa", "sub", "vtt", "idx")
 fun String.ext(): String = substringAfterLast('/').substringAfterLast('.', "").lowercase()
 fun isPlayable(name: String) = name.ext().let { it in VIDEO_EXT || it in AUDIO_EXT }
 
+/**
+ * Separate thread pools (2026-11-28 08:51: the picture search spun for minutes, pictures stopped loading, the NAS looked
+ * unreachable and ReplayGain waited — all at once). Everything used Android's one shared pool for slow work (64 threads);
+ * with the NAS slow (busy copying), every list row's folder picture held a thread up to 15–25 s waiting on the share, the
+ * threads ran out, and every other job — NAS checks, the picture search, scans — queued behind them. Now the folder
+ * pictures of the lists use at most 4 threads, the NAS checks and the internet lookups each have their own, so one slow
+ * NAS can't hold up the rest.
+ */
+object Pools {
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val listPictures = Dispatchers.IO.limitedParallelism(4)
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val checks = Dispatchers.IO.limitedParallelism(8)
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val web = Dispatchers.IO.limitedParallelism(16)
+}
+
 object Net {
     val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
@@ -66,7 +83,7 @@ object Net {
     suspend fun reachable(host: String, port: Int, timeoutMs: Int = 1500): Boolean {
         // Never longer than the time given (2026-11-22 19:37: searches hung on an unreachable NAS): the name lookup
         // before the connection has no time limit of its own, so the check runs apart and is given up when time's up.
-        val d = kotlinx.coroutines.CoroutineScope(Dispatchers.IO).async {
+        val d = kotlinx.coroutines.CoroutineScope(Pools.checks).async {
             try {
                 // LAN servers: their VPN address when that's the one in use.
                 Socket().use { it.connect(InetSocketAddress(VpnLink.routeHost(host), port), timeoutMs) }
