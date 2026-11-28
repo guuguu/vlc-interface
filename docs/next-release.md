@@ -1655,3 +1655,9 @@
    - Tidied: an invisible byte-order-mark character inside 3 source files written as an escape; an ambiguous if/else layout. The rest (style hints, static context references to the app, `commit()` used on purpose before the app ends, constants Android 10 simply ignores) checked and left as they are.
 2. **detekt static analysis** (potential bugs, exceptions, coroutines): 7 hints, none a bug (an extra exception re-throw, hex formatting without locale — digits only).
 3. **Song player vs radio player, side by side:** header, switch buttons, output pill, clock / visualisation buttons, ⏮ ⏭ (song / station), Sleep (time only on the radio), sine and reset (the station's own profile on the radio), tone sliders, floating buttons, notification buttons, picture place and its hiding / clock rules, touch guard — consistent. Song-only by design: −10 / +10, seek bar, Random / Repeat / RGain, Up next, Play next; radio-only: favourites with reorder, find stations, listening time. ReplayGain and the "no ReplayGain −3 dB" are never applied to radio. Also checked: no shared-pool blocking left (every waiting loop runs on its own thread).
+
+# After 1.100.0
+
+## Loading never cuts off the song playing (requested 2026-11-28 10:31)
+- While a song plays, loading a playlist, a folder, a queue, a search selection or a single song (tapped, ▶ Play / Play now, opened from another app) no longer jumps to it: the song playing goes on to its end, and the new items go into the queue right after it — the one picked first, then the rest of its list (Random as chosen). A short note says so: "Added after the song playing — ⏭ starts … now".
+- Unchanged: alarms, going back to a player at its place, radio stations and videos start at once; with nothing playing (or paused), a pick starts as before.

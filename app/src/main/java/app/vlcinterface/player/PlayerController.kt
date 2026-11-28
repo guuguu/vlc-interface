@@ -1442,6 +1442,21 @@ class PlayerController(private val context: Context, private val store: Store) {
             q = listOf(items[i]) + items.filterIndexed { j, _ -> j != i }.shuffled()
             i = 0
         } else orderedQueue = null
+        // 2026-11-28 10:31: a song playing is never cut off by loading — a playlist, a folder, a queue or a single song
+        // picked while a song plays goes into the queue right after it (the picked one first), and the song playing
+        // plays on to its end; ⏭ starts the new one at once. Not for alarms, a player switched back to its place, a
+        // station or a video (those start as before).
+        val cur = _state.value.item
+        if (cur != null && cur.isMusic && _state.value.isPlaying && startAt < 0 && q.getOrNull(i)?.isMusic == true &&
+            !origin.title.startsWith("Alarm")) {
+            val newOrder = (q.drop(i) + q.take(i)).filter { qKey(it) != qKey(cur) }
+            if (newOrder.isEmpty()) return
+            if (orderedQueue != null) orderedQueue = listOf(cur) + items.filter { qKey(it) != qKey(cur) }
+            fullList = (listOf(cur) + fullList).distinctBy { qKey(it) }
+            _state.value = _state.value.copy(queue = listOf(cur) + newOrder, index = 0, origin = origin)
+            main.post { try { app.vlcinterface.ui.ShortNote.hint("Added after the song playing — ⏭ starts \"${newOrder.first().title}\" now") } catch (_: Exception) {} }
+            return
+        }
         skippedPlaces.clear()                                       // a new list: every place is tried again
         // Today's list: the song playing until now was heard whole or cut off; a specific song picked to start
         // with (not the first of the list, or a single file) is a choice made by hand.
