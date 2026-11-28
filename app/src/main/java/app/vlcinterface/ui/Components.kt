@@ -1013,6 +1013,11 @@ fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
     // The alarm service is kept only while an alarm rings / is snoozed or watched (Android would restart it, "sticky").
     try { if (app.vlcinterface.alarm.AlarmEngine.ui.value.phase == "idle") a.stopService(android.content.Intent(a, app.vlcinterface.alarm.AlarmService::class.java)) } catch (_: Exception) {}
     try { a.getSharedPreferences("volkeep", android.content.Context.MODE_PRIVATE).edit().putLong("exitAt", System.currentTimeMillis()).commit() } catch (_: Exception) {}
+    // The app's clock as the phone's screen saver (2026-11-28 10:12): Android starts the app whenever the screen saver
+    // starts (charging, docked) — the process seen again after Exit. On Exit it is switched off for Android until the
+    // app is opened again (then it's back as before; meanwhile the phone shows its own screen saver or none).
+    if (!restart) try { a.packageManager.setComponentEnabledSetting(android.content.ComponentName(a, app.vlcinterface.alarm.ClockDream::class.java),
+        android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED, android.content.pm.PackageManager.DONT_KILL_APP) } catch (_: Exception) {}
     fun clearNotes() = try {
         val nm = a.getSystemService(android.app.NotificationManager::class.java)
         val keep = setOf("alarm_next_quiet", "alarm_ring_quiet", "alarm_ring_led_quiet", "alarm_watch_quiet") + if (keepNotice) setOf("sleep_quiet") else emptySet()

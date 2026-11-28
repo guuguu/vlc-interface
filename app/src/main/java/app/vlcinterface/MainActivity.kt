@@ -29,6 +29,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Opened again after Exit: the clock screen saver is available to Android again (switched off on Exit).
+        try { packageManager.setComponentEnabledSetting(android.content.ComponentName(this, app.vlcinterface.alarm.ClockDream::class.java),
+            android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, android.content.pm.PackageManager.DONT_KILL_APP) } catch (_: Exception) {}
         enableEdgeToEdge()
         instance = this
         // Volume buttons always control media volume in this app (not the ringer while playback is paused / resuming).
