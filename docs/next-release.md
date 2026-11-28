@@ -1803,3 +1803,8 @@
 ## Empty the queue (requested 2026-11-28 15:56)
 - "Empty" (red) next to Save in Up next on the song and video players, and on the Queue page next to "Save as playlist". It asks first ("Empty the queue? All N other items leave the queue. "<title>" plays on."); then every item but the one playing leaves the queue, and that one plays on uninterrupted. With nothing playing, the queue is emptied completely. An episode playing doesn't bring its series back by itself afterwards.
 - **Videos only (16:17):** the Empty button is on the video player's Up next, and on the Queue page only while a video plays — not on the song player.
+
+## Audio sync profile per Bluetooth device, videos only (requested 2026-11-28 16:18)
+- Each Bluetooth device now keeps its own video sync profile: the value last set with Audio/Sync on a video played on that device is saved for the device (across app restarts), and every video on it that has no value of its own starts with it. Order used: this video on this device → this session's value → the device's profile → older saved values → 0. A video that runs 30 s with the profile's value keeps it as its own.
+- Videos only: songs and radio never take a device's sync value (only one set for that very file). Speaker, wired and USB outputs get no profile (they have no Bluetooth delay).
+- The Audio/Sync bar's line says so ("Now: from this Bluetooth device's profile").

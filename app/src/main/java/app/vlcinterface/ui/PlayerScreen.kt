@@ -1068,7 +1068,7 @@ private fun BoxScope.AudioSyncBar(onClose: () -> Unit) {
             Text("2.00 s", color = Color(0xFFB8BCC4), fontSize = 11.sp)
         }
         Text("Sound comes after the lips? Push it forward until they match. Kept for this video on " + player.currentOutputName.ifEmpty { "this output" } +
-            "; other videos this session start from it." + player.audioSyncFrom.takeIf { it.isNotEmpty() }?.let { " Now: from $it." }.orEmpty(),
+            "; also this Bluetooth device's profile — every other video on it starts from it." + player.audioSyncFrom.takeIf { it.isNotEmpty() }?.let { " Now: from $it." }.orEmpty(),
             color = Color(0xFFB8BCC4), fontSize = 11.sp)
     }
 }

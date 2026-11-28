@@ -3069,8 +3069,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         val spu = st.subOffsets["file:${item.uri}"] ?: st.subOffsets["folder:${item.folderKey}"] ?: 0L
         if (spu != 0L) setSpuDelay(spu)
         if (!item.isMusic && !item.isRadio) { applyAudioSync(); return }
-        val aud = st.audioOffsets["file:${item.uri}"] ?: st.audioOffsets["device:$currentOutputName"] ?: 0L
-        if (aud != 0L) setAudioDelay(aud)
+        // Songs and radio (2026-11-28 16:18): sound sync is for videos only — a device's value never moves their sound.
+        val aud = st.audioOffsets["file:${item.uri}"] ?: 0L
+        setAudioDelay(aud)
     }
 
     // ---------- video audio sync (Bluetooth), 2026-11-21 12:17 ----------
@@ -3079,6 +3080,13 @@ class PlayerController(private val context: Context, private val store: Store) {
     // value set (the device's delay is usually the same), until one of them gets its own.
     private val sessionSync = java.util.concurrent.ConcurrentHashMap<String, Long>()
     private fun syncKey(uri: String) = "dev:$currentOutputName|file:$uri"
+    /**
+     * Each Bluetooth device's own video sync (2026-11-28 16:18): the last value set by hand for a video on that device is
+     * kept as its profile, across app restarts, and every video on that device without a value of its own starts with it.
+     * Videos only; other outputs (speaker, wired, USB) have no delay to make up and get no profile.
+     */
+    private fun profileKey(dev: String) = "vbt:$dev"
+    private fun onBluetooth(): Boolean = try { app.vlcinterface.App.instance.output.active?.kind == OutputKind.BLUETOOTH } catch (_: Throwable) { false }
 
     /** Where the video's sync value comes from: "this video on <device>", "this session", "saved earlier", "". */
     var audioSyncFrom: String = ""
@@ -3091,13 +3099,15 @@ class PlayerController(private val context: Context, private val store: Store) {
         val st = store.current
         val own = st.audioOffsets[syncKey(item.uri)]
         val sess = sessionSync[currentOutputName]
+        val prof = if (onBluetooth()) st.audioOffsets[profileKey(currentOutputName)] else null
         val old = st.audioOffsets["file:${item.uri}"] ?: st.audioOffsets["device:$currentOutputName"]
-        val v = own ?: sess ?: old ?: 0L
-        audioSyncFrom = when { own != null -> "this video on this device"; sess != null -> "this session"; old != null -> "saved earlier"; else -> "" }
+        val v = own ?: sess ?: prof ?: old ?: 0L
+        audioSyncFrom = when { own != null -> "this video on this device"; sess != null -> "this session"
+            prof != null -> "this Bluetooth device's profile"; old != null -> "saved earlier"; else -> "" }
         setAudioDelay(v)
         // Carried over from the session (2026-11-21 12:21): if the video runs fine with it — not changed after 30 s of
         // playing, or played to its end before that — the value is kept for this video on this device too.
-        if (own == null && sess != null) {
+        if (own == null && (sess != null || prof != null)) {
             adoptSync = Triple(item.uri, currentOutputName, v)
             main.postDelayed({ adoptSessionSync() }, 30_000)
         } else adoptSync = null
@@ -3126,7 +3136,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         sessionSync[currentOutputName] = ms
         audioSyncFrom = "this video on this device"
         val key = syncKey(item.uri)
-        store.update { st -> st.copy(audioOffsets = st.audioOffsets + (key to ms)) }
+        val prof = if (!item.isMusic && !item.isRadio && onBluetooth() && currentOutputName.isNotEmpty()) profileKey(currentOutputName) else null
+        store.update { st -> st.copy(audioOffsets = st.audioOffsets + (key to ms) + (if (prof != null) mapOf(prof to ms) else emptyMap())) }
     }
 
     // ---------- views ----------
