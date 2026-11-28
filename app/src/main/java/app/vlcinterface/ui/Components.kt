@@ -319,6 +319,25 @@ object TouchGuard {
     }
 }
 
+/**
+ * Touch guard for a whole page (settings pages and sub-pages, 2026-11-28 11:21): a touch released before the Touch guard
+ * time (without a long press) is dropped before any button, switch, pill or link on the page sees it, so every control
+ * there reacts after the same delay as the players' buttons. Long presses, scrolling and slider drags are unchanged.
+ */
+fun Modifier.pageTouchGuard(): Modifier = composed {
+    val ms = TouchGuard.ms()
+    if (ms <= 0) this else this.pointerInput(ms) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false, pass = androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+            while (true) {
+                val ev = awaitPointerEvent(androidx.compose.ui.input.pointer.PointerEventPass.Initial)
+                val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                if (!c.pressed) { if (c.uptimeMillis - down.uptimeMillis < ms) c.consume(); break }
+            }
+        }
+    }
+}
+
 fun Modifier.guardClick(key: String, enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
     val ms = TouchGuard.ms()
     val cb = androidx.compose.runtime.rememberUpdatedState(onClick)

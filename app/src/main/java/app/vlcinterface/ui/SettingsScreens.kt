@@ -137,6 +137,14 @@ fun SettingsScreen(nav: Navigator) {
         }
         Column(Modifier.weight(1f).anchorViewport(scroll, "main").scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             if (q.isNotBlank()) { SettingsSearchResults(nav, q); return@Column }
+            // Touch guard (2026-11-28 11:21): one reaction delay for the players' buttons and every settings page and
+            // sub-page — on top of the main Settings page, in its own box.
+            CardBox {
+                ValueSlider("Touch guard", if (s.touchGuardMs == 0) "Off: buttons act on a plain tap"
+                    else "Player buttons and every settings page act after a ${s.touchGuardMs} ms touch without sliding",
+                    if (s.touchGuardMs == 0) "Off" else "${s.touchGuardMs} ms", s.touchGuardMs, 0..300, 10,
+                    onFirst = { if (AutoHelp.ok("playback", "Touch guard")) explainNow("Touch guard", "") }) { set(s.copy(touchGuardMs = it)) }
+            }
             CardBox {
                 orderedGroups(s.settingsOrder).forEachIndexed { i, (id, name) ->
                     if (i > 0) Divider()
@@ -237,12 +245,6 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 ToggleRow("Volume swipe", "Right half, vertical", s.volumeSwipe) { set(s.copy(volumeSwipe = it)) }; Divider()
                 ToggleRow("Brightness swipe", "Left half, vertical", s.brightnessSwipe) { set(s.copy(brightnessSwipe = it)) }; Divider()
                 ValueSlider("Double-tap seek", "Left / right edge", "${s.doubleTapSeekSec} s", s.doubleTapSeekSec, 5..60, 5) { set(s.copy(doubleTapSeekSec = it)) }
-                Divider()
-                // Touch guard (2026-11-28 request 39): the players' main buttons act after a very short hold.
-                ValueSlider("Touch guard", if (s.touchGuardMs == 0) "Off: player buttons act on a plain tap"
-                    else "Player buttons act after a ${s.touchGuardMs} ms hold without sliding; the same button again within 0.4 s is ignored",
-                    if (s.touchGuardMs == 0) "Off" else "${s.touchGuardMs} ms", s.touchGuardMs, 0..300, 10,
-                    onFirst = { if (AutoHelp.ok("playback", "Touch guard")) explainNow("Touch guard", "") }) { set(s.copy(touchGuardMs = it)) }
                 // (Long press on the video now shows its details; the speed is chosen with the speed button.)
             }
             SectionTitle("Playback")

@@ -1696,3 +1696,11 @@
 
 ## Short pop-ups up to 20 s (requested 2026-11-28 11:15)
 - Look → "Short pop-ups stay for": 1–20 s (was 1–10 s), default 3 s as before; the helper says the range.
+
+# After 1.103.0
+
+## One touch guard for the players and every settings page (requested 2026-11-28 11:21)
+- "Touch guard" moved from Playback & gestures to the top of the main Settings page, in its own box (Off … 300 ms, default 60 ms).
+- The same delay now applies to every settings page and sub-page: Settings and its pages, Sound settings, alarm settings and each alarm's page, Clock aspect, Visualisation, Logs, Export / import, Find media folders. A touch let go sooner than the delay doesn't press any button, switch, choice or link there; long presses, scrolling and sliders work as before.
+- The players keep their guard as before (the same delay, plus the same button ignored again within 0.4 s). Pop-up windows keep plain taps (a guard there made buttons seem not to work, 08:27).
+- Helper updated; the Settings search finds it on the main page.

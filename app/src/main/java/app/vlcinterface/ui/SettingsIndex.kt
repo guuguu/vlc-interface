@@ -10,6 +10,7 @@ class SettingsEntry(val page: String, val pageName: String, val section: String,
 private fun E(p: String, pn: String, s: String, t: String, h: String, own: Boolean) = SettingsEntry(p, pn, s, t, h, own)
 
 val SETTINGS_INDEX: List<SettingsEntry> = listOf(
+    E("main", "Settings", "", "Touch guard", "", true),
     E("main", "Settings", "", "Launch the setup wizard", "Permissions and the important settings, page by page", true),
     E("main", "Settings", "", "Text size", "", true),
     E("main", "Settings", "", "Page titles size", "", true),
@@ -39,7 +40,6 @@ val SETTINGS_INDEX: List<SettingsEntry> = listOf(
     E("playback", "Playback & gestures", "Gestures", "Volume swipe", "Right half, vertical", true),
     E("playback", "Playback & gestures", "Gestures", "Brightness swipe", "Left half, vertical", true),
     E("playback", "Playback & gestures", "Gestures", "Double-tap seek", "Left / right edge", true),
-    E("playback", "Playback & gestures", "Gestures", "Touch guard", "", true),
     E("playback", "Playback & gestures", "Playback", "Playback", "", true),
     E("playback", "Playback & gestures", "Playback", "Resume where I left off", "Videos only, per file — songs always start from the beginning", true),
     E("playback", "Playback & gestures", "Playback", "Keep audio in background", "Notification controls", true),

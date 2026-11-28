@@ -175,7 +175,8 @@ fun AppRoot(nav: Navigator, onFinish: () -> Unit) {
                     }
                 } }
                 CompositionLocalProvider(LocalSettingsClose provides settingsPage) {
-                Box(Modifier.fillMaxSize().then(if (!subPage) Modifier else Modifier
+                Box(Modifier.fillMaxSize().then(if (settingsPage || top is Screen.Visualisation || top is Screen.Logs || top is Screen.LogPage ||
+                    top is Screen.LogView || top is Screen.AlarmEdit) Modifier.pageTouchGuard() else Modifier).then(if (!subPage) Modifier else Modifier
                     .nestedScroll(pullBack)
                     .pointerInput(top) {
                         var dx = 0f
