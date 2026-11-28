@@ -1349,7 +1349,7 @@ fun ShortAlarmsLink(nav: Navigator) {
 @Composable
 fun ShortAlarmsSection() {
     val ctx = LocalContext.current
-    LaunchedEffect(Unit) { if (ShortAlarms.list.value.isEmpty()) ShortAlarms.load(ctx) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { if (ShortAlarms.list.value.isEmpty()) ShortAlarms.load(ctx) }
     val list = ShortAlarms.list.collectAsState().value
     var edit by remember { mutableStateOf<ShortAlarm?>(null) }
     SectionTitle("Short notification alarms", Modifier.anchor("Short notification alarms"))
