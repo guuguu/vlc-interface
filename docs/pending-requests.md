@@ -43,3 +43,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
     - a new "reset" button, placed under the sine button (the one that jumps to the tone / audio-correction sliders), the same size and design as it, but crossed diagonally by a red line;
     - a slightly long press: Loudness, Treble and Preamp back to 0 and the sound profile kept for the song playing removed; a short press only shows a short helper for a moment;
     - show a mock-up when ready, before building.
+28. **2026-11-28 01:27 — Guard against race conditions everywhere:** across the whole program, wherever a small delay (or a wait for the previous step to finish) is needed to avoid a race condition, insert it.
