@@ -1071,6 +1071,9 @@ class PlayerController(private val context: Context, private val store: Store) {
     /** Closes the playing video away from the screen's thread (reopen at the same spot). */
     private val closer = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "video-close").apply { isDaemon = true } }
     private var reloadGen = 0
+    /** Item starts waiting for a slow network close (startItem): a newer start drops the older one. */
+    private var startGen = 0
+    private var startAfterClose = false
 
     /**
      * The video reopened at the same spot (picture colour, decoder, subtitle format, picture check).
@@ -2253,6 +2256,31 @@ class PlayerController(private val context: Context, private val store: Store) {
             else askAfterFails(item)
         }
         stopping = true                      // the "stopped" of the old media isn't the end of a song
+        // 2026-11-28 08:38 (request 35, last part): libVLC's setMedia first closes the item playing, on this (the screen's)
+        // thread; a NAS / web item stuck in a read kept the screen frozen meanwhile. The old network item is now closed on
+        // its own thread first; when that takes longer than 0.4 s, this start waits for it there and goes on afterwards
+        // (the screen stays free), unless another item was asked for meanwhile.
+        val oldUri = _state.value.item?.uri.orEmpty()
+        if (!startAfterClose && (oldUri.startsWith("smb://") || oldUri.startsWith("http")) && (mp.media?.also { it.release() } != null)) {
+            val f = closer.submit { try { mp.stop() } catch (_: Throwable) {} }
+            val closed = try { f.get(400, java.util.concurrent.TimeUnit.MILLISECONDS); true } catch (_: Exception) { false }
+            if (!closed) {
+                media.release()
+                try { oldPfd?.close() } catch (_: Exception) {}
+                endHandled = true
+                val gen = ++startGen
+                ServerLog.log("player", "start", "", "", true, "Closing ${oldUri.substringAfterLast('/')} is slow (network) — ${item.title} starts when it's closed")
+                closer.execute {
+                    main.post {
+                        if (gen != startGen) return@post
+                        startAfterClose = true
+                        try { startItem(i0, startAt) } finally { startAfterClose = false }
+                    }
+                }
+                return
+            }
+        }
+        ++startGen
         mp.setMedia(media)
         media.release()
         try { oldPfd?.close() } catch (_: Exception) {}

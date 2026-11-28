@@ -90,4 +90,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 41. **2026-11-28 02:55 — Identify by sound:** radio via AudD (12 s clip, user's token), songs via AcoustID (Chromaprint fingerprint, user's key); text lookup kept as the fallback. Done in 1.95.0.
 
 ## Status — 2026-11-28 08:35
-- 20, 22 dropped. 35 finished for 1.96.0 (silent retry, no skip on a slow answer); left for later: closing the old network item off the screen's thread when switching items.
+- 20, 22 dropped. 35 finished for 1.96.0 (silent retry, no skip on a slow answer, the old network item closed off the screen's thread). Nothing left in the list.
