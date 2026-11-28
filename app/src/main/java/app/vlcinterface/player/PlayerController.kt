@@ -45,10 +45,10 @@ data class Origin(
 )
 
 /**
- * Gain for songs that carry no ReplayGain at all (when ReplayGain is on): 3 dB under the current level (preamps and the
+ * Gain for songs that carry no ReplayGain at all (when ReplayGain is on): the "Songs without ReplayGain" setting under the current level (default 7 dB) (preamps and the
  * player's Preamp slider as set), from the start of the song until its ReplayGain is measured (2026-11-22 18:58).
  */
-const val NO_RG_DB = -3f     // default of Settings → Audio → ReplayGain → "Songs without ReplayGain" (2026-11-28 10:54)
+const val NO_RG_DB = -7f     // default of Settings → Audio → ReplayGain → "Songs without ReplayGain" (2026-11-28 10:54)
 /** Loudness and treble act 30 % deeper than their slider values (same logic, stronger effect). */
 const val TONE_DEPTH = 1.3f
 /** Songs without ReplayGain reached over the VPN: 6 dB lower (not scanned there). */
@@ -234,7 +234,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     @Volatile private var rgUri = ""
     private fun overVpnNoRg(item: PlayItem) = item.uri.startsWith("smb://") &&
         try { android.net.Uri.parse(item.uri).host?.let { h -> app.vlcinterface.sources.VpnLink.routeHost(h) != h } == true } catch (_: Exception) { false }
-    /** A song without ReplayGain: one global setting (default −3 dB), at home and over the VPN alike (2026-11-28 10:56). */
+    /** A song without ReplayGain: one global setting (default −7 dB), at home and over the VPN alike (2026-11-28 10:56). */
     @Suppress("UNUSED_PARAMETER")
     private fun noRgDb(item: PlayItem): Float = store.current.settings.noRgDb
     private fun dbText(v: Float) = (if (v > 0f) "+" else if (v < 0f) "−" else "") + "%.1f".format(java.util.Locale.US, kotlin.math.abs(v)) + " dB"
@@ -254,7 +254,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val set = store.current.settings
         // The level the song starts at is set right away, so it doesn't start at one level and move once its tags are read
         // (18:58: one change at most — none for a song whose ReplayGain is known, one when a missing one gets measured):
-        // known ReplayGain (read before, or kept by a scan) → its value; otherwise the "no ReplayGain" level (3 dB lower).
+        // known ReplayGain (read before, or kept by a scan) → its value; otherwise the "no ReplayGain" level (the setting, default 7 dB lower).
         // The same song again (ReplayGain just measured, RGain switched): the level stays until the new one is worked out.
         if (rgUri != item.uri || !item.isMusic || set.rgMode == "off") {
             rgUri = item.uri

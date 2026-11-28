@@ -94,3 +94,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 42. **2026-11-28 10:50 — Per-device sound optional in Export settings:** its own category, off by unticking. Done after 1.102.0, not built yet.
 43. **2026-11-28 10:54 — Slider for the level of songs without ReplayGain** (−12 … 0 dB, Settings → Audio → ReplayGain). Done after 1.102.0, not built yet.
 44. **2026-11-28 10:56 — One global setting for songs without a ReplayGain tag:** the slider also covers the home NAS over the VPN (no separate VPN value). Done after 1.102.0, not built yet.
+45. **2026-11-28 10:57 — Default for songs without ReplayGain: −7 dB** (was −3 dB). Done after 1.102.0, not built yet.

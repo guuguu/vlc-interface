@@ -276,7 +276,7 @@ data class Settings(
     /** Players' main buttons act after this hold (ms; 0 = plain tap) — request 39. */
     val touchGuardMs: Int = 60,
     /** Songs without ReplayGain: their level, −12 … 0 dB (2026-11-28 10:54). */
-    val noRgDb: Float = -3f,
+    val noRgDb: Float = -7f,
     /** How long short, self-closing pop-ups stay (seconds). */
     val shortPopupSec: Int = 3,
     /** Switch track colours: on (0 = accent) and off. */
@@ -446,7 +446,7 @@ data class Settings(
                 phoneFoldersSet = o.optBoolean("phoneFoldersSet", false),
                 floatBtnSize = o.optInt("floatBtnSize", 64), floatBtnAlpha = o.optInt("floatBtnAlpha", 85),
                 floatBtnX = o.optDouble("floatBtnX", -1.0).toFloat(), floatBtnY = o.optDouble("floatBtnY", -1.0).toFloat(),
-                alarmRowPct = o.optInt("alarmRowPct", 50), alarmRowsShown = o.optInt("alarmRowsShown", 5).coerceIn(1, 10), touchGuardMs = o.optInt("touchGuardMs2", 60).coerceIn(0, 300), noRgDb = (Math.round(o.optDouble("noRgDb", -3.0) * 2) / 2.0).toFloat().coerceIn(-12f, 0f), shortPopupSec = o.optInt("shortPopupSec", 3),
+                alarmRowPct = o.optInt("alarmRowPct", 50), alarmRowsShown = o.optInt("alarmRowsShown", 5).coerceIn(1, 10), touchGuardMs = o.optInt("touchGuardMs2", 60).coerceIn(0, 300), noRgDb = (Math.round(o.optDouble("noRgDb", -7.0) * 2) / 2.0).toFloat().coerceIn(-12f, 0f), shortPopupSec = o.optInt("shortPopupSec", 3),
                 switchOn = o.optLong("switchOn", 0L), switchOff = o.optLong("switchOff", 0xFF4A5568), floatBtnColor = o.optLong("floatBtnColor", 0L), clockHideSec = o.optInt("clockHideSec", 10), coverHideSec = o.optInt("coverHideSec", 10), floatBtnMode = o.optString("floatBtnMode", "always"), clockAutoHide = o.optBoolean("clockAutoHide", true), coverAutoHide = o.optBoolean("coverAutoHide", true),
                 rowOrderSong = o.optJSONArray("rowOrderSong")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
                 rowOrderRadio = o.optJSONArray("rowOrderRadio")?.let { a -> (0 until a.length()).map { a.getString(it) } } ?: emptyList(),
