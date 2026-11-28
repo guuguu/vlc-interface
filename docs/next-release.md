@@ -1808,3 +1808,14 @@
 - Each Bluetooth device now keeps its own video sync profile: the value last set with Audio/Sync on a video played on that device is saved for the device (across app restarts), and every video on it that has no value of its own starts with it. Order used: this video on this device → this session's value → the device's profile → older saved values → 0. A video that runs 30 s with the profile's value keeps it as its own.
 - Videos only: songs and radio never take a device's sync value (only one set for that very file). Speaker, wired and USB outputs get no profile (they have no Bluetooth delay).
 - The Audio/Sync bar's line says so ("Now: from this Bluetooth device's profile").
+
+# After 1.114.0
+
+## Exit: the process killed completely (reported again 2026-11-28 18:20, screen saver already off)
+- **Checked:** Exit ends the process for sure (Android's exit records: killed, signal 9 — three separate ways within 1.5 s). The error logs up to 15:41 show no automatic start after an Exit (only the app opened by hand). So a process seen afterwards was started again by Android.
+- **What could start it again, now closed:**
+  - **The alarm service was "sticky":** Android starts a sticky service again whenever its process ends — Exit too. Exit stopped it only when no alarm was ringing, snoozed or in its wake check. It's no longer sticky (a ringing or snoozed alarm is kept by Android's own alarm timers anyway).
+  - **An old wake check never ended:** at every start of the app a wake check whose time was over got 30 s more, kept the alarm service and its 90 s guard timer going — and the guard started the app again every 90 s. A wake check that's over now ends.
+  - **Exit ends the alarm side too:** a wake check running is ended, the 90 s guard timer cancelled, the alarm service stopped.
+- **Still starts the app, by design:** an alarm (or a snoozed one, a short alarm) at its time; the phone restarting (to set the alarms again — such a background start closes itself after 90 s with nothing to do).
+- If the process still comes back, "Collect error logs" has "App started again … after Exit — started by …" with Android's reason.

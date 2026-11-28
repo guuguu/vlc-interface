@@ -123,3 +123,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 71. **2026-11-28 15:56 — Empty-the-queue button (song / video Up next, Queue page), the item playing goes on.** Done after 1.112.0, not built yet.
 72. **2026-11-28 16:17 — Empty-queue button for videos only.** Done after 1.113.0, not built yet.
 73. **2026-11-28 16:18 — Audio sync profile per Bluetooth device, videos only.** Done after 1.113.0, not built yet.
+74. **2026-11-28 18:20 — Exit: alarm service not sticky, old wake check ends, Exit ends wake check / guard timer / alarm service.** Fixed after 1.114.0, not built yet.

@@ -484,6 +484,19 @@ object AlarmEngine {
     }
 
     /** Guard alarm / app restarted: an alarm that should ring (or be watched) is taken up again. */
+    /**
+     * Exit (2026-11-28 18:20, "killed completely"): a wake check running is ended, the 90 s guard timer cancelled, and the
+     * alarm service stopped. Alarms set and a snooze keep their time with Android and ring then (that starts the app).
+     */
+    fun onExit(ctx: Context) {
+        app = ctx.applicationContext
+        try {
+            if (Alarms.activePhase == "watching" || Alarms.activePhase == "confirming") finishAll()
+            if (Alarms.activePhase != "ringing") AlarmScheduler.guard(app, false)
+        } catch (_: Exception) {}
+        stopService()
+    }
+
     fun guardCheck(ctx: Context) {
         app = ctx.applicationContext
         val id = Alarms.active
@@ -497,8 +510,10 @@ object AlarmEngine {
         when (Alarms.activePhase) {
             "ringing" -> if (!AlarmService.running || _ui.value.phase != "ringing") startRing(app, id, snoozed = true, restart = true)
             "watching", "confirming" -> if (_ui.value.phase != "watching" && _ui.value.phase != "confirming") {
+                // A wake check whose time is already over isn't started again (18:20: it was given 30 s more at every
+                // start of the app, so an old one never ended and kept the alarm service and its guard going).
                 val until = prefs(app).getLong("watchUntil", 0)
-                if (until > 0) startWatch(id, until.coerceAtLeast(System.currentTimeMillis() + 30_000)) else finishAll()
+                if (until > System.currentTimeMillis()) startWatch(id, until) else finishAll()
             }
             "snoozed" -> if (AlarmScheduler.snoozedUntil(app, id) == 0L) { Alarms.active = ""; Alarms.activePhase = "" }
                 else _ui.value = AlarmUi("snoozed", id, Alarms.get(id)?.name ?: "", 0, AlarmScheduler.snoozedUntil(app, id))
@@ -715,9 +730,12 @@ class AlarmService : Service() {
         when (intent?.action) {
             RING -> AlarmEngine.ring(this, intent.getStringExtra("id") ?: "", intent.getBooleanExtra("restart", false), intent.getBooleanExtra("snoozed", false))
             UPDATE -> {}
-            null -> AlarmEngine.guardCheck(this)   // restarted by Android after being killed
+            null -> AlarmEngine.guardCheck(this)
         }
-        return START_STICKY
+        // Not "sticky" any more (2026-11-28 18:20, process back after Exit): a sticky service is started again by Android
+        // whenever the process ends — also by Exit. A ringing or snoozed alarm is safe without it: Android's own alarm
+        // timer (the 90 s guard and the snooze time) starts the app again for it.
+        return START_NOT_STICKY
     }
 
     override fun onDestroy() { running = false; super.onDestroy() }

@@ -1068,7 +1068,9 @@ fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
     try { a.stopService(android.content.Intent(a, app.vlcinterface.player.PlaybackService::class.java)) } catch (_: Exception) {}
     try { a.stopService(android.content.Intent(a, app.vlcinterface.sources.RgScanService::class.java)) } catch (_: Exception) {}
     // The alarm service is kept only while an alarm rings / is snoozed or watched (Android would restart it, "sticky").
-    try { if (app.vlcinterface.alarm.AlarmEngine.ui.value.phase == "idle") a.stopService(android.content.Intent(a, app.vlcinterface.alarm.AlarmService::class.java)) } catch (_: Exception) {}
+    // 18:20: the alarm side ends too (wake check, guard timer, service) — nothing of the app keeps running or comes back by
+    // itself; only an alarm or a snooze due later starts it again at its time.
+    if (!restart) try { app.vlcinterface.alarm.AlarmEngine.onExit(a) } catch (_: Exception) {}
     try { a.getSharedPreferences("volkeep", android.content.Context.MODE_PRIVATE).edit().putLong("exitAt", System.currentTimeMillis()).commit() } catch (_: Exception) {}
     // The app's clock as the phone's screen saver (2026-11-28 10:12): Android starts the app whenever the screen saver
     // starts (charging, docked) — the process seen again after Exit. On Exit it is switched off for Android until the
