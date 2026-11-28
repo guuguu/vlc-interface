@@ -501,6 +501,26 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
                 if (idHelp) HelperDialog("Identify song", SettingHelp.text("Identify song", "")) { idHelp = false }
                 Divider()
+                // Recognition by sound (2026-11-28 02:55): AudD for the radio (any 12 s of a song), AcoustID for song files.
+                Column(Modifier.explain("Identify by sound").padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+                    Text("Identify by sound", color = C.text, modifier = Modifier.anchor("Identify by sound"), fontSize = 15.sp)
+                    Text("Radio: AudD recognises 12 s of what plays (" + (if (s.auddToken.isBlank()) "off — no token" else "on") + "). " +
+                        "Songs: AcoustID matches the file's fingerprint (" + (if (s.acoustidKey.isBlank()) "off — no key" else "on") + "). Without them: by song name only.",
+                        color = C.muted, fontSize = 12.sp)
+                    var keyHelp by remember { mutableStateOf("") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Text("AudD token: how?", color = accent(), fontSize = 13.sp, modifier = Modifier.clickable { keyHelp = "AudD token" })
+                        Text("AcoustID key: how?", color = accent(), fontSize = 13.sp, modifier = Modifier.clickable { keyHelp = "AcoustID key" })
+                    }
+                    var tok by remember { mutableStateOf(s.auddToken) }
+                    var ak by remember { mutableStateOf(s.acoustidKey) }
+                    androidx.compose.material3.OutlinedTextField(tok, { tok = it.trim(); set(s.copy(auddToken = tok)) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(), label = { Text("AudD token (radio)") }, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
+                    androidx.compose.material3.OutlinedTextField(ak, { ak = it.trim(); set(s.copy(acoustidKey = ak)) }, singleLine = true,
+                        modifier = Modifier.fillMaxWidth(), label = { Text("AcoustID application key (songs)") })
+                    if (keyHelp.isNotEmpty()) HelperDialog(keyHelp, SettingHelp.text(keyHelp, "")) { keyHelp = "" }
+                }
+                Divider()
                 var savedList by remember { mutableStateOf(false) }
                 if (savedList) SavedSongsDialog { savedList = false }
                 ValueRow("Saved songs", "Play or delete the songs saved from the radio", "Open") { savedList = true }
@@ -508,6 +528,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 ValueRow("Saved songs log", "Each song saved, or why not", "Open") { nav.go(Screen.LogPage("saved-songs")) }
                 Divider()
                 ValueRow("MP3 encoder", "LAME ${app.vlcinterface.sources.Mp3Encoder.version} — LGPL, bundled unchanged as libmp3lame.so (lame.sourceforge.io)", "") {}
+                Divider()
+                ValueRow("Audio fingerprints", "Chromaprint 1.5.1 — MIT with LGPL parts (FFmpeg resampler), KissFFT — BSD; bundled unchanged as libchromaprint.so (acoustid.org/chromaprint)", "") {}
             }
                 }
                 "look" -> {

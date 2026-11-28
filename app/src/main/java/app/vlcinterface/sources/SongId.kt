@@ -7,6 +7,8 @@ import app.vlcinterface.player.PlayItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URLEncoder
 
 /**
@@ -73,20 +75,37 @@ object SongId {
         busy = true
         try {
             _status.value = "Looking…"
+            val set = App.instance.store.current.settings
             if (item.isRadio) {
+                // By sound first (2026-11-28 02:55): 12 s of what plays now, recognised by AudD — works with or without
+                // the station's song text. Then (or without an AudD token) the station's song text on MusicBrainz.
+                var how = "song name"
+                var m: Match? = null
+                if (set.auddToken.isNotBlank()) {
+                    if (!app.vlcinterface.player.NativeAudio.active) ServerLog.log("audd.io", "identify", "HTTPS", "", false,
+                        "Radio ${item.title}: can't listen — the app's own sound output isn't in use (Settings → Audio)")
+                    else { _status.value = "Listening…"; m = radioBySound(item); how = "sound" }
+                }
                 val (a, t) = split(nowPlaying)
-                val m = if (t.isEmpty()) null else look(a, t)
+                if (m == null && t.isNotEmpty()) { _status.value = "Looking…"; m = look(a, t); how = "song name" }
                 ServerLog.log("musicbrainz.org", "identify", "HTTPS", "", m != null,
-                    if (m == null) "Radio ${item.title}: \"${nowPlaying.ifEmpty { "no song name" }}\" — not found"
-                    else "Radio ${item.title}: \"$nowPlaying\" → ${m.artist} – ${m.title}" + (if (m.album.isNotEmpty()) " (${m.album})" else "") + " · score ${m.score}")
+                    if (m != null) "Radio ${item.title} (by $how): → ${m.artist} – ${m.title}" + (if (m.album.isNotEmpty()) " (${m.album})" else "") + " · score ${m.score}"
+                    else if (t.isEmpty() && set.auddToken.isBlank()) "Radio ${item.title}: the station sends no song name, and recognising by sound needs an AudD token (Settings → Radio → Identify song)"
+                    else "Radio ${item.title}: \"${nowPlaying.ifEmpty { "no song name" }}\" — not found")
                 flash(if (m == null) "Not found" else "Found ✓")
                 if (m != null) showRadio(item.uri, nowPlaying, m)
                 return
             }
-            // Song: its tags first, else its file name.
+            // Song: by sound first (AcoustID, the first 2 minutes of the file — needs an AcoustID key), then its tags
+            // or its file name on MusicBrainz.
             val tagged = item.artist.isNotEmpty()
-            val (a, t) = if (tagged) item.artist to item.title else split(item.fileName.ifEmpty { item.title }.substringBeforeLast('.').replace(Regex("^\\d{1,3}[ .\\-_]+"), ""))
-            val m = look(a, t)
+            var m: Match? = null
+            if (set.acoustidKey.isNotBlank()) { _status.value = "Listening…"; m = songBySound(ctx, item, set.acoustidKey) }
+            if (m == null) {
+                _status.value = "Looking…"
+                val (a, t) = if (tagged) item.artist to item.title else split(item.fileName.ifEmpty { item.title }.substringBeforeLast('.').replace(Regex("^\\d{1,3}[ .\\-_]+"), ""))
+                m = look(a, t)
+            }
             if (m == null) {
                 ServerLog.log("musicbrainz.org", "identify", "HTTPS", "", false, "${item.title}: not found")
                 flash("Not found"); return
@@ -102,6 +121,82 @@ object SongId {
                 _status.value = ""
             } else write(ctx, item, new)
         } finally { busy = false }
+    }
+
+    // ---------- by sound (2026-11-28 02:55) ----------
+
+    /** AcoustID: Chromaprint fingerprint of the file's first 2 minutes plus its length (how AcoustID matches). */
+    private suspend fun songBySound(ctx: Context, item: PlayItem, key: String): Match? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        try {
+            val d = app.vlcinterface.player.SoundCheck.decode(ctx, item, 0L, 120) ?: return@withContext null.also {
+                ServerLog.log("acoustid.org", "identify", "HTTPS", "", false, "${item.title}: the file couldn't be decoded for its fingerprint") }
+            if (d.frames <= 0) return@withContext null
+            val fp = Chroma.of(d.pcm, d.frames * 2, d.rate, 2) ?: return@withContext null   // decode() hands stereo-interleaved samples
+            val ps = App.instance.player.state.value
+            val lenMs = if (ps.item?.uri == item.uri && ps.length > 0) ps.length else if (item.durationMs > 0) item.durationMs else d.frames * 1000L / d.rate
+            val body = okhttp3.FormBody.Builder().add("client", key.trim()).add("format", "json").add("meta", "recordings releasegroups compress")
+                .add("duration", (lenMs / 1000).toString()).add("fingerprint", fp).build()
+            val o = Net.http.newCall(okhttp3.Request.Builder().url("https://api.acoustid.org/v2/lookup").post(body).build()).execute().use { r ->
+                org.json.JSONObject(r.body?.string() ?: "{}") }
+            if (o.optString("status") != "ok") {
+                ServerLog.log("acoustid.org", "identify", "HTTPS", "", false, "${item.title}: AcoustID said " + (o.optJSONObject("error")?.optString("message") ?: "no answer"))
+                return@withContext null
+            }
+            val res = o.optJSONArray("results") ?: return@withContext null
+            for (i in 0 until res.length()) {
+                val r = res.getJSONObject(i); val score = (r.optDouble("score") * 100).toInt()
+                val rec = r.optJSONArray("recordings")?.optJSONObject(0) ?: continue
+                val title = rec.optString("title"); if (title.isBlank() || score < 50) continue
+                val artist = rec.optJSONArray("artists")?.let { a -> (0 until a.length()).joinToString("") { k -> a.getJSONObject(k).let { x -> x.optString("name") + x.optString("joinphrase") } } } ?: ""
+                val album = rec.optJSONArray("releasegroups")?.optJSONObject(0)?.optString("title") ?: ""
+                return@withContext Match(title, artist, album, score)
+            }
+            ServerLog.log("acoustid.org", "identify", "HTTPS", "", false, "${item.title}: no match for its fingerprint")
+            null
+        } catch (e: Exception) {
+            ServerLog.log("acoustid.org", "identify", "HTTPS", "", false, "${item.title}: ${e.message ?: e.javaClass.simpleName}"); null
+        }
+    }
+
+    /** AudD: 12 s of what the app plays now (the sound engine's input), sent as a small mono 16 kHz WAV. */
+    private suspend fun radioBySound(item: PlayItem): Match? = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val na = app.vlcinterface.player.NativeAudio
+        try {
+            val seconds = 12
+            if (!na.capture(seconds)) return@withContext null
+            var st: LongArray? = null
+            for (i in 0 until (seconds + 8) * 4) { kotlinx.coroutines.delay(250); st = na.captureState(); if (st == null || st[0] == 0L) break }
+            val s0 = st ?: return@withContext null
+            val inN = s0[1].toInt(); val rate = s0[4].toInt().takeIf { it > 0 } ?: 44100
+            if (inN < rate * 4) { ServerLog.log("audd.io", "identify", "HTTPS", "", false, "Radio ${item.title}: too little sound captured"); return@withContext null }
+            val pcm = na.captureTake(inN, s0[2].toInt())?.first ?: return@withContext null
+            // Stereo at the stream's rate → mono 16 kHz (averaged; enough for recognition, ~380 KB).
+            val outRate = 16000; val outN = (inN.toLong() * outRate / rate).toInt()
+            val wav = java.io.ByteArrayOutputStream(44 + outN * 2)
+            fun le32(v: Int) { wav.write(v and 255); wav.write((v shr 8) and 255); wav.write((v shr 16) and 255); wav.write((v shr 24) and 255) }
+            fun le16(v: Int) { wav.write(v and 255); wav.write((v shr 8) and 255) }
+            wav.write("RIFF".toByteArray()); le32(36 + outN * 2); wav.write("WAVEfmt ".toByteArray()); le32(16); le16(1); le16(1)
+            le32(outRate); le32(outRate * 2); le16(2); le16(16); wav.write("data".toByteArray()); le32(outN * 2)
+            val step = rate.toDouble() / outRate
+            for (k in 0 until outN) {
+                val a = (k * step).toInt().coerceAtMost(inN - 1); val b = ((k + 1) * step).toInt().coerceIn(a + 1, inN)
+                var sum = 0L; for (f in a until b) sum += pcm[2 * f] + pcm[2 * f + 1]
+                le16((sum / (2 * (b - a))).toInt())
+            }
+            val token = App.instance.store.current.settings.auddToken.trim()
+            val body = okhttp3.MultipartBody.Builder().setType(okhttp3.MultipartBody.FORM).addFormDataPart("api_token", token)
+                .addFormDataPart("file", "clip.wav", wav.toByteArray().toRequestBody("audio/wav".toMediaType())).build()
+            val o = Net.http.newCall(okhttp3.Request.Builder().url("https://api.audd.io/").post(body).build()).execute().use { r ->
+                org.json.JSONObject(r.body?.string() ?: "{}") }
+            if (o.optString("status") != "success") {
+                ServerLog.log("audd.io", "identify", "HTTPS", "", false, "Radio ${item.title}: AudD said " + (o.optJSONObject("error")?.optString("error_message") ?: "no answer"))
+                return@withContext null
+            }
+            val r = o.optJSONObject("result") ?: return@withContext null.also { ServerLog.log("audd.io", "identify", "HTTPS", "", false, "Radio ${item.title}: AudD found no song in the 12 s heard") }
+            Match(r.optString("title"), r.optString("artist"), r.optString("album"), 100)
+        } catch (e: Exception) {
+            ServerLog.log("audd.io", "identify", "HTTPS", "", false, "Radio ${item.title}: ${e.message ?: e.javaClass.simpleName}"); null
+        }
     }
 
     // ---------- radio: the identified song on the player (2026-11-28 request 38) ----------

@@ -87,3 +87,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
     - A second press of the same button within 0.4 s is ignored (no double actions); long presses and drags keep working as now.
     - A setting in Playback & gestures, "Touch guard" (Off … 300 ms, default 120 ms), with a helper; found by the Settings search; exported.
 40. **2026-11-28 02:50 — Helpers on their own settings page:** moved from the alarm settings page to a new sub-page of the main Settings page ("Helpers"). Done for the next release.
+41. **2026-11-28 02:55 — Identify by sound:** radio via AudD (12 s clip, user's token), songs via AcoustID (Chromaprint fingerprint, user's key); text lookup kept as the fallback. Done in 1.95.0.

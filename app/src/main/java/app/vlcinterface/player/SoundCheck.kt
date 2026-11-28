@@ -132,7 +132,7 @@ object SoundCheck {
     // ---------- independent decode ----------
     class Decoded(val pcm: ShortArray, val frames: Int, val rate: Int, val channels: Int, val encoding: String, val encodingBits: Int)
 
-    private fun decode(ctx: Context, item: PlayItem, fromUs: Long, seconds: Int): Decoded? {
+    internal fun decode(ctx: Context, item: PlayItem, fromUs: Long, seconds: Int): Decoded? {
         val ex = MediaExtractor()
         var ds: android.media.MediaDataSource? = null
         try {
