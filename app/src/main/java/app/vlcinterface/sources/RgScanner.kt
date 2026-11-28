@@ -496,7 +496,14 @@ object RgScanner {
             // Network file said written: read back from the server at once (2026-11-21 12:09) — a value that isn't
             // there is an error (the result says so, and it's in the error log), the app keeps the value meanwhile.
             if (saved == "written to the file" && RgScanDates.isNetwork(it.uri)) {
-                val back = try { ReplayGain.fromFile(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion) } catch (_: Exception) { null }
+                // 2026-11-28 09:39 (error log: "written but not found when read back" for files that were fine): a busy NAS
+                // can fail the read itself — read back up to 3 times (2 s, then 4 s apart) before calling it not written.
+                var back: Rg? = null
+                for (k in 0 until 3) {
+                    back = try { ReplayGain.fromFile(ctx, it.uri, it.user, it.password, it.domain, it.smbVersion) } catch (_: Exception) { null }
+                    if (back?.trackGain != null) break
+                    kotlinx.coroutines.delay(2_000L * (k + 1))
+                }
                 if (back?.trackGain == null) {
                     RgStore.put(it.uri, values)
                     saved = "not written: the file on the server has no ReplayGain when read back — kept in the app"

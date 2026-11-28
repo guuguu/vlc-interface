@@ -205,20 +205,35 @@ object ParallelFetch {
         val pieces = ((r.size + PIECE - 1) / PIECE).toInt()
         val pick = (setOf(0, pieces - 1) + (0 until maxOf(3, pieces / 20)).map { (Math.random() * pieces).toInt() }).filter { it in 0 until pieces }
         val a = ByteArray(PIECE); val b = ByteArray(PIECE)
-        r.reader(0).use { rd -> RandomAccessFile(local, "r").use { f ->
+        // 2026-11-28 09:39 (error log: dozens of "didn't match the server — dropped" while the NAS was busy): a piece the
+        // server didn't send (time-out, short read) was counted as different content and the whole copy was dropped and
+        // made again — more load on a busy NAS. A piece is now read up to 3 times (1 s, 2 s apart) with a fresh
+        // connection; only bytes that really differ make the copy "not matching".
+        RandomAccessFile(local, "r").use { f ->
             pick.all { i ->
                 val pos = i.toLong() * PIECE; val len = minOf(PIECE.toLong(), r.size - pos).toInt()
-                var n = 0
-                while (n < len) {
-                    val k = rd.readAt(pos + n, a, len - n); if (k <= 0) break
-                    System.arraycopy(a, 0, b, n, k); n += k
+                var got = false
+                for (attempt in 0 until 3) {
+                    try {
+                        r.reader(0).use { rd ->
+                            var n = 0
+                            while (n < len) {
+                                val k = rd.readAt(pos + n, a, len - n); if (k <= 0) break
+                                System.arraycopy(a, 0, b, n, k); n += k
+                            }
+                            got = n == len
+                        }
+                    } catch (_: Exception) { got = false }
+                    if (got) break
+                    try { Thread.sleep(1000L * (attempt + 1)) } catch (_: InterruptedException) {}
                 }
-                if (n != len) return@all false
+                if (!got) throw java.io.IOException("server didn't send piece $i")
                 val c = ByteArray(len); f.seek(pos); f.readFully(c)
                 java.util.Arrays.equals(c, b.copyOf(len))
             }
-        } }
-    } catch (_: Exception) { false }
+        }
+    } catch (e: java.io.IOException) { ServerLog.log("integrity", "integrity", "", "", false, "Copy couldn't be checked (${e.message}) — dropped"); false }
+    catch (_: Exception) { false }
 
     /**
      * Writes [src] over the network file [targetUri] (SMB) in pieces with tuned parallel connections. Returns false
