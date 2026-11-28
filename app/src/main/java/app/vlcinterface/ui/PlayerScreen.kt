@@ -1333,7 +1333,9 @@ fun SubtitleFormatSettings() {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Slider(s.sizePct.toFloat(), { set(s.copy(sizePct = it.toInt())) }, valueRange = 50f..200f, steps = 14, modifier = Modifier.weight(1f),
                 colors = SliderDefaults.colors(activeTrackColor = accent(), thumbColor = Color.White))
-            Pill("Bold", selected = s.bold, modifier = Modifier.padding(start = 8.dp)) { set(s.copy(bold = !s.bold)) }
+            // On / off as a switch (2026-11-28 10:04).
+            Text("Bold", color = C.text, fontSize = 13.sp, modifier = Modifier.padding(start = 8.dp, end = 4.dp))
+            AppSwitch(s.bold, { set(s.copy(bold = it)) })
         }
         // Font colour.
         Text("Font colour", color = C.muted, fontSize = 13.sp)

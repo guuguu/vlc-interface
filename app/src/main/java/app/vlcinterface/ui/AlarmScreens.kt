@@ -335,8 +335,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
                 SliderRow("Target", a.volTarget.toFloat(), 0f..100f, "${a.volTarget} %") { a = a.copy(volTarget = it.toInt()) }
                 val maxL = Alarms.current.global.maxLevel
                 if (a.volTarget > maxL || a.volStart > maxL) Text("Capped at $maxL % (maximum level in the alarm clock settings)", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp))
-                Label("Fade-in time")
-                Choices(listOf(0, 30, 60, 120, 300, 600).map { minText(it) to it }, a.fadeSec) { a = a.copy(fadeSec = it) }
+                ValueSlider("Fade-in time", "From the start volume to the alarm volume", minText(a.fadeSec), a.fadeSec, 0..600, 15) { a = a.copy(fadeSec = it) }
                 Divider()
                 // This alarm's own choice wins over the alarm clock settings' Vibrate (kept with the alarm).
                 HToggleRow("Vibrate (this alarm)", "", a.vibrate ?: Alarms.current.global.vibrate) { a = a.copy(vibrate = it) }
@@ -348,10 +347,12 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
             }
             SectionTitle("Snooze and stop")
             CardBox {
-                Label("Snoozes allowed", "Snooze times are set in the alarm clock settings")
-                Choices(listOf("None" to 0, "1" to 1, "3" to 3, "5" to 5, "No limit" to -1), a.maxSnoozes) { a = a.copy(maxSnoozes = it) }
-                Label("Stop by itself after")
-                Choices(listOf("5 min" to 5, "10 min" to 10, "15 min" to 15, "30 min" to 30, "60 min" to 60, "Never" to 0), a.stopAfterMin) { a = a.copy(stopAfterMin = it) }
+                // Values as sliders (2026-11-28 10:04). Snoozes: 0–10, the last step = no limit.
+                ValueSlider("Snoozes allowed", "Snooze times are set in the alarm clock settings",
+                    when (a.maxSnoozes) { 0 -> "None"; -1 -> "No limit"; else -> "${a.maxSnoozes}" }, if (a.maxSnoozes < 0) 11 else a.maxSnoozes, 0..11) {
+                    a = a.copy(maxSnoozes = if (it == 11) -1 else it) }
+                ValueSlider("Stop by itself after", "", if (a.stopAfterMin == 0) "Never" else "${a.stopAfterMin} min", if (a.stopAfterMin == 0) 65 else a.stopAfterMin, 5..65, 5) {
+                    a = a.copy(stopAfterMin = if (it == 65) 0 else it) }
             }
             SectionTitle("Output")
             CardBox {
@@ -501,8 +502,8 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
             SectionTitle("Waking up")
             CardBox {
                 HToggleRow("Random pattern to stop", "Tap 4 numbered dots in order", g.pattern) { set(g.copy(pattern = it)) }; Divider()
-                Label("Wake check after Stop", "No sign of being awake for this long (movement, unlocking, network or place change) → a silent, vibrating question; no movement for 30 s → rings again at once, no crescendo")
-                Choices(listOf("Off" to 0, "5 min" to 5, "10 min" to 10, "15 min" to 15, "20 min" to 20, "30 min" to 30), g.wakeCheckMin) { set(g.copy(wakeCheckMin = it)) }
+                ValueSlider("Wake check after Stop", "No sign of being awake for this long (movement, unlocking, network or place change) → a silent, vibrating question; no movement for 30 s → rings again at once, no crescendo",
+                    if (g.wakeCheckMin == 0) "Off" else "${g.wakeCheckMin} min", g.wakeCheckMin, 0..30, 5) { set(g.copy(wakeCheckMin = it)) }
                 Divider()
                 HToggleRow("Use the phone's location", "Moving more than 150 m counts as awake", g.useLocation) { on ->
                     if (!on) set(g.copy(useLocation = false))

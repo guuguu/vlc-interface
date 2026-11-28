@@ -236,18 +236,13 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             CardBox {
                 ToggleRow("Volume swipe", "Right half, vertical", s.volumeSwipe) { set(s.copy(volumeSwipe = it)) }; Divider()
                 ToggleRow("Brightness swipe", "Left half, vertical", s.brightnessSwipe) { set(s.copy(brightnessSwipe = it)) }; Divider()
-                ValueRow("Double-tap seek", "Left / right edge", "${s.doubleTapSeekSec} s") {
-                    val opts = listOf(5, 10, 15, 30); set(s.copy(doubleTapSeekSec = opts[(opts.indexOf(s.doubleTapSeekSec) + 1) % opts.size]))
-                }
+                ValueSlider("Double-tap seek", "Left / right edge", "${s.doubleTapSeekSec} s", s.doubleTapSeekSec, 5..60, 5) { set(s.copy(doubleTapSeekSec = it)) }
                 Divider()
                 // Touch guard (2026-11-28 request 39): the players' main buttons act after a very short hold.
-                ValueRow("Touch guard", if (s.touchGuardMs == 0) "Off: player buttons act on a plain tap"
+                ValueSlider("Touch guard", if (s.touchGuardMs == 0) "Off: player buttons act on a plain tap"
                     else "Player buttons act after a ${s.touchGuardMs} ms hold without sliding; the same button again within 0.4 s is ignored",
-                    if (s.touchGuardMs == 0) "Off" else "${s.touchGuardMs} ms") {
-                    val opts = listOf(60, 80, 100, 120, 160, 200, 0, 40)
-                    set(s.copy(touchGuardMs = opts[(opts.indexOf(s.touchGuardMs) + 1).mod(opts.size)]))
-                    if (AutoHelp.ok("playback", "Touch guard")) explainNow("Touch guard", "")
-                }
+                    if (s.touchGuardMs == 0) "Off" else "${s.touchGuardMs} ms", s.touchGuardMs, 0..300, 10,
+                    onFirst = { if (AutoHelp.ok("playback", "Touch guard")) explainNow("Touch guard", "") }) { set(s.copy(touchGuardMs = it)) }
                 // (Long press on the video now shows its details; the speed is chosen with the speed button.)
             }
             SectionTitle("Playback")
@@ -480,25 +475,18 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
                 Divider()
                 // Free space: under X GB free, recordings may use Y % of it (every decision is said and logged).
-                ValueRow("Free space limit", (if (s.spaceUnderGb == 0) "Off: recordings use any free space"
+                ValueSlider("Free space limit", (if (s.spaceUnderGb == 0) "Off: recordings use any free space"
                     else "When under ${s.spaceUnderGb} GB free, recordings use at most ${s.spacePercent} % of it") + " · never any recording under 2 GB free",
-                    if (s.spaceUnderGb == 0) "Off" else "< ${s.spaceUnderGb} GB") {
-                    val opts = listOf(100, 200, 50, 25, 10, 0); set(s.copy(spaceUnderGb = opts[(opts.indexOf(s.spaceUnderGb) + 1).mod(opts.size)]))
-                }
+                    if (s.spaceUnderGb == 0) "Off" else "< ${s.spaceUnderGb} GB", s.spaceUnderGb, 0..200, 5) { set(s.copy(spaceUnderGb = it)) }
                 if (s.spaceUnderGb > 0) {
                     Divider()
-                    ValueRow("Share of free space", "Recordings (kept minutes and saves) may use", "${s.spacePercent} %") {
-                        val opts = listOf(30, 40, 50, 60, 70, 80, 10, 20); set(s.copy(spacePercent = opts[(opts.indexOf(s.spacePercent) + 1).mod(opts.size)]))
-                    }
+                    ValueSlider("Share of free space", "Recordings (kept minutes and saves) may use", "${s.spacePercent} %", s.spacePercent, 10..90, 5) { set(s.copy(spacePercent = it)) }
                 }
                 Divider()
                 var idHelp by remember { mutableStateOf(false) }
                 // Identify song (button under play, radio and song players): how long the "replace the names?" question waits.
-                ValueRow("Identify song", "Song player: the \"replace the names?\" question closes after ${s.identifyAskSec} s with nothing written · radio: result in the log",
-                    "${s.identifyAskSec} s") {
-                    val opts = listOf(20, 30, 60, 10); set(s.copy(identifyAskSec = opts[(opts.indexOf(s.identifyAskSec) + 1).mod(opts.size)]))
-                    if (AutoHelp.ok("radio", "Identify song")) idHelp = true
-                }
+                ValueSlider("Identify song", "Song player: the \"replace the names?\" question closes after ${s.identifyAskSec} s with nothing written · radio: result in the log",
+                    "${s.identifyAskSec} s", s.identifyAskSec, 5..120, 5, onFirst = { if (AutoHelp.ok("radio", "Identify song")) idHelp = true }) { set(s.copy(identifyAskSec = it)) }
                 if (idHelp) HelperDialog("Identify song", SettingHelp.text("Identify song", "")) { idHelp = false }
                 Divider()
                 // Recognition by sound (2026-11-28 02:55): AudD for the radio (any 12 s of a song), AcoustID for song files.
@@ -538,13 +526,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 ToggleRow("Auto-rotate", "On: the app turns with the phone · Off: stays upright (videos still turn with the rotate button)", s.autoRotate) { set(s.copy(autoRotate = it)) }
                 Divider()
                 // All long lists: the bar on the right; drag it (or touch the right edge) to jump anywhere fast.
-                Column(Modifier.explain("Scroll bar width").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
-                    Text("Scroll bar width", color = C.text, modifier = Modifier.anchor("Scroll bar width"), fontSize = 15.sp)
-                    Text("All lists: drag the bar on the right edge to scroll fast", color = C.muted, fontSize = 13.sp)
-                    Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
-                        (4..9).forEach { px -> Pill("$px px", selected = s.scrollbarPx == px) { set(s.copy(scrollbarPx = px)) } }
-                    }
-                }
+                ValueSlider("Scroll bar width", "All lists: drag the bar on the right edge to scroll fast", "${s.scrollbarPx} px", s.scrollbarPx, 4..9) { set(s.copy(scrollbarPx = it)) }
             }
             CardBox {
                 Column(Modifier.explain("Button size").padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {
@@ -563,13 +545,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
             ScrollSpeedCard("Up next autoscroll", "Long names in the players' Up next lists and the queue", "upnext")
             ScrollSpeedCard("Player titles autoscroll", "Long song, station and video titles on the players (one line)", "player")
             CardBox {
-                Row(Modifier.explain("Up next songs on the player").padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Up next songs on the player", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Up next songs on the player").weight(1f))
-                    Pill("−") { set(s.copy(upNextCount = (s.upNextCount - 1).coerceAtLeast(0))) }
-                    Text("${s.upNextCount}", color = accent(), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.width(40.dp))
-                    Pill("+") { set(s.copy(upNextCount = (s.upNextCount + 1).coerceAtMost(20))) }
-                }
+                ValueSlider("Up next songs on the player", "", "${s.upNextCount}", s.upNextCount, 0..20) { set(s.copy(upNextCount = it)) }
             }
             CardBox {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp)) {

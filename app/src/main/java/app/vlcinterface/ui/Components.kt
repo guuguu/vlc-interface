@@ -401,6 +401,33 @@ fun ToggleRow(label: String, hint: String = "", checked: Boolean, onChange: (Boo
     }
 }
 
+/**
+ * A setting that is a value (2026-11-28 10:04: "all settings as values to be sliders"): its name, line and current value
+ * on top, a slider under it across the row. Long press on the name: its explanation. [shown] writes the value
+ * ("10 s", "Off", "No limit"); [onChange] gets whole steps; [onFirst] runs on the first change of each visit (helpers).
+ */
+@Composable
+fun ValueSlider(label: String, hint: String = "", shown: String, value: Int, range: IntRange, step: Int = 1,
+                onFirst: () -> Unit = {}, onChange: (Int) -> Unit) {
+    val ex = LocalExplain.current
+    var first by remember { mutableStateOf(true) }
+    Column(Modifier.anchor(label).fillMaxWidth().combinedClickable(onClick = {}, onLongClick = { ex(label, hint) })
+        .padding(horizontal = 16.dp, vertical = (6 * sg()).dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(label, color = C.text, fontSize = 15.sp)
+                if (hint.isNotEmpty()) Text(hint, color = C.muted, fontSize = 13.sp)
+            }
+            Text(shown, color = accent(), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 8.dp))
+        }
+        val n = ((range.last - range.first) / step).coerceAtLeast(1)
+        ThinSlider(value.coerceIn(range.first, range.last).toFloat(), { v ->
+            val k = (Math.round((v - range.first) / step) * step + range.first).coerceIn(range.first, range.last)
+            if (k != value) { onChange(k); if (first) { first = false; onFirst() } }
+        }, Modifier.fillMaxWidth(), valueRange = range.first.toFloat()..range.last.toFloat(), steps = (n - 1).coerceAtLeast(0))
+    }
+}
+
 @Composable
 fun ValueRow(label: String, hint: String = "", value: String, onClick: () -> Unit) {
     val ex = LocalExplain.current

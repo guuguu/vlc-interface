@@ -30,8 +30,8 @@ for f, s in src.items():
     for m in re.finditer(r'\n(?:private |internal )?fun (?:ColumnScope\.)?([A-Z]\w*)\(', s):
         funcs.setdefault(m.group(1), (f, m.group(0).strip()))
 STR = r'"((?:[^"\\$]|\\.)*)"'
-ROW = re.compile(r'\b(TitleText|SectionTitle|ToggleRow|ValueRow|HToggleRow|HValueRow|SettingsLink|ScrollSpeedCard|Label|SliderRow|explain)\(\s*' + STR + r'(?:\s*,\s*' + STR + r')?')
-SKIP_FUN = {'SectionTitle','ToggleRow','ValueRow','HToggleRow','HValueRow','SettingsLink','ScrollSpeedCard','Label','SliderRow','CardBox',
+ROW = re.compile(r'\b(TitleText|SectionTitle|ToggleRow|ValueRow|ValueSlider|HToggleRow|HValueRow|SettingsLink|ScrollSpeedCard|Label|SliderRow|explain)\(\s*' + STR + r'(?:\s*,\s*' + STR + r')?')
+SKIP_FUN = {'SectionTitle','ToggleRow','ValueRow','ValueSlider','HToggleRow','HValueRow','SettingsLink','ScrollSpeedCard','Label','SliderRow','CardBox',
             'HelperDialog','BackHeader','Divider','Text','Pill','ThinSlider','Field','STextButton','AppSwitch','NowLine','Explain'}
 
 def walk(code, out, sec, seen):

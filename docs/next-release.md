@@ -1627,3 +1627,13 @@
 ## Visualisation started by itself, the button couldn't switch it off (reported 2026-11-28 10:00)
 - **Why:** when no album picture is found, the visualisation fills the picture's place by itself (20 Nov); the button only switched the "always" visualisation, so with no picture it stayed whatever was pressed (and pictures weren't being found because of the NAS / thread problems fixed in 1.98–1.99).
 - **Now:** the visualisation button is lit whenever the visualisation shows there, for either reason, and a press switches it off — then a plain ♪ sign takes the picture's place when there's no picture — until the button is pressed again (kept while the app runs).
+
+## Values as sliders, on / off as switches (requested 2026-11-28 10:04)
+- Every setting that is a number is now a slider with its value shown at the right (inputs where a value is typed stay as they are). Changed from tap-to-cycle or numbered buttons:
+  - Playback & gestures: Double-tap seek (5–60 s), Touch guard (Off … 300 ms);
+  - Radio: Free space limit (Off … 200 GB), Share of free space (10–90 %), Identify song question time (5–120 s);
+  - Look: Scroll bar width (4–9 px), Up next songs on the player (0–20, were − / + buttons);
+  - Alarm page: Fade-in time (Off … 10 min), Snoozes allowed (None, 1–10, No limit), Stop by itself after (5–60 min, Never);
+  - Alarm clock settings: Wake check after Stop (Off … 30 min).
+- On / off: the subtitle format's "Bold" is a switch (was a button). Every other on / off setting already was one.
+- Choices that aren't numbers (e.g. Off / Screen flash / Flash light, Hardware / Software, Songs / Radio / All) stay as choice buttons.
