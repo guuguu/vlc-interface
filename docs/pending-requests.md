@@ -61,3 +61,7 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
     - folders and their 🔍 Index buttons wrap together in one flow (muzica_flac, Index, muvi / Index on the next line), so it's unclear which Index belongs to which folder; + Folder and ↻ Rescan in the same flow;
     - "Write access: read / write" and "Check write access" not aligned; the button runs past the card's right edge;
     - sizes and paddings differ from chip to chip.
+    - (02:04, mock-up v2 approved as the layout) Address as a two-column grid: left column Auto, + under it (same width); right column one address per row, all the same width, kind on the left (LAN / VPN / remembered) and the IP on the right, so the IPs line up. Folders: one row per folder with its own 🔍 Index on the right; + Folder and ↻ Rescan as two equal buttons under them; Write access state on the left, a short "Check" on the right, inside the card. Title one line (share name), address under it.
+    - (02:05) Helpers for the Auto and + buttons (on a long press, and once per session on a tap when Helpers are on for Library & files):
+      - Auto: the app picks the address by itself — the LAN address at home, the VPN address away (when the VPN is on), else the last one that answered; it checks again when the network changes.
+      - +: add another address for this share by hand (an IP or a name, e.g. a second LAN address or the VPN one); it's kept with the share and offered in the list; long press on an address you added to remove it.
