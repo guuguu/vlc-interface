@@ -64,7 +64,8 @@ fun JumpDialog(playNext: Boolean = false, nav: Navigator? = null, videos: Boolea
         if (!videos && library == null && app.vlcinterface.sources.NetIndex.anyNasDoubt()) library = SongsCache.phoneOnly(ctx.applicationContext)
         library = if (videos) SongsCache.allVideos(ctx.applicationContext) else SongsCache.all(ctx.applicationContext)
     }
-    val queue = player.state.value.queue
+    // Followed live (2026-11-28 recheck): the "in queue" marks stay right when the queue changes while the box is open.
+    val queue = player.state.collectAsState().value.queue
     val inQueue = remember(queue) { queue.map { "${it.uri}#${it.startMs}" }.toHashSet() }
     val hits = remember(dq, library, queue) {
         if (dq.trim().length < 2) emptyList() else {

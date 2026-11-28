@@ -384,7 +384,6 @@ object RadioCapture {
             }
             r.header("icy-br")?.substringBefore(',')?.trim()?.toIntOrNull()?.takeIf { it in 8..1000 }?.let { bytesPerSec = it * 125.0 }
             val metaint = r.header("icy-metaint")?.toIntOrNull() ?: 0
-            val segBytes = (bytesPerSec * 30).toLong().coerceIn(64_000, 4_000_000)
             // Under 2 GB free: no recording at all.
             if (belowFloor()) {
                 val m = floorMsg()

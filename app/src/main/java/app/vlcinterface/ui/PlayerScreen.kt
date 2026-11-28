@@ -298,8 +298,6 @@ fun PlayerScreen(nav: Navigator, openOutput: () -> Unit) {
     }
 
     val syncPanelOpen = panel == Panel.SYNC_SUB || panel == Panel.SYNC_AUDIO
-    // Tall video upright: upper two thirds, buttons in the lower third — unless "Full screen" (double tap in the middle toggles).
-    val tallFull = st.settings.videoTallFull
     // Upright (15:32): always the picture on top with everything else below it (a tall video's "Bigger" gives it more room).
     val fullscreen = inPip || landscape
     val syncBelowVideo = !fullscreen

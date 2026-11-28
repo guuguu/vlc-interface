@@ -2435,8 +2435,6 @@ fun videoRowOrder(s: app.vlcinterface.data.Settings): List<String> {
     return saved + PLAYER_VIDEO_ROWS.filter { it !in saved }
 }
 
-/** Rows that can't be removed: without them the player can't be used. */
-val PLAYER_ROWS_KEPT = setOf("buttons")
 
 
 /** Flag emoji of a two-letter country code ("FR" → 🇫🇷); 🌐 when unknown. */

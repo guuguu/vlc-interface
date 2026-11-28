@@ -51,8 +51,6 @@ data class Origin(
 const val NO_RG_DB = -7f     // default of Settings → Audio → ReplayGain → "Songs without ReplayGain" (2026-11-28 10:54)
 /** Loudness and treble act 30 % deeper than their slider values (same logic, stronger effect). */
 const val TONE_DEPTH = 1.3f
-/** Songs without ReplayGain reached over the VPN: 6 dB lower (not scanned there). */
-const val VPN_NO_RG_DB = -6f     // no longer used: the global "Songs without ReplayGain" setting covers the VPN too     // no ReplayGain: played as it is (no preamp either); the scan question handles it
 
 data class PlayItem(
     val uri: String,
@@ -252,7 +250,9 @@ class PlayerController(private val context: Context, private val store: Store) {
             _state.value = s.copy(noRgShownDb = if (store.current.settings.rgMode != "off") store.current.settings.noRgDb else 0f)
             applySoundChain(); return
         }
-        if (!NativeAudio.active || !s.rgInfo.startsWith("No RG")) return
+        if (!s.rgInfo.startsWith("No RG")) return
+        // libVLC's own output: it applies the new value from the next item; the Preamp slider shows it at once.
+        if (!NativeAudio.active) { _state.value = s.copy(noRgShownDb = store.current.settings.noRgDb); return }
         rgUri = ""
         loadReplayGain(item, s)
     }
@@ -1118,10 +1118,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     /** Closes the playing video away from the screen's thread (reopen at the same spot). */
     private val closer = java.util.concurrent.Executors.newSingleThreadExecutor { r -> Thread(r, "video-close").apply { isDaemon = true } }
     private var reloadGen = 0
-    /** Item starts waiting for a slow network close (startItem): a newer start drops the older one. */
-    private var startGen = 0
     private var nasSeenAt = 0L
-    private var startAfterClose = false
 
     /**
      * The video reopened at the same spot (picture colour, decoder, subtitle format, picture check).
@@ -2322,7 +2319,6 @@ class PlayerController(private val context: Context, private val store: Store) {
         // (2026-11-28 09:39: closing the old network item on another thread first — 1.96–1.98 — is taken back: the error
         // log showed the app's own sound output losing the sound after song changes since then ("libVLC delivered no
         // sound to the app" → switched to libVLC's output). The old item is closed by setMedia here again, as before.)
-        ++startGen
         mp.setMedia(media)
         media.release()
         try { oldPfd?.close() } catch (_: Exception) {}

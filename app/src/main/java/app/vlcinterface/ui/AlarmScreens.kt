@@ -1381,7 +1381,7 @@ private fun ShortAlarmDialog(a0: ShortAlarm, onClose: () -> Unit) {
     var a by remember { mutableStateOf(a0) }
     var hh by remember { mutableStateOf("%02d".format(a0.hour)) }
     var mm by remember { mutableStateOf("%02d".format(a0.minute)) }
-    val exists = ShortAlarms.list.value.any { it.id == a0.id }
+    val exists = ShortAlarms.list.collectAsState().value.any { it.id == a0.id }
     androidx.compose.material3.AlertDialog(onDismissRequest = onClose, containerColor = C.panel,
         title = { Text(if (exists) "Short alarm" else "New short alarm", color = C.text) },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

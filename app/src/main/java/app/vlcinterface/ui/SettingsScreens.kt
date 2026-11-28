@@ -1403,7 +1403,6 @@ fun DeviceSoundControls(name: String) {
 @Composable
 fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
     // Helpers (2026-11-23 01:16): with Helpers on, a change or a still hold on the slider shows the setting's helper.
-    val helpersS = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.helpers
     var sndHelp by remember { mutableStateOf("") }
     if (sndHelp.isNotEmpty()) HelperDialog(sndHelp, SettingHelp.text(sndHelp, "")) { sndHelp = "" }
     SectionTitle("Sound")

@@ -281,7 +281,8 @@ fun WifiLostHost() {
     val g = app.vlcinterface.player.NetGuard
     val stopped by g.stopped.collectAsState()
     val st by App.instance.store.state.collectAsState()
-    val cur = App.instance.player.state.value.item
+    // Followed live (2026-11-28 recheck): another station starting while the question is open updates the choices.
+    val cur = App.instance.player.state.collectAsState().value.item
     val radio = cur?.isRadio == true
     val curMeta = st.stations.firstOrNull { it.url == cur?.uri }?.meta ?: ""
     val light = if (!radio) emptyList() else st.stations.filter { s -> g.bitrateOf(s.meta).let { it in 1..128 } && !s.meta.contains("flac", true) && s.url != cur?.uri }

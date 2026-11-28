@@ -1685,3 +1685,11 @@
 - Reset (long press on the crossed sine button): Loudness, Treble and Preamp back to 0 and the song's / station's own sound profile removed (all three values) — as before.
 - Profiles made again the same way for songs and radio: values changed by hand become the item's own profile once it has played 30 s with them (play time since the last change; pauses don't count). Left sooner, nothing is kept. Each save (and each change not kept) is in the Player log.
 - Radio no longer keeps whatever values a station was played with: like songs, only values set by hand and played 30 s.
+
+## Whole-app check, three ways, plus duplicates / leftovers / odd logic (requested 2026-11-28 11:06 / 11:08)
+1. **Android lint** (CI run 46133587766): 238 findings, nothing new since the last check — the earlier fixes hold. The 5 "StateFlow read once in a screen" spots were looked at again: three were real (a dialog not following changes while open) and now follow live — Jump to / Play next's "in queue" marks, the data-saving question's station choices, the short alarm page's "Short alarm / New short alarm" title. The rest (key handling, Bluetooth codec read in a try) are as intended.
+2. **detekt** (bugs, exceptions, coroutines): the same 7 old style hints, no new ones.
+3. **Review of today's changes** (per-device export, the no-ReplayGain slider for songs / VPN / radio, the front Preamp in sync, the 30 s profile rule): one gap fixed — with libVLC's own output the front Preamp slider didn't show a changed "Songs without ReplayGain" value until the next song; now at once.
+- **Leftovers removed:** the unused NetBIOS name query, two unused server-name / VPN helpers, the fixed −6 dB VPN value, the counters of the taken-back "close on another thread" change, an unused tall-video flag, an unused radio-recording segment size, an unused player-rows set, a settings page reading the alarm state for nothing (an extra redraw), and the Touch guard helper still naming ♪ Identify.
+- **Duplicates:** 0.5 % of the code (jscpd, blocks of 12+ lines): almost all import lists; the only logic twice is the small local HTTP request reader of the SFTP and SMB bridges (16 lines), left as it is.
+- **Odd logic scan** (same if / else branches, upside-down ranges, a value compared with itself): nothing real found.

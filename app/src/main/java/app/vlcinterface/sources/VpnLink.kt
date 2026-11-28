@@ -24,8 +24,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import java.net.DatagramPacket
-import java.net.DatagramSocket
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.io.File
@@ -186,7 +184,6 @@ object VpnLink {
         return s.host
     }
 
-    fun useVpn(s: Source): Boolean = hostNow(s) != s.host
 
     private fun sourceOf(host: String): Source? = try {
         App.instance.store.current.sources.firstOrNull { it.host.equals(host, true) && (it.vpnHost.isNotBlank() || it.altHosts.isNotEmpty()) }
@@ -458,33 +455,6 @@ object VpnLink {
 
     private fun reachable(ip: String, port: Int, ms: Int): Boolean = try { Socket().use { it.connect(InetSocketAddress(ip, port), ms) }; true } catch (_: Exception) { false }
 
-    /** NetBIOS node status (UDP 137): the server's name and MAC. */
-    private fun netbios(ip: String): Pair<String, String> {
-        try {
-            DatagramSocket().use { s ->
-                s.soTimeout = 1200
-                val q = ByteArray(50)
-                q[0] = 0x12; q[1] = 0x34; q[5] = 1                        // id, 1 question
-                q[12] = 0x20; q[13] = 'C'.code.toByte(); q[14] = 'K'.code.toByte()
-                for (i in 15 until 45) q[i] = 'A'.code.toByte()
-                q[45] = 0; q[46] = 0; q[47] = 0x21; q[48] = 0; q[49] = 1   // NBSTAT, IN
-                s.send(DatagramPacket(q, q.size, InetAddress.getByName(ip), 137))
-                val buf = ByteArray(1024); val p = DatagramPacket(buf, buf.size); s.receive(p)
-                var i = 12 + 34 + 4 + 4 + 2                                   // header, name, type/class, ttl, rdlength
-                val n = buf[i].toInt() and 0xFF; i++
-                var name = ""
-                for (k in 0 until n) {
-                    val nm = String(buf, i, 15, Charsets.ISO_8859_1).trim(); val suffix = buf[i + 15].toInt() and 0xFF
-                    val group = (buf[i + 16].toInt() and 0x80) != 0
-                    if (name.isEmpty() && suffix == 0 && !group) name = nm
-                    i += 18
-                }
-                val mac = (0 until 6).joinToString(":") { "%02x".format(buf[i + it]) }
-                return name to (if (mac == "00:00:00:00:00:00") "" else mac)
-            }
-        } catch (_: Exception) { return "" to "" }
-    }
-
     /** SMB2 NEGOTIATE (TCP 445): the server's GUID (unique per server). */
     private fun smbGuid(ip: String): String {
         try {
@@ -510,13 +480,6 @@ object VpnLink {
         } catch (_: Exception) { return "" }
     }
 
-    /**
-     * The server's host name from its SMB login (TCP 445): SMB2 NEGOTIATE, then SESSION_SETUP with an NTLM
-     * "negotiate" message — the server's NTLM challenge lists its NetBIOS computer name (and DNS name). No password
-     * is sent and no session is opened. Works wherever file sharing works (over a VPN too), unlike the UDP 137
-     * name query. Returns "" when it can't be read.
-     */
-    fun smbHostName(ip: String): String = smbIdentity(ip).second
 
     /** Server GUID and host name in one TCP connection (NEGOTIATE answer, then the NTLM challenge). */
     fun smbIdentity(ip: String): Pair<String, String> {
