@@ -102,4 +102,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 50. **2026-11-28 11:15 — Short pop-ups stay for: maximum 20 s** (was 10 s). Done after 1.102.0, not built yet.
 51. **2026-11-28 11:21 — Touch guard the same on every settings page and sub-page; its slider on top of the main Settings page.** Done after 1.103.0, not built yet.
 52. **2026-11-28 11:38 — Treble per output device** (settings page only, added to the sound, not shown on the players' slider). Done after 1.103.0, not built yet.
-53. **2026-11-28 11:39 — Every per-device setting only in Settings, sound only** (player shows item values only; the Loudness "(auto …)" label removed). Done after 1.103.0, not built yet.
+53. **2026-11-28 11:39 — Every per-device setting only in Settings, sound only** (player shows item values only; the Loudness "(auto …)" label kept, 11:41). Done after 1.103.0, not built yet.

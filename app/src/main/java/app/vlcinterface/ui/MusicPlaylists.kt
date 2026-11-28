@@ -2154,9 +2154,10 @@ private fun ToneSliders() {
     }
     // One slider per row, centred, almost the full width (longer sliders, finer control).
     Column(Modifier.fillMaxWidth(0.94f)) {
-        // Only the song's / station's own value (2026-11-28 11:39): what the output device's settings add or take away
-        // (Auto loudness's "flat from", Treble, Preamp, Balance) acts on the sound only and isn't shown here.
-        row("Loudness", p.loudDb, 0f..15f) { x, done -> player.setTone(x, p.trebleDb, done) }
+        // Auto loudness on: the label also shows how much is used at the phone's current volume (kept, 2026-11-28 11:41).
+        // The slider itself shows only the song's / station's own value; the device's Treble, Preamp and Balance aren't shown.
+        row(if (p.loudEffDb != p.loudDb && p.loudDb > 0f) "Loudness (auto %.1f)".format(java.util.Locale.US, p.loudEffDb) else "Loudness",
+            p.loudDb, 0f..15f) { x, done -> player.setTone(x, p.trebleDb, done) }
         // Double tap: Settings → Audio → Treble band (the filter this slider drives), 21:50.
         row("Treble", p.trebleDb, -5f..5f, onDoubleTap = { TrebleBandNav.want = true }) { x, done -> player.setTone(p.loudDb, x, done) }
         // Pre-amp per song / station (−12…+12 dB): for ones too loud or too quiet (on top of ReplayGain for songs).
