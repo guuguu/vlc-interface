@@ -72,3 +72,8 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
     - So the limit becomes 70 % of the measured network maximum (was 60 %), for ReplayGain and indexing alike.
     - Indexing keeps enough parallel reads to reach that speed (not cut to 2 if that's slower than 70 %); CPU pauses for ReplayGain sized so the scan time grows by at most 30 %.
     - Checked and logged: each scan / indexing run writes its speed next to the 1.92-style unthrottled speed measured at the start, so the floor can be seen in the logs.
+35. **2026-11-28 02:14 — Longer network timeouts / buffers; always fluent sound, no interface glitches:**
+    - Now (1.93): libVLC buffer songs 3 s network / 1.5 s phone, videos 2.5 s, radio 3 s (engine default 1.5 s); SMB reads give up after 6–8 s; web streams 20 s read, radio recording 30 s; cache-ahead of the next song.
+    - Raise them so a slow or busy NAS / network never breaks the sound: bigger network buffer for songs and radio (e.g. 3 → 8 s; videos a bit more, seeking kept quick), longer SMB / HTTP read time-outs before an item counts as failed, the next song cached ahead earlier and further; a hiccup is retried silently before any skip or error.
+    - Sound always fluent: playback has priority over everything else (indexing, ReplayGain, cover search, logs wait for it); the sound engine's own buffer kept full under load.
+    - Interface free of glitches: no network, file or libVLC call on the screen's thread anywhere; heavy lists and pictures prepared in the background; checked across the app.
