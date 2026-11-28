@@ -2159,6 +2159,20 @@ class PlayerController(private val context: Context, private val store: Store) {
         return items.size
     }
 
+    /**
+     * Empty the queue (2026-11-28 15:56): every item but the one playing goes; that one plays on, uninterrupted (alone in
+     * the queue). With nothing playing, the queue is emptied completely.
+     */
+    fun clearQueue() {
+        val s = _state.value
+        val cur = s.item
+        orderedQueue = null
+        fullList = listOfNotNull(cur)
+        if (cur == null) { _state.value = s.copy(queue = emptyList(), index = -1); return }
+        seriesTried = cur.uri                    // an episode playing doesn't bring its series back by itself
+        _state.value = s.copy(queue = listOf(cur), index = 0)
+    }
+
     fun removeFromQueue(i: Int) {
         val s = _state.value
         if (i == s.index || i !in s.queue.indices) return

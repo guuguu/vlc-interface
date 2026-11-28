@@ -928,7 +928,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         val cur = p.item
         if (next.size > 1 && cur != null) Column(Modifier.fillMaxWidth()) {
             var upMenu by remember { mutableIntStateOf(-1) }
-            Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); SaveQueueButton(); QueueTimeLeft(cur) { nav.go(Screen.Queue) } }
+            Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); SaveQueueButton(); ClearQueueButton(); QueueTimeLeft(cur) { nav.go(Screen.Queue) } }
             val upDrag = remember { QueueDrag() }
             next.forEachIndexed { i, (qi, n) -> androidx.compose.runtime.key(n.uri) {
                 val now = qi == p.index

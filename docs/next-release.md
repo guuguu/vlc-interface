@@ -1797,3 +1797,8 @@
 - **Why:** the series queue was made only when the episode was tapped in a folder list, and only from the files of that list. Opened from Find, Library → Videos, Browse, another app or a single-file menu, the episode played alone — and episodes in subfolders (one folder per season) were never found.
 - **Now:** whenever an episode starts and the queue doesn't already hold other episodes of its series, its own folder with all its subfolders (phone or network) is read in the background; every file of the same series goes into the queue in season / episode order around it, and a short note says how many. The episode playing goes on untouched; ⏮ ⏭ and Up next work at once. Once per episode start; a playlist you made is left as it is.
 - **Adding an episode brings its series (requested 15:54):** Add to queue or Play next on an episode — the item playing goes on uninterrupted, and the episode's folder and subfolders are read in the background: every episode of the series goes into the queue in succession (season / episode order) where the added one went. If the episode playing is of the same series, only the episodes after it follow. Episodes already in the queue are moved into that succession, so each is in it once. A short note says how many.
+
+# After 1.112.0
+
+## Empty the queue (requested 2026-11-28 15:56)
+- "Empty" (red) next to Save in Up next on the song and video players, and on the Queue page next to "Save as playlist". It asks first ("Empty the queue? All N other items leave the queue. "<title>" plays on."); then every item but the one playing leaves the queue, and that one plays on uninterrupted. With nothing playing, the queue is emptied completely. An episode playing doesn't bring its series back by itself afterwards.

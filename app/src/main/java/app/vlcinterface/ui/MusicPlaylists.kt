@@ -604,7 +604,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (next.size > 1) Column(Modifier.fillMaxWidth().onGloballyPositioned { upNextYpx = it.positionInParent().y.toInt() }) {
                 Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); 
 
-                    SaveQueueButton(); QueueTimeLeft(item) { nav.go(Screen.Queue) } }
+                    SaveQueueButton(); ClearQueueButton(); QueueTimeLeft(item) { nav.go(Screen.Queue) } }
                 val upDrag = remember { QueueDrag() }
                 next.forEachIndexed { i, (qi, n) -> androidx.compose.runtime.key(n.uri) {
                     val now = qi == p.index
@@ -928,6 +928,7 @@ fun QueueScreen(nav: Navigator) {
     Column(Modifier.fillMaxSize()) {
         BackHeader("Queue", nav, "${p.queue.size} items") {
             if (p.queue.isNotEmpty()) STextButton({ saveName = "" }) { Text("Save as playlist", color = accent()) }
+            ClearQueueButton(big = true)
         }
         val st by App.instance.store.state.collectAsState()
         // Videos and stations are always in order (19:20 / 19:21): the Random / Sequential switch only while songs play.
@@ -2450,6 +2451,26 @@ fun flagOf(code: String): String {
  * "Save" next to Up next (2026-11-21 16:48): the whole queue as a new playlist, with a name proposed — the series for
  * episodes ("The Office"), else where it was played from — that can be changed.
  */
+/**
+ * "Empty" next to Up next and on the Queue page (2026-11-28 15:56): every item but the one playing leaves the queue —
+ * asked first; the one playing goes on.
+ */
+@Composable
+fun ClearQueueButton(big: Boolean = false) {
+    val p by App.instance.player.state.collectAsState()
+    var ask by remember { mutableStateOf(false) }
+    if (p.queue.size < 2) return
+    if (big) STextButton({ ask = true }) { Text("Empty", color = C.bad) }
+    else Text("Empty", color = C.bad, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.clip(RoundedCornerShape(10.dp)).clickable { ask = true }.padding(horizontal = 8.dp, vertical = 4.dp))
+    if (ask) AlertDialog(onDismissRequest = { ask = false }, containerColor = C.panel,
+        title = { Text("Empty the queue?", color = C.text) },
+        text = { Text(if (p.item != null) "All ${p.queue.size - 1} other items leave the queue. \"${p.item?.title}\" plays on."
+            else "All ${p.queue.size} items leave the queue.", color = C.muted) },
+        confirmButton = { STextButton({ App.instance.player.clearQueue(); ask = false; ShortNote.show("Queue emptied") }) { Text("Empty", color = C.bad) } },
+        dismissButton = { STextButton({ ask = false }) { Text("Cancel") } })
+}
+
 @Composable
 fun SaveQueueButton() {
     val p by App.instance.player.state.collectAsState()
