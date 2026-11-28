@@ -1583,3 +1583,7 @@
 
 ## Helpers: their own settings page (requested 2026-11-28 02:50)
 - The Helpers switches leave the Alarm clock settings page and get their own page, **Settings → Helpers** (a new link on the main Settings page; its place set in Look like the others): "Helpers" on / off, and under it one switch per settings page (Alarm page, Audio, Playback & gestures, Radio, Video, Look, Library & files, Visualisation, Clock aspect, File associations). Helper text on a long press; found by the Settings search.
+
+## Player buttons squeezed by the Identify / Sleep row (screenshot 2026-11-28 02:51, 1.94.0 radio player)
+- **Cause:** the Identify / Sleep row was inside the player buttons' auto-fitting row; with a long status ("Not found · logged") it was wider than the play button, so the whole row was shrunk — tiny ⏮ / ⏸ / ⏭ while the two pills (fixed text size) stayed big, and the Next column ran into the sine / reset buttons.
+- **Now:** Identify and Sleep are their own row just under the player buttons, centred, outside the fitting row (the buttons keep their size), each a fixed width so a status never moves anything; shorter statuses ("Found ✓", "Not found", "Tags ✓", "After song ✓", "Timed out"; the full result is in the log).

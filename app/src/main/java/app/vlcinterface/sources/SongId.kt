@@ -79,7 +79,7 @@ object SongId {
                 ServerLog.log("musicbrainz.org", "identify", "HTTPS", "", m != null,
                     if (m == null) "Radio ${item.title}: \"${nowPlaying.ifEmpty { "no song name" }}\" — not found"
                     else "Radio ${item.title}: \"$nowPlaying\" → ${m.artist} – ${m.title}" + (if (m.album.isNotEmpty()) " (${m.album})" else "") + " · score ${m.score}")
-                flash(if (m == null) "Not found · logged" else "Found · logged")
+                flash(if (m == null) "Not found" else "Found ✓")
                 if (m != null) showRadio(item.uri, nowPlaying, m)
                 return
             }
@@ -94,7 +94,7 @@ object SongId {
             val new = linkedMapOf("TITLE" to m.title, "ARTIST" to m.artist, "ALBUM" to m.album).filterValues { it.isNotBlank() }
             val old = if (tagged) linkedMapOf("TITLE" to item.title, "ARTIST" to item.artist, "ALBUM" to item.album).filterValues { it.isNotBlank() } else emptyMap()
             val changed = new.filter { (k, v) -> old[k] != v }
-            if (changed.isEmpty()) { flash("Tags already match"); return }
+            if (changed.isEmpty()) { flash("Same tags ✓"); return }
             val clash = changed.keys.any { old.containsKey(it) }
             if (clash) {
                 val sec = App.instance.store.current.settings.identifyAskSec
@@ -169,7 +169,7 @@ object SongId {
     fun decline(timedOut: Boolean) {
         val a = _ask.value ?: return; _ask.value = null
         ServerLog.log("musicbrainz.org", "identify", "HTTPS", "", true, "${a.item.title}: " + if (timedOut) "question timed out — nothing written" else "kept the old names")
-        if (timedOut) flash("Timed out · nothing written")
+        if (timedOut) flash("Timed out")
     }
 
     private suspend fun write(ctx: Context, item: PlayItem, fields: Map<String, String>) {
@@ -177,6 +177,6 @@ object SongId {
         val r = RgScanner.saveTags(ctx, item, fields)
         ServerLog.log("musicbrainz.org", "identify", "HTTPS", "", !r.startsWith("not"),
             "${item.title} → ${fields.values.joinToString(" · ")}: $r")
-        flash(if (r.startsWith("not")) "Not written" else if (r.startsWith("cached")) "Written after this song" else "Tags written")
+        flash(if (r.startsWith("not")) "Not written" else if (r.startsWith("cached")) "After song ✓" else "Tags ✓")
     }
 }

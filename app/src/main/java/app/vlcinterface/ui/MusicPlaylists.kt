@@ -387,6 +387,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             Row(Modifier.fillMaxWidth().onGloballyPositioned { ctlBottom = it.boundsInRoot().bottom }, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) { ClockToggleButton(30); VisButton(nav, 30) }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
             AutoFitRow(spacing = 12.dp) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
                     Box(Modifier.alpha(if (!radio && p.queue.size <= 1) 0.35f else 1f)) { CtlBtn("⏮", 52) { NextBtn.tapPrev() } }
@@ -397,25 +398,34 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 Box(Modifier.size((76 * btnScale()).dp).liteShadow(CircleShape).clip(CircleShape).background(accent()).guardClick("play") { player.togglePause() }, contentAlignment = Alignment.Center) {
                     Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (26 * btnScale()).sp, fontWeight = FontWeight.Bold)
                 }
-                // Under play, close to it (2026-11-28 mock-up v3): ♪ Identify and Sleep side by side; the row may be wider than
-                // the play button and is centred under it (between −10 and +10; the row's width is counted, so every part stays tappable).
+                }
+                if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("+${st.settings.doubleTapSeekSec}", 44) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) } }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
+                    val noNext = !radio && p.queue.size <= 1
+                    Box(Modifier.alpha(if (noNext) 0.35f else 1f)) { CtlBtn("⏭", 52) { NextBtn.tap() } }
+                    Text(if (radio) "Next\nstation" else "Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
+                }
+            }
+                // Under the player buttons, close to play (2026-11-28 mock-up v3; fixed 02:51): ♪ Identify and Sleep side by
+                // side, in their own row — outside the buttons' auto-fitting row, so they never shrink the player buttons —
+                // each a fixed width so a status text never moves anything.
                 val idCtx = androidx.compose.ui.platform.LocalContext.current
                 val idStatus by app.vlcinterface.sources.SongId.status.collectAsState()
-                Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x24FFFFFF))
+                Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.width(92.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x24FFFFFF))
                         .guardClick("identify") { sleepScope.launch { app.vlcinterface.sources.SongId.identify(idCtx, item, p.nowPlaying) } }
-                        .padding(horizontal = 8.dp, vertical = 3.dp)) {
-                        Text(idStatus.ifEmpty { "♪ Identify" }, color = if (idStatus.isEmpty()) C.muted else accent(), fontSize = 10.sp, maxLines = 1)
+                        .padding(horizontal = 6.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+                        Text(idStatus.ifEmpty { "♪ Identify" }, color = if (idStatus.isEmpty()) C.muted else accent(), fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Box {
                         val on = p.sleepUntil > 0 || p.sleepSongs > 0
                         val ac = accent()
                         val left = if (p.sleepUntil > 0) "${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min"
                             else if (p.sleepSongs > 0) "${p.sleepSongs} song" + (if (p.sleepSongs == 1) "" else "s") else ""
-                        Box(Modifier.clip(RoundedCornerShape(10.dp)).background(if (on) ac.copy(alpha = 0.25f) else Color(0x24FFFFFF))
+                        Box(Modifier.width(92.dp).clip(RoundedCornerShape(10.dp)).background(if (on) ac.copy(alpha = 0.25f) else Color(0x24FFFFFF))
                             .border(1.dp, if (on) ac else Color.Transparent, RoundedCornerShape(10.dp)).guardClick("sleep") { sleepMenu = true }
-                            .padding(horizontal = 10.dp, vertical = 3.dp)) {
-                            Text(if (left.isEmpty()) "Sleep" else "Sleep · $left", color = if (on) ac else C.text, fontSize = 10.sp, maxLines = 1)
+                            .padding(horizontal = 6.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
+                            Text(if (left.isEmpty()) "Sleep" else "Sleep · $left", color = if (on) ac else C.text, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         SDropdownMenu(sleepMenu, { sleepMenu = false }) {
                             // Radio: time only (a station has no songs to count).
@@ -429,13 +439,6 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                             if (p.sleepUntil > 0 || p.sleepSongs > 0) SMenuItem({ Text("Off") }, { player.setSleep(0); sleepMenu = false })
                         }
                     }
-                }
-                }
-                if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("+${st.settings.doubleTapSeekSec}", 44) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) } }
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
-                    val noNext = !radio && p.queue.size <= 1
-                    Box(Modifier.alpha(if (noNext) 0.35f else 1f)) { CtlBtn("⏭", 52) { NextBtn.tap() } }
-                    Text(if (radio) "Next\nstation" else "Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
             }
