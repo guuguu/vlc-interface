@@ -349,9 +349,20 @@ object AlarmEngine {
             val cm = app.getSystemService(CameraManager::class.java)
             val id = try { cm.cameraIdList.firstOrNull { cm.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true } } catch (_: Exception) { null }
                 ?: return@launch
-            var on = false
-            try { while (isActive) { on = !on; cm.setTorchMode(id, on); delay(500) } }
-            finally { try { cm.setTorchMode(id, false) } catch (_: Exception) {} }
+            // 2026-11-28 01:10: switching the torch on and off twice a second made the phone post a "flashlight" notice each
+            // time (notification spam). Now the torch is switched on once and blinks by its strength (bright ↔ faint,
+            // Android 13+ where the flash allows levels); where it doesn't, it stays on steadily — one notice only.
+            val max = try { if (android.os.Build.VERSION.SDK_INT >= 33) cm.getCameraCharacteristics(id).get(CameraCharacteristics.FLASH_INFO_STRENGTH_MAXIMUM_LEVEL) ?: 1 else 1 } catch (_: Exception) { 1 }
+            try {
+                if (max > 1 && android.os.Build.VERSION.SDK_INT >= 33) {
+                    var hi = true
+                    cm.turnOnTorchWithStrengthLevel(id, max)
+                    while (isActive) { delay(500); hi = !hi; try { cm.turnOnTorchWithStrengthLevel(id, if (hi) max else 1) } catch (_: Exception) {} }
+                } else {
+                    cm.setTorchMode(id, true)
+                    while (isActive) delay(1000)
+                }
+            } finally { try { cm.setTorchMode(id, false) } catch (_: Exception) {} }
         }
     }
 

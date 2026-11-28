@@ -177,7 +177,7 @@ fun ColumnScope.AssociationSettings() {
                 }
                 ToggleRow(if (t.isAny) t.label else "${t.label} (${t.exts})", if (t.isAny && on) "$status · covers every ${t.group} type, also those above" else status, on) { v ->
                     Associations.setRegistered(ctx, t, v); changed++
-                    if (helpersOn) help = if (v) "Register for a type" else "Deregister a type"
+                    if (helpersOn && AutoHelp.ok("assoc", "reg-$v")) help = if (v) "Register for a type" else "Deregister a type"
                 }
                 if (on && !t.isAny && who !is Associations.Opener.Me) Row0Link("Make it the main app for ${t.label}…") { main = t }
             }
@@ -187,18 +187,18 @@ fun ColumnScope.AssociationSettings() {
     CardBox {
         ValueRow("Register for every type", "The app is offered for all the types above", "Register") {
             Associations.TYPES.forEach { Associations.setRegistered(ctx, it, true) }; changed++
-            if (helpersOn) help = "Register for every type"
+            if (helpersOn && AutoHelp.ok("assoc", "Register for every type")) help = "Register for every type"
         }
         Divider()
         ValueRow("Deregister every type", "The app is no longer offered for any of them (still opens its own files)", "Deregister") {
             Associations.TYPES.forEach { Associations.setRegistered(ctx, it, false) }; changed++
-            if (helpersOn) help = "Deregister every type"
+            if (helpersOn && AutoHelp.ok("assoc", "Deregister every type")) help = "Deregister every type"
         }
         Divider()
         ValueRow("Stop being the main app", "For every type it opens by default now: Android asks again", "Stop") {
             Associations.clearMine(ctx); changed++
             ShortNote.show("No longer the main app for any type")
-            if (helpersOn) help = "Stop being the main app"
+            if (helpersOn && AutoHelp.ok("assoc", "Stop being the main app")) help = "Stop being the main app"
         }
     }
     main?.let { t -> MakeMainDialog(t, onChanged = { changed++ }) { main = null } }

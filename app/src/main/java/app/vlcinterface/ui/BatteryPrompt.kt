@@ -363,7 +363,7 @@ fun UseNasButton() {
     val link by app.vlcinterface.player.NetGuard.link.collectAsState()
     val stS by App.instance.store.state.collectAsState()
     // Status shown on the button (the tap works as before): at home → NAS active; away with the VPN → VPN - NAS active;
-    // VPN without NAS use → VPN active; NAS in use but not answering → NAS unreach; nothing → VPN-NAS off.
+    // VPN without NAS use → VPN active; NAS in use but not answering → NAS unreachable; nothing → VPN-NAS off.
     val servers = remember(stS.sources, vpn, link) { v.lanServers() }
     val home = remember(servers, vpn, link) { servers.any { v.atHome(it) } }
     val nasInUse = home || on.isNotEmpty()
@@ -382,10 +382,10 @@ fun UseNasButton() {
         }
     }
     val label = when {
-        nasInUse && reach == false -> "NAS unreach"
+        nasInUse && reach == false -> "NAS unreachable"
         home -> "NAS active"
         on.isNotEmpty() && vpn -> "VPN - NAS active"
-        on.isNotEmpty() -> "NAS unreach"
+        on.isNotEmpty() -> "NAS unreachable"
         vpn -> "VPN active"
         else -> "VPN-NAS off"
     }
@@ -401,7 +401,7 @@ fun UseNasButton() {
                 else -> pick = true
             }
         }, onLongClick = { if (vpn) pick = true else needVpn = true }).padding(horizontal = 12.dp, vertical = 2.dp)) {
-        val col = if (lit) Color.Black else if (label == "NAS unreach") Color(0xFFE57373) else if (vpn) accent() else C.muted
+        val col = if (lit) Color.Black else if (label == "NAS unreachable") Color(0xFFE57373) else if (vpn) accent() else C.muted
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (link.isNotEmpty()) { NetSymbol(link, col); Box(Modifier.width(6.dp)) }
             Text(label, color = col, fontSize = 12.sp, lineHeight = 14.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)

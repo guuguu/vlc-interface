@@ -157,7 +157,7 @@ fun SettingsScreen(nav: Navigator) {
                         Text("${s.settingsTextPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
                     }
                     ThinSlider(s.settingsTextPct.toFloat(), { v -> set(s.copy(settingsTextPct = (Math.round(v / 5f) * 5).coerceIn(70, 160))) }, valueRange = 70f..160f,
-                        onHoldStill = { if (helpersOnM) sizeHelp = true })
+                        onHoldStill = { if (helpersOnM && AutoHelp.ok("look", "sizeHelp")) sizeHelp = true })
                 }
             }
             // Page titles size (18:05): one size for every page title in the app.
@@ -179,7 +179,7 @@ fun SettingsScreen(nav: Navigator) {
                         Text("${s.settingsGapPct} %", color = accent(), fontWeight = FontWeight.SemiBold)
                     }
                     ThinSlider(s.settingsGapPct.toFloat(), { v -> set(s.copy(settingsGapPct = (Math.round(v / 5f) * 5).coerceIn(40, 160))) }, valueRange = 40f..160f,
-                        onHoldStill = { if (helpersOnM) gapHelp = true })
+                        onHoldStill = { if (helpersOnM && AutoHelp.ok("look", "gapHelp")) gapHelp = true })
                 }
             }
             if (gapHelp) HelperDialog("Vertical spacing", SettingHelp.text("Vertical spacing", ""), extra = {
@@ -275,7 +275,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 Divider()
                 // Clock on the video picture (2026-11-22 13:23): time only, top-left, always while a video plays.
                 ToggleRow("Clock on the video", "The time in the top-left corner of the picture", s.videoClock) { v ->
-                    set(s.copy(videoClock = v)); if (helpersV) vidHelp = "Clock on the video" }
+                    set(s.copy(videoClock = v)); if (helpersV && AutoHelp.ok("video", "Clock on the video")) vidHelp = "Clock on the video" }
                 if (s.videoClock) Column(Modifier.padding(horizontal = 16.dp, vertical = (6 * sg()).dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Clock size", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Clock size").weight(1f).explain("Clock on the video"))
@@ -283,19 +283,19 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(videoClockPct = 100)) }) { Text("Reset") }
                     }
                     ThinSlider(s.videoClockPct.toFloat(), { v -> set(s.copy(videoClockPct = (Math.round(v / 10f) * 10).coerceIn(50, 250))) }, valueRange = 50f..250f,
-                        onHoldStill = { if (helpersV) vidHelp = "Clock on the video" })
+                        onHoldStill = { if (helpersV && AutoHelp.ok("video", "Clock on the video")) vidHelp = "Clock on the video" })
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Clock opacity", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Clock opacity").weight(1f).explain("Clock on the video"))
                         Text("${s.videoClockAlpha} %", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(videoClockAlpha = 80)) }) { Text("Reset") }
                     }
                     ThinSlider(s.videoClockAlpha.toFloat(), { v -> set(s.copy(videoClockAlpha = (Math.round(v / 5f) * 5).coerceIn(20, 100))) }, valueRange = 20f..100f,
-                        onHoldStill = { if (helpersV) vidHelp = "Clock on the video" })
+                        onHoldStill = { if (helpersV && AutoHelp.ok("video", "Clock on the video")) vidHelp = "Clock on the video" })
                     // 13:25: any corner, the digits' colour (full colour editor), a grey shadow.
                     Text("Clock corner", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Clock corner").padding(top = 6.dp).explain("Clock on the video"))
                     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("tl" to "↖ Top left", "tr" to "↗ Top right", "bl" to "↙ Bottom left", "br" to "↘ Bottom right").forEach { (k, l) ->
-                            Pill(l, selected = s.videoClockCorner == k, filled = s.videoClockCorner == k) { set(s.copy(videoClockCorner = k)); if (helpersV) vidHelp = "Clock on the video" }
+                            Pill(l, selected = s.videoClockCorner == k, filled = s.videoClockCorner == k) { set(s.copy(videoClockCorner = k)); if (helpersV && AutoHelp.ok("video", "Clock on the video")) vidHelp = "Clock on the video" }
                         }
                     }
                     var clockColour by remember { mutableStateOf(false) }
@@ -308,10 +308,10 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(videoClockColor = 0xFFFFFFFFL)) }) { Text("White") }
                     }
                     if (clockColour) ColorPickDialog(s.videoClockColor, onDismiss = { clockColour = false }) { c ->
-                        set(s.copy(videoClockColor = c)); clockColour = false; if (helpersV) vidHelp = "Clock on the video" }
+                        set(s.copy(videoClockColor = c)); clockColour = false; if (helpersV && AutoHelp.ok("video", "Clock on the video")) vidHelp = "Clock on the video" }
                 }
                 if (s.videoClock) ToggleRow("Clock shadow", "A grey shadow under the digits", s.videoClockShadow) { v ->
-                    set(s.copy(videoClockShadow = v)); if (helpersV) vidHelp = "Clock on the video" }
+                    set(s.copy(videoClockShadow = v)); if (helpersV && AutoHelp.ok("video", "Clock on the video")) vidHelp = "Clock on the video" }
                 if (s.videoClock && s.videoClockShadow) Column(Modifier.padding(horizontal = 16.dp, vertical = (6 * sg()).dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Shadow intensity", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Shadow intensity").weight(1f).explain("Clock on the video"))
@@ -319,14 +319,14 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(videoClockShadowPct = 70)) }) { Text("Reset") }
                     }
                     ThinSlider(s.videoClockShadowPct.toFloat(), { v -> set(s.copy(videoClockShadowPct = (Math.round(v / 5f) * 5).coerceIn(10, 100))) }, valueRange = 10f..100f,
-                        onHoldStill = { if (helpersV) vidHelp = "Clock on the video" })
+                        onHoldStill = { if (helpersV && AutoHelp.ok("video", "Clock on the video")) vidHelp = "Clock on the video" })
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Shadow width", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Shadow width").weight(1f).explain("Clock on the video"))
                         Text("${s.videoClockShadowW} dp", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(videoClockShadowW = 3)) }) { Text("Reset") }
                     }
                     ThinSlider(s.videoClockShadowW.toFloat(), { v -> set(s.copy(videoClockShadowW = Math.round(v).coerceIn(1, 12))) }, valueRange = 1f..12f, steps = 10,
-                        onHoldStill = { if (helpersV) vidHelp = "Clock on the video" })
+                        onHoldStill = { if (helpersV && AutoHelp.ok("video", "Clock on the video")) vidHelp = "Clock on the video" })
                 }
             }
             if (vidHelp.isNotEmpty()) HelperDialog(vidHelp, SettingHelp.text(vidHelp, "")) { vidHelp = "" }
@@ -358,7 +358,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     } else set(if (k == "dec") s.copy(videoDecoder = v) else s.copy(videoDeinterlace = v))
                     refresh++
                     App.instance.player.reloadVideo()       // the playing video (if any) reopens at the same spot with it
-                    if (app.vlcinterface.alarm.Alarms.current.global.helpers) vHelp = helpKey
+                    if (AutoHelp.ok("video", helpKey)) vHelp = helpKey
                 }
                 val forWhat = if (vItem != null) "For this video (kept with the file)" else "Default for all videos"
                 CardBox {
@@ -546,7 +546,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         listOf("always" to "Always", "scroll" to "When the buttons scroll away", "off" to "Off").forEach { (m, l) ->
                             Pill(l, selected = s.floatBtnMode == m) {
                                 set(s.copy(floatBtnMode = m))
-                                if (app.vlcinterface.alarm.Alarms.current.global.helpers) floatHelp = true
+                                if (AutoHelp.ok("look", "floatHelp")) floatHelp = true
                             }
                         }
                     }
@@ -573,7 +573,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(alarmRowPct = 50)) }) { Text("Reset") }
                     }
                     if (alarmSysOn) ThinSlider(s.alarmRowPct.toFloat(), { v -> set(s.copy(alarmRowPct = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f,
-                        onHoldStill = { if (helpersOn) lookHelp = "Alarm rows under the clock" })
+                        onHoldStill = { if (helpersOn && AutoHelp.ok("look", "Alarm rows under the clock")) lookHelp = "Alarm rows under the clock" })
                     // Order of the player rows, songs and radio apart.
                     // Songs / Radio / Both ("Both": one order for the rows the two players share).
                     var rowsMode by rememberKept("look.rowsMode", "song")
@@ -595,7 +595,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                                 rowOrderVideo = if (l.isEmpty()) emptyList() else videoRowsLike(l, videoRowOrder(s)))
                             else -> s.copy(rowOrderSong = l)
                         })
-                        if (helpersOn) lookHelp = "Order of the player rows"
+                        if (helpersOn && AutoHelp.ok("look", "Order of the player rows")) lookHelp = "Order of the player rows"
                     }
                     // Drag (≡ or long press) to reorder (11:28). A list only for ordering has no ✕ (11:32).
                     DragOrderList(rowAll, { (if (rowsMode == "video") VIDEO_ROW_NAMES[it] else PLAYER_ROW_NAMES[it]) ?: it }, onOrder = { l -> saveRows(l) })
@@ -607,7 +607,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(playerGap = 4)) }) { Text("Reset") }
                     }
                     ThinSlider(s.playerGap.toFloat(), { v -> set(s.copy(playerGap = Math.round(v).coerceIn(0, 16))) }, valueRange = 0f..16f, steps = 15,
-                        onHoldStill = { if (helpersOn) lookHelp = "Player rows spacing" })
+                        onHoldStill = { if (helpersOn && AutoHelp.ok("look", "Player rows spacing")) lookHelp = "Player rows spacing" })
                     // One spacing for every list and queue (2026-11-22 09:12).
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("List row spacing", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("List row spacing").weight(1f).explain("List row spacing"))
@@ -615,7 +615,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(listRowPct = 70)) }) { Text("Reset") }
                     }
                     ThinSlider(s.listRowPct.toFloat(), { v -> set(s.copy(listRowPct = (Math.round(v / 5f) * 5).coerceIn(5, 160))) }, valueRange = 5f..160f,
-                        onHoldStill = { if (helpersOn) lookHelp = "List row spacing" })
+                        onHoldStill = { if (helpersOn && AutoHelp.ok("look", "List row spacing")) lookHelp = "List row spacing" })
                     Text("Every list and queue: queue, Up next (songs and videos), playlists, folders, Songs, Videos, radio stations", color = C.muted, fontSize = 12.sp)
                     // Upright player: the clock / album picture hide while scrolling (on) or not (off: clock pinned), and for how long.
                     // Clock / Picture / Both ("Both": one switch and one time for the two).
@@ -631,7 +631,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         Text(hideLabel, color = C.text, fontSize = 15.sp, modifier = Modifier.weight(1f).explain(if (hideMode == "cover") "Hide the album picture while scrolling" else "Hide the clock while scrolling"))
                         AppSwitch(hideOn, { v ->
                             set(when (hideMode) { "clock" -> s.copy(clockAutoHide = v); "cover" -> s.copy(coverAutoHide = v); else -> s.copy(clockAutoHide = v, coverAutoHide = v) })
-                            if (helpersOn) lookHelp = if (hideMode == "cover") "Hide the album picture while scrolling" else "Hide the clock while scrolling" })
+                            if (helpersOn && AutoHelp.ok("look", "hide-" + hideMode)) lookHelp = if (hideMode == "cover") "Hide the album picture while scrolling" else "Hide the clock while scrolling" })
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         val tl = when (hideMode) { "clock" -> "Clock hidden for"; "cover" -> "Cover hidden for"; else -> "Clock and picture hidden for" }
@@ -641,7 +641,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     ThinSlider(hideSecV.toFloat(), { v -> val n = Math.round(v).coerceIn(3, 60)
                         set(when (hideMode) { "clock" -> s.copy(clockHideSec = n); "cover" -> s.copy(coverHideSec = n); else -> s.copy(clockHideSec = n, coverHideSec = n) }) },
-                        valueRange = 3f..60f, onHoldStill = { if (helpersOn) lookHelp = if (hideMode == "cover") "Cover hidden for" else "Clock hidden for" })
+                        valueRange = 3f..60f, onHoldStill = { if (helpersOn && AutoHelp.ok("look", "hide-" + hideMode)) lookHelp = if (hideMode == "cover") "Cover hidden for" else "Clock hidden for" })
                     // Short, self-closing pop-ups: how long they stay.
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Short pop-ups stay for", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Short pop-ups stay for").weight(1f).explain("Short pop-ups stay for"))
@@ -649,7 +649,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(shortPopupSec = 3)) }) { Text("Reset") }
                     }
                     ThinSlider(s.shortPopupSec.toFloat(), { v -> set(s.copy(shortPopupSec = Math.round(v).coerceIn(1, 10))) }, valueRange = 1f..10f, steps = 8,
-                        onHoldStill = { if (helpersOn) lookHelp = "Short pop-ups stay for" })
+                        onHoldStill = { if (helpersOn && AutoHelp.ok("look", "Short pop-ups stay for")) lookHelp = "Short pop-ups stay for" })
                     // Switch colours: only the current colour and a colour creation button for each.
                     var swEdit by remember { mutableStateOf("") }
                     val accArgb = accent().toArgb().toLong() and 0xFFFFFFFFL
@@ -678,7 +678,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         onDismiss = { swEdit = "" }) { c ->
                         set(when (swEdit) { "on" -> s.copy(switchOn = c); "float" -> s.copy(floatBtnColor = c); "both" -> s.copy(switchOn = c, switchOff = c); else -> s.copy(switchOff = c) })
                         val l = when (swEdit) { "float" -> "Floating button colour"; else -> "Switch colour" }
-                        swEdit = ""; if (helpersOn) lookHelp = l
+                        swEdit = ""; if (helpersOn && AutoHelp.ok("look", l)) lookHelp = l
                     }
                     if (lookHelp.isNotEmpty()) HelperDialog(lookHelp, SettingHelp.text(lookHelp, ""), extra = {
                         when {
@@ -884,7 +884,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 val helpersAF = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.helpers
                 var afHelp by remember { mutableStateOf(false) }
                 ToggleRow("All files access (like VLC)", if (granted) "On: the whole storage is read — also folders Android leaves out of its media list"
-                    else "Off: the app sees what Android lists as media", granted) { _ -> if (helpersAF) afHelp = true else app.vlcinterface.sources.AllFiles.open(ctxV) }
+                    else "Off: the app sees what Android lists as media", granted) { _ -> if (helpersAF && AutoHelp.ok("library", "allfiles")) afHelp = true else app.vlcinterface.sources.AllFiles.open(ctxV) }
                 if (afHelp) HelperDialog("All files access (like VLC)", SettingHelp.text("All files access (like VLC)", "")) {
                     afHelp = false; app.vlcinterface.sources.AllFiles.open(ctxV) }
             }
@@ -1394,7 +1394,7 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
                 Text("${s.startVolume}%", color = accent(), fontWeight = FontWeight.SemiBold)
             }
             ThinSlider(s.startVolume.toFloat(), { set(s.copy(startVolume = it.toInt())) }, valueRange = 0f..100f,
-                onHoldStill = { if (helpersS) sndHelp = "Start volume" })
+                onHoldStill = { if (AutoHelp.ok("audio", "Start volume")) sndHelp = "Start volume" })
             Divider()
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -1406,6 +1406,9 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
             }
             ThinSlider(s.preampDb, { v -> set(s.copy(preampDb = Math.round(v * 2) / 2f)); App.instance.player.applySoundChain() }, valueRange = -12f..12f)
             Divider()
+            ToggleRow("Start volume on a new output", "When the sound moves to another device, it starts at the Start volume", s.startVolOnOutput) { v ->
+                set(s.copy(startVolOnOutput = v)); if (AutoHelp.ok("audio", "Start volume on a new output")) sndHelp = "Start volume on a new output" }
+            Divider()
             // 2026-11-22 18:37: minutes with nothing playing → the next sound starts at the Start volume (0 = never).
             Text("Reset volume after", color = C.text, modifier = Modifier.anchor("Reset volume after").explain("Reset volume after"), fontSize = 15.sp)
             var idleHelpShown by remember { mutableStateOf(false) }      // once per visit, not on every digit typed
@@ -1416,7 +1419,7 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
             }
             DigitField(s.idleResetMin.toString(), "minutes", 3, Modifier.fillMaxWidth()) { v -> v.toIntOrNull()?.takeIf { it in 0..999 }?.let {
                 val first = it != s.idleResetMin
-                set(s.copy(idleResetMin = it)); if (helpersS && first && sndHelp.isEmpty() && !idleHelpShown) { idleHelpShown = true; sndHelp = "Reset volume after" } } }
+                set(s.copy(idleResetMin = it)); if (first && sndHelp.isEmpty() && !idleHelpShown && AutoHelp.ok("audio", "Reset volume after")) { idleHelpShown = true; sndHelp = "Reset volume after" } } }
             Text(if (s.idleResetMin == 0) "Never: the volume stays as you left it (the start volume is set only when the app starts)."
                 else "After ${s.idleResetMin} min with nothing playing, the next song, station or video starts at ${s.startVolume} % (Preamp as set: " + "%+.1f".format(s.preampDb) + " dB).",
                 color = C.muted, fontSize = 13.sp)

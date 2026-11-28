@@ -554,6 +554,16 @@ fun openOrigin(nav: Navigator, keepStack: Boolean = false, video: Boolean = fals
  * Unknown folder (single link, radio…) → where it was played from.
  */
 fun openItemFolder(nav: Navigator, item: PlayItem, keepStack: Boolean = false, video: Boolean = false) {
+    // 2026-11-28 01:18: a queue item's folderKey is where it was played from (a playlist, a search …) or empty — the
+    // file's own folder is worked out first (network: its address; phone: its folder in the phone's song list).
+    kotlinx.coroutines.MainScope().launch {
+        val real = try { MusicLibrary.realFolderKey(App.instance, item) } catch (_: Exception) { item.folderKey }
+        val src = MusicLibrary.sourceOf(item)
+        openItemFolderAt(nav, item.copy(folderKey = real.ifEmpty { item.folderKey }, sourceId = src?.id ?: item.sourceId), keepStack, video)
+    }
+}
+
+private fun openItemFolderAt(nav: Navigator, item: PlayItem, keepStack: Boolean, video: Boolean) {
     val fk = item.folderKey
     val store = App.instance.store
     val kind = if (item.isMusic) "audio" else "video"

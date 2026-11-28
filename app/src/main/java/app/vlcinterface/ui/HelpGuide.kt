@@ -76,7 +76,7 @@ object HelpGuide {
             "Home servers" to "Add a NAS or share from Library → LAN: the app finds servers on the home network or takes an address by hand. SMB (Windows " +
                 "shares, most NAS), NFS, SFTP, FTP, WebDAV and UPnP are supported. Passwords are kept encrypted on the phone.",
             "Away from home" to "Away from the home network the NAS is reached through your VPN (see the VPN chapter). The VPN-NAS button on the player " +
-                "shows the state: NAS active (home), VPN - NAS active (through the VPN), VPN active (NAS not used), NAS unreach, or VPN-NAS off. " +
+                "shows the state: NAS active (home), VPN - NAS active (through the VPN), VPN active (NAS not used), NAS unreachable, or VPN-NAS off. " +
                 "The symbol in front tells whether Wi-Fi or mobile data carries the connection.",
             "Mobile data" to "On mobile data the app asks before streaming from the NAS; caching ahead and ReplayGain scans wait for Wi-Fi unless you allow them.",
         )),

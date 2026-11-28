@@ -133,8 +133,12 @@ object ParallelFetch {
         if (maxBytes > 0 && r.size > maxBytes) return false
         RandomAccessFile(dst, "rw").use { out ->
             out.setLength(r.size)
+            val slow = BgThrottle.bg(what)                     // ReplayGain / indexing reads: kept to their share (01:11)
             val w = object : Writer {
-                override fun writeAt(lane: Int, pos: Long, buf: ByteArray, len: Int) = synchronized(out) { out.seek(pos); out.write(buf, 0, len) }
+                override fun writeAt(lane: Int, pos: Long, buf: ByteArray, len: Int) {
+                    synchronized(out) { out.seek(pos); out.write(buf, 0, len) }
+                    if (slow) BgThrottle.pass(len)
+                }
                 override fun close() {}
             }
             val t0 = System.currentTimeMillis()

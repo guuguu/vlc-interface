@@ -99,6 +99,7 @@ object NetIndex {
     }
 
     private val upAt = HashMap<String, Pair<Long, Boolean>>()   // source id → (checked at, reachable)
+    private val failCount = java.util.concurrent.ConcurrentHashMap<String, Int>()
 
     /** The network changed (Wi-Fi ↔ VPN): servers are checked again at once — the index itself stays as it is. */
     fun recheckReachable() = synchronized(upAt) { upAt.clear() }
@@ -187,7 +188,13 @@ object NetIndex {
                     lastUp = up
                     if (before != null) {
                         if ((before - up).isNotEmpty()) try { App.instance.player.pruneNas() } catch (_: Exception) {}
-                        if ((up - before).isNotEmpty()) try { App.instance.player.restoreNas() } catch (_: Exception) {}
+                        if ((up - before).isNotEmpty()) {
+                            try { App.instance.player.restoreNas() } catch (_: Exception) {}
+                            // Back on line (01:14: the app kept saying "inaccessible" until restarted): its state is renewed
+                            // at once — kept failures dropped, and a NAS item that stopped on an error starts again where it was.
+                            (up - before).forEach { failCount.remove(it) }
+                            try { App.instance.player.nasBack() } catch (_: Exception) {}
+                        }
                     }
                 } catch (_: Exception) {}
                 kotlinx.coroutines.delay(20_000)
@@ -209,9 +216,21 @@ object NetIndex {
                     val c = synchronized(upAt) { upAt[s.id] }
                     if (c != null && now - c.first < 20_000) s.id to c.second
                     else {
-                        val ok = try { Net.reachable(Urls.hostOnly(s.host), if (s.port > 0) s.port else s.defaultPort) } catch (_: Exception) { false }
-                        synchronized(upAt) { upAt[s.id] = now to ok }
-                        s.id to ok
+                        // 2026-11-28 01:24 (false reachable / unreachable flapping while a ReplayGain scan ran): one failed
+                        // check no longer makes a NAS "unreachable". A failure is tried again at once with more time; only
+                        // 3 failed checks in a row turn it off, and failures don't count while this app's own ReplayGain
+                        // scan or indexing loads the network (the NAS keeps its state then). One answer turns it back on.
+                        val host = Urls.hostOnly(s.host); val port = if (s.port > 0) s.port else s.defaultPort
+                        var ok = try { Net.reachable(host, port) } catch (_: Exception) { false }
+                        if (!ok) ok = try { Net.reachable(host, port, 3_000) } catch (_: Exception) { false }
+                        val was = c?.second
+                        val busy = try { RgScanner.state.value.running || building.isNotEmpty() } catch (_: Exception) { false }
+                        val fails = if (ok) 0 else if (busy && was == true) (failCount[s.id] ?: 0) else (failCount[s.id] ?: 0) + 1
+                        failCount[s.id] = fails
+                        val state = ok || (was != false && fails < 3)
+                        if (!ok) app.vlcinterface.data.ServerLog.log("index", "check", s.name, "", false, "${s.name} didn't answer (${fails} in a row" + (if (busy) ", network busy with a scan" else "") + ")" + if (state) " — still counted as on line" else " — off line")
+                        synchronized(upAt) { upAt[s.id] = now to state }
+                        s.id to state
                     }
                 }
             }.map { it.await() }.filter { it.second }.map { it.first }.toHashSet()
@@ -224,6 +243,16 @@ object NetIndex {
     }
 
     fun has(src: Source, pin: String) = byPin.containsKey(key(src, pin))
+
+    /** A location deleted from the app (2026-11-28 01:14): its index and kept state go with it. */
+    fun forgetSource(id: String) {
+        scope.launch {
+            lock.withLock { byPin = byPin.filterKeys { !it.startsWith("$id|") }; save() }
+            synchronized(parts) { parts.keys.filter { it.startsWith("$id|") }.forEach { parts.remove(it) } }
+            synchronized(upAt) { upAt.remove(id) }
+            version.value++
+        }
+    }
     /** Its last indexing was interrupted; what it gathered is kept (resumed by itself, or asked when started by hand). */
     fun hasStopped(src: Source, pin: String) = synchronized(parts) { parts.containsKey(key(src, pin)) }
 

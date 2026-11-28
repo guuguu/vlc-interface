@@ -1134,7 +1134,7 @@ fun VisualisationSettings() {
                     listOf("off" to "Off", "songs" to "Songs", "radio" to "Radio", "both" to "All").forEach { (m, l) ->
                         Pill(l, selected = s.visInsteadCover == m, filled = s.visInsteadCover == m) {
                             store.update { it.copy(settings = it.settings.copy(visInsteadCover = m)) }
-                            if (Alarms.current.global.helpers) visHelp = true
+                            if (AutoHelp.ok("vis", "visHelp")) visHelp = true
                         }
                     }
                 }
@@ -1194,12 +1194,12 @@ fun VisualisationSettings() {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Full-screen brightness", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Full-screen brightness").weight(1f).explain("Full-screen brightness"))
                 Pill("Phone's own", selected = v.fsBright <= 0f, filled = v.fsBright <= 0f) {
-                    set(v.copy(fsBright = if (v.fsBright <= 0f) 0.6f else -1f)); if (Alarms.current.global.helpers) fbHelp = true }
+                    set(v.copy(fsBright = if (v.fsBright <= 0f) 0.6f else -1f)); if (AutoHelp.ok("vis", "fbHelp")) fbHelp = true }
             }
             if (v.fsBright > 0f) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.width(110.dp))
                 ThinSlider(v.fsBright, { set(v.copy(fsBright = (Math.round(it * 100f) / 100f).coerceIn(0.01f, 1f))) }, Modifier.weight(1f), valueRange = 0.01f..1f,
-                    onHoldStill = { if (Alarms.current.global.helpers) fbHelp = true })
+                    onHoldStill = { if (AutoHelp.ok("vis", "fbHelp")) fbHelp = true })
                 Text("${(v.fsBright * 100).toInt()} %", color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
             }
         }
@@ -1212,7 +1212,7 @@ fun VisualisationSettings() {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (v.effect == "lava_spec") "Bars amplitude" else "Amplitude", color = C.text, fontSize = 14.sp, modifier = Modifier.width(110.dp).explain("Amplitude"))
                 ThinSlider(v.specAmp, { set(v.copy(specAmp = (Math.round(it * 10f) / 10f))) }, Modifier.weight(1f), valueRange = 0.4f..2.5f,
-                    onHoldStill = { if (Alarms.current.global.helpers) ampHelp = true })
+                    onHoldStill = { if (AutoHelp.ok("vis", "ampHelp")) ampHelp = true })
                 Text("×%.1f".format(v.specAmp), color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
             }
         }
@@ -1224,7 +1224,7 @@ fun VisualisationSettings() {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Lava amplitude", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Lava amplitude").width(110.dp).explain("Lava amplitude"))
                 ThinSlider(v.lavaAmp, { set(v.copy(lavaAmp = (Math.round(it * 10f) / 10f))) }, Modifier.weight(1f), valueRange = 0.4f..2.5f,
-                    onHoldStill = { if (Alarms.current.global.helpers) lavaHelp = true })
+                    onHoldStill = { if (AutoHelp.ok("vis", "lavaHelp")) lavaHelp = true })
                 Text("×%.1f".format(v.lavaAmp), color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
             }
         }
@@ -1236,7 +1236,7 @@ fun VisualisationSettings() {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Sensitivity", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Sensitivity").width(110.dp).explain("Sensitivity"))
                 ThinSlider(v.specGain, { set(v.copy(specGain = (Math.round(it * 10f) / 10f))) }, Modifier.weight(1f), valueRange = 0.5f..3f,
-                    onHoldStill = { if (Alarms.current.global.helpers) gainHelp = true })
+                    onHoldStill = { if (AutoHelp.ok("vis", "gainHelp")) gainHelp = true })
                 Text("×%.1f".format(v.specGain), color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
             }
         }
@@ -1250,7 +1250,7 @@ fun VisualisationSettings() {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Bar thickness", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Bar thickness").width(110.dp).explain("Bar thickness"))
                 ThinSlider(v.specBar, { set(v.copy(specBar = Math.round(it).toFloat())) }, Modifier.weight(1f), valueRange = 3f..40f,
-                    onHoldStill = { if (Alarms.current.global.helpers) barHelp = true })
+                    onHoldStill = { if (AutoHelp.ok("vis", "barHelp")) barHelp = true })
                 Text("${v.specBar.toInt()} dp", color = accent(), fontSize = 13.sp, modifier = Modifier.width(52.dp).padding(start = 6.dp))
             }
         }

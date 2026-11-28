@@ -40,6 +40,8 @@ class FileMenuExtras(
     val removeLabel: String = "Remove from lists (never re-added)",
     val onRemove: (() -> Unit)? = null,
     val onDelete: (() -> Unit)? = null,
+    /** The menu of a queue item (2026-11-28 01:18): offers "Add album to queue". */
+    val inQueue: Boolean = false,
 )
 
 /**
@@ -67,6 +69,7 @@ fun FileMenu(nav: Navigator, item: PlayItem, expanded: Boolean, onDismiss: () ->
         x.onMoveUp?.let { f -> SMenuItem({ Text("Move up") }, { close(f) }) }
         x.onMoveDown?.let { f -> SMenuItem({ Text("Move down") }, { close(f) }) }
         if (!item.isRadio) SMenuItem({ Text("Open song folder") }, { close { openItemFolder(nav, item) } })
+        if (x.inQueue && item.isMusic) SMenuItem({ Text("Add album to queue") }, { close { player.addAlbumToQueue(item) } })
         if (!item.isRadio) SMenuItem({ Text("Details…") }, { close { FileDialogs.info = item } })
         if (!item.isRadio) SMenuItem({ Text("Share details…") }, { close { FileDialogs.share = item } })
         // Videos (old TV series …): the same name searched on YouTube (2026-11-21 21:04).

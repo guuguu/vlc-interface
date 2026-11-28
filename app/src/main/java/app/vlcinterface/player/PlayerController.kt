@@ -840,11 +840,31 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (!playing) main.postDelayed({ pause() }, 400)
     }
 
-    // ---------- radio: no sound for 5 s → next station (2026-11-22 19:22) ----------
+    // ---------- the queue kept on disk as it changes (2026-11-28 01:23) ----------
+    // It was written only on Exit, so after the phone restarted (no Exit) the last lists weren't there to load. Now every
+    // change of the queue, the item playing or the list played from is written (2 s after it settles), and the position
+    // every 20 s while playing — the app opens with the last songs, video and radio lists after a reboot too.
+    private val queueSaver = bg.launch {
+        var lastSig = ""
+        var lastAt = 0L
+        _state.collect { st ->
+            if (st.queue.isEmpty()) return@collect
+            val sig = "${st.queue.size}|${st.index}|${st.item?.uri}|${st.origin.kind}|${st.origin.title}|${st.queue.firstOrNull()?.uri}|${st.queue.lastOrNull()?.uri}"
+            val now = System.currentTimeMillis()
+            if (sig != lastSig || (st.isPlaying && now - lastAt > 20_000)) {
+                lastSig = sig; lastAt = now
+                kotlinx.coroutines.delay(2_000)
+                try { QueueKeeper.save(_state.value, orderedQueue) } catch (_: Exception) {}
+            }
+        }
+    }
+
+    // ---------- radio: no sound for 20 s → next station (2026-11-22 19:22; 20 s and no level check since 2026-11-28) ----------
 
     /** When the station playing last had sound (or the end of its 10 s to connect). */
     @Volatile private var radioSoundAt = 0L
     private var radioHeard = -1L
+    private var radioTime = -1L
     private var radioStream = -1L
     /** Stations skipped one after another for having no sound (all of them silent → stop). */
     private var radioSkips = 0
@@ -876,26 +896,32 @@ class PlayerController(private val context: Context, private val store: Store) {
         val st = if (NativeAudio.active) NativeAudio.stats() else null
         val heardMoving = st != null && st.stream == radioStream && st.heard > radioHeard
         if (st != null) { radioHeard = st.heard; radioStream = st.stream }
-        val clockMoving = lastTick > 0 && now - lastTick < 2_500
-        val silent = st != null && !st.mute && st.volume > 0f && appVolume > 0f && st.quietMs > 5_000
-        val sound = s.isPlaying && s.error.isEmpty() && (clockMoving || heardMoving) && !silent
+        // The play clock: libVLC's time events, or its time read directly (some streams send few events).
+        val tNow = try { mp.time } catch (_: Exception) { -1L }
+        val polled = tNow > 0 && tNow != radioTime
+        radioTime = tNow
+        val clockMoving = (lastTick > 0 && now - lastTick < 2_500) || polled
+        // 2026-11-28 01:11: the level-based "silence" gave false skips while there was sound (another Wi-Fi network) — it's
+        // gone. A station is skipped only when its stream really stands still: neither libVLC's clock nor the output moves,
+        // or an error, for 20 s (after its 15 s to connect).
+        val sound = s.isPlaying && s.error.isEmpty() && (clockMoving || heardMoving)
         if (sound) { radioSoundAt = now; radioSkips = 0; return }
-        if (now - radioSoundAt <= 5_000) return
+        if (now - radioSoundAt <= 20_000) return
         val why = when {
             s.error.isNotEmpty() -> "error: ${s.error}"
             !s.isPlaying -> "the stream stopped"
             !clockMoving && !heardMoving -> if (s.buffering < 100f) "buffering ${s.buffering.toInt()} %" else "the stream doesn't move"
             else -> "silence"
         }
-        radioSoundAt = now + 10_000                                   // the next station gets its time to connect
+        radioSoundAt = now + 15_000                                   // the next station gets its time to connect
         val more = s.queue.count { it.isRadio } > 1
         if (more && radioSkips < s.queue.size - 1) {
             radioSkips++
-            ServerLog.log("player", "radio", "", "", false, "\"${item.title}\": no sound for 5 s ($why) — next station")
+            ServerLog.log("player", "radio", "", "", false, "\"${item.title}\": no sound for 20 s ($why) — next station")
             next()
         } else {
             radioSkips = 0
-            ServerLog.log("player", "radio", "", "", false, "\"${item.title}\": no sound for 5 s ($why) — stopped" +
+            ServerLog.log("player", "radio", "", "", false, "\"${item.title}\": no sound for 20 s ($why) — stopped" +
                 if (more) " (no station of the list has sound)" else "")
             stop()
             try { app.vlcinterface.ui.ShortNote.hint(if (more) "No station has sound — stopped" else "\"${item.title}\" has no sound — stopped") } catch (_: Exception) {}
@@ -1204,10 +1230,11 @@ class PlayerController(private val context: Context, private val store: Store) {
         // NAS items never go into the queue while the NAS can't be used (19:35); unreadable files never (01:08).
         val items = items0.filterNot { nasOff(it) || !readable(it) }
         if (items.isEmpty()) { if (items0.isNotEmpty()) nasOfflineToast(); return }
-        // A song is playing: it plays to its end; the new list comes right after it (nothing cut off).
+        // A song is playing — or paused (2026-11-28 01:19: queue operations never interrupt the song in the player): it
+        // stays, and plays to its end; the new list comes right after it (nothing cut off).
         val s = _state.value
         val cur = s.queue.getOrNull(s.index)
-        if (s.isPlaying && cur != null && !cur.isRadio) {
+        if (cur != null && !cur.isRadio && isVideo(cur) == isVideo(items.first())) {
             main.post {
                 val list = items.filterNot { nasOff(it) || qKey(it) == qKey(cur) }.distinctBy { qKey(it) }
                 if (list.isEmpty()) return@post
@@ -1229,7 +1256,17 @@ class PlayerController(private val context: Context, private val store: Store) {
         try { app.vlcinterface.sources.NetIndex.blockedNow(it) } catch (_: Exception) { false }
 
     /** "NAS offline", 3 s, nothing logged (a song picked by hand). */
+    /**
+     * The "NAS offline / inaccessible" messages (2026-11-28 01:09: no spam): once per session at most, and only with songs
+     * or videos — never while the radio plays.
+     */
+    @Volatile private var nasNoted = false
+    private fun nasNoteOk(): Boolean {
+        if (_state.value.item?.isRadio == true || nasNoted) return false
+        nasNoted = true; return true
+    }
     private fun nasOfflineToast() = main.post {
+        if (!nasNoteOk()) return@post
         val t = android.widget.Toast.makeText(context, "NAS offline", android.widget.Toast.LENGTH_LONG); t.show()
         main.postDelayed({ t.cancel() }, 3_000)
     }
@@ -1240,6 +1277,18 @@ class PlayerController(private val context: Context, private val store: Store) {
      */
     /** "NAS is inaccessible" already shown for this drop (video queues). */
     @Volatile private var nasDownNoted = false
+
+    /** A NAS back on line: a NAS item that had stopped on an error is opened again at its place (no app restart needed). */
+    fun nasBack() = main.post {
+        nasDownNoted = false
+        val s = _state.value
+        val item = s.item ?: return@post
+        if (item.isRadio || item.uri.startsWith("content://") || item.uri.startsWith("file://")) return@post
+        if (s.error.isNotEmpty() && !s.userPaused) {
+            ServerLog.log("player", "nas", "", "", true, "NAS back on line: \"${item.title}\" opened again")
+            startItem(s.index, s.time.coerceAtLeast(0))
+        }
+    }
 
     fun restoreNas() = main.post {
         nasDownNoted = false
@@ -1299,12 +1348,15 @@ class PlayerController(private val context: Context, private val store: Store) {
         // reached (once per drop; again after it was back).
         if (isVideo(s.item) || (s.item == null && s.queue.any { isVideo(it) })) {
             if (!nasDownNoted) { nasDownNoted = true
-                try { app.vlcinterface.ui.ShortNote.hint("NAS is inaccessible") } catch (_: Exception) {} }
+                if (nasNoteOk()) try { app.vlcinterface.ui.ShortNote.hint("NAS is inaccessible") } catch (_: Exception) {} }
             return@post
         }
         val cur = s.queue.getOrNull(s.index)
+        // A NAS song that is really playing (its clock moving) is never cut (2026-11-28 01:24): it plays on, only the rest
+        // of the list follows the NAS state.
+        val flowing = s.isPlaying && lastTick > 0 && System.currentTimeMillis() - lastTick < 3_000
         // VPN-NAS off: the list keeps only local songs; a NAS song playing now stops and the next local one starts.
-        if (cur != null && nasOff(cur)) {
+        if (cur != null && nasOff(cur) && !flowing) {
             val next = s.queue.drop(s.index + 1).firstOrNull { !nasOff(it) } ?: s.queue.take(s.index).firstOrNull { !nasOff(it) }
             val q = s.queue.filter { !nasOff(it) }
             orderedQueue = orderedQueue?.filter { !nasOff(it) }
@@ -1637,6 +1689,35 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = s.copy(queue = s.queue + items)
     }
 
+    /**
+     * "Add album to queue" (2026-11-28 01:18): every song of the folder [item] is in goes into the queue right after
+     * [item], in the folder's order, without touching the song playing; songs already in the queue aren't doubled. The
+     * album of the song playing: the order switches to Sequential, so the album plays on in order after it.
+     */
+    fun addAlbumToQueue(item: PlayItem) {
+        bg.launch {
+            val album = try { app.vlcinterface.sources.MusicLibrary.folderOf(context, item) } catch (_: Exception) { emptyList() }
+                .filter { it.isMusic && readable(it) && !nasOff(it) }
+            main.post {
+                val s = _state.value
+                val have = s.queue.map { qKey(it) }.toHashSet()
+                val add = album.filter { have.add(qKey(it)) }
+                if (add.isEmpty()) { try { app.vlcinterface.ui.ShortNote.hint("The whole album is already in the queue") } catch (_: Exception) {}; return@post }
+                val at = (s.queue.indexOfFirst { qKey(it) == qKey(item) }.takeIf { it >= 0 } ?: s.index).coerceAtLeast(-1) + 1
+                val q = s.queue.toMutableList().apply { addAll(at.coerceAtMost(size), add) }
+                val playingAlbum = s.item?.let { qKey(it) == qKey(item) } == true
+                if (playingAlbum && store.current.settings.shuffle) {
+                    store.update { it.copy(settings = it.settings.copy(shuffle = false)) }
+                    orderedQueue = null
+                } else orderedQueue = orderedQueue?.plus(add)
+                fullList = (fullList + add).distinctBy { qKey(it) }
+                val idx = s.item?.let { c -> q.indexOfFirst { qKey(it) == qKey(c) } } ?: s.index
+                _state.value = s.copy(queue = q, index = idx)
+                try { app.vlcinterface.ui.ShortNote.show("${add.size} songs of the album added to the queue") } catch (_: Exception) {}
+            }
+        }
+    }
+
     fun playNext(items0: List<PlayItem>) {
         // Unreadable files never go into the queue (01:08).
         if (items0.any { !readable(it) }) {
@@ -1840,7 +1921,7 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     /** The pop-up when an item can't be reached (2026-11-22 19:41): videos the "NAS is inaccessible" hint, songs as before. */
     private fun nasBlockedNote(item: PlayItem) {
-        if (isVideo(item)) main.post { try { app.vlcinterface.ui.ShortNote.hint("NAS is inaccessible") } catch (_: Exception) {} }
+        if (isVideo(item)) main.post { if (nasNoteOk()) try { app.vlcinterface.ui.ShortNote.hint("NAS is inaccessible") } catch (_: Exception) {} }
         else nasOfflineToast()
     }
 
@@ -2184,7 +2265,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         // last moment isn't played at the start volume (2026-11-23 01:04).
         am.requestAudioFocus(focusRequest)
         volumeAfterIdle()
-        radioSoundAt = System.currentTimeMillis() + 10_000           // a station gets 10 s to connect before the 5 s rule
+        radioSoundAt = System.currentTimeMillis() + 15_000           // a station gets 15 s to connect before the 20 s rule
         endHandled = false; lastTick = 0L
         mp.play()
         main.postDelayed({ stopping = false }, 500)

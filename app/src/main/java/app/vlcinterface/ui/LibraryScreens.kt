@@ -626,7 +626,14 @@ fun SourcesTab(nav: Navigator, zone: Zone) {
             kotlinx.coroutines.delay(20_000)
         }
     }
-    if (zone == Zone.LAN) LaunchedEffect(Unit) { found = VlcBrowse.discover() }
+    // 2026-11-28 01:13: the servers found on the LAN are remembered (name, address); one not found now still shows,
+    // marked, and can be used — a connection that fails says the address may not be valid any more.
+    var seenGone by remember { mutableStateOf<List<Entry>>(emptyList()) }
+    if (zone == Zone.LAN) LaunchedEffect(Unit) {
+        val f = VlcBrowse.discover()
+        found = f
+        seenGone = try { LanSeen.remember(f) } catch (_: Exception) { emptyList() }
+    }
     val scroll = rememberKeptScroll("lib:sources:$zone")
     Column(Modifier.fillMaxSize().scrollbar(scroll).verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (zone == Zone.LAN) CardBox(Modifier.clickable { nav.go(Screen.ServerCheck("")) }) {
@@ -653,11 +660,12 @@ fun SourcesTab(nav: Navigator, zone: Zone) {
                         CircularProgressIndicator(Modifier.size(18.dp), color = accent(), strokeWidth = 2.dp)
                         Text("  Looking for servers…", color = C.muted, fontSize = 14.sp)
                     }
-                    found!!.isEmpty() -> Text("Nothing announced itself. You can still add a server by its address.", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
-                    else -> found!!.forEach { e ->
+                    found!!.isEmpty() && seenGone.isEmpty() -> Text("Nothing announced itself. You can still add a server by its address.", color = C.muted, fontSize = 14.sp, modifier = Modifier.padding(16.dp))
+                    else -> (found!! + seenGone).forEach { e ->
+                        val gone = e in seenGone
                         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).padding(start = 14.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(e.name, color = C.text, fontSize = 14.sp)
+                                Text(e.name + if (gone) "  · not found now" else "", color = if (gone) C.muted else C.text, fontSize = 14.sp)
                                 Text(e.meta + " · " + e.uri, color = C.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             val proto = e.uri.substringBefore("://").lowercase()
@@ -665,10 +673,20 @@ fun SourcesTab(nav: Navigator, zone: Zone) {
                                 else Source(zone = Zone.LAN, proto = proto, name = e.name, host = Urls.hostOnly(e.uri.substringAfter("://"))) }
                             // A location found on the LAN (16:59): "+ Folder" too — adding a folder saves the location with it.
                             var pickFound by remember { mutableStateOf(false) }
-                            if (proto != "upnp") Pill("+ Folder") { pickFound = true }
+                            val lanScope = rememberCoroutineScope()
+                            val lanCtx = LocalContext.current
+                            // A remembered address not found now: checked first; not answering → said so, nothing opened.
+                            fun tryGone(then: () -> Unit) {
+                                if (!gone || proto == "upnp") { then(); return }
+                                lanScope.launch {
+                                    val ok = try { app.vlcinterface.sources.Net.reachable(draft.host, draft.defaultPort, 3_000) } catch (_: Exception) { false }
+                                    if (ok) then() else android.widget.Toast.makeText(lanCtx, "${e.name} doesn't answer at ${draft.host} — this address may not be valid any more", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            }
+                            if (proto != "upnp") Pill("+ Folder") { tryGone { pickFound = true } }
                             if (pickFound) AddFolderDialog(draft) { pickFound = false }
                             Box(Modifier.width(6.dp))
-                            Pill("Save as preset") { nav.go(Screen.EditSource(Zone.LAN, draft = draft)) }
+                            Pill("Save as preset") { tryGone { nav.go(Screen.EditSource(Zone.LAN, draft = draft)) } }
                         }
                         Divider()
                     }
@@ -783,6 +801,19 @@ fun SourceCard(nav: Navigator, s: Source, online: Boolean?) {
                 app.vlcinterface.sources.NetIndex.rebuild(s)          // its pinned folders' index too
                 nav.go(Screen.Browse(s.id, Urls.forSource(s), s.name, highlight = "\u0000rescan"))
             }.padding(horizontal = 12.dp, vertical = 7.dp)) { Text("↻ Rescan", color = a, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+            // Delete the location from the app (2026-11-28 01:14), after a question. Its index, pins and kept state go with it.
+            var askDel by remember { mutableStateOf(false) }
+            Box(Modifier.clip(RoundedCornerShape(8.dp)).border(1.dp, C.bad, RoundedCornerShape(8.dp)).clickable { askDel = true }
+                .padding(horizontal = 12.dp, vertical = 7.dp)) { Text("🗑 Delete", color = C.bad, fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+            if (askDel) AlertDialog(onDismissRequest = { askDel = false }, containerColor = C.panel,
+                title = { Text("Delete \"${s.name}\"?") },
+                text = { Text("The location is removed from the app with its folders, its index for search and its settings. The files on it aren't touched. Songs from it stay in playlists but can't be played until it's added again.") },
+                confirmButton = { STextButton({
+                    askDel = false
+                    App.instance.store.update { st -> st.copy(sources = st.sources.filterNot { it.id == s.id }) }
+                    try { app.vlcinterface.sources.NetIndex.forgetSource(s.id) } catch (_: Exception) {}
+                }) { Text("Delete", color = C.bad) } },
+                dismissButton = { STextButton({ askDel = false }) { Text("Cancel") } })
         }
         if (s.proto == "smb") WriteAccessRow(s)
     }
@@ -1187,4 +1218,18 @@ private fun AddFolderDialog(src: app.vlcinterface.data.Source, onDone: () -> Uni
             onDone()
         }, enabled = !already && path != "/") { Text(if (already) "Already added" else "Add this folder", color = accent()) } },
         dismissButton = { STextButton(onDone) { Text("Cancel") } })
+}
+
+
+/** The servers once found on the LAN (2026-11-28 01:13), kept with their address. */
+object LanSeen {
+    private val prefs get() = App.instance.getSharedPreferences("lan_seen", android.content.Context.MODE_PRIVATE)
+    /** Notes the servers found now and returns the ones remembered but not found this time. */
+    fun remember(found: List<Entry>): List<Entry> {
+        val arr = try { org.json.JSONArray(prefs.getString("list", "[]")) } catch (_: Exception) { org.json.JSONArray() }
+        val old = (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { o -> Entry(o.optString("name"), o.optString("uri"), false, meta = o.optString("meta")) } }
+        val all = (found + old).distinctBy { it.uri }
+        prefs.edit().putString("list", org.json.JSONArray().apply { all.forEach { put(org.json.JSONObject().put("name", it.name).put("uri", it.uri).put("meta", it.meta)) } }.toString()).apply()
+        return old.filter { o -> found.none { it.uri == o.uri } }
+    }
 }

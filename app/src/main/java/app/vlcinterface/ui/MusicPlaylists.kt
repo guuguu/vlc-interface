@@ -196,7 +196,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
         androidx.compose.runtime.snapshotFlow { scroll.value }.collect { v ->
             if (landscape || !topAuto || System.currentTimeMillis() < ignoreScrollUntil) return@collect
             if (topHidden) {
-                lastAct = System.currentTimeMillis()
+                // Only your own scrolling counts (2026-11-28 01:20: on the radio player the clock never came back — the page
+                // moved by itself as the station's lines changed every second, and each move restarted the wait).
+                if (scroll.isScrollInProgress) lastAct = System.currentTimeMillis()
                 return@collect
             }
             if (topHpx > 0 && v > topHpx + gapPx) {
@@ -534,9 +536,10 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 )
             }
             AutoFitRow(spacing = 8.dp) {
-                if (!radio) Pill(if (st.settings.shuffle) "Random" else "Sequential", selected = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
+                // 2026-11-28 01:16: an active Random / Repeat / RGain is filled with the app's main (accent) colour.
+                if (!radio) Pill(if (st.settings.shuffle) "Random" else "Sequential", selected = st.settings.shuffle, filled = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
                 // The queue always circles (19:13), so Repeat is All (the whole queue, round) or One (this item again).
-                if (!radio) Pill(if (st.settings.repeat == "one") "Repeat: One" else "Repeat: All", selected = st.settings.repeat == "one") {
+                if (!radio) Pill(if (st.settings.repeat == "one") "Repeat: One" else "Repeat: All", selected = true, filled = true) {
                     val next = if (st.settings.repeat == "one") "all" else "one"
                     App.instance.store.update { it.copy(settings = it.settings.copy(repeat = next)) }
                 }
@@ -547,7 +550,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 // Radio: no ReplayGain (stations use the Preamp slider instead) — no RGain button.
                 if (!radio) Pill(if (st.settings.rgMode == "off") "RGain: Off" else "RGain: On" + (if (mixed) " · track"
                     else player.albumRgChoice(item)?.let { if (it == "album") " · album" else " · track" } ?: ""),
-                    selected = st.settings.rgMode != "off") {
+                    selected = st.settings.rgMode != "off", filled = st.settings.rgMode != "off") {
                     if (st.settings.rgMode != "off" || mixed) player.toggleReplayGain()
                     else rgScope.launch {
                         // Both values in the song's tags: ask which one (album gain is then kept for the whole album).
@@ -589,7 +592,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                         Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
                             onMoveUp = if (qi > 0) ({ player.moveInQueue(qi, -1) }) else null,
                             onMoveDown = if (qi < p.queue.size - 1) ({ player.moveInQueue(qi, 1) }) else null,
-                            removeLabel = "Remove from queue", onRemove = if (now) null else ({ player.removeFromQueue(qi) }))) }
+                            inQueue = true, removeLabel = "Remove from queue", onRemove = if (now) null else ({ player.removeFromQueue(qi) }))) }
                     }
                 } }
             }
@@ -928,7 +931,7 @@ fun QueueScreen(nav: Navigator) {
                         FileMenu(nav, q, qMenu == i, { qMenu = -1 }, FileMenuExtras(
                             onMoveUp = if (i > 0) ({ player.moveInQueue(i, -1) }) else null,
                             onMoveDown = if (i < p.queue.size - 1) ({ player.moveInQueue(i, 1) }) else null,
-                            removeLabel = "Remove from queue",
+                            inQueue = true, removeLabel = "Remove from queue",
                             onRemove = if (i != p.index) ({ player.removeFromQueue(i) }) else null))
                     }
                 }
@@ -1808,13 +1811,15 @@ private fun RadioPanel(nav: Navigator) {
                 val inView = ls.layoutInfo.visibleItemsInfo.any { it.index == i && it.offset >= 0 && it.offset + it.size <= ls.layoutInfo.viewportEndOffset }
                 if (!inView && !ls.isScrollInProgress) ls.animateScrollToItem((i - 2).coerceAtLeast(0))
             }
+            // Reorder the favourites (2026-11-28 01:17): hold ≡ a moment, then drag up / down, like the queue.
+            val favDrag = remember { QueueDrag() }
             androidx.compose.foundation.lazy.LazyColumn(Modifier.fillMaxWidth().heightIn(max = 300.dp).scrollbar(ls), state = ls) {
-                items(st.stations.size) { i ->
+                items(st.stations.size, key = { st.stations[it].id }) { i ->
                     val s = st.stations[i]
                     val on = s.url == cur
                     // Same tight rows as the search results (2026-11-21 02:58): flag (or globe) in front, no extra gap.
                     // The playing station lit like the queue's playing item (accent band and edge).
-                    Row(Modifier.fillMaxWidth().playingBand(on)
+                    Row(Modifier.then(favDrag.row(s.id)).fillMaxWidth().playingBand(on)
                         .combinedClickable(onClick = { player.playStation(s.name, s.url) }, onLongClick = { menu = s.id })
                         .padding(start = 6.dp, top = lrDp(4), bottom = lrDp(4)), verticalAlignment = Alignment.CenterVertically) {
                         val rs = remember(s.url, s.meta) { app.vlcinterface.sources.RadioStation("", s.name, s.url, "", 0, stationCountry(s.meta), "", s.favicon) }
@@ -1822,6 +1827,13 @@ private fun RadioPanel(nav: Navigator) {
                         MarqueeText((if (on) "▶ " else "") + s.name, if (on) accent() else C.text, Modifier.weight(1f), fontSize = 15.sp,
                             lineHeight = 17.sp, list = "radioFav")
                         Text("  " + stationQuality(s.meta), color = C.muted, fontSize = 12.sp, lineHeight = 14.sp, maxLines = 1, softWrap = false)
+                        Text("≡", color = C.muted, fontSize = 18.sp, modifier = Modifier.then(favDrag.handle(s.id,
+                            { App.instance.store.current.stations.indexOfFirst { it.id == s.id } }, { App.instance.store.current.stations.size }) { a0, d ->
+                                App.instance.store.update { x ->
+                                    val l = x.stations.toMutableList(); val to = (a0 + d).coerceIn(0, l.size - 1)
+                                    if (a0 in l.indices && to != a0) { val it0 = l.removeAt(a0); l.add(to, it0) }
+                                    x.copy(stations = l)
+                                } }).padding(horizontal = 8.dp, vertical = lrDp(4)))
                         Box {
                             Text("⋮", color = C.text, fontSize = 20.sp, lineHeight = 20.sp, modifier = Modifier.clickable { menu = s.id }.padding(horizontal = 10.dp))
                             SDropdownMenu(menu == s.id, { menu = null }) {

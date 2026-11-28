@@ -947,7 +947,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
                     Box { if (upMenu == i) FileMenu(nav, n, true, { upMenu = -1 }, FileMenuExtras(
                         onMoveUp = if (qi > 0) ({ player.moveInQueue(qi, -1) }) else null,
                         onMoveDown = if (qi < p.queue.size - 1) ({ player.moveInQueue(qi, 1) }) else null,
-                        removeLabel = "Remove from queue", onRemove = if (now) null else ({ player.removeFromQueue(qi) }))) }
+                        inQueue = true, removeLabel = "Remove from queue", onRemove = if (now) null else ({ player.removeFromQueue(qi) }))) }
                 }
             } }
         }
@@ -1555,7 +1555,7 @@ private fun VideoQueuePanel(p: PlayerState, nav: Navigator, onClose: () -> Unit)
                     Box { if (menu == i) FileMenu(nav, n, true, { menu = -1 }, FileMenuExtras(
                         onMoveUp = if (i > 0) ({ player.moveInQueue(p.index + 1 + i, -1) }) else null,
                         onMoveDown = if (p.index + 2 + i < p.queue.size) ({ player.moveInQueue(p.index + 1 + i, 1) }) else null,
-                        removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
+                        inQueue = true, removeLabel = "Remove from queue", onRemove = { player.removeFromQueue(p.index + 1 + i) })) }
                 }
             }
         }

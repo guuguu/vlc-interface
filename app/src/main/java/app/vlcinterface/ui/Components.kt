@@ -932,9 +932,19 @@ fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
     try { app.vlcinterface.player.QueueKeeper.save(a.player.state.value, a.player.originalOrder()) } catch (_: Exception) {}
     try { a.player.stop() } catch (_: Exception) {}
     // Sleep closing the app keeps its "Player closed by sleep timer" notification; everything else is removed.
-    try { val nm = a.getSystemService(android.app.NotificationManager::class.java); if (keepNotice) a.media.cancelAll() else nm.cancelAll() } catch (_: Exception) {}
+    // 2026-11-28 01:10: Exit closes everything — no notification left but the alarms' (next alarm, ringing, snoozed,
+    // missed). The player's media session is released too (its card on Android 13+ went on showing), the services are
+    // stopped first, and the clean-up is done again just before the process ends (a service could post once more).
+    try { a.media.cancelAll(); a.media.session.release() } catch (_: Exception) {}
     try { a.stopService(android.content.Intent(a, app.vlcinterface.player.PlaybackService::class.java)) } catch (_: Exception) {}
     try { a.stopService(android.content.Intent(a, app.vlcinterface.sources.RgScanService::class.java)) } catch (_: Exception) {}
+    fun clearNotes() = try {
+        val nm = a.getSystemService(android.app.NotificationManager::class.java)
+        val keep = setOf("alarm_next_quiet", "alarm_ring_quiet", "alarm_ring_led_quiet", "alarm_watch_quiet") + if (keepNotice) setOf("sleep_quiet") else emptySet()
+        nm.activeNotifications.filter { it.notification.channelId !in keep && !it.notification.channelId.orEmpty().startsWith("alarm") }.forEach { nm.cancel(it.tag, it.id) }
+    } catch (_: Exception) {}
+    clearNotes()
+    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ clearNotes() }, 250)
     val act = app.vlcinterface.MainActivity.instance
     if (restart && act != null) {
         // A helper in its own process ends this one and opens the app again: everything is loaded fresh.
@@ -1554,4 +1564,18 @@ fun rememberDebounced(value: String, ms: Long = 2000): String {
     var out by remember { mutableStateOf(value) }
     LaunchedEffect(value) { if (value.isBlank()) out = value else { kotlinx.coroutines.delay(ms); out = value } }
     return out
+}
+
+
+/**
+ * Helpers popping up by themselves (2026-11-28 01:15): only with Helpers on (Alarm clock settings), only on the pages
+ * whose switch is on (Helpers per settings page), and each helper once per session — a long press still shows it any time.
+ */
+object AutoHelp {
+    val PAGES = listOf("alarm" to "Alarm page", "audio" to "Audio", "video" to "Video", "look" to "Look", "library" to "Library & files",
+        "vis" to "Visualisation", "clock" to "Clock aspect", "assoc" to "File associations")
+    private val shown = java.util.Collections.synchronizedSet(HashSet<String>())
+    fun pageOn(page: String) = app.vlcinterface.alarm.Alarms.current.global.helpers &&
+        page !in app.vlcinterface.App.instance.store.current.settings.helpersOffPages
+    fun ok(page: String, key: String): Boolean = pageOn(page) && shown.add("$page|$key")
 }

@@ -763,6 +763,7 @@ object RgScanner {
         while (true) {
             val r = i.read(buf); if (r < 0) break
             o.write(buf, 0, r); n += r
+            BgThrottle.pass(r)                                 // kept to its share of the network (2026-11-28 01:11)
             val now = System.currentTimeMillis()
             if (!quiet && now - last > 500) { last = now; update { s -> s.copy(phase = "$what " + if (total > 0) "${n * 100 / total}%" else "${n / 1_000_000} MB") } }
         }

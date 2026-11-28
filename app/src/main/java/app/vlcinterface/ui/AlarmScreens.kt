@@ -205,7 +205,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     var helpMsg by remember { mutableStateOf<Pair<String, String>?>(null) }
     // Helper: what the alarm will now do, and how to get another repetition (Settings → Alarm clock → Helpers).
     fun showHelp(x: Alarm) {
-        if (!Alarms.current.global.helpers) return
+        if (!AutoHelp.ok("alarm", "repetition")) return
         val title = when (x.mode) {
             "weekly" -> if (x.days == 0) "No day chosen yet" else "Rings every " + Alarm.daysText(x.days).replace(" ", ", ") +
                 (if (x.date.isNotEmpty()) " from " + Alarm.whenText(x.copy(mode = "once")) else "")
@@ -506,7 +506,18 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
             }
             SectionTitle("Alarm page and calendar")
             CardBox {
-                HToggleRow("Helpers", "A short pop-up saying what the alarm will do when you choose days or dates", g.helpers) { set(g.copy(helpers = it)) }
+                HToggleRow("Helpers", "Short pop-ups explaining a setting when you change it — each once per session", g.helpers) { set(g.copy(helpers = it)) }
+                // Helpers per settings page (2026-11-28 01:15).
+                if (g.helpers) {
+                    val stH = app.vlcinterface.App.instance.store.state.collectAsState().value.settings
+                    Text("Helpers per page", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
+                    AutoHelp.PAGES.forEach { (k, name) ->
+                        HToggleRow("Helpers: $name", "", k !in stH.helpersOffPages) { on ->
+                            app.vlcinterface.App.instance.store.update { st -> st.copy(settings = st.settings.copy(
+                                helpersOffPages = if (on) st.settings.helpersOffPages - k else (st.settings.helpersOffPages + k).distinct())) }
+                        }
+                    }
+                }
                 Divider()
                 HToggleRow("Show alarms in my calendar", if (g.calSync && g.calName.isNotEmpty()) "In: ${g.calName}" else
                     "Alarms as events in the phone's calendar (your account already on the phone syncs them)", g.calSync) { on ->
@@ -617,7 +628,7 @@ fun ClockAspectScreen(nav: Navigator) {
             val fsHelp = LocalHelp.current
             val fsHelpers = Alarms.state.collectAsState().value.global.helpers
             val fsShown = remember { mutableSetOf<String>() }
-            fun fsHint(k: String) { if (fsHelpers && fsShown.add(k)) fsHelp(k) }
+            fun fsHint(k: String) { if (fsHelpers && fsShown.add(k) && AutoHelp.ok("clock", k)) fsHelp(k) }
             CardBox {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Full-screen brightness", color = C.text, fontSize = 14.sp, modifier = Modifier.anchor("Full-screen clock brightness").weight(1f).helpOn("Full-screen clock brightness"))

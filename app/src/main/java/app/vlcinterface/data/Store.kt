@@ -276,12 +276,15 @@ object ExportCat {
     const val VIDEOS = "videos"
     const val RG = "rg"
     const val ASSOC = "assoc"
+    const val INDEX = "index"
+    const val TONE = "tone"
     /** id → name, in the order shown. */
     val LIST = listOf(SETTINGS to "Settings", NAS to "NAS (servers, shares, addresses)", VPN to "VPN (app, home servers, retry)",
         INTERNET to "Internet sources", PASSWORDS to "Saved passwords", RADIO to "Radio favourites", PLAYLISTS to "Playlists",
         ALARMS to "Alarms and clock", VIS to "Visualisation (all patterns' settings)", SUBS to "Subtitle style and sync offsets", RESUME to "Resume positions and scanned folders",
         VIDEOS to "Per-video choices (format, decoder, tracks, colours, audio sync)", RG to "ReplayGain values kept in the app",
-        ASSOC to "File associations")
+        ASSOC to "File associations", INDEX to "Indexes of the network locations (search)",
+        TONE to "Loudness, Treble and Preamp per song and station")
     val ALL_IDS = LIST.map { it.first }
     /** Settings that belong to the VPN category. */
     val VPN_KEYS = setOf("vpnNas", "vpnAskStart", "vpnApp", "vpnRetrySec")
@@ -303,6 +306,8 @@ object ExportExtras {
         "playerSwitch" to ExportCat.RESUME,           // what each player played last
         "videoFiles" to ExportCat.VIDEOS,             // per video: format, decoder, deinterlacing, tracks, colours, audio sync
         "rgScanDates2" to ExportCat.RG,               // when each network song was measured, and where its values went
+        "netindex_at" to ExportCat.INDEX,
+        "lan_seen" to ExportCat.NAS,                  // servers once found on the LAN, with their addresses (01:13)             // when each indexed folder was indexed, and what its index holds (2026-11-28 01:12)
     )
     /** Data files in the app's storage → category. */
     val FILES = mapOf(
@@ -311,11 +316,16 @@ object ExportExtras {
         "covers-banned.json" to ExportCat.SETTINGS,   // album pictures you rejected
         "saved-songs.json" to ExportCat.RADIO,        // songs saved from the radio
         "replaygain.json" to ExportCat.RG,            // ReplayGain values kept in the app
+        "netindex.json" to ExportCat.INDEX,           // the network locations' indexes (2026-11-28 01:12: no re-indexing after a reinstall)
+    )
+    /** Binary data files → category (sent as base64). */
+    val BIN_FILES = mapOf(
+        "tone.bin" to ExportCat.TONE,                 // Loudness / Treble / Preamp kept per song and station (01:12)
     )
     /** Never exported (this phone only): caches, logs, indexes, battery / crash / sleep notes, weather. */
-    val LOCAL_PREFS = setOf("output", "alarms", "battery", "crashlog", "netindex_at", "sleep", "volkeep", "unreadable")
-    val LOCAL_FILES = setOf("state.json", "backups", "covers", "logs", "netindex-partial.json", "netindex.json", "pictures", "rg-pending",
-        "rgpatch", "subtitles-undo", "subtitles/", "tags.json", "tone.bin")
+    val LOCAL_PREFS = setOf("output", "alarms", "battery", "crashlog", "sleep", "volkeep", "unreadable")
+    val LOCAL_FILES = setOf("state.json", "backups", "covers", "logs", "netindex-partial.json", "pictures", "rg-pending",
+        "rgpatch", "subtitles-undo", "subtitles/", "tags.json")
 
     fun export(ctx: android.content.Context, cats: Set<String>): JSONObject {
         val o = JSONObject()
@@ -338,9 +348,15 @@ object ExportExtras {
         val files = JSONObject()
         FILES.filterValues { it in cats }.keys.forEach { name ->
             val f = File(ctx.filesDir, name)
-            if (f.exists() && f.length() < 8_000_000) files.put(name, f.readText())
+            if (f.exists() && f.length() < (if (name == "netindex.json") 60_000_000 else 8_000_000)) files.put(name, f.readText())
         }
         o.put("files", files)
+        val bins = JSONObject()
+        BIN_FILES.filterValues { it in cats }.keys.forEach { name ->
+            val f = File(ctx.filesDir, name)
+            if (f.exists() && f.length() < 20_000_000) bins.put(name, android.util.Base64.encodeToString(f.readBytes(), android.util.Base64.NO_WRAP))
+        }
+        o.put("bins", bins)
         // File associations: which types are switched on (being the main app is Android's choice, set on the phone).
         if (ExportCat.ASSOC in cats) o.put("assoc", JSONObject().also { a ->
             app.vlcinterface.ui.Associations.TYPES.forEach { t -> a.put(t.key, app.vlcinterface.ui.Associations.registered(ctx, t)) }
@@ -385,6 +401,15 @@ object ExportExtras {
         }
         if (ExportCat.ASSOC in cats) o.optJSONObject("assoc")?.let { a ->
             app.vlcinterface.ui.Associations.TYPES.forEach { t -> if (a.has(t.key)) app.vlcinterface.ui.Associations.setRegistered(ctx, t, a.getBoolean(t.key)) }
+        }
+        // Binary files (the tone kept per song / station): replaced, or added when this phone has none.
+        o.optJSONObject("bins")?.let { all ->
+            all.keys().forEach { name ->
+                if (BIN_FILES[name]?.let { it in cats } != true) return@forEach
+                val f = File(ctx.filesDir, name)
+                if (!replace && f.exists() && f.length() > 0) return@forEach
+                try { File(ctx.filesDir, "$name.tmp").apply { writeBytes(android.util.Base64.decode(all.getString(name), android.util.Base64.NO_WRAP)); renameTo(f) }; restart = true } catch (_: Exception) {}
+            }
         }
         return restart
     }

@@ -125,6 +125,13 @@ class App : Application() {
             if (!back && after != null && before?.name != after.name && startVolumeAt > 0 && now - startVolumeAt < 15_000 && !output.overriding) {
                 applyStartVolume()
                 ServerLog.log("player", "volume", "", "", true, after.name + " came in right after the start volume was set: set to it too")
+            } else if (!back && after != null && before != null && before.name != after.name && store.current.settings.startVolOnOutput) {
+                // 2026-11-28 01:12 (Settings → Audio → "Start volume on a new output"): the sound moved to another output
+                // device — it starts at the Start volume there (a short drop of the same device coming back doesn't count).
+                applyStartVolume()
+                if (!output.overriding) player.setAppVolume(1f)
+                else player.setAppVolume(store.current.settings.startVolume / output.volumePercent().coerceAtLeast(1).toFloat())
+                ServerLog.log("player", "volume", "", "", true, "Output changed to " + after.name + ": set to the start volume (" + store.current.settings.startVolume + " %)")
             }
             // Picked in the app: the sound was already moved to it (outputChanged would send it back to Android's default).
             if (before?.name != after?.name && !picked) player.outputChanged()
