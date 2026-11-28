@@ -31,6 +31,22 @@ class App : Application() {
         store = Store(this)
         ServerLog.init(this)
         app.vlcinterface.data.CrashLog.init(this)        // crashes now, and why the app ended last time
+        // Started again soon after Exit (2026-11-28 03:09): what started it is written to the Player log (Android 15+
+        // says why: an alarm, a broadcast, a service, a screen saver …; older phones: just that it started).
+        try {
+            val exitAt = getSharedPreferences("volkeep", MODE_PRIVATE).getLong("exitAt", 0L)
+            if (exitAt > 0 && System.currentTimeMillis() - exitAt < 30 * 60_000L) {
+                var why = "reason not given by Android before version 15"
+                if (android.os.Build.VERSION.SDK_INT >= 35) try {
+                    val am = getSystemService(android.app.ActivityManager::class.java)
+                    am.getHistoricalProcessStartReasons(1).firstOrNull()?.let { r ->
+                        why = "start reason ${r.reason}" + (r.intent?.let { i -> " · " + (i.action ?: i.component?.shortClassName ?: "") } ?: "")
+                    }
+                } catch (_: Throwable) {}
+                ServerLog.log("player", "start", "", "", true, "App started again ${(System.currentTimeMillis() - exitAt) / 1000} s after Exit — $why")
+            }
+            getSharedPreferences("volkeep", MODE_PRIVATE).edit().remove("exitAt").apply()
+        } catch (_: Exception) {}
         app.vlcinterface.data.CrashLog.state = {
             val s = player.state.value
             "Playing: ${s.item?.title ?: "nothing"} (${s.item?.uri ?: ""})\nOutput: " +

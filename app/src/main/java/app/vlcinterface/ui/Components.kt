@@ -970,6 +970,9 @@ fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
     try { app.vlcinterface.sources.ParallelFetch.report() } catch (_: Exception) {}
     // The queue and the position: kept for the next start.
     try { app.vlcinterface.player.QueueKeeper.save(a.player.state.value, a.player.originalOrder()) } catch (_: Exception) {}
+    // The process is ended by a plain thread in 1.5 s whatever happens next — even if stop() hangs on a network read
+    // stuck in libVLC (the screen's thread then can't run the usual end below).
+    Thread({ try { Thread.sleep(1500) } catch (_: InterruptedException) {}; android.os.Process.killProcess(android.os.Process.myPid()) }, "exit-guard").start()
     try { a.player.stop() } catch (_: Exception) {}
     // Sleep closing the app keeps its "Player closed by sleep timer" notification; everything else is removed.
     // 2026-11-28 01:10: Exit closes everything — no notification left but the alarms' (next alarm, ringing, snoozed,
@@ -978,6 +981,9 @@ fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
     try { a.media.cancelAll(); a.media.session.release() } catch (_: Exception) {}
     try { a.stopService(android.content.Intent(a, app.vlcinterface.player.PlaybackService::class.java)) } catch (_: Exception) {}
     try { a.stopService(android.content.Intent(a, app.vlcinterface.sources.RgScanService::class.java)) } catch (_: Exception) {}
+    // The alarm service is kept only while an alarm rings / is snoozed or watched (Android would restart it, "sticky").
+    try { if (app.vlcinterface.alarm.AlarmEngine.ui.value.phase == "idle") a.stopService(android.content.Intent(a, app.vlcinterface.alarm.AlarmService::class.java)) } catch (_: Exception) {}
+    try { a.getSharedPreferences("volkeep", android.content.Context.MODE_PRIVATE).edit().putLong("exitAt", System.currentTimeMillis()).commit() } catch (_: Exception) {}
     fun clearNotes() = try {
         val nm = a.getSystemService(android.app.NotificationManager::class.java)
         val keep = setOf("alarm_next_quiet", "alarm_ring_quiet", "alarm_ring_led_quiet", "alarm_watch_quiet") + if (keepNotice) setOf("sleep_quiet") else emptySet()
@@ -995,6 +1001,10 @@ fun exitApp(restart: Boolean = false, keepNotice: Boolean = false) {
     }
     act?.finishAndRemoveTask()
     android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ android.os.Process.killProcess(android.os.Process.myPid()); kotlin.system.exitProcess(0) }, 300)
+    // 2026-11-28 03:09 (process still there after Exit): the end no longer depends on the screen's thread being free
+    // (a player or network call stuck on it kept the delayed end from ever running) — a plain thread ends the process
+    // after 1.2 s whatever happens.
+    Thread({ try { Thread.sleep(1200) } catch (_: InterruptedException) {}; android.os.Process.killProcess(android.os.Process.myPid()) }, "exit").apply { isDaemon = false }.start()
 }
 
 /** Power button: quits the app completely. */
