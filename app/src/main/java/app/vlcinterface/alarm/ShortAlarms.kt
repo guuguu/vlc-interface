@@ -28,9 +28,65 @@ data class ShortAlarm(val id: String, val label: String = "", val hour: Int = 9,
     }
 }
 
+/**
+ * One setting for every short alarm (2026-11-28 13:22): the sound (any of the phone's sounds; "" = the default notification
+ * sound, "none" = no sound), how long it plays (s), and the vibration (off / short / long / pulses for the sound's time).
+ */
+data class ShortAlarmSound(val uri: String = "", val seconds: Int = 3, val vibrate: String = "short") {
+    val silent get() = uri == "none"
+}
+
 object ShortAlarms {
     const val ACTION = "app.vlcinterface.SHORT_ALARM"
-    private const val CH = "short_alarm_notice"
+    // A channel of its own without sound or vibration (13:22): the app plays the chosen sound for the chosen time and
+    // vibrates itself; Android keeps a channel's sound fixed once made, so the old "short_alarm_notice" is removed.
+    private const val CH = "short_alarm_notice2"
+    val sound = MutableStateFlow(ShortAlarmSound())
+    fun loadSound(ctx: Context) {
+        val p = prefs(ctx)
+        sound.value = ShortAlarmSound(p.getString("soundUri", "") ?: "", p.getInt("soundSec", 3).coerceIn(1, 60), p.getString("vibrate", "short") ?: "short")
+    }
+    fun setSound(ctx: Context, s: ShortAlarmSound) {
+        sound.value = s
+        prefs(ctx).edit().putString("soundUri", s.uri).putInt("soundSec", s.seconds).putString("vibrate", s.vibrate).apply()
+    }
+    /** The sound's name as the phone calls it. */
+    fun soundName(ctx: Context, s: ShortAlarmSound = sound.value): String = when {
+        s.silent -> "No sound"
+        s.uri.isEmpty() -> "Default notification sound"
+        else -> try { RingtoneManager.getRingtone(ctx, android.net.Uri.parse(s.uri))?.getTitle(ctx) ?: "Chosen sound" } catch (_: Exception) { "Chosen sound" }
+    }
+
+    /** Plays the chosen sound for its time and vibrates as chosen (also used by "Try"). */
+    fun ring(ctx: Context, done: () -> Unit = {}) {
+        loadSound(ctx)
+        val s = sound.value
+        val app = ctx.applicationContext
+        val h = android.os.Handler(android.os.Looper.getMainLooper())
+        var rt: android.media.Ringtone? = null
+        if (!s.silent) try {
+            val u = if (s.uri.isEmpty()) RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION) else android.net.Uri.parse(s.uri)
+            rt = RingtoneManager.getRingtone(app, u)?.apply {
+                audioAttributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()
+                if (android.os.Build.VERSION.SDK_INT >= 28) isLooping = true     // a short sound repeats until its time is up
+                play()
+            }
+        } catch (_: Exception) {}
+        val ms = s.seconds * 1000L
+        try {
+            val vib = if (android.os.Build.VERSION.SDK_INT >= 31) app.getSystemService(android.os.VibratorManager::class.java).defaultVibrator
+                else @Suppress("DEPRECATION") app.getSystemService(android.os.Vibrator::class.java)
+            val effect = when (s.vibrate) {
+                "short" -> android.os.VibrationEffect.createOneShot(300, android.os.VibrationEffect.DEFAULT_AMPLITUDE)
+                "long" -> android.os.VibrationEffect.createOneShot(1500, android.os.VibrationEffect.DEFAULT_AMPLITUDE)
+                "pulses" -> android.os.VibrationEffect.createWaveform(LongArray(((ms / 800).toInt().coerceAtLeast(1)) * 2) { i -> if (i % 2 == 0) 300L else 500L }.let { longArrayOf(0) + it }, -1)
+                else -> null
+            }
+            if (effect != null) vib?.vibrate(effect)
+        } catch (_: Exception) {}
+        h.postDelayed({ try { rt?.stop() } catch (_: Exception) {}; done() }, ms)
+    }
     val list = MutableStateFlow<List<ShortAlarm>>(emptyList())
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("short_alarms", Context.MODE_PRIVATE)
 
@@ -79,15 +135,15 @@ object ShortAlarms {
         val a = list.value.firstOrNull { it.id == id } ?: return
         if (!a.on) return
         val nm = ctx.getSystemService(NotificationManager::class.java)
+        try { nm.deleteNotificationChannel("short_alarm_notice") } catch (_: Exception) {}
         if (nm.getNotificationChannel(CH) == null) nm.createNotificationChannel(NotificationChannel(CH, "Short notification alarms", NotificationManager.IMPORTANCE_HIGH).apply {
-            setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
-                AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
-            enableVibration(true); vibrationPattern = longArrayOf(0, 300)
+            setSound(null, null); enableVibration(false)
         })
         val open = PendingIntent.getActivity(ctx, 0, Intent(ctx, app.vlcinterface.MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), PendingIntent.FLAG_IMMUTABLE)
         nm.notify(("short:" + id).hashCode(), Notification.Builder(ctx, CH).setSmallIcon(app.vlcinterface.R.drawable.ic_stat_cone)
             .setContentTitle(a.label.ifEmpty { "Reminder" }).setContentText(a.timeText).setCategory(Notification.CATEGORY_REMINDER)
             .setAutoCancel(true).setOnlyAlertOnce(true).setContentIntent(open).setShowWhen(true).build())
         if (a.days == 0) put(ctx, a.copy(on = false)) else schedule(ctx, a)
+        ring(ctx)
     }
 }

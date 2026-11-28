@@ -1738,3 +1738,12 @@
 - **Now:** automatic indexing (new folders, interrupted runs, "every N days", the 5-minute checks) starts only once the app's screen has been opened in that process. Indexing asked by hand, and the indexing of a played file's folder, are unchanged.
 - **A background start with nothing to do ends itself:** if, 90 s after the process started, no screen was opened, nothing was played, no alarm is ringing or snoozed, the clock screen saver isn't showing, and no ReplayGain scan or radio recording is running, the process closes (written to the Player log; checked again every minute while one of those is busy). Alarms still ring — Android starts the app again for them.
 - The "App started again … after Exit — started by …" entry (Player log, in "Collect error logs") still says what started it.
+
+## Short notification alarms: time fields, and one sound / duration / vibration for all (requested 2026-11-28 13:22, screenshots)
+- **Fixed:** the hh and mm fields stood side by side, so the digit pad opened squeezed into two columns beside the other field (3, 6, 9 and → missing). Now "Hour (hh)" and "Minutes (mm)" are one under the other, full width, and the pad opens whole under the one being typed.
+- **New, for every short alarm** (a box under the list in the alarm settings):
+  - **Sound:** Android's sound picker — any notification, alarm or ringtone sound on the phone, the default notification sound, or none; its name is shown.
+  - **Sound plays for:** 1–60 s (default 3 s); a short sound repeats until the time is up.
+  - **Vibration:** Off / Short (0.3 s) / Long (1.5 s) / Pulses (for as long as the sound plays).
+  - **▶ Try it:** plays the sound and vibration as set.
+- The app now plays the sound and vibrates itself (the notification channel is silent), so the choice applies at once; plays on the notification volume. Saved and exported with the short alarms. Helpers on a long press.

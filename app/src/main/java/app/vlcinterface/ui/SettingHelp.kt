@@ -62,6 +62,8 @@ object SettingHelp {
         "Treble per device" to "Extra Treble for this output device only, on the players' Treble scale (−5 … +5, in half steps; 0 = none): e.g. a little more for dull headphones, less for bright speakers.\n\n" +
             "It's added to the sound whenever this device plays — songs, radio and videos — on top of the song's or station's own Treble, with the Treble band's filter (Settings → Audio → Treble band). The players' Treble slider still shows only the song's or station's own value. It acts on its own, whatever the players' sliders and ReplayGain are set to: it's always added in full (the sum may go past the slider's ±5).\n\n" +
             "App's own sound output only (libVLC's output doesn't apply it). Exported with \"Per output device sound\".",
+        "Short alarm sound" to "The sound every short notification alarm plays: any of the phone's sounds (notification, alarm or ringtone sounds, and your own added to them), the default notification sound, or none. It plays on the notification volume, for the time set under it.",
+        "Short alarm vibration" to "How every short notification alarm vibrates: Off, Short (one 0.3 s buzz), Long (one 1.5 s buzz) or Pulses (short buzzes for as long as the sound plays). \"Try it\" plays the sound and the vibration as they are set.",
         "Prevent clipping" to "Loud songs boosted by Preamp or ReplayGain can go beyond the maximum and distort ('clip'). This lowers the gain just enough that the song's loudest peak stays clean.\n\n" +
             "It uses the peak values stored in the song's tags (written by ReplayGain scans). Songs without peak tags play as they are.\n\n" +
             "No battery or data cost. Default: on.",

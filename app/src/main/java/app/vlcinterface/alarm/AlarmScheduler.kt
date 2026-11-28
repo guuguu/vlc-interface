@@ -200,7 +200,13 @@ class AlarmReceiver : BroadcastReceiver() {
                 AlarmEngine.startRing(ctx, id, intent.getBooleanExtra(AlarmScheduler.EXTRA_SNOOZED, false))
             }
             AlarmScheduler.ACTION_GUARD -> AlarmEngine.guardCheck(ctx)
-            ShortAlarms.ACTION -> intent.getStringExtra("id")?.let { ShortAlarms.fire(ctx, it) }
+            // The sound and vibration last the chosen time (13:22): the receiver stays alive until they're done.
+            ShortAlarms.ACTION -> intent.getStringExtra("id")?.let { id ->
+                val pending = try { goAsync() } catch (_: Exception) { null }
+                ShortAlarms.fire(ctx, id)
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ try { pending?.finish() } catch (_: Exception) {} },
+                    ShortAlarms.sound.value.seconds * 1000L + 500L)
+            }
             AlarmScheduler.ACTION_SNOOZE -> AlarmEngine.snooze(ctx, intent.getIntExtra(AlarmScheduler.EXTRA_N, 0))
             AlarmScheduler.ACTION_AWAKE -> AlarmEngine.awake(ctx, "notification")
             AlarmScheduler.ACTION_RESHOW -> AlarmEngine.reshow(ctx)

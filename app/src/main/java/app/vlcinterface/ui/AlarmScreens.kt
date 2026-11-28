@@ -1372,6 +1372,51 @@ fun ShortAlarmsSection() {
         Text("+ Add a short alarm", color = accent(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.fillMaxWidth().clickable { edit = ShortAlarm(java.util.UUID.randomUUID().toString()) }.padding(16.dp))
     }
+    // For all the short alarms (13:22): the sound, how long it plays, the vibration.
+    androidx.compose.runtime.LaunchedEffect(Unit) { ShortAlarms.loadSound(ctx) }
+    val snd = ShortAlarms.sound.collectAsState().value
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+        if (r.resultCode == android.app.Activity.RESULT_OK) {
+            @Suppress("DEPRECATION") val u = r.data?.getParcelableExtra<Uri>(android.media.RingtoneManager.EXTRA_RINGTONE_PICKED_URI)
+            ShortAlarms.setSound(ctx, snd.copy(uri = u?.toString() ?: "none"))
+        }
+    }
+    CardBox {
+        Text("For every short alarm", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp))
+        Row(Modifier.fillMaxWidth().clickable {
+            val cur = if (snd.silent) null else if (snd.uri.isEmpty()) android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION) else Uri.parse(snd.uri)
+            try { pick.launch(Intent(android.media.RingtoneManager.ACTION_RINGTONE_PICKER)
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TYPE, android.media.RingtoneManager.TYPE_ALL)
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_TITLE, "Short alarm sound")
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true)
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true)
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_DEFAULT_URI, android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION))
+                .putExtra(android.media.RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, cur)) } catch (_: Exception) {}
+        }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Sound", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Short alarm sound"))
+                Text(ShortAlarms.soundName(ctx, snd), color = C.muted, fontSize = 13.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+            Text("Choose ›", color = accent(), fontSize = 14.sp)
+        }
+        Divider()
+        ValueSlider("Sound plays for", "A short sound repeats until the time is up", "${snd.seconds} s", snd.seconds, 1..60, 1) {
+            ShortAlarms.setSound(ctx, snd.copy(seconds = it)) }
+        Divider()
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Vibration", color = C.text, fontSize = 15.sp, modifier = Modifier.explain("Short alarm vibration"))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("off" to "Off", "short" to "Short", "long" to "Long", "pulses" to "Pulses").forEach { (k, l) ->
+                    Pill(l, selected = snd.vibrate == k) { ShortAlarms.setSound(ctx, snd.copy(vibrate = k)) }
+                }
+            }
+            Text(when (snd.vibrate) { "off" -> "No vibration"; "short" -> "One short buzz (0.3 s)"; "long" -> "One long buzz (1.5 s)"
+                else -> "Buzzes for as long as the sound plays" }, color = C.muted, fontSize = 13.sp)
+        }
+        Divider()
+        Text("▶ Try it", color = accent(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.fillMaxWidth().clickable { ShortAlarms.ring(ctx) }.padding(16.dp))
+    }
     edit?.let { e -> ShortAlarmDialog(e, onClose = { edit = null }) }
 }
 
@@ -1386,11 +1431,10 @@ private fun ShortAlarmDialog(a0: ShortAlarm, onClose: () -> Unit) {
         title = { Text(if (exists) "Short alarm" else "New short alarm", color = C.text) },
         text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Field("Name (e.g. Pills)", a.label) { a = a.copy(label = it) }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) { DigitField(hh, "hh", 2, Modifier.fillMaxWidth()) { hh = it } }
-                Text(":", color = C.text, fontSize = 22.sp)
-                Box(Modifier.weight(1f)) { DigitField(mm, "mm", 2, Modifier.fillMaxWidth()) { mm = it } }
-            }
+            // One field under the other, full width (13:22, screenshots: side by side, the digit pad opened squeezed into
+            // two columns beside the other field). The pad opens whole under the field being typed.
+            DigitField(hh, "Hour (hh)", 2, Modifier.fillMaxWidth()) { hh = it }
+            DigitField(mm, "Minutes (mm)", 2, Modifier.fillMaxWidth()) { mm = it }
             Text("Days (none = one time only)", color = C.muted, fontSize = 13.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { i, d ->
