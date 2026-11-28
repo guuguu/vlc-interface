@@ -969,8 +969,6 @@ fun FitRow(modifier: Modifier = Modifier, arrangement: androidx.compose.foundati
     }
 }
 
-/** Every menu and submenu starts with "‹ Back", which closes it and returns to the page. */
-@Composable
 /**
  * Sideways fit (2026-11-28 15:05): row height and spacing the menu's entries use instead of the settings (null = as set).
  * With the phone sideways the screen is short: when fewer than 6 entries would fit at the chosen row height and spacing,
@@ -978,6 +976,7 @@ fun FitRow(modifier: Modifier = Modifier, arrangement: androidx.compose.foundati
  */
 val LocalMenuFit = androidx.compose.runtime.compositionLocalOf<Pair<Int, Int>?> { null }
 
+/** Every menu and submenu starts with "‹ Back", which closes it and returns to the page. */
 @Composable
 fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = Modifier,
                   content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {

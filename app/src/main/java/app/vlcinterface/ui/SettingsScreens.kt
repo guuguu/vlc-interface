@@ -791,7 +791,6 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     choices("Menu vertical spacing", listOf("0" to "None", "3" to "Small", "6" to "Medium", "10" to "Large", "16" to "Extra large"), s.menuGap.toString()) {
                         set(s.copy(menuGap = it.toInt())) }
                     STextButton({ set(s.copy(menuTextSp = 15, menuFace = "default", menuRowDp = 0, menuGap = 6)) }) { Text("Reset menus") }
-                    }
                 }
             }
             // Separate colours for local / LAN files and for radio: choose which one the circles below set.
