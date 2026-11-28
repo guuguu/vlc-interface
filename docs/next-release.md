@@ -1802,3 +1802,4 @@
 
 ## Empty the queue (requested 2026-11-28 15:56)
 - "Empty" (red) next to Save in Up next on the song and video players, and on the Queue page next to "Save as playlist". It asks first ("Empty the queue? All N other items leave the queue. "<title>" plays on."); then every item but the one playing leaves the queue, and that one plays on uninterrupted. With nothing playing, the queue is emptied completely. An episode playing doesn't bring its series back by itself afterwards.
+- **Videos only (16:17):** the Empty button is on the video player's Up next, and on the Queue page only while a video plays — not on the song player.

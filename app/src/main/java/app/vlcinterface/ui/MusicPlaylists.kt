@@ -604,7 +604,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             if (next.size > 1) Column(Modifier.fillMaxWidth().onGloballyPositioned { upNextYpx = it.positionInParent().y.toInt() }) {
                 Row(verticalAlignment = Alignment.CenterVertically) { SectionTitle("Up next", Modifier.weight(1f)); 
 
-                    SaveQueueButton(); ClearQueueButton(); QueueTimeLeft(item) { nav.go(Screen.Queue) } }
+                    SaveQueueButton(); QueueTimeLeft(item) { nav.go(Screen.Queue) } }
                 val upDrag = remember { QueueDrag() }
                 next.forEachIndexed { i, (qi, n) -> androidx.compose.runtime.key(n.uri) {
                     val now = qi == p.index
@@ -928,7 +928,7 @@ fun QueueScreen(nav: Navigator) {
     Column(Modifier.fillMaxSize()) {
         BackHeader("Queue", nav, "${p.queue.size} items") {
             if (p.queue.isNotEmpty()) STextButton({ saveName = "" }) { Text("Save as playlist", color = accent()) }
-            ClearQueueButton(big = true)
+            if (p.item?.let { !it.isMusic && !it.isRadio } == true) ClearQueueButton(big = true)     // videos only (16:17)
         }
         val st by App.instance.store.state.collectAsState()
         // Videos and stations are always in order (19:20 / 19:21): the Random / Sequential switch only while songs play.
