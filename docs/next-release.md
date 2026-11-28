@@ -1783,3 +1783,12 @@
 - **The menu grows with its entries:** as wide as the longest entry needs at the chosen size and font, up to the screen's width (was 340 dp at most, so entries wrapped), and as tall as they need (it scrolls only when the screen is full).
 - Helpers on a long press; saved and exported with the settings.
 - **Sideways fit (requested 15:05):** with the phone sideways (the video player most of all) the screen is short; when fewer than 6 entries of a menu would fit at the chosen row height and spacing, its rows go to Auto height and then less spacing until 6 fit (or no spacing is left). Text size and font stay as chosen; upright, nothing changes. Same on the song, radio and video players and every other menu.
+
+# After 1.110.0
+
+## "vlc interface isn't responding" when a video started (2026-11-28 15:41, error log: the not-responding trace)
+- **What the trace shows:** the screen's thread was in libVLC, setting the picture's shape for our picture-size check, waiting for libVLC's player lock. libVLC's own thread held it while making the video's picture output: that starts its subtitle text engine, and fontconfig scanned every font on the phone (FcInitLoadConfigAndFonts → FcConfigBuildFonts) — over 10 s; Android called the app not responding.
+- **Why it's slow:** libVLC's font engine had no folder to keep its list of the phone's fonts, so the whole scan ran again for every video.
+- **Now:**
+  - fontconfig gets a cache folder of the app's own (set before libVLC starts), so the list is made once and read back after — the first video after installing may still take a moment, then no more;
+  - while a video's picture output is being made, the screen's thread no longer calls libVLC to size the picture or change its format (the format chosen meanwhile is kept): both are applied the moment the picture output exists. So even a slow start can't freeze the screen.

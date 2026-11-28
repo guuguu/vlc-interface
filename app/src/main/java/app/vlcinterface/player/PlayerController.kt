@@ -2838,7 +2838,11 @@ class PlayerController(private val context: Context, private val store: Store) {
         get() = if (scale == MediaPlayer.ScaleType.SURFACE_ORIGINAL) MediaPlayer.ScaleType.SURFACE_BEST_FIT else scale
 
     fun setScale(s: MediaPlayer.ScaleType) {
-        scale = s; mp.setVideoScale(vlcScale); refreshSurface()
+        // While the picture output is being made, only kept — applied when it's there (refreshSurface at Vout), 15:41.
+        scale = s
+        val it0 = _state.value.item
+        if (!(it0 != null && !it0.isMusic && !it0.isRadio && voutNow <= 0)) mp.setVideoScale(vlcScale)
+        refreshSurface()
         // Kept for this video file (Fit, the default, isn't stored).
         _state.value.item?.takeIf { !it.isMusic && !it.isRadio }?.let { VideoAuto.setStr(it.uri, "scale", if (s == MediaPlayer.ScaleType.SURFACE_BEST_FIT) "" else s.name) }
     }
@@ -2847,6 +2851,11 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun refreshSurface() {
         if (attachedLayout == null) return
         main.post {
+            // 15:41 "not responding" (video, sideways): while a video's picture output is still being made, libVLC holds
+            // its player lock (making the subtitle text engine can take seconds) — these calls waited on the screen's
+            // thread for over 10 s. Until the picture output exists they're skipped; its arrival (Vout) calls this again.
+            val it0 = _state.value.item
+            if (it0 != null && !it0.isMusic && !it0.isRadio && voutNow <= 0) return@post
             try { mp.updateVideoSurfaces() } catch (_: Throwable) {}
             try { mp.setVideoScale(vlcScale) } catch (_: Throwable) {}
         }

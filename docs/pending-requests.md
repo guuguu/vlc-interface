@@ -117,3 +117,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 65. **2026-11-28 14:44 — Error log 14:43 (1.108): app output judged silent (stuck counters) → fixed properly; crash of the playback service with nothing playing → fixed.** Not built yet.
 66. **2026-11-28 14:57–15:01 — Long-press menus: text size, font, row height, vertical spacing (choice buttons); menus grow with their entries; no reordering.** Done after 1.109.0, not built yet.
 67. **2026-11-28 15:05 — Menus sideways: rows fit at least 6 entries (Auto height, less spacing).** Done after 1.109.0.
+68. **2026-11-28 15:41 — Not responding at a video's start (fontconfig scanning all fonts under libVLC's lock):** font cache folder; no libVLC sizing calls on the screen's thread until the picture output exists. Fixed after 1.110.0, not built yet.

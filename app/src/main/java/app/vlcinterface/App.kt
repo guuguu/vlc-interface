@@ -83,6 +83,15 @@ class App : Application() {
             val am = getSystemService(AudioManager::class.java); val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(p * max / 100f), 0) } catch (_: Exception) {} }
         vk.edit().putBoolean("cleanExit", false).apply()
+        // libVLC's subtitle text engine (fontconfig) scanned every font of the phone each time a video's picture output was
+        // made — no place to keep its font list — seconds of work with libVLC's player lock held (15:41 "not responding").
+        // A cache folder of the app's own, so the list is made once and read back after.
+        try {
+            val fc = java.io.File(cacheDir, "fontconfig").apply { mkdirs() }
+            android.system.Os.setenv("XDG_CACHE_HOME", cacheDir.absolutePath, true)
+            android.system.Os.setenv("FONTCONFIG_CACHE", fc.absolutePath, true)
+            if (android.system.Os.getenv("HOME").isNullOrEmpty()) android.system.Os.setenv("HOME", filesDir.absolutePath, true)
+        } catch (_: Throwable) {}
         player = PlayerController(this, store)
         output = OutputRouter(this)
         media = MediaCenter(this, player)
