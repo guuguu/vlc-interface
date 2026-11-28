@@ -68,3 +68,7 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 32. **2026-11-28 02:08 — LAN storage reached over the VPN also shown under Internet:** every LAN location that also has a VPN address (e.g. Transcend: LAN 192.168.5.1, VPN 192.168.192.40) gets a duplicate entry in the Internet section, using the VPN address.
     - Linked twin (confirmed 02:08): same share, folders, index and credentials as the LAN entry — no second indexing; the Internet card shows the VPN address and its own Online state; deleting the LAN location removes its twin.
 33. **2026-11-28 02:11 — "Add a station by URL": a second field, Displayed name** (Library → Radio, screenshot): under the URL field, a "Displayed name" field; the station is saved and shown under that name. Left empty: the name found as now (playlist title / server name). Mock-up first (graphic change).
+34. **2026-11-28 02:13 — Speed floor for the throttling (requests 6 and 30):** indexing and ReplayGain scans must stay at least 70 % as fast as in 1.92 (at most 30 % slower).
+    - So the limit becomes 70 % of the measured network maximum (was 60 %), for ReplayGain and indexing alike.
+    - Indexing keeps enough parallel reads to reach that speed (not cut to 2 if that's slower than 70 %); CPU pauses for ReplayGain sized so the scan time grows by at most 30 %.
+    - Checked and logged: each scan / indexing run writes its speed next to the 1.92-style unthrottled speed measured at the start, so the floor can be seen in the logs.
