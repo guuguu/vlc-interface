@@ -825,10 +825,16 @@ JNIEXPORT void JNICALL
 Java_app_vlcinterface_player_NativeAudio_stats(JNIEnv *env, jobject thiz, jlongArray out) {
     (void)thiz;
     jlong v[18];
-    pthread_mutex_lock(&g_lock);
-    v[6] = g_stream ? AAudioStream_getFramesRead(g_stream) : -1;
-    v[7] = g_stream ? AAudioStream_getState(g_stream) : -1;
-    pthread_mutex_unlock(&g_lock);
+    /* 2026-11-28 14:33 (scrolling names stuttering): the sound thread holds g_lock while AAudioStream_write waits for
+     * room (tens of ms); this read came from the screen's thread every second and waited with it — a dropped frame each
+     * time. It never waits now: when the lock is busy, the last values read are given (they're a second old at most). */
+    static jlong s_read = -1, s_state = -1;
+    if (pthread_mutex_trylock(&g_lock) == 0) {
+        s_read = g_stream ? AAudioStream_getFramesRead(g_stream) : -1;
+        s_state = g_stream ? AAudioStream_getState(g_stream) : -1;
+        pthread_mutex_unlock(&g_lock);
+    }
+    v[6] = s_read; v[7] = s_state;
     v[0] = atomic_load(&st_setup); v[1] = atomic_load(&st_setupRes); v[2] = atomic_load(&st_play);
     v[3] = atomic_load(&st_frames); v[4] = atomic_load(&st_lastWrite); v[5] = atomic_load(&st_startRes);
     v[8] = atomic_load(&st_ptsDelta); v[9] = atomic_load(&st_rate); v[10] = atomic_load(&st_open);

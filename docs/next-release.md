@@ -1762,3 +1762,9 @@
 ## Short alarms made no sound, only the vibration — also with "Try it" (reported 2026-11-28 14:25 / 14:26)
 - **Likely cause:** the sound played on the notification stream, which Android mutes when the phone is on vibrate or silent (and which is often turned down); a sound that failed to start was dropped without a trace.
 - **Now:** played on the alarm stream (the phone's alarm volume), heard whatever the ringer mode; music playing is lowered meanwhile and comes back after. If the chosen sound can't be opened, the default notification sound, then the default alarm sound, is used. A sound that can't be played at all, or an alarm volume at 0, is written to the Alarm log.
+
+# After 1.107.0
+
+## Scrolling names jerky on the players and in the queue (reported 2026-11-28 14:33)
+- **Likely cause:** the sound engine's thread holds a lock while it waits for Android to take the next piece of sound (tens of milliseconds at a time). Reading the engine's counters waited on that lock — and since 1.104 the clipping check reads them from the screen's thread every second while a song plays (the radio's "no sound" watchdog and the Sound engine panel in Settings do too). Each wait froze the screen for a moment: the gliding names jumped instead of moving smoothly, everywhere on the player and in the queue.
+- **Now:** reading the counters never waits — when the sound thread holds the lock, the values read a moment before are used. Nothing else in the sound changes.

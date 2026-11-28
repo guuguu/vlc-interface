@@ -113,3 +113,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 61. **2026-11-28 13:26 — App didn't start at 15 % battery (battery check before the player existed).** Fixed after 1.105.0, not built yet.
 62. **2026-11-28 13:34 — Sound check: source format / bitrate, every correction of the app, measured dynamics, bandwidth and tone change.** Done after 1.105.0, not built yet.
 63. **2026-11-28 14:25 — Short alarms silent (only vibration), also on Try it:** now on the alarm stream, with fallbacks and logging. Fixed after 1.106.0, not built yet.
+64. **2026-11-28 14:33 — Scrolling names jerky (counter read waited on the sound thread every second).** Fixed after 1.107.0, not built yet.
