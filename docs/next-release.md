@@ -1782,3 +1782,4 @@
 - Applies to every long-press menu (songs, videos, folders, stations, the player's menus) and the search results.
 - **The menu grows with its entries:** as wide as the longest entry needs at the chosen size and font, up to the screen's width (was 340 dp at most, so entries wrapped), and as tall as they need (it scrolls only when the screen is full).
 - Helpers on a long press; saved and exported with the settings.
+- **Sideways fit (requested 15:05):** with the phone sideways (the video player most of all) the screen is short; when fewer than 6 entries of a menu would fit at the chosen row height and spacing, its rows go to Auto height and then less spacing until 6 fit (or no spacing is left). Text size and font stay as chosen; upright, nothing changes. Same on the song, radio and video players and every other menu.

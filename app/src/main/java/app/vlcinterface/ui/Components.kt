@@ -843,7 +843,9 @@ fun SMenuItem(text: @Composable () -> Unit, onClick: () -> Unit, modifier: Modif
     // Menu text size from Settings; long entries wrap onto more lines instead of being cut.
     val sp = UiPrefs.menuFontSp
     // Own row (Android's menu rows are at least 48 dp high): rows as close as set in Settings (menu row spacing).
-    val gap = UiPrefs.menuGapDp
+    val fit = LocalMenuFit.current
+    val gap = fit?.second ?: UiPrefs.menuGapDp
+    val rowMin = fit?.first ?: UiPrefs.menuRowDp
     Row(modifier.fillMaxWidth().widthIn(min = 112.dp).clickable(enabled = enabled, onClick = onClick).pointerInput(Unit) {
         // Long-press (no click afterwards): show the menu text size choice in this menu.
         awaitEachGesture {
@@ -868,7 +870,7 @@ fun SMenuItem(text: @Composable () -> Unit, onClick: () -> Unit, modifier: Modif
                 }
             }
         }
-    }.heightIn(min = UiPrefs.menuRowDp.dp).padding(horizontal = 16.dp, vertical = gap.dp), verticalAlignment = Alignment.CenterVertically) {
+    }.heightIn(min = rowMin.dp).padding(horizontal = 16.dp, vertical = gap.dp), verticalAlignment = Alignment.CenterVertically) {
         leadingIcon?.let { it(); androidx.compose.foundation.layout.Spacer(Modifier.width(12.dp)) }
         Box(Modifier.weight(1f)) {
             androidx.compose.material3.ProvideTextStyle(androidx.compose.material3.LocalTextStyle.current.copy(fontSize = sp.sp, lineHeight = (sp + 4).sp,
@@ -969,6 +971,14 @@ fun FitRow(modifier: Modifier = Modifier, arrangement: androidx.compose.foundati
 
 /** Every menu and submenu starts with "‹ Back", which closes it and returns to the page. */
 @Composable
+/**
+ * Sideways fit (2026-11-28 15:05): row height and spacing the menu's entries use instead of the settings (null = as set).
+ * With the phone sideways the screen is short: when fewer than 6 entries would fit at the chosen row height and spacing,
+ * the rows shrink toward Auto height and smaller spacing until 6 fit (or Auto / none is reached). Text size and font stay.
+ */
+val LocalMenuFit = androidx.compose.runtime.compositionLocalOf<Pair<Int, Int>?> { null }
+
+@Composable
 fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Modifier = Modifier,
                   content: @Composable androidx.compose.foundation.layout.ColumnScope.() -> Unit) {
     if (LocalMeasureOnly.current) return
@@ -984,6 +994,18 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
     // The menu grows with its entries (15:00): as wide as the longest entry needs at the chosen text size and font, up to
     // the screen's width less a margin (entries wrap only beyond that); as tall as they need up to the free height (then it scrolls).
     val maxW = (androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp - 32).coerceAtLeast(200).dp
+    val landscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val fit: Pair<Int, Int>? = if (!landscape) null else {
+        val avail = freeH.value.coerceAtLeast(160f)
+        val textH = (UiPrefs.menuSp + 4) * androidx.compose.ui.platform.LocalDensity.current.fontScale
+        fun entryH(row: Int, g: Int) = maxOf(row.toFloat(), textH + 2 * g)
+        var row = UiPrefs.menuRowDp; var g = UiPrefs.menuGapDp
+        if (avail / entryH(row, g) >= 6f) null else {
+            row = 0                                                       // first: Auto height
+            while (g > 0 && avail / entryH(row, g) < 6f) g--              // then: less spacing, down to none
+            row to g
+        }
+    }
     androidx.compose.material3.DropdownMenu(expanded, onDismissRequest, modifier.widthIn(max = maxW).heightIn(max = freeH.coerceAtLeast(160.dp)),
         containerColor = C.menu, tonalElevation = 0.dp, shadowElevation = 0.dp,
         border = androidx.compose.foundation.BorderStroke(0.5.dp, C.line)) {
@@ -1002,8 +1024,10 @@ fun SDropdownMenu(expanded: Boolean, onDismissRequest: () -> Unit, modifier: Mod
                 Text("✓", color = C.text, fontSize = 20.sp, modifier = Modifier.clickable { UiPrefs.sizePick = false }.padding(horizontal = 8.dp))
             }
         }
-        SMenuItem(text = { Text("‹  Back", color = C.muted) }, onClick = onDismissRequest)
-        content()
+        androidx.compose.runtime.CompositionLocalProvider(LocalMenuFit provides fit) {
+            SMenuItem(text = { Text("‹  Back", color = C.muted) }, onClick = onDismissRequest)
+            content()
+        }
     }
 }
 
