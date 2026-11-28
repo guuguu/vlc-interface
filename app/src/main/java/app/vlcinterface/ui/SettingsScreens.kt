@@ -648,7 +648,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         Text("${s.shortPopupSec} s", color = accent(), fontWeight = FontWeight.SemiBold)
                         STextButton({ set(s.copy(shortPopupSec = 3)) }) { Text("Reset") }
                     }
-                    ThinSlider(s.shortPopupSec.toFloat(), { v -> set(s.copy(shortPopupSec = Math.round(v).coerceIn(1, 10))) }, valueRange = 1f..10f, steps = 8,
+                    ThinSlider(s.shortPopupSec.toFloat(), { v -> set(s.copy(shortPopupSec = Math.round(v).coerceIn(1, 20))) }, valueRange = 1f..20f, steps = 18,
                         onHoldStill = { if (helpersOn && AutoHelp.ok("look", "Short pop-ups stay for")) lookHelp = "Short pop-ups stay for" })
                     // Switch colours: only the current colour and a colour creation button for each.
                     var swEdit by remember { mutableStateOf("") }

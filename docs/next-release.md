@@ -1693,3 +1693,6 @@
 - **Leftovers removed:** the unused NetBIOS name query, two unused server-name / VPN helpers, the fixed −6 dB VPN value, the counters of the taken-back "close on another thread" change, an unused tall-video flag, an unused radio-recording segment size, an unused player-rows set, a settings page reading the alarm state for nothing (an extra redraw), and the Touch guard helper still naming ♪ Identify.
 - **Duplicates:** 0.5 % of the code (jscpd, blocks of 12+ lines): almost all import lists; the only logic twice is the small local HTTP request reader of the SFTP and SMB bridges (16 lines), left as it is.
 - **Odd logic scan** (same if / else branches, upside-down ranges, a value compared with itself): nothing real found.
+
+## Short pop-ups up to 20 s (requested 2026-11-28 11:15)
+- Look → "Short pop-ups stay for": 1–20 s (was 1–10 s), default 3 s as before; the helper says the range.

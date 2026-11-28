@@ -254,7 +254,7 @@ object SettingHelp {
         "Clock hidden for" to "With the phone upright and the clock shown on the player, scrolling the player hides the clock completely, so the list and buttons get its room.\n\n" +
             "The clock comes back this many seconds after your last action; every scroll, touch or button press starts the count again, and it never comes back while a menu, pop-up or settings window is open. Sideways the clock stays on the left.\n\nDefault: 10 s.",
         "Short pop-ups stay for" to "How long short notes that close by themselves stay on screen: an alarm switched on or off, the explanation pop-ups of the alarm pages, and similar confirmations.\n\n" +
-            "Longer gives time to read; shorter gets them out of the way sooner. A pop-up you touch stays open until you close it. Default: 3 s.",
+            "Longer gives time to read; shorter gets them out of the way sooner. A pop-up you touch stays open until you close it. From 1 to 20 s; default: 3 s.",
         "Switch colour" to "The colour of every switch in the app, one for the on position and one for the off position, so the state shows at a glance as well as by the knob's place. Choose On, Off, or All (the same colour for the two positions — then only the knob's side shows the state).\n\n" +
             "'+ Create' opens the colour editor (hue, saturation, brightness); the new colour replaces the current one. Switches that can't be used stay dark grey.\n\n" +
             "Default: on = your accent colour, off = a muted grey-blue.",
