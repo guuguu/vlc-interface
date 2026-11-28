@@ -297,7 +297,9 @@ object RadioCapture {
         app.vlcinterface.player.BackgroundWork.resume()          // encoding must not wait for the pause button
         stop()
         scope.launch {
-            while (exiting.value && (saveQueue.value.isNotEmpty() || status.value.pending != null)) delay(300)
+            // At most 30 s (2026-11-28 10:10): a save that never finishes must not keep the app from closing.
+            val until = System.currentTimeMillis() + 30_000
+            while (exiting.value && (saveQueue.value.isNotEmpty() || status.value.pending != null) && System.currentTimeMillis() < until) delay(300)
             Handler(Looper.getMainLooper()).post { if (exiting.value) { exiting.value = false; exitAction?.invoke(); exitAction = null } }
         }
     }

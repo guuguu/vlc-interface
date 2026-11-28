@@ -40,10 +40,15 @@ class App : Application() {
                 if (android.os.Build.VERSION.SDK_INT >= 35) try {
                     val am = getSystemService(android.app.ActivityManager::class.java)
                     am.getHistoricalProcessStartReasons(1).firstOrNull()?.let { r ->
-                        why = "start reason ${r.reason}" + (r.intent?.let { i -> " · " + (i.action ?: i.component?.shortClassName ?: "") } ?: "")
+                        val names = mapOf(0 to "an alarm", 1 to "a backup", 2 to "the phone starting", 3 to "a broadcast", 4 to "a content provider",
+                            5 to "a scheduled job", 6 to "the launcher (opened by hand)", 7 to "recent apps", 8 to "other", 9 to "a push message",
+                            10 to "a service", 11 to "an activity being opened")
+                        why = "started by " + (names[r.reason] ?: "reason ${r.reason}") +
+                            (r.intent?.let { i -> " · " + listOfNotNull(i.action, i.component?.shortClassName).joinToString(" ") } ?: "")
                     }
                 } catch (_: Throwable) {}
-                ServerLog.log("player", "start", "", "", true, "App started again ${(System.currentTimeMillis() - exitAt) / 1000} s after Exit — $why")
+                // An error entry, so it is in "Collect error logs" (2026-11-28 10:10: the process still seen after Exit).
+                ServerLog.log("player", "start", "", "", false, "App started again ${(System.currentTimeMillis() - exitAt) / 1000} s after Exit — $why")
             }
             getSharedPreferences("volkeep", MODE_PRIVATE).edit().remove("exitAt").apply()
         } catch (_: Exception) {}

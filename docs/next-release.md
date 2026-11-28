@@ -1641,3 +1641,7 @@
 ## Identify song removed; Sleep centred under play (requested 2026-11-28 10:08)
 - The ♪ Identify button and everything behind it are gone: the MusicBrainz / AcoustID / AudD lookups, the Chromaprint fingerprint library (the APK is smaller), the "replace the names?" question, writing names into tags, the identified radio song on the player, and the settings (Radio → Identify song, Identify by sound, the keys) with their helpers.
 - Sleep is alone under the player buttons, centred under play, in its own row (never shrinks the buttons); solid accent while a sleep timer is set.
+
+## Process still there after Exit (reported again 2026-11-28 10:10, 1.99.0)
+- 1.96 already ends the process 1.5 s after Exit from its own thread, whatever is stuck — so a process seen afterwards is most likely the app started again by Android. To find what does it: when the app starts within 30 min of an Exit, an error entry "App started again N s after Exit — started by …" is written (Android's own reason, readable on this phone: an alarm, a broadcast, a service, the screen saver, a scheduled job, opened by hand …) — so it shows in "Collect error logs".
+- Exit with songs still being saved from the radio waited for them without a limit: now at most 30 s, then the app closes.
