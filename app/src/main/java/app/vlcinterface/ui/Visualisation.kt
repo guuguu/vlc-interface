@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+
 package app.vlcinterface.ui
 
 import android.view.WindowInsets
@@ -5,6 +7,7 @@ import android.view.WindowManager
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -148,6 +151,23 @@ private fun lerpC(a: Color, b: Color, f: Float) = androidx.compose.ui.graphics.l
 /** Visualisation in the player's picture place, switched by [VisButton]; kept while the app runs. */
 object VisCover {
     var on by mutableStateOf(false)
+    /**
+     * 2026-11-28 10:00 ("the visualisation starts by itself and the button can't switch it off"): when no album picture
+     * is found, the visualisation fills the picture's place by itself (since 20 Nov). The button now switches that off
+     * too: [off] = the user switched it off → a plain music sign there instead, until the button is pressed again
+     * (kept while the app runs). [fallback] = the visualisation is showing now only because no picture was found.
+     */
+    var off by mutableStateOf(false)
+    var fallback by mutableStateOf(false)
+}
+
+/** The picture's place when no picture was found: the visualisation, or a plain sign when it was switched off. */
+@Composable
+fun NoCoverVis(nav: Navigator) {
+    androidx.compose.runtime.DisposableEffect(Unit) { VisCover.fallback = true; onDispose { VisCover.fallback = false } }
+    if (VisCover.off) Box(Modifier.fillMaxSize().background(Color(0xFF16161C)), contentAlignment = Alignment.Center) {
+        androidx.compose.material3.Text("♪", color = Color(0x66FFFFFF), fontSize = androidx.compose.ui.unit.TextUnit(64f, androidx.compose.ui.unit.TextUnitType.Sp))
+    } else VisArea(Modifier.fillMaxSize().combinedClickable(onClick = {}, onDoubleClick = { nav.go(Screen.Visualisation) }, onLongClick = { nav.go(Screen.SettingsGroup("vis")) }))
 }
 
 /** Button under the clock button: the visualisation in the album picture's place (again: the picture back).
@@ -158,11 +178,18 @@ fun VisButton(nav: Navigator, size: Int = 30) {
     val cols = visColours(st.vis)
     val a = accent()
     val clockShown = st.showClock
-    val lit = VisCover.on && !clockShown
+    // Lit whenever the visualisation shows in the picture's place — chosen with this button, or by itself because no
+    // picture was found. A press while it shows switches it off (in both cases); a press while it doesn't shows it.
+    val showing = (VisCover.on || (VisCover.fallback && !VisCover.off)) && !clockShown
+    val lit = showing
     Box(Modifier.size(size.dp).liteShadow(CircleShape).clip(CircleShape).background(if (lit) a.copy(alpha = 0.25f) else Color(0x24FFFFFF))
         .border(1.dp, if (lit) a else Color.Transparent, CircleShape)
         .guardClick("visBtn") {
-            if (clockShown) { Alarms.toggleClock(); VisCover.on = true } else VisCover.on = !VisCover.on
+            when {
+                clockShown -> { Alarms.toggleClock(); VisCover.on = true; VisCover.off = false }
+                showing -> { VisCover.on = false; VisCover.off = true }
+                else -> { VisCover.on = true; VisCover.off = false }
+            }
         },
         contentAlignment = Alignment.Center) {
         Canvas(Modifier.size((size * 0.7f).dp)) {
