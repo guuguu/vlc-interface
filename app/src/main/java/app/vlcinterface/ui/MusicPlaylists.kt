@@ -2162,7 +2162,7 @@ private fun ToneSliders() {
         // Pre-amp per song / station (−12…+12 dB): for ones too loud or too quiet (on top of ReplayGain for songs).
         // A song without ReplayGain (2026-11-28 10:58): the slider shows its Preamp together with the "Songs without
         // ReplayGain" correction (the real level); moving it changes only the song's own Preamp, the correction stays.
-        val nr = if (p.item?.isMusic == true) p.noRgShownDb else 0f
+        val nr = if (p.item?.isMusic == true || p.item?.isRadio == true) p.noRgShownDb else 0f
         row(if (nr != 0f) "Preamp (no RG %s)".format("%+.1f".format(java.util.Locale.US, nr).replace("-", "−")) else "Preamp",
             (p.radioPreDb + nr).coerceIn(-12f, 12f), -12f..12f, recall = false) { x, done -> player.setRadioPre(x - nr, done) }
     }

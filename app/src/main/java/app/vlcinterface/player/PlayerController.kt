@@ -248,6 +248,10 @@ class PlayerController(private val context: Context, private val store: Store) {
     fun noRgChanged() {
         val s = _state.value
         val item = s.item ?: return
+        if (item.isRadio) {
+            _state.value = s.copy(noRgShownDb = if (store.current.settings.rgMode != "off") store.current.settings.noRgDb else 0f)
+            applySoundChain(); return
+        }
         if (!NativeAudio.active || !s.rgInfo.startsWith("No RG")) return
         rgUri = ""
         loadReplayGain(item, s)
@@ -264,7 +268,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (rgUri != item.uri || !item.isMusic || set.rgMode == "off") {
             rgUri = item.uri
             rgPeak = 0f
-            _state.value = _state.value.copy(noRgShownDb = 0f)
+            // Radio (2026-11-28 11:01): a stream never has ReplayGain, so it always takes the "Songs without ReplayGain"
+            // correction while ReplayGain is on — nothing is read, scanned or written for it.
+            _state.value = _state.value.copy(noRgShownDb = if (item.isRadio && set.rgMode != "off") set.noRgDb else 0f)
             rgDb = if (!item.isMusic || set.rgMode == "off" || !NativeAudio.active) 0f else {
                 val k = app.vlcinterface.sources.ReplayGain.known(item.uri)
                 val album = rgModeFor(s) == "album"
@@ -439,6 +445,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         val st = store.current
         val dev = currentOutputName
         val rg = (if (NativeAudio.active && _state.value.item?.isMusic == true) rgDb else 0f) +
+            // Radio: the no-ReplayGain correction (libVLC's own output applies it itself, as its ReplayGain default).
+            (if (NativeAudio.active && _state.value.item?.isRadio == true) _state.value.noRgShownDb else 0f) +
             (if (st.settings.toneSliders && _state.value.item?.let { it.isRadio || it.isMusic } == true) _state.value.radioPreDb else 0f)
         var total = (st.settings.preampDb + (st.devicePreamp[dev] ?: 0f) + rg).coerceIn(-36f, 12f)
         // Clip protection over the whole gain (ReplayGain + pre-amps), not ReplayGain alone: the song's loudest peak
@@ -862,6 +870,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         store.update { it.copy(settings = if (on) it.settings.copy(rgMode = "off", rgLastMode = st.rgMode) else it.settings.copy(rgMode = st.rgLastMode)) }
         val s = _state.value
         if (s.item == null) return
+        if (s.item.isRadio) { noRgChanged(); return }
         // App output: on / off applied at once on the playing song, no reload, no new engine.
         if (NativeAudio.active) {
             loadReplayGain(s.item, s)
