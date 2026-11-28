@@ -560,6 +560,8 @@ data class AppState(
     val deviceLoudFrom: Map<String, Int> = emptyMap(),
     /** output device name -> extra Treble (−5 … +5, the players' Treble scale), added to the sound only (2026-11-28 11:38) */
     val deviceTreble: Map<String, Float> = emptyMap(),
+    /** output device name -> extra Loudness (−15 … +15, the players' Loudness scale), added to the sound only (11:43) */
+    val deviceLoud: Map<String, Float> = emptyMap(),
 )
 
 fun JSONArray?.strings(): List<String> {

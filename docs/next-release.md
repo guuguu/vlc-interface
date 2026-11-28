@@ -1710,3 +1710,9 @@
 - Kept only there: it's added to the sound whenever that device plays (songs, radio, videos), on top of the song's / station's own Treble, with the Treble band's filter; the two together stay within ±5. The players' Treble slider is not moved by it — it shows 0 or the song's / station's own value only.
 - Switches by itself when the sound moves to another device. App's own sound output only. Helper on a long press; exported with "Per output device sound".
 - **Every per-device setting follows that rule (requested 11:39 / 11:41):** checked — the device's Preamp, Balance and Treble act on the sound only; the players' sliders show only the song's / station's own values. The Loudness label keeps showing the reduced value Auto loudness uses at the current volume ("Loudness (auto 3.2)"), as before.
+
+## Loudness per output device, hidden, with the volume rule (requested 2026-11-28 11:43)
+- Settings → Audio → Per output device: a Loudness row for each device, −15 … +15 in half steps (the players' Loudness scale), default 0, under Preamp.
+- Added hidden to the song's / station's own Loudness whenever that device plays (songs, radio, videos); the sum (kept within 0 … 15) follows the volume rule like before: with Auto loudness, all of it up to the device's "Loudness flat from" volume, less above, none at full volume. The overall level is made up for it hidden, the way the players' Preamp follows their Loudness.
+- The player shows only the visible sliders' own values: the Loudness slider shows the song's / station's value, and its "(auto …)" label what that value gives at the current volume — the device's part isn't in either.
+- App's own sound output only. Helper on a long press; exported with "Per output device sound".

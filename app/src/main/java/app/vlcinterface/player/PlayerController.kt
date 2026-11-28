@@ -448,7 +448,8 @@ class PlayerController(private val context: Context, private val store: Store) {
             // Radio: the no-ReplayGain correction (libVLC's own output applies it itself, as its ReplayGain default).
             (if (NativeAudio.active && _state.value.item?.isRadio == true) _state.value.noRgShownDb else 0f) +
             (if (st.settings.toneSliders && _state.value.item?.let { it.isRadio || it.isMusic } == true) _state.value.radioPreDb else 0f)
-        var total = (st.settings.preampDb + (st.devicePreamp[dev] ?: 0f) + rg).coerceIn(-36f, 12f)
+        val devLoudUp = if (NativeAudio.active && _state.value.item != null) deviceLoudComp() else 0f
+        var total = (st.settings.preampDb + (st.devicePreamp[dev] ?: 0f) + rg + devLoudUp).coerceIn(-36f, 12f)
         // Clip protection over the whole gain (ReplayGain + pre-amps), not ReplayGain alone: the song's loudest peak
         // never goes over full scale, so the limiter has nothing to do and the sound stays untouched.
         if (NativeAudio.active && st.settings.rgClipProtect && rgPeak > 0f && _state.value.item?.isMusic == true)
@@ -512,8 +513,11 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun currentToneGains(): FloatArray {
         val s = _state.value
         val on = store.current.settings.toneSliders
-        val l = if (on) autoLoudness(s.loudDb) else 0f; val t = if (on) s.trebleDb else 0f
-        if (l != s.loudEffDb) _state.value = _state.value.copy(loudEffDb = l)
+        // The output device's own Loudness (11:43): added hidden to the song's / station's Loudness, and the sum follows the
+        // volume rule (Auto loudness). The player's label shows only what its own slider gives at this volume.
+        val shown = if (on) autoLoudness(s.loudDb) else 0f
+        if (shown != s.loudEffDb) _state.value = _state.value.copy(loudEffDb = shown)
+        val l = autoLoudness(((if (on) s.loudDb else 0f) + deviceLoudNow()).coerceIn(0f, 15f)); val t = if (on) s.trebleDb else 0f
         val bands = if (l == 0f) FloatArray(10) else toneGains(l, 0f)
         val set = store.current.settings
         NativeAudio.trebleBand(set.trebleType == "peak", set.trebleHz.toFloat(), if (set.trebleType == "peak") set.trebleQ else set.trebleSlope)
@@ -523,6 +527,17 @@ class PlayerController(private val context: Context, private val store: Store) {
         val dev = store.current.deviceTreble[currentOutputName] ?: 0f
         val total = (t + dev).coerceIn(-5f, 5f)
         return bands + floatArrayOf(total * set.trebleMaxDb / 5f * trebleFlatten())
+    }
+
+    private fun deviceLoudNow(): Float = store.current.deviceLoud[currentOutputName] ?: 0f
+    /**
+     * Level lost to the device's hidden Loudness (dB ≥ 0 when it adds, < 0 when it takes away), made up hidden like the
+     * players' Preamp follows their own Loudness — so a device's Loudness changes the tone, not the overall level.
+     */
+    private fun deviceLoudComp(): Float {
+        val d = deviceLoudNow(); if (d == 0f) return 0f
+        val own = if (store.current.settings.toneSliders) _state.value.loudDb else 0f
+        return toneLevelDrop((own + d).coerceIn(0f, 15f), 0f) - toneLevelDrop(own, 0f)
     }
 
     /** Band gains (10 bands, all ≤ 0 dB) for loudness [l] and treble [t]. */

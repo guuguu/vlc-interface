@@ -29,6 +29,7 @@ val SETTINGS_INDEX: List<SettingsEntry> = listOf(
     E("audio", "Audio", "Sound engine", "Sound engine", "", true),
     E("audio", "Audio", "Per output device", "Per output device", "", true),
     E("audio", "Audio", "Per output device", "Auto loudness", "", true),
+    E("audio", "Audio", "Per output device", "Loudness per device", "", true),
     E("audio", "Audio", "Per output device", "Treble per device", "", true),
     E("audio", "Audio", "ReplayGain", "ReplayGain", "", true),
     E("audio", "Audio", "ReplayGain", "ReplayGain (tagged music only)", "", true),

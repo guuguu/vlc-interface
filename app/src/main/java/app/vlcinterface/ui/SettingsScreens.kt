@@ -1246,7 +1246,7 @@ fun BackupScreen(nav: Navigator) {
         ExportCat.VIS to "patterns",
         ExportCat.SUBS to "${st.subOffsets.size + st.audioOffsets.size} offsets",
         ExportCat.RESUME to "${st.recent.size} files",
-        ExportCat.DEVICES to "${(st.devicePreamp.keys + st.deviceBalance.keys + st.deviceLoudFrom.keys + st.deviceTreble.keys).size} devices",
+        ExportCat.DEVICES to "${(st.devicePreamp.keys + st.deviceBalance.keys + st.deviceLoudFrom.keys + st.deviceTreble.keys + st.deviceLoud.keys).size} devices",
     )
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
@@ -1317,7 +1317,7 @@ fun DeviceSoundList() {
     val store = App.instance.store
     val st by store.state.collectAsState()
     val devices by App.instance.output.devices.collectAsState()
-    val names = (devices.filter { it.connected }.map { it.name } + st.devicePreamp.keys + st.deviceBalance.keys + st.deviceTreble.keys).distinct()
+    val names = (devices.filter { it.connected }.map { it.name } + st.devicePreamp.keys + st.deviceBalance.keys + st.deviceTreble.keys + st.deviceLoud.keys).distinct()
     val na = app.vlcinterface.player.NativeAudio
     SectionTitle("Sound engine")
     CardBox { Column(Modifier.padding(horizontal = 16.dp, vertical = (10 * sg()).dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
@@ -1373,6 +1373,15 @@ fun DeviceSoundControls(name: String) {
                 store.update { it.copy(devicePreamp = it.devicePreamp + (name to Math.round(v * 2) / 2f)) }; App.instance.player.applySoundChain()
             }, valueRange = -12f..12f, modifier = Modifier.weight(1f))
             Text("%+.1f dB".format(pre), color = accent(), fontSize = 12.sp, modifier = Modifier.width(64.dp))
+        }
+        // Loudness for this device (11:43): only here, added hidden to the song's / station's Loudness, follows the volume rule.
+        val ld = st.deviceLoud[name] ?: 0f
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Loudness", color = C.muted, fontSize = 13.sp, modifier = Modifier.width(64.dp).explain("Loudness per device"))
+            ThinSlider(ld, { v ->
+                store.update { it.copy(deviceLoud = it.deviceLoud + (name to (Math.round(v * 2) / 2f).coerceIn(-15f, 15f))) }; App.instance.player.applySoundChain()
+            }, valueRange = -15f..15f, modifier = Modifier.weight(1f))
+            Text("%+.1f".format(java.util.Locale.US, ld).replace("-", "−"), color = accent(), fontSize = 12.sp, modifier = Modifier.width(64.dp))
         }
         // Treble for this device (11:38): only here, added to the sound; the players' Treble slider isn't moved by it.
         val tr = st.deviceTreble[name] ?: 0f
