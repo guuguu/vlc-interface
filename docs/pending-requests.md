@@ -37,3 +37,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
     - radio: no pop-ups; the result (or no result) goes to a log record;
     - song player: the result is written into the song's tags; if the file already has a name (title / artist), ask whether to overwrite with a Yes / No pop-up — the pop-up closes on the answer, and if it isn't answered within its time-out nothing is written (time-out setting, default 20 s);
     - a section on the Radio settings page for it (the time-out setting included), with helpers.
+26. **2026-11-28 01:25 — "NAS unreach" → "NAS unreachable":** replace the label "NAS unreach" on the song player's button, and everywhere it appears in the settings (and helpers), with "NAS unreachable".
