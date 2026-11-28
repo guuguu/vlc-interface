@@ -83,6 +83,8 @@ static peak_t g_ring[RING];
 static atomic_long st_loudAt;      /* last time (µs) a block had sound above −66 dBFS (radio silence watchdog) */
 static atomic_long st_over;        /* frames that went over full scale before the limiter (clipping caught), total (2026-11-28) */
 static atomic_long st_overPeak;    /* highest level before the limiter since the last stats read, ×1e6 (1e6 = full scale) */
+static atomic_long st_heard = -1;  /* frames Android has played, stored by the sound thread after each write (14:44) */
+static atomic_long st_state = -1;  /* the stream's state, stored with it */
 static atomic_long st_gen;         /* streams opened so far (frames heard restart from 0 with each one) */
 static atomic_long st_setup, st_setupRes = -99, st_play, st_frames, st_lastWrite, st_startRes = -99, st_ptsDelta, st_rate, st_open = -99;
 static atomic_uint g_w, g_r, g_r2, g_r3;
@@ -229,6 +231,7 @@ static void close_stream(void) {
         AAudioStream_requestStop(g_stream);
         AAudioStream_close(g_stream);
         g_stream = NULL;
+        atomic_store(&st_heard, -1); atomic_store(&st_state, -1);       /* no stream: as the locked read gave before */
     }
     g_started = false;
 }
@@ -629,6 +632,8 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
         if (w < 0) { atomic_store(&g_disconnected, true); break; }
         if (w == 0 && !g_started) ensure_started();
         atomic_fetch_add(&st_frames, w);
+        atomic_store(&st_heard, (long)AAudioStream_getFramesRead(g_stream));
+        atomic_store(&st_state, (long)AAudioStream_getState(g_stream));
         done += n;
     }
     if (blkOver) {
@@ -828,13 +833,10 @@ Java_app_vlcinterface_player_NativeAudio_stats(JNIEnv *env, jobject thiz, jlongA
     /* 2026-11-28 14:33 (scrolling names stuttering): the sound thread holds g_lock while AAudioStream_write waits for
      * room (tens of ms); this read came from the screen's thread every second and waited with it — a dropped frame each
      * time. It never waits now: when the lock is busy, the last values read are given (they're a second old at most). */
-    static jlong s_read = -1, s_state = -1;
-    if (pthread_mutex_trylock(&g_lock) == 0) {
-        s_read = g_stream ? AAudioStream_getFramesRead(g_stream) : -1;
-        s_state = g_stream ? AAudioStream_getState(g_stream) : -1;
-        pthread_mutex_unlock(&g_lock);
-    }
-    v[6] = s_read; v[7] = s_state;
+    /* 14:44 (1.108: the app output judged silent, "heard" stuck): a try-lock almost never got the lock — the sound thread
+     * holds it nearly all the time — so the old values were given forever. The sound thread now stores both values after
+     * every write (below), and they're read here without any lock. */
+    v[6] = atomic_load(&st_heard); v[7] = atomic_load(&st_state);
     v[0] = atomic_load(&st_setup); v[1] = atomic_load(&st_setupRes); v[2] = atomic_load(&st_play);
     v[3] = atomic_load(&st_frames); v[4] = atomic_load(&st_lastWrite); v[5] = atomic_load(&st_startRes);
     v[8] = atomic_load(&st_ptsDelta); v[9] = atomic_load(&st_rate); v[10] = atomic_load(&st_open);

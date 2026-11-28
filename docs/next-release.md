@@ -1767,4 +1767,7 @@
 
 ## Scrolling names jerky on the players and in the queue (reported 2026-11-28 14:33)
 - **Likely cause:** the sound engine's thread holds a lock while it waits for Android to take the next piece of sound (tens of milliseconds at a time). Reading the engine's counters waited on that lock — and since 1.104 the clipping check reads them from the screen's thread every second while a song plays (the radio's "no sound" watchdog and the Sound engine panel in Settings do too). Each wait froze the screen for a moment: the gliding names jumped instead of moving smoothly, everywhere on the player and in the queue.
-- **Now:** reading the counters never waits — when the sound thread holds the lock, the values read a moment before are used. Nothing else in the sound changes.
+- **1.108 fix taken back (error log 14:43):** it read the counters only when the lock happened to be free — almost never, as the sound thread holds it nearly all the time — so the "frames heard" stayed frozen, the app's sound output was judged silent ("the phone did not play the sound") and the sound fell back to libVLC's output. **Now:** the sound thread itself stores the frames heard and the stream's state after every piece it hands to Android, and they're read without any lock — never waiting, always current.
+
+## Crash on a playlist page with nothing playing (error log 14:43, 1.108.0)
+- "ForegroundServiceDidNotStartInTimeException": the playback service, asked to start in the foreground, found the player empty (a list loading, a stop) and ended without going to the foreground first — Android closes an app for that. It now always goes to the foreground first, then ends.

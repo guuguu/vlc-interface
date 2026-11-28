@@ -31,10 +31,13 @@ class PlaybackService : Service() {
             ACTION_PREV -> player.prev()
             ACTION_BACK -> player.seekBy(-step)
             ACTION_FWD -> player.seekBy(step)
-            ACTION_STOP -> { player.stop(); finish(); return START_NOT_STICKY }
+            ACTION_STOP -> { player.stop(); promised(); finish(); return START_NOT_STICKY }
         }
         val st = player.state.value
-        if (st.item == null) { finish(); return START_NOT_STICKY }
+        // 14:40 crash (ForegroundServiceDidNotStartInTimeException, a playlist page, nothing playing): started with
+        // startForegroundService, the service must go to the foreground even when it stops at once — the player had
+        // already been emptied (a list loading, a stop) and it ended without that, so Android closed the app.
+        if (st.item == null) { promised(); finish(); return START_NOT_STICKY }
         foreground(st)
         if (job == null) {
             // Only react to "has item" / "is playing" changes; MediaCenter updates the notification content.
@@ -96,6 +99,14 @@ class PlaybackService : Service() {
                 wifi?.takeIf { it.isHeld }?.release()
             }
         } catch (_: Exception) {}
+    }
+
+    /** The foreground start Android was promised, kept even when the service ends right away. */
+    private fun promised() {
+        val n = try { App.instance.media.build(App.instance.player.state.value) } catch (_: Throwable) {
+            try { android.app.Notification.Builder(this, MediaCenter.CHANNEL).setSmallIcon(app.vlcinterface.R.drawable.ic_stat_cone)
+                .setContentTitle("vlc interface").build() } catch (_: Throwable) { null } }
+        if (n != null) try { startForeground(MediaCenter.ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK) } catch (_: Throwable) {}
     }
 
     private fun finish() {
