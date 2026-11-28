@@ -96,6 +96,9 @@ object SettingHelp {
         "Address: +" to "Adds another address for the same server by hand — an IP or a name, e.g. its address on ZeroTier / Tailscale or a second LAN address. " +
             "Its folders, files and index stay the same; only the way to reach it changes.\n\n" +
             "The new address joins the list on the right (tap it to always use it; Auto may pick it too). Long-press an added address to remove it.",
+        "Helpers" to "Short pop-ups that explain a setting the first time you change it in each session (and what an alarm will do after you choose its days). " +
+            "Off: no pop-ups at all. On: below it, one switch per settings page (Alarm page, Audio, Playback & gestures, Radio, Video, Look, Library & files, Visualisation, Clock aspect, File associations) to keep them for some pages only.\n\n" +
+            "A long press on any setting always shows its explanation, whatever is chosen here.",
         "Touch guard" to "Protects the players' main buttons from accidental touches — play / pause, ⏮ ⏭, −10 / +10, Sleep, ♪ Identify, the sine button, the clock and visualisation buttons, Random / Repeat / RGain and the floating buttons, on the song, radio and video players.\n\n" +
             "A button acts only when the finger stayed on it at least this long without sliding: a brush, a palm, or a touch that turns into a scroll does nothing. The same button pressed again within 0.4 s is ignored, so nothing happens twice.\n\n" +
             "120 ms (default) is hardly noticeable on a normal tap. Off: a plain tap, as before. Long presses and drags work as always.",

@@ -217,7 +217,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     var dateAsk by remember { mutableStateOf(false) }
     var datesAsk by remember { mutableStateOf(false) }
     var helpMsg by remember { mutableStateOf<Pair<String, String>?>(null) }
-    // Helper: what the alarm will now do, and how to get another repetition (Settings → Alarm clock → Helpers).
+    // Helper: what the alarm will now do, and how to get another repetition (Settings → Helpers).
     fun showHelp(x: Alarm) {
         if (!AutoHelp.ok("alarm", "repetition")) return
         val title = when (x.mode) {
@@ -523,19 +523,7 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
             }
             SectionTitle("Alarm page and calendar")
             CardBox {
-                HToggleRow("Helpers", "Short pop-ups explaining a setting when you change it — each once per session", g.helpers) { set(g.copy(helpers = it)) }
-                // Helpers per settings page (2026-11-28 01:15).
-                if (g.helpers) {
-                    val stH = app.vlcinterface.App.instance.store.state.collectAsState().value.settings
-                    Text("Helpers per page", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 8.dp))
-                    AutoHelp.PAGES.forEach { (k, name) ->
-                        HToggleRow("Helpers: $name", "", k !in stH.helpersOffPages) { on ->
-                            app.vlcinterface.App.instance.store.update { st -> st.copy(settings = st.settings.copy(
-                                helpersOffPages = if (on) st.settings.helpersOffPages - k else (st.settings.helpersOffPages + k).distinct())) }
-                        }
-                    }
-                }
-                Divider()
+                // Helpers moved to their own settings page (2026-11-28 02:50): Settings → Helpers.
                 HToggleRow("Show alarms in my calendar", if (g.calSync && g.calName.isNotEmpty()) "In: ${g.calName}" else
                     "Alarms as events in the phone's calendar (your account already on the phone syncs them)", g.calSync) { on ->
                     if (!on) set(g.copy(calSync = false))

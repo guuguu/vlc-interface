@@ -1578,3 +1578,8 @@
 - **Alarms shown under the clock (37):** Look → 1–10 rows (default 5), with a helper.
 - **Identified radio song on the player (38):** after ♪ Identify finds it, the title (big) and artist · album show in place of "Live" / the station's text. Taken off on pause / stop, another station, the station's own text changing, a pause in the sound (1.5 s), or a rhythm change (the bass beat's tempo moving over 15 % for 3 s, or the beat lost and a new one starting); each removal is logged with its reason.
 - **Touch guard (39):** the players' main buttons (play / pause, ⏮ ⏭, −10 / +10, Sleep, Identify, sine, clock / visualisation, Random / Repeat / RGain, floating buttons; video play) act only after a 120 ms hold without sliding; the same button again within 0.4 s is ignored. Playback & gestures → "Touch guard" (Off … 300 ms), helper; Helpers now have a Playback & gestures switch too.
+
+# After 1.94.0
+
+## Helpers: their own settings page (requested 2026-11-28 02:50)
+- The Helpers switches leave the Alarm clock settings page and get their own page, **Settings → Helpers** (a new link on the main Settings page; its place set in Look like the others): "Helpers" on / off, and under it one switch per settings page (Alarm page, Audio, Playback & gestures, Radio, Video, Look, Library & files, Visualisation, Clock aspect, File associations). Helper text on a long press; found by the Settings search.

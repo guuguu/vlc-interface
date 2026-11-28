@@ -64,14 +64,16 @@ import java.util.Locale
 /** Settings groups: id → name (the main page's links; their order is chosen in Look). */
 val SETTINGS_GROUPS: List<Pair<String, String>> = listOf("audio" to "Audio", "playback" to "Playback & gestures", "video" to "Video",
     "radio" to "Radio", "look" to "Look", "library" to "Library & files", "network" to "Network & NAS", "vpn" to "VPN",
-    "alarm" to "Alarm clock", "vis" to "Visualisation", "backup" to "Export / import", "logs" to "Logs", "folders" to "Find media folders", "assoc" to "File associations")
+    "alarm" to "Alarm clock", "vis" to "Visualisation", "backup" to "Export / import", "logs" to "Logs", "folders" to "Find media folders", "assoc" to "File associations",
+    "helpers" to "Helpers")
 
 private val GROUP_HINTS = mapOf("audio" to "Start volume, preamp, ReplayGain, sound engine", "playback" to "Gestures, resume, background playback",
     "video" to "Decoding, deinterlacing, subtitles", "radio" to "Saving songs, radio buffer, free space", "look" to "Colours, sizes, menus, order of these links",
     "library" to "Scanning, album pictures, deleting files", "network" to "SMB1, Spotify links", "vpn" to "Home NAS through ZeroTier / Tailscale",
     "alarm" to "Alarms, ringing, wake check, clock aspect", "vis" to "Patterns, colours, frequencies", "backup" to "Your whole setup in one file",
     "logs" to "Errors, servers, indexing, crashes, caches", "folders" to "Search the phone, SD card and Downloads for music and videos",
-    "assoc" to "Which media files and radio links open with this app")
+    "assoc" to "Which media files and radio links open with this app",
+    "helpers" to "Short explanations when you change a setting, page by page")
 
 /** The main Settings page's links, in the chosen order (new groups added at the end). */
 fun orderedGroups(order: List<String>): List<Pair<String, String>> {
@@ -580,7 +582,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         STextButton({ set(s.copy(floatBtnAlpha = 85)) }) { Text("Reset") }
                     }
                     ThinSlider((100 - s.floatBtnAlpha).toFloat(), { v -> set(s.copy(floatBtnAlpha = 100 - (Math.round(v / 5f) * 5).coerceIn(0, 70))) }, valueRange = 0f..70f)
-                    // Helpers (Settings → Alarm clock → Helpers): explanation, with a preview where useful, after a change.
+                    // Helpers (Settings → Helpers): explanation, with a preview where useful, after a change.
                     val helpersOn = app.vlcinterface.alarm.Alarms.state.collectAsState().value.global.helpers
                     var lookHelp by remember { mutableStateOf("") }
                     // Alarm rows under the clock: height (50 % = half the old rows). Hidden while the alarm system is off.
@@ -1093,6 +1095,28 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 }
                 "assoc" -> {
             AssociationSettings()
+                }
+                "helpers" -> {
+            // Helpers (2026-11-28 02:50): moved here from the alarm settings page — one switch for all, then one per page.
+            SectionTitle("Helpers")
+            val alarmsSt by app.vlcinterface.alarm.Alarms.state.collectAsState()
+            val g = alarmsSt.global
+            CardBox {
+                ToggleRow("Helpers", "Short pop-ups explaining a setting when you change it — each once per session", g.helpers) { on ->
+                    app.vlcinterface.alarm.Alarms.setGlobal(g.copy(helpers = on))
+                }
+                if (g.helpers) {
+                    Divider()
+                    Text("Per settings page", color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(start = 16.dp, top = 8.dp, bottom = 2.dp))
+                    AutoHelp.PAGES.forEach { (k, name) ->
+                        ToggleRow(name, "", k !in s.helpersOffPages) { on ->
+                            set(s.copy(helpersOffPages = if (on) s.helpersOffPages - k else (s.helpersOffPages + k).distinct()))
+                        }
+                    }
+                }
+            }
+            Text("A long press on any setting always shows its explanation, whatever is chosen here.", color = C.muted, fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp))
                 }
                 "vis" -> {
             SectionTitle("Visualisation")
