@@ -110,3 +110,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 58. **2026-11-28 12:07 — Error log 12:06: waiting writes not called "not written", stopped copies logged as such, no null characters in the zip.** Fixed after 1.104.0, not built yet.
 59. **2026-11-28 13:20 — Background process at 149 % CPU:** no automatic indexing until the screen opens; idle background starts close after 90 s. Fixed after 1.105.0, not built yet.
 60. **2026-11-28 13:22 — Short alarms: time fields fixed; global sound picker, duration and vibration.** Done after 1.105.0, not built yet.
+61. **2026-11-28 13:26 — App didn't start at 15 % battery (battery check before the player existed).** Fixed after 1.105.0, not built yet.

@@ -1747,3 +1747,7 @@
   - **Vibration:** Off / Short (0.3 s) / Long (1.5 s) / Pulses (for as long as the sound plays).
   - **▶ Try it:** plays the sound and vibration as set.
 - The app now plays the sound and vibrates itself (the notification channel is silent), so the choice applies at once; plays on the notification volume. Saved and exported with the short alarms. Helpers on a long press.
+
+## The app didn't start at 15 % battery (reported 2026-11-28 13:26)
+- **Cause:** the battery check runs at the very start of the app, before the player exists. Above 15 % it stops early; at 15 % or less (not charging) it looked at the player to see whether something was playing — which didn't exist yet — and the app closed as it opened. (The same kind of start-up crash as the "output" one of 22 Nov.)
+- **Fixed:** the check reads the player safely at any point of the start, and a battery report can never take the app down. At 15 % the app opens with its red colours and only playing allowed, at 10 % with its message, as intended.

@@ -68,7 +68,8 @@ object BatteryGuard {
     }
 
     private fun update(pct: Int, charging: Boolean) {
-        try { updateInner(pct, charging) } finally { first = false }
+        // Never takes the app down, whatever it meets (a battery report can come at any moment of the start).
+        try { updateInner(pct, charging) } catch (_: Throwable) {} finally { first = false }
     }
 
     private fun updateInner(pct: Int, charging: Boolean) {
@@ -77,8 +78,9 @@ object BatteryGuard {
         warnColour.value = !charging && pct <= 15
         if (warnColour.value && !was) stopBackgroundWork()
         if (charging || pct > 15) { warned = false; stopped = false; low.value = false; if (charging && notice.value != 0) notice.value = 0; return }
-        val player = App.instance.player
-        val playing = player.state.value.item != null && player.state.value.isPlaying
+        // Safe at any point of the start (2026-11-28 13:26: at 15 % or less the app closed as it opened — this runs from
+        // App.onCreate before the player exists, and reading it then crashed the start).
+        val playing = try { App.instance.player.state.value.let { it.item != null && it.isPlaying } } catch (_: Throwable) { false }
         if (pct <= 10) {
             low.value = true
             if (!stopped) {
