@@ -65,3 +65,5 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
     - (02:05) Helpers for the Auto and + buttons (on a long press, and once per session on a tap when Helpers are on for Library & files):
       - Auto: the app picks the address by itself — the LAN address at home, the VPN address away (when the VPN is on), else the last one that answered; it checks again when the network changes.
       - +: add another address for this share by hand (an IP or a name, e.g. a second LAN address or the VPN one); it's kept with the share and offered in the list; long press on an address you added to remove it.
+32. **2026-11-28 02:08 — LAN storage reached over the VPN also shown under Internet:** every LAN location that also has a VPN address (e.g. Transcend: LAN 192.168.5.1, VPN 192.168.192.40) gets a duplicate entry in the Internet section, using the VPN address.
+    - Planned as a linked twin (to confirm): same share, folders, index and credentials as the LAN entry — no second indexing; the Internet card shows the VPN address and its own Online state; deleting the LAN location removes its twin.
