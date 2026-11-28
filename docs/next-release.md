@@ -1675,6 +1675,7 @@
 - It used to go inside "Settings". Older files still import it, shown as this row.
 
 ## Level of songs without ReplayGain, a slider (requested 2026-11-28 10:54)
-- Settings → Audio → ReplayGain → "Songs without ReplayGain": −12 dB … 0 dB in 0.5 dB steps (default −3 dB, as before). A song that has no ReplayGain plays this much under the current level until it's measured; over the VPN (no scan there) 3 dB lower still (default −6 dB, as before).
+- Settings → Audio → ReplayGain → "Songs without ReplayGain": −12 dB … 0 dB in 0.5 dB steps (default −3 dB, as before). A song that has no ReplayGain plays this much under the current level until it's measured.
+- Under it, "Songs without ReplayGain over the VPN" (requested 10:55): the same, −12 … 0 dB, for home-NAS songs played through the VPN away from home, where they aren't scanned (default −6 dB, as before).
 - A change applies at once to a song playing without ReplayGain (app output; libVLC's own output takes it from the next song). The player line shows the level used ("No RG · −4.5 dB until measured").
 - Helper on a hold; found by the Settings search; saved with the settings and in export / import.
