@@ -17,3 +17,9 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 13. **2026-11-28 01:16 — Active state visible on the song player's buttons:** on the song player (front page), the Random, Repeat All and RGain (on track) buttons must clearly show when they're active — give them the app's main (accent) colour, as set for the other items, while on.
 14. **2026-11-28 01:16 — Won't install on a Huawei (Android 12 / version 12.0.0.2):** the APK couldn't be installed, not even alongside / over the native VLC already installed; the message: "There was a problem parsing the package" ("A apărut o problemă la analizarea pachetului"). Find why (minimum Android version, CPU type the APK is built for, signature scheme, manifest features …) and make it install there.
 15. **2026-11-28 01:17 — Reorder radio favourites on the player:** add the ability to reorder the stations in the favourite stations list on the radio player's front page (drag, like the queue).
+16. **2026-11-28 01:17 — "Short notification alarms" (a second alarm list):** for daily moments (taking pills, doing exercises …), with a simplified setup:
+    - not written to the calendar, not shown in front of the player;
+    - a short vibration and a short Android notification sound; each rings once, and shows a notification on the screen and in the notification list (which can be swiped away there);
+    - same setup logic as the main alarms (time, days / repetition …, simplified);
+    - the list lives at the bottom of the global alarm settings page, as its own section named "Short notification alarms", with an enable / disable switch on each alarm like the alarms in front of the player;
+    - advertised and linked at the top of every alarm settings page, with a link that jumps to that section.
