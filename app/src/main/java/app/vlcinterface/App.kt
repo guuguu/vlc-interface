@@ -66,7 +66,8 @@ class App : Application() {
         app.vlcinterface.sources.RgScanner.flushPendingSoon(this)   // cached ReplayGain writes left from last time
         app.vlcinterface.sources.CoverArt.init(this)
         app.vlcinterface.sources.NetIndex.init(this)
-        app.vlcinterface.sources.NetIndex.autoStart()        // home-network pins not indexed yet, and interrupted ones: in the background
+        // Home-network indexing starts when the app's screen is opened (uiOpened), not when Android starts the process in
+        // the background for an alarm, a broadcast or a job (13:20: 149 % CPU in a process nobody had opened).
         // The volume is kept only: after Exit and opened again (within "Reset volume after"), or when the app was restarted by a
         // short hiccup of Bluetooth / the sound system (back within 2 min). Otherwise: the start volume.
         val vk = getSharedPreferences("volkeep", MODE_PRIVATE)
@@ -97,6 +98,21 @@ class App : Application() {
         if (app.vlcinterface.alarm.Alarms.active.isNotEmpty()) app.vlcinterface.alarm.AlarmEngine.guardCheck(this)
         app.vlcinterface.sources.VpnLink.init(this)          // home NAS over a VPN (ZeroTier …)   // radio: keeps the playing station ready to save songs
         player.currentOutputName = output.active?.name ?: ""
+        // Started in the background with nothing to do (13:20): no screen opened, nothing played, no alarm ringing / snoozed,
+        // no screen saver, no ReplayGain scan, no radio recording — after 90 s the process ends itself (logged). Alarms still
+        // ring: Android starts the app again for them.
+        android.os.Handler(android.os.Looper.getMainLooper()).let { h ->
+            h.postDelayed(object : Runnable { override fun run() {
+                if (uiStarted || everPlayed) return
+                val busy = try {
+                    app.vlcinterface.alarm.AlarmEngine.ui.value.phase != "idle" || app.vlcinterface.alarm.ClockDream.on ||
+                        app.vlcinterface.sources.RgScanner.state.value.running || app.vlcinterface.sources.RadioCapture.status.value.running
+                } catch (_: Exception) { true }
+                if (busy) { h.postDelayed(this, 60_000); return }
+                try { ServerLog.log("player", "start", "", "", true, "Started in the background with nothing to do (no screen, no playing, no alarm) — closed after 90 s") } catch (_: Exception) {}
+                android.os.Process.killProcess(android.os.Process.myPid())
+            } }, 90_000)
+        }
         // Every second: the volume of the output in use, kept per output (put back exactly after a short change of output).
         android.os.Handler(android.os.Looper.getMainLooper()).let { h ->
             h.post(object : Runnable { override fun run() {
@@ -215,6 +231,18 @@ class App : Application() {
         const val BLIP_MS = 2 * 60_000L
         lateinit var instance: App
             private set
+        /**
+         * The app's screen was opened in this process / something was played (2026-11-28 13:20: the process seen at 149 %
+         * CPU with the screen saver off — started in the background by an alarm or broadcast, it began indexing).
+         */
+        @Volatile var uiStarted = false
+        @Volatile var everPlayed = false
+        /** The screen opened: the background work held back for it starts now (once). */
+        fun uiOpened() {
+            if (uiStarted) return
+            uiStarted = true
+            try { app.vlcinterface.sources.NetIndex.autoStart() } catch (_: Exception) {}
+        }
         const val VERSION = "0.3.0"
     }
 }

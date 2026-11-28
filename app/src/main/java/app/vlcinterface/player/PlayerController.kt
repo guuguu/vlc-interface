@@ -3149,6 +3149,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         val s = _state.value
         when (ev.type) {
             MediaPlayer.Event.Playing -> {
+                app.vlcinterface.App.everPlayed = true
                 _state.value = s.copy(isPlaying = true, error = "", ended = false, buffering = 100f, userPaused = false)
                 failsInRow = 0
                 // A video that started without its picture (no view / no surface at that moment) is re-opened once.

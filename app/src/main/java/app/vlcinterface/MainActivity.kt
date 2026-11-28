@@ -33,6 +33,7 @@ class MainActivity : ComponentActivity() {
         try { packageManager.setComponentEnabledSetting(android.content.ComponentName(this, app.vlcinterface.alarm.ClockDream::class.java),
             android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT, android.content.pm.PackageManager.DONT_KILL_APP) } catch (_: Exception) {}
         enableEdgeToEdge()
+        App.uiOpened()                                   // background work held back for the screen starts now (13:20)
         instance = this
         // Volume buttons always control media volume in this app (not the ringer while playback is paused / resuming).
         volumeControlStream = android.media.AudioManager.STREAM_MUSIC

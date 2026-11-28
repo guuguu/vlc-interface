@@ -342,6 +342,7 @@ object NetIndex {
      * Phone songs need no indexing: Android keeps their list.
      */
     fun autoLan() {
+        if (!app.vlcinterface.App.uiStarted) return       // only once the app's screen was opened (13:20)
         val srcs = App.instance.store.current.sources.filter { it.zone == app.vlcinterface.data.Zone.LAN && it.proto != "upnp" && it.proto != "m3u" }
         scope.launch {
             srcs.forEach { s ->
@@ -647,6 +648,7 @@ object NetIndex {
      * 5 minutes while some are waiting; a server that doesn't answer is skipped quietly until the next check.
      */
     fun resumeStopped() {
+        if (!app.vlcinterface.App.uiStarted) return       // only once the app's screen was opened (13:20)
         val waiting = synchronized(parts) { parts.keys.toList() }
         if (waiting.isEmpty()) return
         val srcs = App.instance.store.current.sources

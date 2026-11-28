@@ -1732,3 +1732,9 @@
   - "Copy of … didn't match the server — dropped" (Operation: Mindcrime 11:57, Dedicated to Chaos 10:35): the file is sized in full before the copy starts, so a copy that was stopped or failed part-way was logged as a mismatch too. Now the log says which: "not finished (stopped: no longer needed / the server stopped sending)" or a real mismatch.
   - The error-log zip had null characters inside (tools took app-errors.txt for a binary file): taken out.
   - "App output gave no sound" stopped after 09:41 — 1.99's revert holds.
+
+## The process at 149 % CPU with the screen saver off (reported 2026-11-28 13:20, process monitor: "vlc interface CPU 149.13 %, MEM 80 MB")
+- **Likely cause:** Android starts the app's process in the background for its alarm work (an alarm due, the phone's time set, the alarms rescheduled, a job) — no screen opened. Every start of the process also started the automatic indexing of the home-network folders (up to 6 reading threads), which is what used the CPU with nobody using the app.
+- **Now:** automatic indexing (new folders, interrupted runs, "every N days", the 5-minute checks) starts only once the app's screen has been opened in that process. Indexing asked by hand, and the indexing of a played file's folder, are unchanged.
+- **A background start with nothing to do ends itself:** if, 90 s after the process started, no screen was opened, nothing was played, no alarm is ringing or snoozed, the clock screen saver isn't showing, and no ReplayGain scan or radio recording is running, the process closes (written to the Player log; checked again every minute while one of those is busy). Alarms still ring — Android starts the app again for them.
+- The "App started again … after Exit — started by …" entry (Player log, in "Collect error logs") still says what started it.

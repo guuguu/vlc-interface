@@ -50,6 +50,7 @@ class ClockDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        on = true
         isInteractive = false
         isFullscreen = true
         isScreenBright = false
@@ -80,9 +81,11 @@ class ClockDream : DreamService(), LifecycleOwner, SavedStateRegistryOwner {
 
     override fun onDreamingStarted() { super.onDreamingStarted(); reg.currentState = Lifecycle.State.RESUMED }
     override fun onDreamingStopped() { super.onDreamingStopped(); reg.currentState = Lifecycle.State.STARTED }
-    override fun onDetachedFromWindow() { reg.currentState = Lifecycle.State.DESTROYED; super.onDetachedFromWindow() }
+    override fun onDetachedFromWindow() { on = false; reg.currentState = Lifecycle.State.DESTROYED; super.onDetachedFromWindow() }
 
     companion object {
+        /** The screen saver is showing now (the app's process must stay). */
+        @Volatile var on = false
         /** null = Android doesn't tell; true / false otherwise. */
         data class Status(val available: Boolean, val chosen: Boolean?, val enabled: Boolean?, val whileCharging: Boolean?)
 
