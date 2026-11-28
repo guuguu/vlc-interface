@@ -50,14 +50,19 @@ fun CoverPicker(item: PlayItem, onNone: () -> Unit, onDone: (note: String, chang
     val scope = rememberCoroutineScope()
     var list by remember { mutableStateOf<List<CoverArt.Candidate>?>(null) }
     var saving by remember { mutableStateOf(false) }
+    var searching by remember { mutableStateOf(true) }
     fun use(c: CoverArt.Candidate) {
         saving = true
         scope.launch { val r = CoverArt.useCandidate(ctx.applicationContext, item, c); onDone(r.note, r.bitmap != null) }
     }
     LaunchedEffect(item.uri) {
         if (CoverArt.onMobile()) { onDone("Pictures are downloaded only on Wi-Fi", false); return@LaunchedEffect }
-        val l = CoverArt.candidates(item.artist, item.album)
-            .filter { c -> CoverArt.notBanned(item.artist, item.album, if (c.kind == "web") c.id else "https://coverartarchive.org/${c.kind}/${c.id}/front-500") }
+        fun ok(c: CoverArt.Candidate) = CoverArt.notBanned(item.artist, item.album, if (c.kind == "web") c.id else "https://coverartarchive.org/${c.kind}/${c.id}/front-500")
+        // The list fills as pictures arrive (2026-11-28 08:31); the search goes on meanwhile ("still looking" under it).
+        val l = CoverArt.candidates(item.artist, item.album) { c ->
+            if (ok(c)) scope.launch(kotlinx.coroutines.Dispatchers.Main) { list = (list ?: emptyList()) + c }
+        }.filter { ok(it) }
+        searching = false
         when (l.size) {
             0 -> if (onBan != null && (CoverArt.canBan(item.uri, artPath) || CoverArt.hasBans(item.artist, item.album))) list = l else onNone()
             else -> list = l
@@ -77,6 +82,10 @@ fun CoverPicker(item: PlayItem, onNone: () -> Unit, onDone: (note: String, chang
                 if (onBan != null) {
                     if (CoverArt.canBan(item.uri, artPath)) STextButton({ onBan(false) }) { Text("Wrong picture — never use it for this album", color = C.bad, fontWeight = FontWeight.SemiBold) }
                     if (CoverArt.hasBans(item.artist, item.album)) STextButton({ onBan(true) }) { Text("Allow pictures marked wrong again") }
+                }
+                if (searching) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CircularProgressIndicator(color = accent(), strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                    Text("Still looking…", color = C.muted, fontSize = 12.sp)
                 }
                 val state = rememberLazyListState()
                 LazyColumn(Modifier.heightIn(max = 460.dp).scrollbar(state), state = state, verticalArrangement = Arrangement.spacedBy(6.dp)) {

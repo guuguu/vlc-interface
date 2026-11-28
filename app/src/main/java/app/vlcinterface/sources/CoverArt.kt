@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
@@ -38,6 +40,11 @@ object CoverArt {
     private lateinit var miss: File        // "not found online" markers only (no pictures)
     private val lock = Mutex()
     private var lastCall = 0L
+    private val rate = Mutex()
+    // Picture lookups give up quickly on a slow site and go on to the next (2026-11-28 08:31: 30 s and more without a
+    // result); the shared client waits up to 30 s for web streams.
+    private val http by lazy { Net.http.newBuilder().connectTimeout(6, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS).callTimeout(30, java.util.concurrent.TimeUnit.SECONDS).build() }
     private const val UA = "vlc-interface/0.3.0 ( https://github.com/guuguu/vlc-interface )"
     private const val MAX = 800
     private val names = listOf("cover.jpg", "folder.jpg", "front.jpg", "cover.png", "folder.png", "artist.jpg")
@@ -201,7 +208,7 @@ object CoverArt {
                 names.firstNotNullOfOrNull { n -> SmbFile(VpnLink.route(pl.folder + n), cx).takeIf { it.exists() }?.inputStream?.use { it.readBytes() } }
             }
             is Web -> names.firstNotNullOfOrNull { n ->
-                Net.http.newCall(Request.Builder().url(pl.folder + n).apply { auth(this, pl.item) }.build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }
+                http.newCall(Request.Builder().url(pl.folder + n).apply { auth(this, pl.item) }.build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }
             }
         }
     } catch (_: Exception) { null }
@@ -226,7 +233,7 @@ object CoverArt {
                 SmbFile(VpnLink.route(pl.folder + name), cx).outputStream.use { it.write(jpeg) }; ""
             }
             is Web -> if (!pl.writable) "not saved — this source is read-only" else
-                Net.http.newCall(Request.Builder().url(pl.folder + name).put(jpeg.toRequestBody("image/jpeg".toMediaType())).apply { auth(this, pl.item) }.build())
+                http.newCall(Request.Builder().url(pl.folder + name).put(jpeg.toRequestBody("image/jpeg".toMediaType())).apply { auth(this, pl.item) }.build())
                     .execute().use { r -> if (r.isSuccessful) "" else "not saved — server refused (HTTP ${r.code})" }
         }
     } catch (e: Exception) { "not saved — ${e.message ?: e.javaClass.simpleName}" }
@@ -323,7 +330,7 @@ object CoverArt {
         val f = File(dir, "logo-" + key(url) + ".img")
         if (f.exists() && f.length() > 100) return f
         if (onMobile()) return null
-        val b = try { Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null } } catch (_: Exception) { null }
+        val b = try { http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null } } catch (_: Exception) { null }
             ?: return null
         if (b.size < 100) return null
         f.writeBytes(b)
@@ -393,16 +400,18 @@ object CoverArt {
     private fun markMissed(k: String) { try { File(miss, "$k.none").writeText("") } catch (_: Exception) {} }
 
     internal suspend fun mb(url: String): JSONObject? {
-        val wait = 1100 - (System.currentTimeMillis() - lastCall); if (wait > 0) delay(wait)   // MusicBrainz: 1 request/s
-        lastCall = System.currentTimeMillis()
+        rate.withLock {                                                                       // MusicBrainz: 1 request/s, for every caller
+            val wait = 1100 - (System.currentTimeMillis() - lastCall); if (wait > 0) delay(wait)
+            lastCall = System.currentTimeMillis()
+        }
         // Always off the screen's thread, whoever asks.
         return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) JSONObject(r.body!!.string()) else null }
+            http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) JSONObject(r.body!!.string()) else null }
         }
     }
 
     private fun get(url: String): ByteArray? =
-        Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }?.takeIf { it.size > 1000 }
+        http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) r.body?.bytes() else null }?.takeIf { it.size > 1000 }
 
     /** Album title variants: as tagged, without "(Remastered)" / "[Deluxe]" / "CD 1", without any bracketed extra, roman ↔ arabic numbers (ELO 2 ↔ ELO II). */
     private fun albumVariants(album: String): List<String> {
@@ -486,7 +495,7 @@ object CoverArt {
     }
 
     private fun json(url: String): JSONObject? = try {
-        Net.http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) JSONObject(r.body!!.string()) else null }
+        http.newCall(Request.Builder().url(url).header("User-Agent", UA).build()).execute().use { r -> if (r.isSuccessful) JSONObject(r.body!!.string()) else null }
     } catch (_: Exception) { null }
 
     /**
@@ -632,58 +641,80 @@ object CoverArt {
      * Every album picture that fits this album and artist (different editions often have different covers),
      * with a small preview each. Same searches as the automatic one, but all fitting results are kept.
      */
-    suspend fun candidates(artist0: String, album: String): List<Candidate> = withContext(Dispatchers.IO) {
+    /**
+     * The picture search (long press on the picture). 2026-11-28 08:31 ("no results for 30 s or more"): it waited for the
+     * automatic picture search of other songs to finish (a shared lock), asked MusicBrainz for every title variant before
+     * showing anything, and fetched the previews one after another, each allowed 20–30 s. Now it doesn't wait for the
+     * background searches (only MusicBrainz's 1-request-per-second rule is shared), the shops (iTunes, Deezer) and
+     * MusicBrainz are asked at the same time, previews are fetched 6 at a time with short time limits, and each picture
+     * is handed to [onFound] as soon as it's there — the list fills while the search goes on.
+     */
+    suspend fun candidates(artist0: String, album: String, onFound: (Candidate) -> Unit = {}): List<Candidate> = withContext(Dispatchers.IO) {
         val artist = canonicalArtist(artist0)
         if (album.isBlank() && artist.isBlank()) return@withContext emptyList()
         if (onMobile()) return@withContext emptyList()       // only on Wi-Fi
-        val hits = LinkedHashMap<String, Triple<String, String, JSONObject>>()   // id → (kind, id, json)
-        lock.withLock {
-            try {
-                fun q(t: String) = t.replace("\"", "")
-                suspend fun search(query: String, kind: String, wantTitle: String?) {
-                    val arr = mb("https://musicbrainz.org/ws/2/$kind/?fmt=json&limit=15&query=" + URLEncoder.encode(query, "UTF-8"))
-                        ?.optJSONArray(if (kind == "release-group") "release-groups" else "releases") ?: return
-                    (0 until arr.length()).map { arr.getJSONObject(it) }
-                        .filter { it.optInt("score") >= 80 && artistFits(artist, creditOf(it)) && (wantTitle == null || norm(it.optString("title")) == wantTitle) }
-                        .forEach { o -> hits.putIfAbsent(o.getString("id"), Triple(kind, o.getString("id"), o)) }
-                }
-                val base = album.trim().replace(Regex("[´`’‘ʼ′]"), "'").replace(Regex("""\s*[\(\[\{][^)\]\}]*[\)\]\}]"""), "").trim()
-                for (withArtist in listOf(true, false)) {
-                    if (withArtist && artist.isBlank()) continue
-                    if (!withArtist && hits.isNotEmpty()) break
-                    for (title in albumVariants(album)) {
-                        for (kind in listOf("release-group", "release"))
-                            search("${if (kind == "release-group") "releasegroup" else "release"}:\"${q(title)}\"" + if (withArtist) " AND artist:\"${q(artist)}\"" else "", kind, null)
-                        if (hits.size >= 12) break
-                    }
-                }
-                if (hits.isEmpty() && artist.isNotBlank()) {
-                    val words = base.replace(Regex("[^\\p{L}\\p{N}' ]"), " ").trim().split(Regex("\\s+")).filter { it.isNotBlank() }.joinToString(" ") { it.replace("'", "") }
-                    if (words.isNotEmpty()) for (kind in listOf("release-group", "release"))
-                        search("${if (kind == "release-group") "releasegroup" else "release"}:($words) AND artist:\"${q(artist)}\"", kind, norm(base))
-                }
-            } catch (_: Exception) {}
-        }
-        // Previews (Cover Art Archive, small size); entries without a picture drop out, identical pictures shown once.
         val seen = HashSet<Int>()
-        val mbList = hits.values.take(16).mapNotNull { (kind, id, o) ->
-            val b = try { get("https://coverartarchive.org/$kind/$id/front-250") } catch (_: Exception) { null } ?: return@mapNotNull null
-            if (!seen.add(b.contentHashCode())) return@mapNotNull null
-            val bmp = BitmapFactory.decodeByteArray(b, 0, b.size) ?: return@mapNotNull null
-            Candidate(kind, id, o.optString("title"), creditOf(o), infoOf(kind, o), bmp)
+        val out = java.util.Collections.synchronizedList(ArrayList<Candidate>())
+        val gate = kotlinx.coroutines.sync.Semaphore(6)
+        suspend fun preview(url: String, make: (android.graphics.Bitmap) -> Candidate, bytesSeen: HashSet<Int>) = gate.withPermit {
+            val b = try { get(url) } catch (_: Exception) { null } ?: return@withPermit
+            if (!synchronized(bytesSeen) { bytesSeen.add(b.contentHashCode()) }) return@withPermit
+            val bmp = BitmapFactory.decodeByteArray(b, 0, b.size) ?: return@withPermit
+            val c = make(bmp); out.add(c); try { onFound(c) } catch (_: Exception) {}
         }
-        // Shops' catalogues too (iTunes, Deezer): kind "web", id = the full-size picture's address.
-        val web = webAlbumsFull(artist, album).take(8).mapNotNull { (big, small, title, who, from) ->
-            val b = get(small) ?: return@mapNotNull null
-            if (!seen.add(b.contentHashCode())) return@mapNotNull null
-            Candidate("web", big, title, who, from, BitmapFactory.decodeByteArray(b, 0, b.size) ?: return@mapNotNull null)
+        val bytesSeen = HashSet<Int>()
+        kotlinx.coroutines.coroutineScope {
+            // Shops' catalogues (iTunes, Deezer): kind "web", id = the full-size picture's address. Usually the fastest.
+            launch {
+                try {
+                    webAlbumsFull(artist, album).take(8).map { (big, small, title, who, from) ->
+                        launch { preview(small, { bmp -> Candidate("web", big, title, who, from, bmp) }, bytesSeen) }
+                    }.forEach { it.join() }
+                } catch (_: Exception) {}
+            }
+            // MusicBrainz releases → Cover Art Archive previews, each fetched as soon as its release is found.
+            launch {
+                val hits = LinkedHashMap<String, Pair<String, JSONObject>>()
+                val jobs = ArrayList<kotlinx.coroutines.Job>()
+                try {
+                    fun q(t: String) = t.replace("\"", "")
+                    suspend fun search(query: String, kind: String, wantTitle: String?) {
+                        val arr = mb("https://musicbrainz.org/ws/2/$kind/?fmt=json&limit=15&query=" + URLEncoder.encode(query, "UTF-8"))
+                            ?.optJSONArray(if (kind == "release-group") "release-groups" else "releases") ?: return
+                        (0 until arr.length()).map { arr.getJSONObject(it) }
+                            .filter { it.optInt("score") >= 80 && artistFits(artist, creditOf(it)) && (wantTitle == null || norm(it.optString("title")) == wantTitle) }
+                            .forEach { o ->
+                                val id = o.getString("id")
+                                if (hits.size < 16 && !hits.containsKey(id)) {
+                                    hits[id] = kind to o
+                                    jobs += launch { preview("https://coverartarchive.org/$kind/$id/front-250", { bmp -> Candidate(kind, id, o.optString("title"), creditOf(o), infoOf(kind, o), bmp) }, bytesSeen) }
+                                }
+                            }
+                    }
+                    val base = album.trim().replace(Regex("[´`’‘ʼ′]"), "'").replace(Regex("""\s*[\(\[\{][^)\]\}]*[\)\]\}]"""), "").trim()
+                    for (withArtist in listOf(true, false)) {
+                        if (withArtist && artist.isBlank()) continue
+                        if (!withArtist && hits.isNotEmpty()) break
+                        for (title in albumVariants(album)) {
+                            for (kind in listOf("release-group", "release"))
+                                search("${if (kind == "release-group") "releasegroup" else "release"}:\"${q(title)}\"" + if (withArtist) " AND artist:\"${q(artist)}\"" else "", kind, null)
+                            if (hits.size >= 12) break
+                        }
+                    }
+                    if (hits.isEmpty() && artist.isNotBlank()) {
+                        val words = base.replace(Regex("[^\\p{L}\\p{N}' ]"), " ").trim().split(Regex("\\s+")).filter { it.isNotBlank() }.joinToString(" ") { it.replace("'", "") }
+                        if (words.isNotEmpty()) for (kind in listOf("release-group", "release"))
+                            search("${if (kind == "release-group") "releasegroup" else "release"}:($words) AND artist:\"${q(artist)}\"", kind, norm(base))
+                    }
+                } catch (_: Exception) {}
+                jobs.forEach { it.join() }
+            }
         }
-        val all = mbList + web
-        if (all.isNotEmpty()) return@withContext all
+        if (out.isNotEmpty()) return@withContext out.toList()
         // No album cover anywhere: the artist's photo(s) instead.
         listOfNotNull(deezerArtist(artist)?.let { (big, small) ->
             get(small)?.let { b -> BitmapFactory.decodeByteArray(b, 0, b.size)?.let { Candidate("web", big, artist, artist, "Artist photo · Deezer", it) } }
-        })
+        }).also { it.forEach { c -> try { onFound(c) } catch (_: Exception) {} } }
     }
 
     /** The chosen picture: downloaded at full size, resized for the phone and saved as cover.jpg in the album folder. */
@@ -753,7 +784,7 @@ object CoverArt {
                     // Direct image link on Wikimedia Commons, else the Wikidata item's image (P18).
                     target("image")?.takeIf { "commons.wikimedia.org" in it }?.let { file = it.substringAfterLast("File:", "").ifEmpty { null } }
                     if (file == null) target("wikidata")?.substringAfterLast('/')?.let { q ->
-                        val wd = Net.http.newCall(Request.Builder().url("https://www.wikidata.org/wiki/Special:EntityData/$q.json").header("User-Agent", UA).build())
+                        val wd = http.newCall(Request.Builder().url("https://www.wikidata.org/wiki/Special:EntityData/$q.json").header("User-Agent", UA).build())
                             .execute().use { r -> if (r.isSuccessful) JSONObject(r.body!!.string()) else null }
                         file = wd?.optJSONObject("entities")?.optJSONObject(q)?.optJSONObject("claims")?.optJSONArray("P18")
                             ?.optJSONObject(0)?.optJSONObject("mainsnak")?.optJSONObject("datavalue")?.optString("value")?.ifEmpty { null }
