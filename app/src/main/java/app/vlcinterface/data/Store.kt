@@ -81,7 +81,8 @@ class Store(private val context: Context) {
             }
             st.put("settings", o)
         }
-        if (ExportCat.SETTINGS in c) listOf("lastOutput", "devicePreamp", "deviceBalance", "deviceLoudFrom").forEach { st.put(it, full.get(it)) }
+        if (ExportCat.SETTINGS in c) st.put("lastOutput", full.get("lastOutput"))
+        if (ExportCat.DEVICES in c) listOf("devicePreamp", "deviceBalance", "deviceLoudFrom").forEach { st.put(it, full.get(it)) }
         val zones = buildSet { if (ExportCat.NAS in c) add(Zone.LAN); if (ExportCat.INTERNET in c) add(Zone.INTERNET) }
         if (zones.isNotEmpty()) st.put("sources", JSONArray(current.sources.filter { it.zone in zones }.map { it.toJson(transform) }))
         if (ExportCat.RADIO in c) st.put("stations", full.get("stations"))
@@ -123,6 +124,8 @@ class Store(private val context: Context) {
                 ?: (ExportCat.ALL_IDS.toSet() - ExportCat.ALARMS - (if (pw) emptySet() else setOf(ExportCat.PASSWORDS)))   // older files
             // Files from before the split carry the visualisation inside the alarms section.
             val catsV = cats.let { if (ExportCat.ALARMS in it && ExportCat.VIS !in it && st.optJSONObject("alarms")?.has("vis") == true) it + ExportCat.VIS else it }
+                // Files from before 2026-11-28 carry the per-device sound inside Settings.
+                .let { if (ExportCat.DEVICES !in it && st.has("devicePreamp")) it + ExportCat.DEVICES else it }
                 .filter { it in ExportCat.ALL_IDS }.toSet()
             ImportPreview(
                 true,
@@ -168,7 +171,7 @@ class Store(private val context: Context) {
                 }
                 m = m.copy(settings = Settings.fromJson(myS) { it })
             }
-            if (ExportCat.SETTINGS in c && stJ.has("devicePreamp")) m = m.copy(
+            if (ExportCat.DEVICES in c && stJ.has("devicePreamp")) m = m.copy(
                 devicePreamp = if (replace) incoming.devicePreamp else incoming.devicePreamp + mine.devicePreamp,
                 deviceBalance = if (replace) incoming.deviceBalance else incoming.deviceBalance + mine.deviceBalance,
                 deviceLoudFrom = if (replace) incoming.deviceLoudFrom else incoming.deviceLoudFrom + mine.deviceLoudFrom,
@@ -278,13 +281,16 @@ object ExportCat {
     const val ASSOC = "assoc"
     const val INDEX = "index"
     const val TONE = "tone"
+    /** Preamp, balance and loudness start per output device (2026-11-28): optional, the devices are this phone's own. */
+    const val DEVICES = "devices"
     /** id → name, in the order shown. */
     val LIST = listOf(SETTINGS to "Settings", NAS to "NAS (servers, shares, addresses)", VPN to "VPN (app, home servers, retry)",
         INTERNET to "Internet sources", PASSWORDS to "Saved passwords", RADIO to "Radio favourites", PLAYLISTS to "Playlists",
         ALARMS to "Alarms and clock", VIS to "Visualisation (all patterns' settings)", SUBS to "Subtitle style and sync offsets", RESUME to "Resume positions and scanned folders",
         VIDEOS to "Per-video choices (format, decoder, tracks, colours, audio sync)", RG to "ReplayGain values kept in the app",
         ASSOC to "File associations", INDEX to "Indexes of the network locations (search)",
-        TONE to "Loudness, Treble and Preamp per song and station")
+        TONE to "Loudness, Treble and Preamp per song and station",
+        DEVICES to "Per output device sound (this phone's speakers, headphones, Bluetooth)")
     val ALL_IDS = LIST.map { it.first }
     /** Settings that belong to the VPN category. */
     val VPN_KEYS = setOf("vpnNas", "vpnAskStart", "vpnApp", "vpnRetrySec")

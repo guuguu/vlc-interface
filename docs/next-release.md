@@ -1667,3 +1667,9 @@
 ## Every on / off state a switch (requested 2026-11-28 10:33, screenshot "Clock screen saver while charging … ✓")
 - Rows that showed an on / off state as ✓ / Allow / On / Off are switches now, on every settings page: Clock screen saver while charging, Exact alarms, Full-screen alarm, Battery unrestricted (alarm settings → System), Background playback (Playback & gestures), Phone music folders (Library & files), VPN on (VPN page).
 - These are Android's own permissions / settings: the switch shows their state now, and a tap opens Android's page for it (the switch follows when you come back). "VPN on" only shows the state (the VPN is switched in its own app).
+
+# After 1.102.0
+
+## Per-device sound optional in Export settings (requested 2026-11-28 10:50)
+- Export / Import has its own row "Per output device sound (this phone's speakers, headphones, Bluetooth)", with the number of devices. Untick it and the preamp, balance and loudness start of each output device stay out of the file, so a file given to someone else doesn't fill their list with your devices.
+- It used to go inside "Settings". Older files still import it, shown as this row.

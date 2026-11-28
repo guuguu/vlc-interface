@@ -1244,6 +1244,7 @@ fun BackupScreen(nav: Navigator) {
         ExportCat.VIS to "patterns",
         ExportCat.SUBS to "${st.subOffsets.size + st.audioOffsets.size} offsets",
         ExportCat.RESUME to "${st.recent.size} files",
+        ExportCat.DEVICES to "${(st.devicePreamp.keys + st.deviceBalance.keys + st.deviceLoudFrom.keys).size} devices",
     )
     val scroll = rememberScrollState()
     Column(Modifier.fillMaxSize()) {
