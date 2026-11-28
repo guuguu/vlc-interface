@@ -119,3 +119,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 67. **2026-11-28 15:05 — Menus sideways: rows fit at least 6 entries (Auto height, less spacing).** Done after 1.109.0.
 68. **2026-11-28 15:41 — Not responding at a video's start (fontconfig scanning all fonts under libVLC's lock):** font cache folder; no libVLC sizing calls on the screen's thread until the picture output exists. Fixed after 1.110.0, not built yet.
 69. **2026-11-28 15:52 — Series queue from the episode's folder and subfolders, whatever it was opened from.** Done after 1.111.0, not built yet.
+70. **2026-11-28 15:54 — Adding an episode adds its whole series in succession, the playing item uninterrupted.** Done after 1.111.0, not built yet.

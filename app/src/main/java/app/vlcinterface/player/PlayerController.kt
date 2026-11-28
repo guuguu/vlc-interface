@@ -2155,6 +2155,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         session(null, items)                                     // an addition: today's session list gets it
         orderedQueue = orderedQueue?.plus(items)
         _state.value = s.copy(queue = s.queue + items)
+        items.firstOrNull { !it.isMusic && !it.isRadio }?.let { addSeriesAround(it) }
         return items.size
     }
 
@@ -2243,6 +2244,46 @@ class PlayerController(private val context: Context, private val store: Store) {
         q.add((idx + 1).coerceIn(0, q.size), song)
         if (at < 0) orderedQueue = orderedQueue?.plus(song)
         _state.value = s.copy(queue = q, index = idx)
+        if (!song.isMusic && !song.isRadio) addSeriesAround(song)
+    }
+
+    /**
+     * An episode added to the queue (Add to queue / Play next, 2026-11-28 15:54): the item playing goes on untouched, and
+     * the whole series follows in succession — its folder and subfolders are read in the background and every episode
+     * of the series is put, in season / episode order, where the added one went (episodes already in the queue are
+     * moved there, so each is in it once; the one playing stays where it is).
+     */
+    private fun addSeriesAround(added: PlayItem) {
+        val me = Episodes.parse(added.fileName.ifEmpty { android.net.Uri.decode(added.uri.substringAfterLast('/')) }) ?: return
+        bg.launch {
+            val found = try { app.vlcinterface.sources.MusicLibrary.folderDeepOf(context, added) } catch (_: Exception) { emptyList() }
+                .filter { !it.isMusic && !it.isRadio && readable(it) && !nasOff(it) }
+            val series = Episodes.series(found + added, added) ?: return@launch
+            main.post {
+                val s = _state.value
+                val cur = s.item
+                val pos = s.queue.indexOfFirst { qKey(it) == qKey(added) }
+                if (pos < 0) return@post                                    // taken out meanwhile
+                // The one playing is of the same series: only the episodes after it follow (no going back in the story).
+                val curAt = cur?.let { c -> series.indexOfFirst { qKey(it) == qKey(c) } } ?: -1
+                val group = if (curAt >= 0) series.drop(curAt + 1) else series
+                val keys = group.map { qKey(it) }.toHashSet()
+                // The episodes of that group leave their places (the one playing never); the group goes, in order,
+                // where the added one was.
+                val q = ArrayList<PlayItem>(); var insertAt = -1
+                s.queue.forEachIndexed { i, it ->
+                    val playing = cur != null && i == s.index
+                    if (i == pos) insertAt = q.size
+                    if (qKey(it) !in keys || playing) q.add(it)
+                }
+                q.addAll(insertAt.coerceIn(0, q.size), group)
+                val idx = cur?.let { c -> q.indexOfFirst { qKey(it) == qKey(c) } }?.takeIf { it >= 0 } ?: s.index
+                fullList = (fullList + group).distinctBy { qKey(it) }
+                orderedQueue = null
+                _state.value = s.copy(queue = q, index = idx)
+                try { app.vlcinterface.ui.ShortNote.show("${group.size} episodes of the series in the queue") } catch (_: Exception) {}
+            }
+        }
     }
 
     /**
