@@ -1696,7 +1696,8 @@ fun LogViewScreen(nav: Navigator, kind: String) {
 fun OriginPickDialog(fromLabel: String, onOpen: () -> Unit, onDismiss: () -> Unit) {
     val st by App.instance.store.state.collectAsState()
     val player = App.instance.player
-    val curId = player.state.value.origin.let { if (it.kind == "playlist") it.playlistId else null }
+    val ps by player.state.collectAsState()
+    val curId = ps.origin.let { if (it.kind == "playlist") it.playlistId else null }
     AlertDialog(onDismissRequest = onDismiss, containerColor = C.panel,
         title = { Text("Playing from", color = C.text) },
         text = {

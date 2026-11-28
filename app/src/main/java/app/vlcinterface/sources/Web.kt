@@ -239,7 +239,7 @@ object PlaylistFiles {
 
     /** Returns (title, absolute uri) pairs; relative entries are resolved against [baseUrl] when given. */
     fun parse(text: String, baseUrl: String = ""): List<Pair<String, String>> {
-        val t = text.removePrefix("﻿")
+        val t = text.removePrefix("\uFEFF")
         return if (t.trimStart().startsWith("[playlist]", ignoreCase = true)) {
             val files = HashMap<Int, String>(); val titles = HashMap<Int, String>()
             t.lineSequence().forEach { l ->

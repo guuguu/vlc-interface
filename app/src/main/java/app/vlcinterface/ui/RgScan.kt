@@ -89,6 +89,7 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, initialM
         }
     }
     LaunchedEffect(wholeFolder, folder) { val f = folder; val one = single; if (one != null) items = if (wholeFolder && f != null) f else listOf(one) }
+    val rgRunning = RgScanner.state.collectAsState().value.running
     AlertDialog(onDismissRequest = onDone, containerColor = C.panel,
         title = { Text(title, color = C.text) },
         text = {
@@ -152,7 +153,7 @@ fun RgScanDialog(nav: Navigator, collect: suspend () -> List<PlayItem>, initialM
                 val its = items ?: return@STextButton
                 RgScanner.start(ctx.applicationContext, its, mode, target, rescan)
                 onDone(); nav.go(Screen.RgScan)
-            }, enabled = !items.isNullOrEmpty()) { Text(if (RgScanner.state.value.running) "Add to queue" else "Scan", color = accent()) }
+            }, enabled = !items.isNullOrEmpty()) { Text(if (rgRunning) "Add to queue" else "Scan", color = accent()) }
         },
         dismissButton = { STextButton(onDone) { Text("Cancel") } },
     )
@@ -303,7 +304,7 @@ fun RgFailureReport(nav: Navigator) {
     LaunchedEffect(s.needsPhonePermission) {
         // Android 10 has no write request: those songs keep their values in the app.
         if (s.needsPhonePermission.isNotEmpty() && android.os.Build.VERSION.SDK_INT < 30) RgScanner.phonePermissionResult(false)
-        else if (s.needsPhonePermission.isNotEmpty()) try {
+        else if (s.needsPhonePermission.isNotEmpty() && android.os.Build.VERSION.SDK_INT >= 30) try {
             val pi = MediaStore.createWriteRequest(ctx.contentResolver, s.needsPhonePermission.map { Uri.parse(it) })
             launcher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
         } catch (_: Exception) { RgScanner.phonePermissionResult(false) }

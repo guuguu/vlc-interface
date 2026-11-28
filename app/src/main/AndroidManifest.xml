@@ -323,8 +323,6 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:scheme="content" android:mimeType="video/mp2t" />
                 <data android:scheme="file" android:mimeType="video/mp2t" />
-                <data android:scheme="content" android:mimeType="video/MP2T" />
-                <data android:scheme="file" android:mimeType="video/MP2T" />
                 <data android:scheme="content" android:mimeType="video/vnd.dlna.mpeg-tts" />
                 <data android:scheme="file" android:mimeType="video/vnd.dlna.mpeg-tts" />
             </intent-filter>

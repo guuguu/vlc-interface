@@ -395,8 +395,11 @@ fun SavedSongsDialog(onDone: () -> Unit) {
             val uris = app.vlcinterface.sources.SavedSongs.needsConfirm(ctx, left)
             if (uris.isNotEmpty()) {
                 pendingAsk = left
-                try { ask.launch(androidx.activity.result.IntentSenderRequest.Builder(MediaStore.createDeleteRequest(ctx.contentResolver, uris).intentSender).build()) }
-                catch (_: Exception) {}
+                try {
+                    val sender = app.vlcinterface.sources.PhoneDelete.request(ctx, uris)
+                    if (sender != null) ask.launch(androidx.activity.result.IntentSenderRequest.Builder(sender).build())
+                    else { pendingAsk = emptyList(); kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { app.vlcinterface.sources.SavedSongs.forgetDeleted(ctx, left) } }
+                } catch (_: Exception) {}
             }
             if (n > 0) Toast.makeText(ctx, "$n deleted", Toast.LENGTH_SHORT).show()
         }

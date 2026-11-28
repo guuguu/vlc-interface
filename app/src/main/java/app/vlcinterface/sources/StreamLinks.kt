@@ -57,7 +57,7 @@ object StreamLinks {
 
     /** First stream of a .pls / .m3u / .xspf text, with its title when the playlist has one. */
     fun parse(text: String): Station? {
-        val t = text.trimStart('﻿')
+        val t = text.trimStart('\uFEFF')
         if (t.contains("<playlist", ignoreCase = true) || t.contains("<location>", ignoreCase = true)) {
             val loc = Regex("<location>\\s*([^<]+?)\\s*</location>", RegexOption.IGNORE_CASE).find(t)?.groupValues?.get(1) ?: return null
             val title = Regex("<title>\\s*([^<]*?)\\s*</title>", RegexOption.IGNORE_CASE).find(t)?.groupValues?.get(1).orEmpty()

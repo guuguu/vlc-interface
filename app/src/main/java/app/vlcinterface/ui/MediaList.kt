@@ -353,8 +353,8 @@ fun MediaList(
                             .background(if (sel) accent().copy(alpha = 0.18f) else if (hl) accent().copy(alpha = 0.12f) else Color.Transparent)
                             .combinedClickable(onClick = { if (selected.isNotEmpty()) toggle(e) else play(e) }, onLongClick = { if (selected.isNotEmpty()) quickFromSelection() else menuFor = e }).padding(horizontal = 4.dp),
                             verticalAlignment = Alignment.CenterVertically) {
-                            if (sel) Text("✓", color = accent(), fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp)) else
-                            Text(if (e.track > 0) (if (r.multiDisc && e.disc > 0) "${e.disc}-%02d".format(e.track) else e.track.toString()) else "·",
+                            if (sel) Text("✓", color = accent(), fontWeight = FontWeight.Bold, modifier = Modifier.width(36.dp))
+                            else Text(if (e.track > 0) (if (r.multiDisc && e.disc > 0) "${e.disc}-%02d".format(e.track) else e.track.toString()) else "·",
                                 color = if (isCur) accent() else C.muted, fontSize = 13.sp, modifier = Modifier.width(36.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(e.display, color = if (isCur) accent() else C.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -518,8 +518,10 @@ fun DeleteDialog(uris: List<String>, name: String, totalBytes: Long, count: Int,
         confirmButton = {
             STextButton({
                 try {
-                    val pi = MediaStore.createDeleteRequest(ctx.contentResolver, uris.map { Uri.parse(it) })
-                    launcher.launch(IntentSenderRequest.Builder(pi.intentSender).build())
+                    // Android 10 has no delete request (crashed there — lint 2026-11-28): the files are deleted directly;
+                    // a file another app owns asks once through Android's own permission prompt.
+                    val sender = app.vlcinterface.sources.PhoneDelete.request(ctx, uris.map { Uri.parse(it) })
+                    if (sender == null) onDone(true) else launcher.launch(IntentSenderRequest.Builder(sender).build())
                 } catch (e: Exception) { onDone(false) }
             }) { Text("Delete", color = C.bad) }
         },

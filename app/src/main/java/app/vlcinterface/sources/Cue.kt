@@ -16,7 +16,7 @@ data class CueResult(val items: List<PlayItem>, val ignored: List<String>, val a
 /** .cue sheets: parse, check every referenced file really exists, ignore the ones that don't. */
 object Cue {
     fun decode(b: ByteArray): String {
-        val s = String(b, Charsets.UTF_8).removePrefix("﻿")
+        val s = String(b, Charsets.UTF_8).removePrefix("\uFEFF")
         return if (s.contains('�')) String(b, charset("windows-1252")) else s
     }
 
