@@ -1673,3 +1673,8 @@
 ## Per-device sound optional in Export settings (requested 2026-11-28 10:50)
 - Export / Import has its own row "Per output device sound (this phone's speakers, headphones, Bluetooth)", with the number of devices. Untick it and the preamp, balance and loudness start of each output device stay out of the file, so a file given to someone else doesn't fill their list with your devices.
 - It used to go inside "Settings". Older files still import it, shown as this row.
+
+## Level of songs without ReplayGain, a slider (requested 2026-11-28 10:54)
+- Settings → Audio → ReplayGain → "Songs without ReplayGain": −12 dB … 0 dB in 0.5 dB steps (default −3 dB, as before). A song that has no ReplayGain plays this much under the current level until it's measured; over the VPN (no scan there) 3 dB lower still (default −6 dB, as before).
+- A change applies at once to a song playing without ReplayGain (app output; libVLC's own output takes it from the next song). The player line shows the level used ("No RG · −4.5 dB until measured").
+- Helper on a hold; found by the Settings search; saved with the settings and in export / import.

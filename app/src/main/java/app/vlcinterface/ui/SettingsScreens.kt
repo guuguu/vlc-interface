@@ -1474,6 +1474,17 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
             ThinSlider(s.rgPreampDb, { v -> set(s.copy(rgPreampDb = Math.round(v * 2) / 2f)) }, valueRange = -6f..6f)
         }
         Divider()
+        // 2026-11-28 10:54: the level of songs that have no ReplayGain (was a fixed −3 dB), half-dB steps.
+        val exNoRg = LocalExplain.current
+        val half = Math.round(s.noRgDb * 2)
+        ValueSlider("Songs without ReplayGain",
+            if (half == 0) "Played at the current level until measured (over the VPN 3 dB lower)"
+            else "Played this much lower until measured (over the VPN 3 dB lower still)",
+            if (half == 0) "0 dB" else "−%.1f dB".format(java.util.Locale.US, -half / 2f), half, -24..0, 1,
+            onFirst = { if (AutoHelp.ok("audio", "Songs without ReplayGain")) exNoRg("Songs without ReplayGain", "") }) { v ->
+            set(s.copy(noRgDb = v / 2f)); App.instance.player.noRgChanged()
+        }
+        Divider()
         ToggleRow("Prevent clipping", "Uses the peak values in the tags", s.rgClipProtect) { set(s.copy(rgClipProtect = it)) }
         Divider()
         // 2026-11-21 12:01: a song without ReplayGain → its whole folder scanned silently, 5 s summary at the end.
