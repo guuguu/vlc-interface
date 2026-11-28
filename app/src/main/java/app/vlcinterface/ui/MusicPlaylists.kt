@@ -19,7 +19,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -141,7 +140,6 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     val st by App.instance.store.state.collectAsState()
     val item = p.item
     if (item == null) { LaunchedEffect(Unit) { nav.back() }; return }
-    IdentifyAskDialog()
     LaunchedEffect(item.uri) { if (!item.isMusic && !item.isRadio) nav.replace(Screen.Player) }
     // Double tap on the Treble slider: Settings → Audio scrolled to the Treble band; Back returns here (21:50).
     LaunchedEffect(TrebleBandNav.want) { if (TrebleBandNav.want) { TrebleBandNav.want = false; SettingsAnchor.go("audio", null, "Treble band"); nav.go(Screen.SettingsGroup("audio")) } }
@@ -407,30 +405,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     Text(if (radio) "Next\nstation" else "Next in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
             }
-                // Under the player buttons, close to play (2026-11-28 mock-up v3; fixed 02:51): ♪ Identify and Sleep side by
-                // side, in their own row — outside the buttons' auto-fitting row, so they never shrink the player buttons —
-                // each a fixed width so a status text never moves anything.
-                val idCtx = androidx.compose.ui.platform.LocalContext.current
-                val idStatus by app.vlcinterface.sources.SongId.status.collectAsState()
-                Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    // The label never changes; what the button is doing shows by a strong colour (02:53): working — the
-                    // accent, pulsing; found / written — solid green; not found / not written / timed out — solid red
-                    // (for a few seconds; the details are in the log). Same size and place in every state.
-                    val idPhase = when {
-                        idStatus.isEmpty() -> ""
-                        idStatus.endsWith("…") -> "busy"
-                        idStatus.startsWith("Not") || idStatus.startsWith("Timed") -> "fail"
-                        else -> "ok"
-                    }
-                    val pulse = if (idPhase == "busy") androidx.compose.animation.core.rememberInfiniteTransition(label = "idPulse").animateFloat(0.55f, 1f,
-                        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(500), androidx.compose.animation.core.RepeatMode.Reverse), label = "idA").value else 1f
-                    val idBg = when (idPhase) { "busy" -> accent().copy(alpha = pulse); "ok" -> Color(0xFF2E9E5B); "fail" -> Color(0xFFD64541); else -> Color(0x24FFFFFF) }
-                    val idFg = if (idPhase.isEmpty()) C.muted else Color(0xFF101010)
-                    Box(Modifier.width(92.dp).clip(RoundedCornerShape(10.dp)).background(idBg)
-                        .guardClick("identify") { sleepScope.launch { app.vlcinterface.sources.SongId.identify(idCtx, item, p.nowPlaying) } }
-                        .padding(horizontal = 6.dp, vertical = 4.dp), contentAlignment = Alignment.Center) {
-                        Text("♪ Identify", color = idFg, fontSize = 11.sp, fontWeight = if (idPhase.isEmpty()) FontWeight.Normal else FontWeight.Bold, maxLines = 1)
-                    }
+                // Under the player buttons, centred under play (2026-11-28 10:08: Identify removed — Sleep alone, centred),
+                // in its own row outside the buttons' auto-fitting row (never shrinks them), a fixed width.
+                Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     Box {
                         val on = p.sleepUntil > 0 || p.sleepSongs > 0
                         val ac = accent()
@@ -1760,12 +1737,7 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
     val st by App.instance.store.state.collectAsState()
     val fav = st.stations.firstOrNull { it.url == item.uri }
     val name = fav?.name ?: item.title
-    val idShown by app.vlcinterface.sources.SongId.radio.collectAsState()
-    // ♪ Identify's result (2026-11-28 request 38): shown like a song's tags in place of "Live" / the station's text,
-    // until the song looks over (pause, another station, the station's text changing, a pause or a rhythm change).
-    val ids = idShown?.takeIf { it.uri == item.uri }
-    val (artist, title) = if (ids != null) (ids.artist + if (ids.album.isNotBlank()) " · ${ids.album}" else "") to ids.title
-        else app.vlcinterface.player.splitNowPlaying(p.nowPlaying)
+    val (artist, title) = app.vlcinterface.player.splitNowPlaying(p.nowPlaying)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // Station rows (label, name, address, details): the station's menu. Song rows (title, artist): the song's menu.
         var stMenu by remember { mutableStateOf(false) }
@@ -2500,38 +2472,3 @@ fun SaveQueueButton() {
     }
 }
 
-
-/** Identify song: the file already has other names — replace them? Closes by itself with nothing written. */
-@Composable
-private fun IdentifyAskDialog() {
-    val ask by app.vlcinterface.sources.SongId.ask.collectAsState()
-    val a = ask ?: return
-    val ctx = androidx.compose.ui.platform.LocalContext.current
-    var left by remember(a) { mutableStateOf(((a.until - System.currentTimeMillis()) / 1000).coerceAtLeast(0)) }
-    LaunchedEffect(a) {
-        while (true) {
-            left = ((a.until - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
-            if (left <= 0) { app.vlcinterface.sources.SongId.decline(timedOut = true); break }
-            kotlinx.coroutines.delay(250)
-        }
-    }
-    val names = mapOf("TITLE" to "Title", "ARTIST" to "Artist", "ALBUM" to "Album")
-    androidx.compose.material3.AlertDialog(onDismissRequest = { app.vlcinterface.sources.SongId.decline(false) }, containerColor = C.panel,
-        title = { Text("Replace the song's names?", color = C.text) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("MusicBrainz found other names than the ones in the file.", color = C.muted, fontSize = 13.sp)
-                names.forEach { (k, l) ->
-                    val o = a.old[k].orEmpty(); val n = a.new[k].orEmpty()
-                    if (n.isNotEmpty() && o != n) {
-                        Text(l, color = accent(), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
-                        Text("Now: ${o.ifEmpty { "—" }}", color = C.muted, fontSize = 13.sp)
-                        Text("New: $n", color = C.text, fontSize = 13.sp)
-                    }
-                }
-                Text("Closes in $left s with nothing written", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-            }
-        },
-        confirmButton = { androidx.compose.material3.TextButton(onClick = { app.vlcinterface.sources.SongId.accept(ctx) }) { Text("Yes", color = accent()) } },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = { app.vlcinterface.sources.SongId.decline(false) }) { Text("No", color = C.muted) } })
-}

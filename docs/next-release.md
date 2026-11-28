@@ -1637,3 +1637,7 @@
   - Alarm clock settings: Wake check after Stop (Off … 30 min).
 - On / off: the subtitle format's "Bold" is a switch (was a button). Every other on / off setting already was one.
 - Choices that aren't numbers (e.g. Off / Screen flash / Flash light, Hardware / Software, Songs / Radio / All) stay as choice buttons.
+
+## Identify song removed; Sleep centred under play (requested 2026-11-28 10:08)
+- The ♪ Identify button and everything behind it are gone: the MusicBrainz / AcoustID / AudD lookups, the Chromaprint fingerprint library (the APK is smaller), the "replace the names?" question, writing names into tags, the identified radio song on the player, and the settings (Radio → Identify song, Identify by sound, the keys) with their helpers.
+- Sleep is alone under the player buttons, centred under play, in its own row (never shrinks the buttons); solid accent while a sleep timer is set.

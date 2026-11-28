@@ -84,9 +84,6 @@ object SettingHelp {
             "Useful when a save seems to be missing.",
         "MP3 encoder" to "The LAME MP3 encoder bundled with the app, used when the format is MP3. It runs on the phone, no internet needed.\n\n" +
             "LAME is free software (LGPL), included unchanged.",
-        "Identify song" to "The small ♪ Identify button under the play button looks the song up on MusicBrainz — only when you press it, with a second try with a simpler search when the first finds nothing.\n\n" +
-            "Radio: the station's song name is looked up and the result is written to the Server log (no pop-ups).\n\n" +
-            "Songs: the file's tags (or its name) are looked up and the found title, artist and album are written to the file. When the file already has other names, you're asked first; the question closes after this many seconds with nothing written. A song that is playing gets its new names when it's over.",
         "Address: Auto" to "The app picks this location's address by itself, every time it connects:\n\n" +
             "• at home (the phone on the same network as the server): the LAN address;\n" +
             "• on another network where one of the other saved addresses is reachable: that one;\n" +
@@ -102,14 +99,6 @@ object SettingHelp {
         "Touch guard" to "Protects the players' main buttons from accidental touches — play / pause, ⏮ ⏭, −10 / +10, Sleep, ♪ Identify, the sine button, the clock and visualisation buttons, Random / Repeat / RGain and the floating buttons, on the song, radio and video players.\n\n" +
             "A button acts only when the finger stayed on it at least this long without sliding: a brush, a palm, or a touch that turns into a scroll does nothing. The same button pressed again within 0.4 s is ignored, so nothing happens twice.\n\n" +
             "60 ms (default) is shorter than a normal tap, so taps work as always while brushes are ignored; raise it if accidental presses still happen. Off: a plain tap, as before. Long presses and drags work as always.",
-        "Identify by sound" to "♪ Identify can recognise a song by its sound, not only by its name:\n\n" +
-            "• Radio — AudD: the app sends 12 s of what is playing (a small sound clip, mono, about 0.4 MB) and AudD says which song it is, from anywhere in the song. Works also when the station sends no song name. Needs your AudD token; the app's own sound output must be in use (Settings → Audio).\n\n" +
-            "• Songs on the phone or NAS — AcoustID: the app makes the file's fingerprint (its first 2 minutes, on the phone) and AcoustID finds the recording on MusicBrainz. Needs an AcoustID application key.\n\n" +
-            "When recognising by sound finds nothing (or no key is set), the song name is tried on MusicBrainz as before. Every result and why something wasn't found is written to the Server log (audd.io, acoustid.org, musicbrainz.org).",
-        "AudD token" to "1. Open dashboard.audd.io and sign up (e-mail; no card needed).\n2. Copy the API token shown on the dashboard.\n3. Paste it in \"AudD token (radio)\".\n\n" +
-            "The first 300 recognitions are free; after that AudD charges (about \$5 per 1,000). Each ♪ Identify press on the radio uses one. The token is kept in the app's settings (and in the exported setup file).",
-        "AcoustID key" to "1. Open acoustid.org and sign in (with a MusicBrainz account, free).\n2. Go to \"Applications\" → Register a new application: name \"vlc interface\", version 1, any website.\n3. Copy the application's API key.\n4. Paste it in \"AcoustID application key (songs)\".\n\n" +
-            "Free for personal, non-commercial use. It works for whole song files (the fingerprint of their start), not for a moment in the middle of a radio song — that's what AudD is for.",
         "Radio buffer" to "How many minutes of the playing station are kept. A song that started up to this long ago can still be saved whole, and a connection lost and back within this time keeps the recording going.\n\n" +
             "Longer buffers use more phone storage (about 1 MB per minute for MP3 stations, much more for FLAC). The buffer is deleted when you stop the radio or clear caches.",
         // ---------------------------------------------------------------- Network & VPN
