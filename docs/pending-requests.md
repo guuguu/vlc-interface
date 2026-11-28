@@ -23,3 +23,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
     - same setup logic as the main alarms (time, days / repetition …, simplified);
     - the list lives at the bottom of the global alarm settings page, as its own section named "Short notification alarms", with an enable / disable switch on each alarm like the alarms in front of the player;
     - advertised and linked at the top of every alarm settings page, with a link that jumps to that section.
+17. **2026-11-28 01:18 — "Add album to queue" in a queue item's menu:** a long press on a queue item offers "Add album to queue": it inserts the whole content of the folder that song is in (its album) into the queue, without changing the item playing. When the album added is the one of the song playing, the play order switches to Sequential.
