@@ -252,8 +252,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 // Re-checked each time the page is shown (the answer is given in Android's own window).
                 val bctx = androidx.compose.ui.platform.LocalContext.current
                 val free = Battery.unrestricted(bctx)
-                ValueRow("Background playback", if (free) "Battery: Unrestricted — playlists go on while you use other apps"
-                    else "Battery saver may stop playback between songs in the background", if (free) "Unrestricted ✓" else "Allow") { Battery.ask(bctx) }
+                ToggleRow("Background playback", if (free) "Battery: Unrestricted — playlists go on while you use other apps"
+                    else "Battery saver may stop playback between songs in the background", free) { Battery.ask(bctx) }
             }
                 }
                 "audio" -> {
@@ -931,8 +931,8 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                         granted = true
                     } catch (_: Exception) {}
                 }
-                ValueRow("Phone music folders", if (granted) "Album pictures can be saved in phone album folders" else "Allow once (e.g. pick Music) so pictures can be saved next to the songs",
-                    if (granted) "Allowed ✓" else "Allow") { pick.launch(null) }
+                ToggleRow("Phone music folders", if (granted) "Album pictures can be saved in phone album folders" else "Allow once (e.g. pick Music) so pictures can be saved next to the songs",
+                    granted) { pick.launch(null) }
             }
             // Deleting a file for good: only here (not in the lists' menus), with a search like the Songs list / player.
             CardBox {
@@ -1007,7 +1007,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 val vl = app.vlcinterface.sources.VpnLink
                 val up by vl.vpnUp.collectAsState()
                 val busy by vl.searching.collectAsState()
-                ValueRow("Status", if (up) "A VPN is on" else "No VPN on", if (up) "On" else "Off") {}
+                ToggleRow("VPN on", if (up) "A VPN is on (switched in the VPN app)" else "No VPN on (switched in the VPN app)", up) {}
                 if (up) vl.phoneVpnInfo().takeIf { it.isNotEmpty() }?.let { Text(it, color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp)) }
                 Divider()
                 ToggleRow("Home NAS through the VPN", "Away from home with the VPN on, your LAN servers are reached through it — at home, directly", s.vpnNas) { set(s.copy(vpnNas = it)) }

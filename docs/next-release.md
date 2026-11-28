@@ -1661,3 +1661,9 @@
 ## Loading never cuts off the song playing (requested 2026-11-28 10:31)
 - While a song plays, loading a playlist, a folder, a queue, a search selection or a single song (tapped, ▶ Play / Play now, opened from another app) no longer jumps to it: the song playing goes on to its end, and the new items go into the queue right after it — the one picked first, then the rest of its list (Random as chosen). A short note says so: "Added after the song playing — ⏭ starts … now".
 - Unchanged: alarms, going back to a player at its place, radio stations and videos start at once; with nothing playing (or paused), a pick starts as before.
+
+# After 1.101.0
+
+## Every on / off state a switch (requested 2026-11-28 10:33, screenshot "Clock screen saver while charging … ✓")
+- Rows that showed an on / off state as ✓ / Allow / On / Off are switches now, on every settings page: Clock screen saver while charging, Exact alarms, Full-screen alarm, Battery unrestricted (alarm settings → System), Background playback (Playback & gestures), Phone music folders (Library & files), VPN on (VPN page).
+- These are Android's own permissions / settings: the switch shows their state now, and a tap opens Android's page for it (the switch follows when you come back). "VPN on" only shows the state (the VPN is switched in its own app).

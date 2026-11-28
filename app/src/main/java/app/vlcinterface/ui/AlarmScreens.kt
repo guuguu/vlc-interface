@@ -537,20 +537,21 @@ fun ColumnScope.AlarmSettingsBody(nav: Navigator) {
             CardBox {
                 HToggleRow("Next alarm in a notification", "", g.nextInNotif) { set(g.copy(nextInNotif = it)) }; Divider()
                 val exact = AlarmScheduler.canExact(ctx)
-                HValueRow("Exact alarms", if (exact) "Allowed: alarms ring on the minute, also in battery saving" else "Not allowed: alarms may be late",
-                    if (exact) "✓" else "Allow") {
+                // On / off states as switches (2026-11-28 10:33): the switch shows what Android allows now; a tap opens
+                // Android's page for it (the state is read again when you come back).
+                HToggleRow("Exact alarms", if (exact) "Allowed: alarms ring on the minute, also in battery saving" else "Not allowed: alarms may be late", exact) {
                     try { ctx.startActivity(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + ctx.packageName))) } catch (_: Exception) {}
                 }
                 if (Build.VERSION.SDK_INT >= 34) {
                     Divider()
                     val fs = ctx.getSystemService(android.app.NotificationManager::class.java).canUseFullScreenIntent()
-                    HValueRow("Full-screen alarm", if (fs) "The ringing screen shows over the lock screen" else "Not allowed: only a notification", if (fs) "✓" else "Allow") {
+                    HToggleRow("Full-screen alarm", if (fs) "The ringing screen shows over the lock screen" else "Not allowed: only a notification", fs) {
                         try { ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:" + ctx.packageName))) } catch (_: Exception) {}
                     }
                 }
                 Divider()
                 val free = Battery.unrestricted(ctx)
-                HValueRow("Battery", if (free) "Unrestricted" else "Battery saving may delay the app after the alarm", if (free) "✓" else "Allow") { Battery.ask(ctx) }
+                HToggleRow("Battery unrestricted", if (free) "Unrestricted" else "Battery saving may delay the app after the alarm", free) { Battery.ask(ctx) }
             }
 }
 
@@ -761,7 +762,7 @@ internal val HELP: Map<String, String> = mapOf(
     "Next alarm in a notification" to "A quiet notification shows the next alarm.",
     "Exact alarms" to "Android permission needed for alarms to ring on the minute, also in battery saving.",
     "Full-screen alarm" to "Android permission for the ringing screen to turn the screen on over the lock screen. Without it the alarm still rings, but you only get a notification.",
-    "Battery" to "Unrestricted battery use keeps the app from being held back after the alarm.",
+    "Battery unrestricted" to "Unrestricted battery use keeps the app from being held back after the alarm.",
     "Clock aspect" to "How the clock looks: designs, colours, thickness, sizes, date and digital options.",
     "Clock screen saver while charging" to "Android can show an app's screen saver while the phone charges, over the locked phone. This one is your chosen clock, dimmed, drifting very slowly so the screen doesn't burn in. Apps can't draw on the lock screen itself; this is Android's way. Turned on in Android's Screen saver page (the button opens it).",
     "Alarm health" to "Everything Android needs so alarms always ring. A red line has a button to fix it.",
@@ -1081,14 +1082,16 @@ fun musicRootText(g: AlarmGlobal): String = g.localRoot.ifEmpty { knownMusicRoot
 private fun ScreenSaverRow() {
     val ctx = LocalContext.current
     val st = remember(resumeTick()) { app.vlcinterface.alarm.ClockDream.status(ctx) }
-    val (hint, value) = when {
-        !st.available -> "This phone has no screen saver setting (removed by the phone maker)" to "Not available"
-        st.chosen == true && st.enabled != false && st.whileCharging != false -> "On: the dimmed clock shows while the phone charges" to "✓"
-        st.chosen == true -> "Chosen, but Android's screen saver is off or not set to \"While charging\"" to "Turn on"
-        st.chosen == false -> "In Android: Screen saver → \"vlc interface clock\", start \"While charging\"" to "Set up"
-        else -> "Android doesn't tell whether it's on: check in its Screen saver page" to "Open"
+    // A switch (2026-11-28 10:33): on when Android shows this clock while charging; a tap opens Android's screen saver page.
+    val on = st.available && st.chosen == true && st.enabled != false && st.whileCharging != false
+    val hint = when {
+        !st.available -> "This phone has no screen saver setting (removed by the phone maker)"
+        on -> "On: the dimmed clock shows while the phone charges"
+        st.chosen == true -> "Chosen, but Android's screen saver is off or not set to \"While charging\""
+        st.chosen == false -> "Off — in Android: Screen saver → \"vlc interface clock\", start \"While charging\""
+        else -> "Android doesn't tell whether it's on: check in its Screen saver page"
     }
-    HValueRow("Clock screen saver while charging", hint, value) { if (st.available) app.vlcinterface.alarm.ClockDream.open(ctx) }
+    HToggleRow("Clock screen saver while charging", hint, on) { if (st.available) app.vlcinterface.alarm.ClockDream.open(ctx) }
 }
 
 

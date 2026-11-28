@@ -106,7 +106,7 @@ object SettingHelp {
             "SMB1 isn't encrypted and has known weaknesses: fine on your home network, avoid it over the internet. Off: SMB1-only servers can't be opened.\n\nDefault: off.",
         "Spotify links" to "Song links (the ⋯ menu of a song) can include Spotify when you add the Client ID and Secret of a free Spotify developer app.\n\n" +
             "No Spotify login is needed and the keys stay on the phone (exported only with passwords). Without keys, links to other services still work.",
-        "Status" to "Whether a VPN is running on the phone right now, and which app runs it. It updates by itself.",
+        "VPN on" to "Whether a VPN is running on the phone right now, and which app runs it. It updates by itself.",
         "Home NAS through the VPN" to "Away from home with the VPN on, your home servers are reached through the VPN; at home they're reached directly, which is faster.\n\n" +
             "The app learns each server's VPN address the first time it is seen through the VPN. Off: home servers are only used at home.\n\n" +
             "Data: songs stream through the VPN over mobile data when away. Default: on.",
