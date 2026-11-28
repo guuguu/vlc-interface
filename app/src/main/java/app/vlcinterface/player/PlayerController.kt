@@ -1909,6 +1909,40 @@ class PlayerController(private val context: Context, private val store: Store) {
      * [item], in the folder's order, without touching the song playing; songs already in the queue aren't doubled. The
      * album of the song playing: the order switches to Sequential, so the album plays on in order after it.
      */
+    /**
+     * Series queue whatever the episode was opened from (2026-11-28 15:52, "Ted.Lasso.S04E07" played alone: ⏮ ⏭ grey).
+     * When an episode starts and the queue doesn't hold other episodes of its series, its folder (subfolders included)
+     * is read in the background and the series goes into the queue in season / episode order around it — the episode
+     * playing goes on, untouched. Once per episode start; a playlist the user made is left as it is.
+     */
+    private var seriesTried = ""
+    private fun fillSeries(item: PlayItem, origin: Origin) {
+        if (item.isMusic || item.isRadio || origin.kind == "playlist") return
+        if (seriesTried == item.uri) return
+        val me = Episodes.parse(item.fileName.ifEmpty { android.net.Uri.decode(item.uri.substringAfterLast('/')) }) ?: return
+        val inQueue = _state.value.queue.count { q -> !q.isMusic && !q.isRadio &&
+            Episodes.parse(q.fileName.ifEmpty { android.net.Uri.decode(q.uri.substringAfterLast('/')) })?.series == me.series }
+        if (inQueue >= 2) return
+        seriesTried = item.uri
+        bg.launch {
+            val found = try { app.vlcinterface.sources.MusicLibrary.folderDeepOf(context, item) } catch (_: Exception) { emptyList() }
+                .filter { !it.isMusic && !it.isRadio && readable(it) }
+            val series = Episodes.series(found, item) ?: return@launch
+            main.post {
+                val s = _state.value
+                val cur = s.item ?: return@post
+                if (qKey(cur) != qKey(item)) return@post                     // another video started meanwhile
+                val at = series.indexOfFirst { qKey(it) == qKey(cur) }
+                if (at < 0) return@post
+                val q = series.toMutableList().also { it[at] = cur }          // the one playing keeps its own item
+                fullList = q
+                orderedQueue = null
+                _state.value = s.copy(queue = q, index = at)
+                try { app.vlcinterface.ui.ShortNote.show("${q.size} episodes of the series in the queue") } catch (_: Exception) {}
+            }
+        }
+    }
+
     fun addAlbumToQueue(item: PlayItem) {
         bg.launch {
             val album = try { app.vlcinterface.sources.MusicLibrary.folderOf(context, item) } catch (_: Exception) { emptyList() }
@@ -2382,6 +2416,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         voutNow = 0                                                     // picture outputs are counted per item
         session(item, emptyList())
         loadPictureForFile(item)
+        try { fillSeries(item, s0.origin) } catch (_: Throwable) {}            // an episode alone: its series around it (15:52)
         val wanted = store.current.subStyle
         if (wanted != styleInUse || rgSignature() != rgInUse) recreateEngine(wanted)
         setCredentials(item.user, item.password)

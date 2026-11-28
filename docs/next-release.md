@@ -1792,3 +1792,7 @@
 - **Now:**
   - fontconfig gets a cache folder of the app's own (set before libVLC starts), so the list is made once and read back after — the first video after installing may still take a moment, then no more;
   - while a video's picture output is being made, the screen's thread no longer calls libVLC to size the picture or change its format (the format chosen meanwhile is kept): both are applied the moment the picture output exists. So even a slow start can't freeze the screen.
+
+## Series queue whatever the episode was opened from (reported 2026-11-28 15:52, "Ted.Lasso.S04E07…" played alone, ⏮ ⏭ grey)
+- **Why:** the series queue was made only when the episode was tapped in a folder list, and only from the files of that list. Opened from Find, Library → Videos, Browse, another app or a single-file menu, the episode played alone — and episodes in subfolders (one folder per season) were never found.
+- **Now:** whenever an episode starts and the queue doesn't already hold other episodes of its series, its own folder with all its subfolders (phone or network) is read in the background; every file of the same series goes into the queue in season / episode order around it, and a short note says how many. The episode playing goes on untouched; ⏮ ⏭ and Up next work at once. Once per episode start; a playlist you made is left as it is.

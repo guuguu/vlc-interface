@@ -53,6 +53,26 @@ object MusicLibrary {
         return r
     }
 
+    /**
+     * The video's own folder with its subfolders (2026-11-28 15:52): for building a series' queue whatever the video was
+     * opened from (Find, Library → Videos, another app, a single file …). Phone: Android's media list under that folder;
+     * network: the folder read with every subfolder.
+     */
+    suspend fun folderDeepOf(ctx: Context, item: PlayItem): List<PlayItem> {
+        val src = sourceOf(item)
+        val fk = realFolderKey(ctx, item)
+        return try {
+            when {
+                fk.startsWith("local:") -> {
+                    val vol = fk.removePrefix("local:").substringBefore(':'); val rel = fk.removePrefix("local:").substringAfter(':')
+                    collectLocal(ctx, LocalFolder("$vol:$rel", rel, rel, 0, vol), true)
+                }
+                src != null && fk.contains("://") -> collectRecursive(src, fk)
+                else -> emptyList()
+            }
+        } catch (_: Exception) { emptyList() }
+    }
+
     /** The saved location a song belongs to: by its id, else by the server in its address. */
     fun sourceOf(item: PlayItem): Source? {
         val sources = App.instance.store.current.sources
