@@ -1478,19 +1478,11 @@ fun SoundSettings(s: Settings, set: (Settings) -> Unit) {
         val exNoRg = LocalExplain.current
         val half = Math.round(s.noRgDb * 2)
         ValueSlider("Songs without ReplayGain",
-            if (half == 0) "At home: played at the current level until measured"
-            else "At home: played this much lower until measured",
+            if (half == 0) "Every song with no ReplayGain tag: played at the current level until measured"
+            else "Every song with no ReplayGain tag: played this much lower until measured",
             if (half == 0) "0 dB" else "−%.1f dB".format(java.util.Locale.US, -half / 2f), half, -24..0, 1,
             onFirst = { if (AutoHelp.ok("audio", "Songs without ReplayGain")) exNoRg("Songs without ReplayGain", "") }) { v ->
             set(s.copy(noRgDb = v / 2f)); App.instance.player.noRgChanged()
-        }
-        val halfV = Math.round(s.noRgVpnDb * 2)
-        ValueSlider("Songs without ReplayGain over the VPN",
-            if (halfV == 0) "Home NAS away from home (not scanned there): played at the current level"
-            else "Home NAS away from home (not scanned there): played this much lower",
-            if (halfV == 0) "0 dB" else "−%.1f dB".format(java.util.Locale.US, -halfV / 2f), halfV, -24..0, 1,
-            onFirst = { if (AutoHelp.ok("audio", "Songs without ReplayGain over the VPN")) exNoRg("Songs without ReplayGain over the VPN", "") }) { v ->
-            set(s.copy(noRgVpnDb = v / 2f)); App.instance.player.noRgChanged()
         }
         Divider()
         ToggleRow("Prevent clipping", "Uses the peak values in the tags", s.rgClipProtect) { set(s.copy(rgClipProtect = it)) }

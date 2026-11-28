@@ -52,7 +52,7 @@ const val NO_RG_DB = -3f     // default of Settings → Audio → ReplayGain →
 /** Loudness and treble act 30 % deeper than their slider values (same logic, stronger effect). */
 const val TONE_DEPTH = 1.3f
 /** Songs without ReplayGain reached over the VPN: 6 dB lower (not scanned there). */
-const val VPN_NO_RG_DB = -6f     // default of "Songs without ReplayGain over the VPN" (2026-11-28 10:55)     // no ReplayGain: played as it is (no preamp either); the scan question handles it
+const val VPN_NO_RG_DB = -6f     // no longer used: the global "Songs without ReplayGain" setting covers the VPN too     // no ReplayGain: played as it is (no preamp either); the scan question handles it
 
 data class PlayItem(
     val uri: String,
@@ -234,11 +234,9 @@ class PlayerController(private val context: Context, private val store: Store) {
     @Volatile private var rgUri = ""
     private fun overVpnNoRg(item: PlayItem) = item.uri.startsWith("smb://") &&
         try { android.net.Uri.parse(item.uri).host?.let { h -> app.vlcinterface.sources.VpnLink.routeHost(h) != h } == true } catch (_: Exception) { false }
-    /** A song without ReplayGain: its setting — at home (default −3 dB) or over the VPN, where it isn't scanned (default −6 dB). */
-    private fun noRgDb(item: PlayItem): Float {
-        val s = store.current.settings
-        return if (overVpnNoRg(item)) s.noRgVpnDb else s.noRgDb
-    }
+    /** A song without ReplayGain: one global setting (default −3 dB), at home and over the VPN alike (2026-11-28 10:56). */
+    @Suppress("UNUSED_PARAMETER")
+    private fun noRgDb(item: PlayItem): Float = store.current.settings.noRgDb
     private fun dbText(v: Float) = (if (v > 0f) "+" else if (v < 0f) "−" else "") + "%.1f".format(java.util.Locale.US, kotlin.math.abs(v)) + " dB"
 
     /** "Songs without ReplayGain" moved: a playing song without ReplayGain takes the new level at once (app output). */

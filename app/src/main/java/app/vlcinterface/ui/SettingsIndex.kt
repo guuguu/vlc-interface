@@ -31,7 +31,6 @@ val SETTINGS_INDEX: List<SettingsEntry> = listOf(
     E("audio", "Audio", "ReplayGain", "ReplayGain", "", true),
     E("audio", "Audio", "ReplayGain", "ReplayGain (tagged music only)", "", true),
     E("audio", "Audio", "ReplayGain", "Songs without ReplayGain", "", true),
-    E("audio", "Audio", "ReplayGain", "Songs without ReplayGain over the VPN", "", true),
     E("audio", "Audio", "ReplayGain", "Prevent clipping", "Uses the peak values in the tags", true),
     E("audio", "Audio", "ReplayGain", "Automatic ReplayGain for folders", "Phone and home-network songs: a song without it → its whole folder is scanned silently (track gain per song, written into the files' tags); through the VPN you're asked instead", true),
     E("audio", "Audio", "ReplayGain", "Music folders with write access", "", true),
