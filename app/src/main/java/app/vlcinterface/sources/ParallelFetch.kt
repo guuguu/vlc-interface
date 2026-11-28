@@ -146,8 +146,13 @@ object ParallelFetch {
             if (ok) out.fd.sync()                                   // on the storage before it's checked and used
             // Integrity: size, then the content checked against the server (whole file when it will be written
             // back, sampled pieces otherwise). A copy that doesn't match is never used.
+            // 2026-11-28 12:07 (error log): the file is sized in full before copying, so a copy that was stopped or failed
+            // part-way was also logged as "didn't match the server". Now each case says what really happened.
+            val copied = ok
             if (ok) ok = dst.length() == r.size && (if (full) matchesRemote(p, p.uri, dst, maxThreads = maxThreads) else samplesMatch(r, dst))
-            if (!ok && dst.length() == r.size) ServerLog.log(hostOf(p.uri), "integrity", "", "", false, "Copy of ${p.title} didn't match the server — dropped")
+            if (!copied) ServerLog.log(hostOf(p.uri), "integrity", "", "", false,
+                "Copy of ${p.title} not finished (${if (!keepGoing()) "stopped: no longer needed" else "the server stopped sending"}) — dropped")
+            else if (!ok) ServerLog.log(hostOf(p.uri), "integrity", "", "", false, "Copy of ${p.title} didn't match the server — dropped")
             record(hostOf(p.uri), what, r.size, System.currentTimeMillis() - t0, ok)
             return ok
         }

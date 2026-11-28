@@ -107,3 +107,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 55. **2026-11-28 11:45 — Device settings act independently of the players' manual / ReplayGain values, invisibly** (sums not cut at the sliders' limits). Done after 1.103.0, not built yet.
 56. **2026-11-28 11:48 / 11:49 — Clipping in the Sound engine log, once per song / station, with every setting's value.** Done after 1.103.0, not built yet.
 57. **2026-11-28 12:04 — Measured ReplayGain not applied (address written two ways).** Fixed after 1.104.0, not built yet.
+58. **2026-11-28 12:07 — Error log 12:06: waiting writes not called "not written", stopped copies logged as such, no null characters in the zip.** Fixed after 1.104.0, not built yet.

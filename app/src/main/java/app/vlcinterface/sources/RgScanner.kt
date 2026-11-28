@@ -194,6 +194,9 @@ object RgScanner {
                 scope.launch {
                     val written = HashSet<String>(); val lost = ArrayList<Pair<PlayItem, Pair<Long, String>> >()
                     for ((m, rec) in recent) {
+                        // 12:07 (error log, 09:51): a song whose tagged copy is still waiting to be written (it was playing)
+                        // has its values kept in the app meanwhile — that's not "lost", and it isn't scanned again.
+                        if (hasPending(ctx, m.uri) || RgStore.get(m.uri)?.trackGain != null) { written += m.uri; continue }
                         val rg = try { ReplayGain.fromFile(ctx, m.uri, m.user, m.password, m.domain, m.smbVersion) } catch (_: Exception) { null }
                         if (rg?.trackGain != null) written += m.uri
                         else if (RgScanDates.meantForFile(rec.second)) {
@@ -950,6 +953,12 @@ object RgScanner {
             } catch (_: Exception) { /* not reachable now: tried again at the next start */ }
         }
     }
+
+    /** A tagged copy of [uri] is waiting to be written (the song was playing when it was measured). */
+    fun hasPending(ctx: Context, uri: String): Boolean = try {
+        val a = readPending(ctx.applicationContext)
+        (0 until a.length()).any { sameSong(a.getJSONObject(it).optJSONObject("e")?.optString("uri"), uri) }
+    } catch (_: Exception) { false }
 
     @Synchronized private fun addPending(ctx: Context, item: PlayItem, tmp: File) {
         val a = readPending(ctx)
