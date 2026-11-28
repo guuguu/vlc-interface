@@ -299,6 +299,8 @@ fun CardBox(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -
 val PLAYER_BG = Color(0xFF1A1A1A)
 /** Inside a player: buttons and pills get the faint shadow. */
 val LocalInPlayer = androidx.compose.runtime.staticCompositionLocalOf { false }
+/** Pills inside it use the touch guard (the player's own Random / Repeat / RGain). */
+val LocalGuard = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 /**
  * Touch guard on the players' main buttons (2026-11-28 request 39): the action happens only when the finger stayed on
@@ -308,7 +310,7 @@ val LocalInPlayer = androidx.compose.runtime.staticCompositionLocalOf { false }
  */
 object TouchGuard {
     private val last = java.util.concurrent.ConcurrentHashMap<String, Long>()
-    fun ms(): Int = try { App.instance.store.current.settings.touchGuardMs } catch (_: Exception) { 120 }
+    fun ms(): Int = try { App.instance.store.current.settings.touchGuardMs } catch (_: Exception) { 60 }
     fun allow(key: String): Boolean {
         val now = android.os.SystemClock.uptimeMillis()
         val prev = last[key] ?: 0L
@@ -377,7 +379,7 @@ private fun PillBody(text: String, selected: Boolean, modifier: Modifier, filled
             .clip(RoundedCornerShape(18.dp))
             .background(bg)
             .border(1.dp, if (selected || filled) a else C.line, RoundedCornerShape(18.dp))
-            .then(if (LocalInPlayer.current) Modifier.guardClick("pill:$text", onClick = onClick) else Modifier.clickable(onClick = onClick))
+            .then(if (LocalGuard.current) Modifier.guardClick("pill:$text", onClick = onClick) else Modifier.clickable(onClick = onClick))
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) { Text(text, color = fg, fontSize = 14.sp, fontWeight = if (selected || filled) FontWeight.SemiBold else FontWeight.Medium) }

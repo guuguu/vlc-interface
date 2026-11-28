@@ -113,25 +113,16 @@ object NetIndex {
         return withPartial().filterKeys { it.substringBefore('|') in up }.values.flatten().map { MusicLibrary.fromPlEntry(it) }.filter { it.isMusic }
     }
 
-    /** Servers with an index that answer right now (checked in parallel, remembered 20 s). */
-    private suspend fun reachableIds(): Set<String> = kotlinx.coroutines.coroutineScope {
-        val now = System.currentTimeMillis()
+    /**
+     * Servers with an index that answer right now — the same check as the NAS monitor (2026-11-28 08:27, "NAS appears
+     * unreachable often"): this one used to make its own single 1.5 s check and wrote the result over the monitor's, so
+     * one slow answer (NAS busy with a ReplayGain copy) put the NAS off line for 20 s for everything — songs left the
+     * queue, pictures and scans waited. Now one shared, forgiving check (3 failures in a row) for all.
+     */
+    private suspend fun reachableIds(): Set<String> {
         val keys = withPartial().keys
-        val srcs = App.instance.store.current.sources.filter { s -> keys.any { it.startsWith(s.id + "|") } }
-            .filter { s -> s.zone != app.vlcinterface.data.Zone.LAN || VpnLink.atHome(s) || (s.id in VpnLink.useNas.value && VpnLink.vpnUp.value) }
-            .filter { s -> !(VpnLink.ignoreSession && s.zone == app.vlcinterface.data.Zone.LAN) }
-        val up = srcs.map { s ->
-            async {
-                val c = synchronized(upAt) { upAt[s.id] }
-                if (c != null && now - c.first < 20_000) s.id to c.second
-                else {
-                    val ok = Net.reachable(Urls.hostOnly(s.host), if (s.port > 0) s.port else s.defaultPort)
-                    synchronized(upAt) { upAt[s.id] = now to ok }
-                    s.id to ok
-                }
-            }
-        }.map { it.await() }.filter { it.second }.map { it.first }.toHashSet()
-        up
+        val ids = App.instance.store.current.sources.filter { s -> keys.any { it.startsWith(s.id + "|") } }.map { it.id }.toSet()
+        return if (ids.isEmpty()) emptySet() else usableSources(ids)
     }
 
     /**
@@ -221,8 +212,8 @@ object NetIndex {
                         // 3 failed checks in a row turn it off, and failures don't count while this app's own ReplayGain
                         // scan or indexing loads the network (the NAS keeps its state then). One answer turns it back on.
                         val host = Urls.hostOnly(s.host); val port = if (s.port > 0) s.port else s.defaultPort
-                        var ok = try { Net.reachable(host, port) } catch (_: Exception) { false }
-                        if (!ok) ok = try { Net.reachable(host, port, 3_000) } catch (_: Exception) { false }
+                        var ok = try { Net.reachable(host, port, 3_000) } catch (_: Exception) { false }
+                        if (!ok) ok = try { Net.reachable(host, port, 5_000) } catch (_: Exception) { false }
                         val was = c?.second
                         val busy = try { RgScanner.state.value.running || building.isNotEmpty() } catch (_: Exception) { false }
                         val fails = if (ok) 0 else if (busy && was == true) (failCount[s.id] ?: 0) else (failCount[s.id] ?: 0) + 1

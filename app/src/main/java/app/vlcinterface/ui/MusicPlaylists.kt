@@ -589,6 +589,9 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     },
                 )
             }
+            // Touch guard only here (2026-11-28 08:27): the player's own Random / Repeat / RGain pills — not every pill
+            // of the player's pop-ups (the picture search's buttons needed a hold and seemed not to work).
+            androidx.compose.runtime.CompositionLocalProvider(LocalGuard provides true) {
             AutoFitRow(spacing = 8.dp) {
                 // 2026-11-28 01:16: an active Random / Repeat / RGain is filled with the app's main (accent) colour.
                 if (!radio) Pill(if (st.settings.shuffle) "Random" else "Sequential", selected = st.settings.shuffle, filled = st.settings.shuffle) { player.setShuffle(!st.settings.shuffle) }
@@ -612,6 +615,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                         if (rg?.trackGain != null && rg.albumGain != null) rgAsk = rg else player.toggleReplayGain()
                     }
                 }
+            }
             }
             }
             val rowUpNext: @Composable () -> Unit = {

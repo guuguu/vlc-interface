@@ -244,7 +244,7 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 ValueRow("Touch guard", if (s.touchGuardMs == 0) "Off: player buttons act on a plain tap"
                     else "Player buttons act after a ${s.touchGuardMs} ms hold without sliding; the same button again within 0.4 s is ignored",
                     if (s.touchGuardMs == 0) "Off" else "${s.touchGuardMs} ms") {
-                    val opts = listOf(120, 160, 200, 300, 0, 60, 80, 100)
+                    val opts = listOf(60, 80, 100, 120, 160, 200, 0, 40)
                     set(s.copy(touchGuardMs = opts[(opts.indexOf(s.touchGuardMs) + 1).mod(opts.size)]))
                     if (AutoHelp.ok("playback", "Touch guard")) explainNow("Touch guard", "")
                 }

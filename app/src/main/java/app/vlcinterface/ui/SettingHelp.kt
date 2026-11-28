@@ -101,7 +101,7 @@ object SettingHelp {
             "A long press on any setting always shows its explanation, whatever is chosen here.",
         "Touch guard" to "Protects the players' main buttons from accidental touches — play / pause, ⏮ ⏭, −10 / +10, Sleep, ♪ Identify, the sine button, the clock and visualisation buttons, Random / Repeat / RGain and the floating buttons, on the song, radio and video players.\n\n" +
             "A button acts only when the finger stayed on it at least this long without sliding: a brush, a palm, or a touch that turns into a scroll does nothing. The same button pressed again within 0.4 s is ignored, so nothing happens twice.\n\n" +
-            "120 ms (default) is hardly noticeable on a normal tap. Off: a plain tap, as before. Long presses and drags work as always.",
+            "60 ms (default) is shorter than a normal tap, so taps work as always while brushes are ignored; raise it if accidental presses still happen. Off: a plain tap, as before. Long presses and drags work as always.",
         "Identify by sound" to "♪ Identify can recognise a song by its sound, not only by its name:\n\n" +
             "• Radio — AudD: the app sends 12 s of what is playing (a small sound clip, mono, about 0.4 MB) and AudD says which song it is, from anywhere in the song. Works also when the station sends no song name. Needs your AudD token; the app's own sound output must be in use (Settings → Audio).\n\n" +
             "• Songs on the phone or NAS — AcoustID: the app makes the file's fingerprint (its first 2 minutes, on the phone) and AcoustID finds the recording on MusicBrainz. Needs an AcoustID application key.\n\n" +
