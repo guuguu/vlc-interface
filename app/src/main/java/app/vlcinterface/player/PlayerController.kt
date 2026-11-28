@@ -677,6 +677,53 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (target <= 0) 1f else (1f - volumeNowPct() / target).coerceIn(0f, 1f)
     } catch (_: Throwable) { 1f }     // never takes the app down: the whole correction then
 
+    /**
+     * Sound check (2026-11-28 13:34): every setting of the app's own that changes the sound of the item playing now,
+     * with its value and what it does — the level built step by step, the tone, the volumes.
+     */
+    fun chainReport(): List<Pair<String, String>> {
+        val s = _state.value; val st = store.current; val set = st.settings; val dev = currentOutputName
+        val item = s.item
+        fun db(v: Float) = (if (v > 0f) "+" else if (v < 0f) "−" else "±") + "%.1f".format(java.util.Locale.US, kotlin.math.abs(v)) + " dB"
+        fun n(v: Float) = "%.1f".format(java.util.Locale.US, v)
+        val r = ArrayList<Pair<String, String>>()
+        val music = item?.isMusic == true; val radio = item?.isRadio == true
+        val tone = set.toneSliders && (music || radio)
+        // Level, step by step (what applySoundChain adds up).
+        r += "Preamp (Settings → Audio, all items)" to db(set.preampDb)
+        r += "Preamp of this output (\"$dev\")" to db(st.devicePreamp[dev] ?: 0f)
+        if (music) {
+            r += "ReplayGain mode" to set.rgMode + " · in use: " + (rgModeFor(s)) + (if (s.rgInfo.isNotEmpty()) " — ${s.rgInfo}" else "")
+            r += "ReplayGain level used" to db(rgDb) + (if (s.noRgShownDb != 0f) " (no ReplayGain: \"Songs without ReplayGain\" ${db(set.noRgDb)})" else
+                " (track / album value + ReplayGain pre-amp ${db(set.rgPreampDb)})")
+            r += "Prevent clipping" to if (!set.rgClipProtect) "off" else if (rgPeak > 0f) "on — the song's peak ${"%.3f".format(java.util.Locale.US, rgPeak)} caps the total at ${db(-20f * log10(rgPeak))}" else "on (no peak value known for this song)"
+        }
+        if (radio) r += "No-ReplayGain correction (radio)" to (if (set.rgMode == "off") "none (ReplayGain off)" else db(s.noRgShownDb))
+        if (tone) r += "Player Preamp (this ${if (radio) "station" else "song"})" to db(s.radioPreDb) + " (follows Loudness / Treble so the level stays)"
+        val loudComp = try { deviceLoudComp() } catch (_: Throwable) { 0f }
+        if (loudComp != 0f) r += "Level made up for the output's Loudness" to db(loudComp)
+        r += "Total digital level now" to db(lastTotalDb) + (if (lastTotalDb > 0f) " — above 0 dB: the limiter catches the peaks" else "")
+        r += "Balance of this output" to (st.deviceBalance[dev] ?: 0).let { if (it == 0) "centre" else if (it < 0) "left $it" else "right $it" }
+        // Tone.
+        r += "Tone sliders" to if (set.toneSliders) "on" else "off (the player's Loudness / Treble / Preamp do nothing)"
+        val devLoud = st.deviceLoud[dev] ?: 0f; val devTr = st.deviceTreble[dev] ?: 0f
+        r += "Loudness" to "player ${n(if (tone) s.loudDb else 0f)} + output ${n(devLoud)}" +
+            (if (set.autoLoud) " · Auto loudness on: used now ${n(autoLoudness(((if (tone) s.loudDb else 0f) + devLoud).coerceIn(0f, 30f)))} at ${volumeNowPct().toInt()} % volume (flat from ${st.deviceLoudFrom[dev] ?: 50} %)" else " · Auto loudness off") +
+            " — ISO 226 curve as cuts (−26 dB at most per band), ${"%.0f".format((TONE_DEPTH - 1) * 100)} % deeper than the plain curve"
+        val trTotal = ((if (tone) s.trebleDb else 0f) + devTr).coerceIn(-10f, 10f)
+        val fl = trebleFlatten()
+        r += "Treble" to "player ${n(if (tone) s.trebleDb else 0f)} + output ${n(devTr)} = ${n(trTotal)} → ${db(trTotal * set.trebleMaxDb / 5f * fl)} now" +
+            (if (set.trebleFlatPct > 0) " (flatten at ${set.trebleFlatPct} %: ${"%.0f".format(fl * 100)} % of it left at this volume)" else "")
+        r += "Treble band" to "${set.trebleType} at ${set.trebleHz} Hz, " + (if (set.trebleType == "peak") "Q ${set.trebleQ}" else "slope ${set.trebleSlope}") +
+            ", ±${"%.0f".format(set.trebleMaxDb)} dB at ±5" + (if (set.trebleHz < 3000 && set.trebleType == "shelf") " — a shelf this low also moves the upper mids (sound can turn dull / bright)" else "")
+        // Volumes and format chosen by the app.
+        r += "Phone volume / app volume" to "${volumeNowPct().toInt()} % / ${"%.0f".format(appVolume * 100)} %"
+        r += "Sound engine" to if (NativeAudio.active) "app output" else "libVLC output (${NativeAudio.reason})"
+        r += "libVLC → app" to "16-bit PCM (libVLC's output for apps; files with more bits are cut to 16 before the engine)"
+        r += "Network buffer" to (if (radio) "5 s" else if (music) "8 s" else "4 s") + " (libVLC network caching)"
+        return r
+    }
+
     /** Phone volume changed (buttons, speaker): Auto loudness follows at once. */
     private val volumeRx = object : android.content.BroadcastReceiver() {
         override fun onReceive(c: Context, i: android.content.Intent) {

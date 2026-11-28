@@ -108,6 +108,32 @@ object SoundCheck {
             }
         }
 
+        // 4b. Dynamics, bandwidth and tone, measured on what came in and what went out (2026-11-28 13:34).
+        progress("Measuring dynamics and bandwidth…")
+        val mIn = FloatArray(inN) { i -> (capIn[i * 2] + capIn[i * 2 + 1]) / 65536f }
+        val mOut = FloatArray(outN) { i -> (capOut[i * 2] + capOut[i * 2 + 1]) / 2f }
+        val dIn = dynamics(mIn, src, capIn, inN); val dOut = dynamics(mOut, dev, null, 0)
+        val dynRows = ArrayList<Pair<String, String>>()
+        dynRows += "Peak (in → out)" to "${dIn.peakDb} → ${dOut.peakDb}"
+        dynRows += "Average level, RMS (in → out)" to "${dIn.rmsDb} → ${dOut.rmsDb}"
+        dynRows += "Crest factor, peak − RMS (in → out)" to "${dIn.crest} → ${dOut.crest}" +
+            dIn.crestVal.let { a -> dOut.crestVal.let { b -> if (a - b > 0.5f) " — the engine took ${"%.1f".format(java.util.Locale.US, a - b)} dB of punch (limiter)" else " — dynamics kept" } }
+        dynRows += "Loudness range, 0.4 s blocks 10–95 % (in → out)" to "${dIn.range} → ${dOut.range}"
+        dynRows += "Clipped samples in libVLC's sound" to if (dIn.clipped == 0) "none" else "${dIn.clipped} at full scale (clipping already in the file or in libVLC's decoding)"
+        val spIn = spectrum(mIn, src); val spOut = spectrum(mOut, dev)
+        val bwRows = ArrayList<Pair<String, String>>()
+        bwRows += "Highest frequency with sound (in → out)" to "${spIn.rolloff} → ${spOut.rolloff}" +
+            (spIn.rolloffHz.let { h -> if (h in 1..16_500) " — the source stops near ${h / 1000} kHz (typical of lossy coding or a low bitrate)" else "" })
+        bwRows += "Lowest frequency with sound (in)" to spIn.lowEnd
+        if (spIn.bands.isNotEmpty() && spOut.bands.isNotEmpty()) {
+            val line = BANDS.indices.joinToString(" · ") { i -> "${BAND_NAMES[i]} ${"%+.1f".format(java.util.Locale.US, (spOut.bands[i] - spIn.bands[i]) - (spOut.mean - spIn.mean))}" }
+            bwRows += "Tone change by the engine, per band (out − in, level change removed)" to line + " dB"
+            val treble = listOf(6, 7, 8).map { spOut.bands[it] - spIn.bands[it] }.average() - (spOut.mean - spIn.mean)
+            if (treble < -1.5) bwRows += "Treble" to "%.1f dB less from 4 kHz up — sounds dull / dampened (Treble, Treble band, Loudness)".format(java.util.Locale.US, -treble)
+            else if (treble > 1.5) bwRows += "Treble" to "%.1f dB more from 4 kHz up — sounds brighter".format(java.util.Locale.US, treble)
+        }
+        val fileRows = fileInfo(ctx, item)
+
         // 5. Output.
         val outRows = ArrayList<Pair<String, String>>()
         outRows += "Output" to player.currentOutputName.ifEmpty { "phone default" }
@@ -123,11 +149,134 @@ object SoundCheck {
         outRows += "Phone sound effects" to "an app can't read them; with no audio session, per-app effects (e.g. Dolby, Adapt Sound) may apply differently than to other players"
 
         Report("Sound check · ${item.title}" + when { item.isRadio -> " (radio)"; !item.isMusic -> " (video)"; else -> "" },
-            listOf("Decoding (libVLC vs Android)" to decRows, "App's sound engine" to engRows, "Output" to outRows),
+            listOf("Source (format, bitrate)" to fileRows, "Decoding (libVLC vs Android)" to decRows, "App's sound engine" to engRows,
+                "The app's corrections now" to (try { player.chainReport() } catch (_: Throwable) { emptyList() }),
+                "Dynamics (measured)" to dynRows, "Bandwidth and tone (measured)" to bwRows, "Output" to outRows),
             "Captured $seconds s from ${fmt(posMs)}. Share or copy this to compare.")
     }
 
     private fun fmt(ms: Long) = "%d:%02d".format(ms / 60000, ms / 1000 % 60)
+
+    // ---------- dynamics, bandwidth, format (2026-11-28 13:34) ----------
+    private class Dyn(val peakDb: String, val rmsDb: String, val crest: String, val crestVal: Float, val range: String, val clipped: Int)
+    private fun dbf(x: Double) = if (x <= 1e-9) "−∞ dBFS" else "%.1f dBFS".format(java.util.Locale.US, 20 * log10(x))
+
+    private fun dynamics(x: FloatArray, rate: Int, raw: ShortArray?, rawN: Int): Dyn {
+        if (x.isEmpty() || rate <= 0) return Dyn("—", "—", "—", 0f, "—", 0)
+        var pk = 0.0; var sum = 0.0
+        for (v in x) { val a = abs(v.toDouble()); if (a > pk) pk = a; sum += v * v.toDouble() }
+        val rms = sqrt(sum / x.size)
+        val crest = if (rms > 0) (20 * log10(pk / rms)).toFloat() else 0f
+        val blk = (rate * 0.4).toInt().coerceAtLeast(1)
+        val levels = ArrayList<Double>()
+        var i = 0
+        while (i + blk <= x.size) { var s = 0.0; for (k in i until i + blk) s += x[k] * x[k].toDouble(); val r = sqrt(s / blk); if (r > 1e-5) levels += 20 * log10(r); i += blk }
+        levels.sort()
+        val range = if (levels.size < 4) "—" else "%.1f dB".format(java.util.Locale.US, levels[(levels.size * 0.95).toInt().coerceAtMost(levels.size - 1)] - levels[(levels.size * 0.10).toInt()])
+        var clipped = 0
+        if (raw != null) for (k in 0 until rawN * 2) if (raw[k] >= 32767 || raw[k] <= -32768) clipped++
+        return Dyn(dbf(pk), dbf(rms), "%.1f dB".format(java.util.Locale.US, crest), crest, range, clipped)
+    }
+
+    private val BANDS = intArrayOf(40, 100, 250, 500, 1000, 2000, 4000, 8000, 12000, 16000)
+    private val BAND_NAMES = listOf("40", "100", "250", "500", "1k", "2k", "4k", "8k", "12k", "16k")
+    private class Spec(val bands: DoubleArray, val mean: Double, val rolloff: String, val rolloffHz: Int, val lowEnd: String)
+
+    /** Average spectrum (8192-point FFT, Hann, up to 48 windows), band levels and where the sound ends. */
+    private fun spectrum(x: FloatArray, rate: Int): Spec {
+        val n = 8192
+        if (x.size < n || rate <= 0) return Spec(DoubleArray(0), 0.0, "—", 0, "—")
+        val pow = DoubleArray(n / 2)
+        val win = DoubleArray(n) { 0.5 - 0.5 * kotlin.math.cos(2 * Math.PI * it / (n - 1)) }
+        val hops = ((x.size - n) / (n / 2) + 1).coerceAtMost(48)
+        val step = if (hops <= 1) 0 else (x.size - n) / (hops - 1)
+        val re = DoubleArray(n); val im = DoubleArray(n)
+        for (h in 0 until hops) {
+            val off = h * step
+            for (k in 0 until n) { re[k] = x[off + k] * win[k]; im[k] = 0.0 }
+            fft(re, im)
+            for (k in 0 until n / 2) pow[k] += re[k] * re[k] + im[k] * im[k]
+        }
+        val dbs = DoubleArray(n / 2) { k -> 10 * log10(pow[k] / hops + 1e-20) }
+        val hz = rate.toDouble() / n
+        fun bandDb(f: Int): Double {                      // ⅓-octave around f
+            val lo = (f / 1.122 / hz).toInt().coerceIn(1, n / 2 - 1); val hi = (f * 1.122 / hz).toInt().coerceIn(lo, n / 2 - 1)
+            var s = 0.0; for (k in lo..hi) s += pow[k] / hops; return 10 * log10(s / (hi - lo + 1) + 1e-20)
+        }
+        val bands = DoubleArray(BANDS.size) { if (BANDS[it] < rate / 2) bandDb(BANDS[it]) else -200.0 }
+        val mean = bands.filter { it > -199 }.average()
+        // Where the sound ends: the highest bin (smoothed over ~200 Hz) above (loudest − 70 dB).
+        val top = dbs.maxOrNull() ?: 0.0
+        val sm = (200 / hz).toInt().coerceAtLeast(1)
+        var roll = 0
+        for (k in n / 2 - sm - 1 downTo sm) { var s = 0.0; for (j in k - sm until k + sm) s += dbs[j]; if (s / (2 * sm) > top - 70) { roll = (k * hz).toInt(); break } }
+        var low = 0
+        for (k in 1 until n / 2) if (dbs[k] > top - 40) { low = (k * hz).toInt(); break }
+        return Spec(bands, mean, if (roll > 0) "%.1f kHz".format(java.util.Locale.US, roll / 1000.0) else "—", roll, if (low > 0) "$low Hz" else "—")
+    }
+
+    private fun fft(re: DoubleArray, im: DoubleArray) {
+        val n = re.size
+        var j = 0
+        for (i in 1 until n) { var bit = n shr 1; while (j and bit != 0) { j = j xor bit; bit = bit shr 1 }; j = j xor bit
+            if (i < j) { var t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t } }
+        var len = 2
+        while (len <= n) {
+            val ang = -2 * Math.PI / len; val wr = kotlin.math.cos(ang); val wi = kotlin.math.sin(ang)
+            var i = 0
+            while (i < n) {
+                var cr = 1.0; var ci = 0.0
+                for (k in 0 until len / 2) {
+                    val ar = re[i + k + len / 2] * cr - im[i + k + len / 2] * ci; val ai = re[i + k + len / 2] * ci + im[i + k + len / 2] * cr
+                    re[i + k + len / 2] = re[i + k] - ar; im[i + k + len / 2] = im[i + k] - ai; re[i + k] += ar; im[i + k] += ai
+                    val ncr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = ncr
+                }
+                i += len
+            }
+            len = len shl 1
+        }
+    }
+
+    /** The source: codec, rate, channels, bits, bitrate (the file's own, or the station's). */
+    private fun fileInfo(ctx: Context, item: PlayItem): List<Pair<String, String>> {
+        val r = ArrayList<Pair<String, String>>()
+        if (item.isRadio) {
+            val meta = try { App.instance.store.current.stations.firstOrNull { it.url == item.uri }?.meta ?: "" } catch (_: Exception) { "" }
+            r += "Station" to (meta.ifEmpty { "no details from the directory" })
+            val br = Regex("(\\d{2,4})\\s*k").find(meta)?.groupValues?.get(1)?.toIntOrNull()
+            if (br != null) r += "Bitrate" to "$br kbit/s" + when { meta.contains("flac", true) -> " (lossless)"; br < 128 -> " — low: highs above ~15 kHz are usually cut"; br < 192 -> " — highs above ~16 kHz are usually cut"; else -> "" }
+            return r
+        }
+        val ex = MediaExtractor(); var ds: android.media.MediaDataSource? = null
+        try {
+            val u = item.uri
+            when {
+                u.startsWith("content://") -> ex.setDataSource(ctx, Uri.parse(u), null)
+                u.startsWith("file://") -> ex.setDataSource(Uri.parse(u).path!!)
+                u.startsWith("/") -> ex.setDataSource(u)
+                u.startsWith("smb://") -> { ds = app.vlcinterface.sources.RgScanner.SmbSource(jcifs.smb.SmbFile(app.vlcinterface.sources.VpnLink.route(Uri.decode(u)),
+                    app.vlcinterface.sources.SmbProbe.fileContext(item.smbVersion, item.user, item.password, item.domain))); ex.setDataSource(ds) }
+                u.startsWith("http") -> ex.setDataSource(u, emptyMap())
+                else -> { r += "File" to "can't be read here"; return r }
+            }
+            val ti = (0 until ex.trackCount).firstOrNull { ex.getTrackFormat(it).getString(MediaFormat.KEY_MIME)?.startsWith("audio/") == true }
+                ?: run { r += "File" to "no sound track found"; return r }
+            val f = ex.getTrackFormat(ti)
+            val mime = f.getString(MediaFormat.KEY_MIME) ?: ""
+            val lossless = mime.contains("flac") || mime.contains("raw") || mime.contains("wav") || mime.contains("alac") || mime.contains("ape")
+            r += "Codec" to mime.substringAfter("audio/") + if (lossless) " (lossless)" else " (lossy)"
+            r += "Sample rate / channels" to "${f.getInteger(MediaFormat.KEY_SAMPLE_RATE)} Hz · ${f.getInteger(MediaFormat.KEY_CHANNEL_COUNT)} ch"
+            if (f.containsKey("bits-per-sample")) r += "Bit depth" to "${f.getInteger("bits-per-sample")} bit" + if (f.getInteger("bits-per-sample") > 16) " — libVLC hands the app 16 bit" else ""
+            val durUs = if (f.containsKey(MediaFormat.KEY_DURATION)) f.getLong(MediaFormat.KEY_DURATION) else 0L
+            val size = ds?.size ?: try { if (u.startsWith("content://")) ctx.contentResolver.openAssetFileDescriptor(Uri.parse(u), "r")?.use { it.length } ?: 0L else java.io.File(Uri.parse(u).path ?: u).length() } catch (_: Exception) { 0L }
+            val br = if (f.containsKey(MediaFormat.KEY_BIT_RATE)) f.getInteger(MediaFormat.KEY_BIT_RATE) / 1000
+                else if (size > 0 && durUs > 0) (size * 8 * 1000 / durUs).toInt() else 0
+            if (br > 0) r += "Bitrate" to "$br kbit/s" + (if (!lossless && br < 192) " — low for lossy: highs and detail may be missing" else "") +
+                (if (!f.containsKey(MediaFormat.KEY_BIT_RATE)) " (average, from size and length)" else "")
+        } catch (e: Exception) { r += "File" to "couldn't be read (${e.message ?: e.javaClass.simpleName})" }
+        finally { try { ex.release() } catch (_: Exception) {}; try { ds?.close() } catch (_: Exception) {} }
+        return r
+    }
 
     // ---------- independent decode ----------
     class Decoded(val pcm: ShortArray, val frames: Int, val rate: Int, val channels: Int, val encoding: String, val encodingBits: Int)
