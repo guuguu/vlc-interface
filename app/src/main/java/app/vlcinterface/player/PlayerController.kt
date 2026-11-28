@@ -2426,13 +2426,13 @@ class PlayerController(private val context: Context, private val store: Store) {
             media.addOption(":brightness=$b")
             media.addOption(":gamma=$g")
         }
-        // Bigger read-ahead so a busy phone or network never runs the decoder dry (smooth playback):
-        // songs keep 3 s from the network / 1.5 s from the phone; videos 2.5 s / 1 s (seeking stays quick).
+        // Bigger read-ahead so a busy phone or network never runs the decoder dry (smooth playback). 2026-11-28 request 35:
+        // songs keep 8 s from the network (was 3 s), radio 5 s, the phone 1.5 s; videos 4 s / 1 s (seeking stays quick).
         when {
             // Radio as an alarm: live, no network buffer.
-            item.isRadio -> media.addOption(if (alarmLive) ":network-caching=0" else ":network-caching=3000")
-            item.isMusic -> { media.addOption(":network-caching=3000"); media.addOption(":file-caching=1500") }
-            else -> { media.addOption(":network-caching=2500"); media.addOption(":file-caching=1000") }
+            item.isRadio -> media.addOption(if (alarmLive) ":network-caching=0" else ":network-caching=5000")   // radio 5 s: a station still starts quickly
+            item.isMusic -> { media.addOption(":network-caching=8000"); media.addOption(":file-caching=1500") }
+            else -> { media.addOption(":network-caching=4000"); media.addOption(":file-caching=1000") }
         }
         if (item.startMs >= 0) media.addOption(":start-time=${item.startMs / 1000.0}")
         if (item.endMs > 0) media.addOption(":stop-time=${item.endMs / 1000.0}")

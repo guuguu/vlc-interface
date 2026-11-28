@@ -96,6 +96,9 @@ object SettingHelp {
         "Address: +" to "Adds another address for the same server by hand — an IP or a name, e.g. its address on ZeroTier / Tailscale or a second LAN address. " +
             "Its folders, files and index stay the same; only the way to reach it changes.\n\n" +
             "The new address joins the list on the right (tap it to always use it; Auto may pick it too). Long-press an added address to remove it.",
+        "Touch guard" to "Protects the players' main buttons from accidental touches — play / pause, ⏮ ⏭, −10 / +10, Sleep, ♪ Identify, the sine button, the clock and visualisation buttons, Random / Repeat / RGain and the floating buttons, on the song, radio and video players.\n\n" +
+            "A button acts only when the finger stayed on it at least this long without sliding: a brush, a palm, or a touch that turns into a scroll does nothing. The same button pressed again within 0.4 s is ignored, so nothing happens twice.\n\n" +
+            "120 ms (default) is hardly noticeable on a normal tap. Off: a plain tap, as before. Long presses and drags work as always.",
         "Radio buffer" to "How many minutes of the playing station are kept. A song that started up to this long ago can still be saved whole, and a connection lost and back within this time keeps the recording going.\n\n" +
             "Longer buffers use more phone storage (about 1 MB per minute for MP3 stations, much more for FLAC). The buffer is deleted when you stop the radio or clear caches.",
         // ---------------------------------------------------------------- Network & VPN
@@ -222,6 +225,8 @@ object SettingHelp {
             "'+ Create' opens the colour editor; the ▶ / ❚❚ symbol turns dark or white by itself to stay readable. Default: the accent colour.",
         "Floating button transparency" to "How see-through the floating play / pause button is: 0 % is solid, higher lets the list show through it.\n\n" +
             "It stays fully usable at any transparency. Default: 15 %.",
+        "Alarms shown under the clock" to "How many alarm rows the box under the clock on the players shows at once (1–10, default 5). With more alarms, the list scrolls inside the box.\n\n" +
+            "The alarms are listed in ringing order: the next one to ring on top (a snoozed one at its snooze time), then the following ones; switched-off alarms come last. So with 2, you always see the next two alarms.",
         "Alarm rows under the clock" to "Height of each alarm row in the list under the clock on the player (and the alarms list), as a share of the original rows.\n\n" +
             "50 % fits twice as many alarms in the same space; the list shows every alarm and scrolls on its own when they don't all fit. Low rows show the name and repetition on one line; from 75 % on two.\n\n" +
             "The wide switch of each row shrinks with it but stays easy to hit. Default: 50 %.",

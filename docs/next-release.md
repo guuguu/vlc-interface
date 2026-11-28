@@ -1553,3 +1553,28 @@
   - Slightly long press: Loudness, Treble and Preamp back to 0 at once, and the sound profile kept for the song (or station) playing is removed. A short note confirms; written to the Player log.
   - Short tap: only a short hint ("Hold to reset Loudness, Treble and Preamp to 0 …"), nothing changes.
 - **Radio player the same (confirmed 2026-11-28 02:22):** ♪ Identify (result to the log), Sleep (time choices only) and the reset button sit in the same places on the radio player; the reset removes the station's own sound profile, and a station left at 0 / 0 / 0 isn't given a new one when you switch stations.
+
+## Android 10 and Huawei (requests 14 / 29)
+- **Installs on Android 10 and 11 now** (was Android 12 and newer): e.g. Huawei with EMUI 12 / HarmonyOS, which run Android 10. Android 12+ phones are unchanged.
+- On Android 10 / 11: exact alarms need no permission (the red alarm warning doesn't ask for it); Bluetooth needs no "Nearby devices"; the vibration, full-screen bars, the player notification and the safe-area padding use the older calls; ReplayGain for phone files without folder access stays in the app (no write request there); "All files access" is the storage permission. The crash notice from Android's exit records needs Android 11 (the app's own crash log works everywhere).
+- **Huawei / Honor:** the app needs no Google services. Alarm health and the "Keep playing in the background" question explain Huawei's App launch (switch off "Manage automatically", allow Auto-launch, Secondary launch, Run in background) and open that page directly ("App launch" / "Open"); Xiaomi's Autostart page too.
+
+## Throttling finished, with a speed floor (requests 30 / 34)
+- **ReplayGain network reads:** kept to 70 % of the measured network maximum (was 60 %).
+- **Indexing:** its tag reads now count too: the first 60 s of real reading measure the files per second at full speed, then indexing is kept to 70 % of that rate for the session (the Server log says both numbers). Parallel reads aren't cut.
+- **CPU:** ReplayGain measuring runs at background priority and rests a fifth of the time it works — about 83 % of full speed, the phone cooler and playback first.
+- So indexing and ReplayGain stay at least 70 % as fast as in 1.92.
+
+## Location cards in order (requests 31 / 32)
+- Header: the share's name on one line, its address under it.
+- **Address:** a grid — Auto and + in the left column, one address per row on the right (LAN / VPN / Other on the left, the IP on the right, aligned); each address once (the repeated LAN address is gone). "In use: … (LAN / VPN)". Helpers for Auto and + (long press; once per session on a tap with Helpers on).
+- **Folders:** one row per folder with its own 🔍 Index on the right. **+ Folder · ↻ Rescan · 🗑 Delete** as equal buttons. **Write access:** the state on the left, "Check" on the right, inside the card.
+- **LAN storage with a VPN address shows again under Internet** as a linked card (🔗): same folders, index and login, at its VPN address with its own Online state; edited and deleted with the LAN card.
+
+## Smaller ones
+- **Add a station by URL (33):** a second field, "Displayed name (optional)"; empty = the name found as before.
+- **Longer buffers and time-outs (35):** songs keep 8 s from the network (was 3 s), radio 5 s (was 3 s, still starting quickly), videos 4 s (was 2.5 s); NAS file reads wait 15 s for an answer (was 6 s) before failing, web streams 30 s (was 20 s); server checks keep their short times so an unreachable NAS is still noticed quickly. Songs up to 250 MB are cached ahead (was 100 MB).
+- **Alarms under the clock in ringing order (36):** the next to ring on top (a snoozed one at its snooze time), switched-off alarms last; re-sorted every minute and on any change.
+- **Alarms shown under the clock (37):** Look → 1–10 rows (default 5), with a helper.
+- **Identified radio song on the player (38):** after ♪ Identify finds it, the title (big) and artist · album show in place of "Live" / the station's text. Taken off on pause / stop, another station, the station's own text changing, a pause in the sound (1.5 s), or a rhythm change (the bass beat's tempo moving over 15 % for 3 s, or the beat lost and a new one starting); each removal is logged with its reason.
+- **Touch guard (39):** the players' main buttons (play / pause, ⏮ ⏭, −10 / +10, Sleep, Identify, sine, clock / visualisation, Random / Repeat / RGain, floating buttons; video play) act only after a 120 ms hold without sliding; the same button again within 0.4 s is ignored. Playback & gestures → "Touch guard" (Off … 300 ms), helper; Helpers now have a Playback & gestures switch too.

@@ -37,7 +37,7 @@ object Prefetch {
     private const val BUSY_MS = 2 * 60_000L
     private const val CALM_MS = 5 * 60_000L
     private val done = java.util.concurrent.ConcurrentHashMap<String, File>()   // uri → complete copy
-    private const val MAX_BYTES = 100L * 1024 * 1024             // bigger songs aren't cached
+    private const val MAX_BYTES = 250L * 1024 * 1024             // bigger songs aren't cached (2026-11-28: was 100 MB — long hi-res FLAC)
     private const val MIN_FREE = 2L * 1024 * 1024 * 1024         // never under 2 GB free
 
     fun init(ctx: Context) {

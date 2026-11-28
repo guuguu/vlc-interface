@@ -394,7 +394,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 }
                 if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("−${st.settings.doubleTapSeekSec}", 44) { player.seekBy(-st.settings.doubleTapSeekSec * 1000L) } }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size((76 * btnScale()).dp).liteShadow(CircleShape).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
+                Box(Modifier.size((76 * btnScale()).dp).liteShadow(CircleShape).clip(CircleShape).background(accent()).guardClick("play") { player.togglePause() }, contentAlignment = Alignment.Center) {
                     Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (26 * btnScale()).sp, fontWeight = FontWeight.Bold)
                 }
                 // Under play, close to it (2026-11-28 mock-up v3): ♪ Identify and Sleep side by side; the row may be wider than
@@ -403,7 +403,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                 val idStatus by app.vlcinterface.sources.SongId.status.collectAsState()
                 Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.clip(RoundedCornerShape(10.dp)).background(Color(0x24FFFFFF))
-                        .clickable { sleepScope.launch { app.vlcinterface.sources.SongId.identify(idCtx, item, p.nowPlaying) } }
+                        .guardClick("identify") { sleepScope.launch { app.vlcinterface.sources.SongId.identify(idCtx, item, p.nowPlaying) } }
                         .padding(horizontal = 8.dp, vertical = 3.dp)) {
                         Text(idStatus.ifEmpty { "♪ Identify" }, color = if (idStatus.isEmpty()) C.muted else accent(), fontSize = 10.sp, maxLines = 1)
                     }
@@ -413,7 +413,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                         val left = if (p.sleepUntil > 0) "${((p.sleepUntil - System.currentTimeMillis()) / 60000).coerceAtLeast(0)} min"
                             else if (p.sleepSongs > 0) "${p.sleepSongs} song" + (if (p.sleepSongs == 1) "" else "s") else ""
                         Box(Modifier.clip(RoundedCornerShape(10.dp)).background(if (on) ac.copy(alpha = 0.25f) else Color(0x24FFFFFF))
-                            .border(1.dp, if (on) ac else Color.Transparent, RoundedCornerShape(10.dp)).clickable { sleepMenu = true }
+                            .border(1.dp, if (on) ac else Color.Transparent, RoundedCornerShape(10.dp)).guardClick("sleep") { sleepMenu = true }
                             .padding(horizontal = 10.dp, vertical = 3.dp)) {
                             Text(if (left.isEmpty()) "Sleep" else "Sleep · $left", color = if (on) ac else C.text, fontSize = 10.sp, maxLines = 1)
                         }
@@ -444,7 +444,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
             // the page goes when they're near its end). Shown only when the tone sliders are on.
             Column(Modifier.width(44.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (st.settings.toneSliders && "tone" in playerRowOrder(setsP, radio)) Box(Modifier.size(30.dp).liteShadow(CircleShape).clip(CircleShape)
-                    .background(Color(0x24FFFFFF)).clickable {
+                    .background(Color(0x24FFFFFF)).guardClick("sine") {
                         val vc = viewBox[0]?.takeIf { it.isAttached }; val tc = toneBox[0]?.takeIf { it.isAttached }
                         if (vc == null || tc == null) ShortNote.show("The tone sliders aren't on this page (Look → player rows)")
                         else {
@@ -909,7 +909,7 @@ fun StereoVu(modifier: Modifier) {
 @Composable
 private fun CtlBtn(t: String, size: Int, onClick: () -> Unit) {
     val k = btnScale()
-    Box(Modifier.size((size * k).dp).liteShadow(CircleShape).clip(CircleShape).background(if (LocalInPlayer.current) Color(0xFF303035) else C.card2).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(Modifier.size((size * k).dp).liteShadow(CircleShape).clip(CircleShape).background(if (LocalInPlayer.current) Color(0xFF303035) else C.card2).guardClick("ctl:$t", onClick = onClick), contentAlignment = Alignment.Center) {
         Text(t, color = C.text, fontSize = (16 * k).sp, fontWeight = FontWeight.SemiBold)
     }
 }
@@ -1734,7 +1734,12 @@ private fun RadioHeader(item: PlayItem, p: PlayerState, tk: Float) {
     val st by App.instance.store.state.collectAsState()
     val fav = st.stations.firstOrNull { it.url == item.uri }
     val name = fav?.name ?: item.title
-    val (artist, title) = app.vlcinterface.player.splitNowPlaying(p.nowPlaying)
+    val idShown by app.vlcinterface.sources.SongId.radio.collectAsState()
+    // ♪ Identify's result (2026-11-28 request 38): shown like a song's tags in place of "Live" / the station's text,
+    // until the song looks over (pause, another station, the station's text changing, a pause or a rhythm change).
+    val ids = idShown?.takeIf { it.uri == item.uri }
+    val (artist, title) = if (ids != null) (ids.artist + if (ids.album.isNotBlank()) " · ${ids.album}" else "") to ids.title
+        else app.vlcinterface.player.splitNowPlaying(p.nowPlaying)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // Station rows (label, name, address, details): the station's menu. Song rows (title, artist): the song's menu.
         var stMenu by remember { mutableStateOf(false) }
@@ -2350,14 +2355,14 @@ fun BoxScope.FloatingPlayButton(playing: Boolean, onToggle: () -> Unit) {
             .graphicsLayer { alpha = s.floatBtnAlpha / 100f }
             .liteShadow(CircleShape).clip(CircleShape).background(bg)
             .then(noteTap).then(drag)
-            .clickable { FloatBtnTap.at = System.currentTimeMillis(); NextBtn.tap() }, contentAlignment = Alignment.Center) {
+            .guardClick("floatNext") { FloatBtnTap.at = System.currentTimeMillis(); NextBtn.tap() }, contentAlignment = Alignment.Center) {
             Text("⏭", color = floatSymbolColor(s.floatBtnColor), fontSize = (s.floatBtnSize * 0.36f * 2f / 3f).sp, fontWeight = FontWeight.Bold)
         }
         Box(Modifier.offset { androidx.compose.ui.unit.IntOffset(x.toInt(), y.toInt()) }.size(s.floatBtnSize.dp)
             .graphicsLayer { alpha = s.floatBtnAlpha / 100f }
             .liteShadow(CircleShape).clip(CircleShape).background(bg)
             .then(noteTap).then(drag)
-            .clickable { FloatBtnTap.at = System.currentTimeMillis(); onToggle() }, contentAlignment = Alignment.Center) {
+            .guardClick("floatPlay") { FloatBtnTap.at = System.currentTimeMillis(); onToggle() }, contentAlignment = Alignment.Center) {
             Text(if (playing) "❚❚" else "▶", color = floatSymbolColor(s.floatBtnColor), fontSize = (s.floatBtnSize * 0.36f).sp, fontWeight = FontWeight.Bold)
         }
     }

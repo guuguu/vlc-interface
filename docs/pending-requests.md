@@ -46,7 +46,7 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 28. **2026-11-28 01:27 — Guard against race conditions everywhere:** across the whole program, wherever a small delay (or a wait for the previous step to finish) is needed to avoid a race condition, insert it.
 
 ## Status — 1.93.0 (2026-11-28)
-- Done: 1–13, 15–19, 21, 23–26, 28.
+- Done: 1–13, 15–19, 21, 23–26, 28 (1.93.0); 14, 27, 29–39 (1.94.0).
 - 27: mock-up approved 01:48 — done for the next release (after 1.93.0).
 - 14: decided 01:56 — support Android 10 (request 29).
 - 20, 22: Android doesn't let normal apps pick the active Bluetooth (A2DP) device or disconnect one; explained.

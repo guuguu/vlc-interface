@@ -1092,13 +1092,19 @@ fun RadioTab(nav: Navigator) {
             }
         }
         SectionTitle("Add a station by URL")
+        // 2026-11-28 02:11 (request 33): a second field, the name shown for the station; empty = the name found as before.
+        var addName by remember { mutableStateOf("") }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(addUrl, { addUrl = it }, Modifier.weight(1f), placeholder = { Text("https://…/stream or .pls / .m3u") }, singleLine = true)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                OutlinedTextField(addUrl, { addUrl = it }, Modifier.fillMaxWidth(), placeholder = { Text("https://…/stream or .pls / .m3u") }, singleLine = true)
+                OutlinedTextField(addName, { addName = it }, Modifier.fillMaxWidth(), placeholder = { Text("Displayed name (optional)") }, singleLine = true)
+            }
             SymButton({
                 if (addUrl.isNotBlank()) {
                     val u = addUrl.trim()
-                    App.instance.store.update { x -> x.copy(stations = x.stations + Station(name = Urls.nameOf(u), url = u, meta = "added by URL")) }
-                    addUrl = ""
+                    val n = addName.trim().ifEmpty { Urls.nameOf(u) }
+                    App.instance.store.update { x -> x.copy(stations = x.stations + Station(name = n, url = u, meta = "added by URL")) }
+                    addUrl = ""; addName = ""
                 }
             }) { SymIcon(Icons.Filled.Add, "Add station", tint = C.text) }
         }

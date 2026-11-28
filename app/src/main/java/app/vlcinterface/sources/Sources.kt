@@ -57,7 +57,7 @@ fun isPlayable(name: String) = name.ext().let { it in VIDEO_EXT || it in AUDIO_E
 object Net {
     val http: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)   // 2026-11-28 request 35: a slow server gets longer
         .followRedirects(true)
         .build()
 

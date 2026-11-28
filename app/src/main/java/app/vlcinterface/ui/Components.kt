@@ -23,6 +23,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -299,6 +301,44 @@ val PLAYER_BG = Color(0xFF1A1A1A)
 val LocalInPlayer = androidx.compose.runtime.staticCompositionLocalOf { false }
 
 /**
+ * Touch guard on the players' main buttons (2026-11-28 request 39): the action happens only when the finger stayed on
+ * the button at least Playback & gestures → "Touch guard" (default 120 ms) and didn't slide; a brush, a palm or a touch
+ * that turns into a scroll does nothing. The same button pressed again within 0.4 s is ignored (no double actions).
+ * Off (0 ms): a plain tap, as before.
+ */
+object TouchGuard {
+    private val last = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    fun ms(): Int = try { App.instance.store.current.settings.touchGuardMs } catch (_: Exception) { 120 }
+    fun allow(key: String): Boolean {
+        val now = android.os.SystemClock.uptimeMillis()
+        val prev = last[key] ?: 0L
+        if (now - prev < 400) return false
+        last[key] = now; return true
+    }
+}
+
+fun Modifier.guardClick(key: String, enabled: Boolean = true, onClick: () -> Unit): Modifier = composed {
+    val ms = TouchGuard.ms()
+    val cb = androidx.compose.runtime.rememberUpdatedState(onClick)
+    if (!enabled) this
+    else if (ms <= 0) this.clickable { if (TouchGuard.allow(key)) cb.value() }
+    else this.semantics { this.onClick(label = null) { cb.value(); true } }.pointerInput(key, ms) {
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            var moved = false
+            var upAt = -1L
+            while (true) {
+                val ev = awaitPointerEvent()
+                val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                if ((c.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                if (!c.pressed) { upAt = c.uptimeMillis; if (!moved && c.position.x in 0f..size.width.toFloat() && c.position.y in 0f..size.height.toFloat()) c.consume(); break }
+            }
+            if (upAt >= 0 && !moved && upAt - down.uptimeMillis >= ms && TouchGuard.allow(key)) cb.value()
+        }
+    }
+}
+
+/**
  * Faint light-grey shadow 45° down-right ([offset] dp) drawn behind a control of [shape] — put it before clip().
  * Only in the players, and only when switched on in Settings.
  */
@@ -337,7 +377,7 @@ private fun PillBody(text: String, selected: Boolean, modifier: Modifier, filled
             .clip(RoundedCornerShape(18.dp))
             .background(bg)
             .border(1.dp, if (selected || filled) a else C.line, RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick)
+            .then(if (LocalInPlayer.current) Modifier.guardClick("pill:$text", onClick = onClick) else Modifier.clickable(onClick = onClick))
             .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center
     ) { Text(text, color = fg, fontSize = 14.sp, fontWeight = if (selected || filled) FontWeight.SemiBold else FontWeight.Medium) }
@@ -1572,7 +1612,7 @@ fun rememberDebounced(value: String, ms: Long = 2000): String {
  * whose switch is on (Helpers per settings page), and each helper once per session — a long press still shows it any time.
  */
 object AutoHelp {
-    val PAGES = listOf("alarm" to "Alarm page", "audio" to "Audio", "radio" to "Radio", "video" to "Video", "look" to "Look", "library" to "Library & files",
+    val PAGES = listOf("alarm" to "Alarm page", "audio" to "Audio", "playback" to "Playback & gestures", "radio" to "Radio", "video" to "Video", "look" to "Look", "library" to "Library & files",
         "vis" to "Visualisation", "clock" to "Clock aspect", "assoc" to "File associations")
     private val shown = java.util.Collections.synchronizedSet(HashSet<String>())
     fun pageOn(page: String) = app.vlcinterface.alarm.Alarms.current.global.helpers &&

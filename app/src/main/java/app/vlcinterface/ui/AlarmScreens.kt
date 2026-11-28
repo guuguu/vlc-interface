@@ -72,7 +72,7 @@ fun ClockToggleButton(size: Int = 30) {
     val d by Alarms.state.collectAsState()
     val a = accent()
     Box(Modifier.size(size.dp).liteShadow(CircleShape).clip(CircleShape).background(if (d.showClock) a.copy(alpha = 0.25f) else Color(0x24FFFFFF))
-        .border(1.dp, if (d.showClock) a else Color.Transparent, CircleShape).clickable { Alarms.toggleClock() },
+        .border(1.dp, if (d.showClock) a else Color.Transparent, CircleShape).guardClick("clockBtn") { Alarms.toggleClock() },
         contentAlignment = Alignment.Center) {
         Text("⏰", fontSize = (size * 0.5f).sp)
     }
@@ -85,7 +85,18 @@ fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
     val ctxH = LocalContext.current
     val issues = remember(resumeTick()) { alarmIssues(ctxH) }
     // One-time alarms that already rang are not shown here (2026-11-21 12:30): they're in Alarm settings → History.
-    val list = d.alarms.filter { it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID && !Alarms.isPast(it) }.sortedBy { it.hour * 60 + it.minute }
+    // In ringing order (2026-11-28 request 36): the next one to ring on top (a snoozed one at its snooze time), then the
+    // following ones; switched-off alarms after them, by time of day. Re-sorted each minute and whenever an alarm changes.
+    val minuteTick by androidx.compose.runtime.produceState(0L) { while (true) { value = System.currentTimeMillis() / 60_000; kotlinx.coroutines.delay(15_000) } }
+    val list = remember(d, minuteTick) {
+        val now = System.currentTimeMillis()
+        fun ringsAt(a: app.vlcinterface.alarm.Alarm): Long = try {
+            val sn = AlarmScheduler.snoozedUntil(ctxH, a.id)
+            if (sn > now) sn else Alarms.planned(a.id).takeIf { it > now } ?: AlarmScheduler.nextTime(a).takeIf { it > 0 } ?: Long.MAX_VALUE
+        } catch (_: Exception) { Long.MAX_VALUE }
+        val shown = d.alarms.filter { it.id != app.vlcinterface.alarm.AlarmEngine.TEST_ID && !Alarms.isPast(it) }
+        shown.filter { it.on }.sortedBy { ringsAt(it) } + shown.filter { !it.on }.sortedBy { it.hour * 60 + it.minute }
+    }
     val warn = issues.isNotEmpty() && list.any { it.on }
     // Permissions missing (typically right after a new install, 2026-11-21 11:41): the alarm area is red and any touch
     // on it (an alarm, its switch, + Add, ⚙, ⚠) first shows a pop-up with a link to each setting to fix; "Later" goes
@@ -119,7 +130,8 @@ fun AlarmMiniList(nav: Navigator, compact: Boolean = false) {
         // the list scrolls on its own when they don't all fit.
         val k = App.instance.store.state.collectAsState().value.settings.alarmRowPct.coerceIn(50, 100) / 100f
         val rowH = (56 * k).dp
-        val maxRows = 5
+        // How many rows the box shows (2026-11-28 request 37: Look → "Alarms shown under the clock", 1–10, default 5).
+        val maxRows = App.instance.store.state.collectAsState().value.settings.alarmRowsShown.coerceIn(1, 10)
         val listScroll = rememberScrollState()
         Column(Modifier.fillMaxWidth().heightIn(max = (rowH + 1.dp) * maxRows).verticalScroll(listScroll)) {
             list.forEach { al -> AlarmRow(nav, al, k, guard = { a -> guard(a) }); Divider() }

@@ -80,6 +80,7 @@ object SongId {
                     if (m == null) "Radio ${item.title}: \"${nowPlaying.ifEmpty { "no song name" }}\" — not found"
                     else "Radio ${item.title}: \"$nowPlaying\" → ${m.artist} – ${m.title}" + (if (m.album.isNotEmpty()) " (${m.album})" else "") + " · score ${m.score}")
                 flash(if (m == null) "Not found · logged" else "Found · logged")
+                if (m != null) showRadio(item.uri, nowPlaying, m)
                 return
             }
             // Song: its tags first, else its file name.
@@ -101,6 +102,65 @@ object SongId {
                 _status.value = ""
             } else write(ctx, item, new)
         } finally { busy = false }
+    }
+
+    // ---------- radio: the identified song on the player (2026-11-28 request 38) ----------
+    data class RadioShown(val uri: String, val artist: String, val title: String, val album: String)
+    private val _radio = MutableStateFlow<RadioShown?>(null)
+    /** Shown on the radio player in place of "Live" / the station's text, until the song looks over. */
+    val radio: StateFlow<RadioShown?> = _radio
+    private var watch: kotlinx.coroutines.Job? = null
+
+    private fun showRadio(uri: String, np: String, m: Match) {
+        _radio.value = RadioShown(uri, m.artist, m.title, m.album)
+        watch?.cancel()
+        watch = scope.launch { watchRadio(uri, np) }
+    }
+
+    private fun clearRadio(why: String) {
+        val r = _radio.value ?: return
+        _radio.value = null
+        try { ServerLog.log("musicbrainz.org", "identify", "HTTPS", "", true, "Radio: \"${r.artist} – ${r.title}\" taken off the player ($why)") } catch (_: Exception) {}
+    }
+
+    /**
+     * Erased when the song looks over: pause / stop, another station, the station's own song text changing, a pause in
+     * the sound (over 1.5 s near silence), or a brutal rhythm change — the bass beat's tempo moving more than 15 % for 3 s,
+     * or the beat lost for 4 s and then a new one starting. The beat is followed in the sound engine's low band.
+     */
+    private suspend fun watchRadio(uri: String, np: String) {
+        val buf = FloatArray(2)
+        var avg = 0f; var lastOn = 0L; var tempo = 0f; var off = 0; var quietFrom = 0L; var notPlaying = 0; var lostAt = 0L
+        val iv = ArrayDeque<Long>()
+        kotlinx.coroutines.delay(3000)                          // the identification's own moment settles first
+        while (true) {
+            val s = App.instance.player.state.value
+            if (s.item?.uri != uri) { clearRadio("another station"); return }
+            if (!s.isPlaying) { if (++notPlaying >= 40) { clearRadio("paused / stopped"); return } } else notPlaying = 0
+            if (s.userPaused) { clearRadio("paused"); return }
+            if (s.nowPlaying != np) { clearRadio("the station's song text changed"); return }
+            if (s.isPlaying && app.vlcinterface.player.NativeAudio.active) {
+                val now = System.currentTimeMillis()
+                app.vlcinterface.player.NativeAudio.bands(buf)
+                val x = buf[0]
+                if (x < 0.0008f) { if (quietFrom == 0L) quietFrom = now else if (now - quietFrom > 1500) { clearRadio("a pause in the sound — next song"); return } }
+                else quietFrom = 0L
+                avg += (x - avg) * 0.08f
+                if (x > avg * 1.4f + 0.0005f && now - lastOn > 250) {
+                    if (lostAt > 0) { clearRadio("the beat stopped and a new one started"); return }
+                    if (lastOn > 0) { iv.addLast(now - lastOn); while (iv.size > 12) iv.removeFirst() }
+                    lastOn = now
+                }
+                if (tempo > 0f && lastOn > 0 && now - lastOn > maxOf(4000f, tempo * 8f)) { if (lostAt == 0L) lostAt = now }
+                if (iv.size >= 8) {
+                    val med = iv.sorted()[iv.size / 2].toFloat()
+                    if (tempo == 0f) tempo = med
+                    else if (kotlin.math.abs(med - tempo) / tempo > 0.15f) { if (++off >= 60) { clearRadio("the rhythm changed — next song"); return } }
+                    else { off = 0; tempo = tempo * 0.9f + med * 0.1f }
+                }
+            }
+            kotlinx.coroutines.delay(50)
+        }
     }
 
     /** Yes on the question. */

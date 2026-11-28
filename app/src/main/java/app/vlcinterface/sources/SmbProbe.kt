@@ -44,13 +44,18 @@ object SmbProbe {
         "SMB210" to "SMB 2.1", "SMB202" to "SMB 2.0.2", "SMB1" to "SMB 1 (CIFS)",
     )
 
-    internal fun context(version: String, user: String, pass: String, domain: String, guest: Boolean): CIFSContext {
+    /**
+     * [files]: contexts that read / copy files (playback copies, cache ahead, ReplayGain) wait longer for a busy NAS
+     * (2026-11-28 request 35: 15 s per answer, 25 s idle socket) before a read counts as failed; probes and checks keep
+     * the short times so an unreachable server is still noticed quickly.
+     */
+    internal fun context(version: String, user: String, pass: String, domain: String, guest: Boolean, files: Boolean = false): CIFSContext {
         val p = Properties()
         p["jcifs.smb.client.minVersion"] = version
         p["jcifs.smb.client.maxVersion"] = version
-        p["jcifs.smb.client.responseTimeout"] = "6000"
+        p["jcifs.smb.client.responseTimeout"] = if (files) "15000" else "6000"
         p["jcifs.smb.client.connTimeout"] = "4000"
-        p["jcifs.smb.client.soTimeout"] = "8000"
+        p["jcifs.smb.client.soTimeout"] = if (files) "25000" else "8000"
         p["jcifs.resolveOrder"] = "DNS,BCAST"
         if (version == "SMB1") p["jcifs.smb.client.useSMB2Negotiation"] = "false"
         val base = BaseContext(PropertyConfiguration(p))
@@ -188,12 +193,12 @@ object SmbProbe {
      */
     fun laneContext(version: String, user: String, pass: String, domain: String, lane: Int): CIFSContext {
         val v = version.ifEmpty { "SMB311" }
-        return lanes.getOrPut("$v|$domain|$user|$pass|$lane") { context(v, user, pass, domain, user.isEmpty()) }
+        return lanes.getOrPut("$v|$domain|$user|$pass|$lane") { context(v, user, pass, domain, user.isEmpty(), files = true) }
     }
 
     fun fileContext(version: String, user: String, pass: String, domain: String): CIFSContext {
         val v = version.ifEmpty { "SMB311" }
-        return shared.getOrPut("$v|$domain|$user|$pass") { context(v, user, pass, domain, user.isEmpty()) }
+        return shared.getOrPut("$v|$domain|$user|$pass") { context(v, user, pass, domain, user.isEmpty(), files = true) }
     }
 }
 

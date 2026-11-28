@@ -603,7 +603,7 @@ private fun BoxScope.ControlsOverlayBody(
         Box(Modifier.alpha(if (p.queue.size <= 1) 0.35f else 1f)) { RoundBtn("⏮", 44) { NextBtn.tapPrev(); onTouch() } }
         RoundBtn("−10", 52) { player.seekBy(-10_000); onTouch() }
         val k = btnScale()
-        Box(Modifier.size(maxOf((if (compact) 60 else 76) * k, 56f).dp).clip(CircleShape).background(accent()).clickable { player.togglePause(); onTouch() }, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(maxOf((if (compact) 60 else 76) * k, 56f).dp).clip(CircleShape).background(accent()).guardClick("vplay") { player.togglePause(); onTouch() }, contentAlignment = Alignment.Center) {
             Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = maxOf(24 * k, 20f).sp, fontWeight = FontWeight.Bold)
         }
         RoundBtn("+10", 52) { player.seekBy(10_000); onTouch() }
@@ -885,7 +885,7 @@ private fun PortraitIdle(p: PlayerState, nav: Navigator, showList: Boolean, onPa
         FitRow(Modifier.fillMaxWidth(), arrangement = Arrangement.SpaceEvenly, minGap = 8.dp) {
             Box(Modifier.alpha(if (p.queue.size <= 1) 0.35f else 1f)) { UnderBtn("⏮") { NextBtn.tapPrev() } }
             UnderBtn("−10") { player.seekBy(-10_000) }
-            Box(Modifier.size(60.dp).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
+            Box(Modifier.size(60.dp).clip(CircleShape).background(accent()).guardClick("vplay2") { player.togglePause() }, contentAlignment = Alignment.Center) {
                 Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = 22.sp, fontWeight = FontWeight.Bold)
             }
             UnderBtn("+10") { player.seekBy(10_000) }

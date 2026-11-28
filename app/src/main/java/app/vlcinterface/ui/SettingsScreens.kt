@@ -237,6 +237,15 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                 ValueRow("Double-tap seek", "Left / right edge", "${s.doubleTapSeekSec} s") {
                     val opts = listOf(5, 10, 15, 30); set(s.copy(doubleTapSeekSec = opts[(opts.indexOf(s.doubleTapSeekSec) + 1) % opts.size]))
                 }
+                Divider()
+                // Touch guard (2026-11-28 request 39): the players' main buttons act after a very short hold.
+                ValueRow("Touch guard", if (s.touchGuardMs == 0) "Off: player buttons act on a plain tap"
+                    else "Player buttons act after a ${s.touchGuardMs} ms hold without sliding; the same button again within 0.4 s is ignored",
+                    if (s.touchGuardMs == 0) "Off" else "${s.touchGuardMs} ms") {
+                    val opts = listOf(120, 160, 200, 300, 0, 60, 80, 100)
+                    set(s.copy(touchGuardMs = opts[(opts.indexOf(s.touchGuardMs) + 1).mod(opts.size)]))
+                    if (AutoHelp.ok("playback", "Touch guard")) explainNow("Touch guard", "")
+                }
                 // (Long press on the video now shows its details; the speed is chosen with the speed button.)
             }
             SectionTitle("Playback")
@@ -583,6 +592,16 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                     if (alarmSysOn) ThinSlider(s.alarmRowPct.toFloat(), { v -> set(s.copy(alarmRowPct = (Math.round(v / 5f) * 5).coerceIn(50, 100))) }, valueRange = 50f..100f,
                         onHoldStill = { if (helpersOn && AutoHelp.ok("look", "Alarm rows under the clock")) lookHelp = "Alarm rows under the clock" })
+                    // How many alarm rows the box under the clock shows (2026-11-28 request 37); more scroll inside it.
+                    if (alarmSysOn) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+                        Text("Alarms shown under the clock", color = C.text, fontSize = 15.sp, modifier = Modifier.anchor("Alarms shown under the clock").weight(1f).explain("Alarms shown under the clock"))
+                        Text("${s.alarmRowsShown}", color = accent(), fontWeight = FontWeight.SemiBold)
+                        STextButton({ set(s.copy(alarmRowsShown = 5)) }) { Text("Reset") }
+                    }
+                    if (alarmSysOn) ThinSlider(s.alarmRowsShown.toFloat(), { v ->
+                        val n = Math.round(v).coerceIn(1, 10)
+                        if (n != s.alarmRowsShown) { set(s.copy(alarmRowsShown = n)); if (helpersOn && AutoHelp.ok("look", "Alarms shown under the clock")) lookHelp = "Alarms shown under the clock" }
+                    }, valueRange = 1f..10f, steps = 8)
                     // Order of the player rows, songs and radio apart.
                     // Songs / Radio / Both ("Both": one order for the rows the two players share).
                     var rowsMode by rememberKept("look.rowsMode", "song")
