@@ -1680,3 +1680,8 @@
 - Helper on a hold; found by the Settings search; saved with the settings and in export / import.
 - **Front Preamp slider in sync (requested 10:58):** on a song without ReplayGain, the song player's Preamp slider shows the correction together with the song's own Preamp — the real level (e.g. at −7.0 with the default), labelled "Preamp (no RG −7.0)". Moving it changes only the song's own Preamp (kept per song as before); the correction stays. When the song's ReplayGain is measured, the correction leaves the slider at once (back to the song's own Preamp, plain "Preamp"). Radio and videos unchanged.
 - **Radio takes the same correction (requested 11:01):** every station plays at the "Songs without ReplayGain" level while ReplayGain is on (a stream never has ReplayGain). Nothing is read, scanned or written for radio. The radio player's Preamp slider shows it the same way ("Preamp (no RG −7.0)"); the station's own Preamp is kept per station as before. A change of the setting applies at once to the station playing.
+
+## Reset button and the sound profile, with a 30 s play rule (requested 2026-11-28 11:03)
+- Reset (long press on the crossed sine button): Loudness, Treble and Preamp back to 0 and the song's / station's own sound profile removed (all three values) — as before.
+- Profiles made again the same way for songs and radio: values changed by hand become the item's own profile once it has played 30 s with them (play time since the last change; pauses don't count). Left sooner, nothing is kept. Each save (and each change not kept) is in the Player log.
+- Radio no longer keeps whatever values a station was played with: like songs, only values set by hand and played 30 s.

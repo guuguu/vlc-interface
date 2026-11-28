@@ -600,6 +600,29 @@ class PlayerController(private val context: Context, private val store: Store) {
 
     // ---------- loudness / treble per song ----------
     private var toneDirty = false
+    /**
+     * Manual Loudness / Treble / Preamp changes become the song's (station's) own profile only after it has played 30 s
+     * with them (2026-11-28 11:03): counted in play time since the last change; less than that, nothing is kept for it.
+     */
+    private var toneHeardMs = 0L
+    private var toneTickAt = 0L
+    private fun toneChanged() { toneDirty = true; toneHeardMs = 0L; toneTickAt = 0L }
+    private fun toneTick(now: Long) {
+        if (!toneDirty) return
+        if (toneTickAt > 0L) toneHeardMs += (now - toneTickAt).coerceIn(0L, 1_000L)
+        toneTickAt = now
+        if (toneHeardMs >= 30_000L) saveToneProfile()
+    }
+    private fun saveToneProfile() {
+        val s = _state.value
+        val item = s.item ?: return
+        toneDirty = false
+        if (!(item.isMusic || item.isRadio)) return
+        ToneStore.put(item, s.loudDb, s.trebleDb); ToneStore.putPre(item.uri, s.radioPreDb)
+        _state.value = _state.value.copy(toneSaved = true)
+        ServerLog.log("player", "tone", "", "", true, "\"${item.title}\": sound profile kept after 30 s of play — Loudness %.1f, Treble %.1f, Preamp %+.1f dB"
+            .format(java.util.Locale.US, s.loudDb, s.trebleDb, s.radioPreDb))
+    }
 
     /** Slider moved (live); [done] = finger lifted. Kept as the "last values" too. */
     fun setTone(loud: Float, treble: Float, done: Boolean) {
@@ -610,13 +633,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         val delta = toneLevelDrop(l, t) - toneLevelDrop(s0.loudDb, s0.trebleDb)
         val pre = (s0.radioPreDb + delta).coerceIn(-12f, 12f)
         _state.value = s0.copy(loudDb = l, trebleDb = t, radioPreDb = pre)
-        if (done) s0.item?.let { ToneStore.putPre(it.uri, pre) }
         applySoundChain()
-        toneDirty = true
-        if (done) store.update { it.copy(settings = it.settings.copy(toneLoud = l, toneTreble = t)) }
-        // Radio: the values belong to the station at once (loaded whenever it is selected).
-        val item = _state.value.item
-        if (done && item?.isRadio == true) { ToneStore.put(item, l, t); toneDirty = false; _state.value = _state.value.copy(toneSaved = true) }
+        // Kept with the song / station once it has played 30 s with them (songs and radio alike).
+        if (done) { toneChanged(); store.update { it.copy(settings = it.settings.copy(toneLoud = l, toneTreble = t)) } }
     }
 
     /** Radio pre-amp slider (cut only); kept for the station when the finger is lifted. */
@@ -626,7 +645,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         _state.value = _state.value.copy(radioPreDb = v)
         applySoundChain()
         if (done) {
-            ToneStore.putPre(item.uri, v)
+            toneChanged()
             store.update { it.copy(settings = if (item.isRadio) it.settings.copy(radioPreLast = v) else it.settings.copy(songPreLast = v)) }
         }
     }
@@ -660,8 +679,9 @@ class PlayerController(private val context: Context, private val store: Store) {
         val item = s.item ?: return
         // Radio: every station played keeps its settings (loudness, treble, pre-amp), changed or not.
         // (A station reset to 0 with the reset button keeps no profile: nothing is written back for it.)
-        if (item.isRadio) { if (s.loudDb != 0f || s.trebleDb != 0f || s.radioPreDb != 0f) { ToneStore.put(item, s.loudDb, s.trebleDb); ToneStore.putPre(item.uri, s.radioPreDb) } }
-        else if (toneDirty) ToneStore.put(item, s.loudDb, s.trebleDb)
+        // Songs and radio alike (2026-11-28 11:03): changes made by hand are kept only if the item played 30 s with them
+        // (saved then, see [toneTick]); left sooner, nothing is written. A reset item keeps no profile until then.
+        if (toneDirty) ServerLog.log("player", "tone", "", "", true, "\"${item.title}\": sound changes not kept (played under 30 s with them)")
         toneDirty = false
     }
 
@@ -3082,6 +3102,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             MediaPlayer.Event.EndReached -> { adoptSessionSync(); handleEnd(s) }
             MediaPlayer.Event.TimeChanged -> {
                 lastTick = System.currentTimeMillis(); _state.value = s.copy(time = ev.timeChanged)
+                if (s.isPlaying) toneTick(lastTick)
                 // A NAS song playing on is proof its NAS answers (08:54): noted every 10 s, no network check needed.
                 val it0 = s.item
                 if (it0 != null && it0.uri.startsWith("smb://") && lastTick - nasSeenAt > 10_000) {

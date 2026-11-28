@@ -97,3 +97,4 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 45. **2026-11-28 10:57 — Default for songs without ReplayGain: −7 dB** (was −3 dB). Done after 1.102.0, not built yet.
 46. **2026-11-28 10:58 — Front Preamp slider in sync with the no-ReplayGain correction.** Done after 1.102.0, not built yet.
 47. **2026-11-28 11:01 — Radio gets the no-ReplayGain correction** (no RG read / scan / write for radio). Done after 1.102.0, not built yet.
+48. **2026-11-28 11:03 — Reset removes the sound profile; profiles kept only after 30 s of play with the manual values** (songs and radio). Done after 1.102.0, not built yet.
