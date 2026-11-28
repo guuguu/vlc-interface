@@ -48,5 +48,7 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 ## Status — 1.93.0 (2026-11-28)
 - Done: 1–13, 15–19, 21, 23–26, 28.
 - 27: mock-up approved 01:48 — done for the next release (after 1.93.0).
-- 14: needs a decision — the app requires Android 12 (API 31); that Huawei's "12.0.0.2" is EMUI 12, which runs on Android 10.
+- 14: decided 01:56 — support Android 10 (request 29).
 - 20, 22: Android doesn't let normal apps pick the active Bluetooth (A2DP) device or disconnect one; explained.
+
+29. **2026-11-28 01:56 — Install on Android 10 (for request 14, the Huawei):** lower the minimum Android version from 12 to 10 (minSdk 31 → 29) and guard the Android 12+ features so they're skipped or fall back on older phones: exact-alarm permission (not needed there), Bluetooth "Nearby devices" permission, Bluetooth LE output types, crash notices from Android's exit records (the app's own crash log stays), ReplayGain writes to phone files without createWriteRequest, full-screen bars and vibration with the older calls. Android 12+ phones unchanged. To confirm on the phone: Settings → About phone → Android version (10 expected; HarmonyOS counts as Android 10 level).
