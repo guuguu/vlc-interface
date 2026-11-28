@@ -221,12 +221,13 @@ class PlayerController(private val context: Context, private val store: Store) {
         val rg = app.vlcinterface.sources.Rg(f("REPLAYGAIN_TRACK_GAIN"), f("REPLAYGAIN_TRACK_PEAK"), f("REPLAYGAIN_ALBUM_GAIN"), f("REPLAYGAIN_ALBUM_PEAK"))
         main.post {
             val s = _state.value; val item = s.item ?: return@post
-            if (item.uri != uri) return@post
+            if (!app.vlcinterface.sources.sameSong(item.uri, uri)) return@post
             // One change only (18:58): the first measured value is used for the rest of this song; the scan's later
             // reports for it (the same track value again, or the album value at the end of an album scan) are not —
             // the next play of the song uses whatever was written.
-            if (scannedRg?.first == uri) return@post
-            scannedRg = uri to rg
+            if (scannedRg?.first == item.uri) return@post
+            scannedRg = item.uri to rg
+            ServerLog.log("player", "rg", "", "", true, "\"${item.title}\": ReplayGain just measured, used now — track ${rg.trackGain?.let { "%.2f dB".format(java.util.Locale.US, it) } ?: "?"}")
             loadReplayGain(item, s)
         }
     }

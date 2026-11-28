@@ -455,7 +455,7 @@ object RgScanner {
             if (m != null && !bad) meters[it.uri] = m
             // The song playing: its track value is used at once, as soon as it is measured (the album value, in an album
             // scan, follows when the whole album is done).
-            if (m != null && !bad && it.uri == App.instance.player.state.value.item?.uri) {
+            if (m != null && !bad && sameSong(it.uri, App.instance.player.state.value.item?.uri)) {
                 val v = linkedMapOf("REPLAYGAIN_TRACK_GAIN" to "%.2f dB".format(java.util.Locale.US, Loudness.gainDb(m.integrated)),
                     "REPLAYGAIN_TRACK_PEAK" to "%.6f".format(java.util.Locale.US, m.peak))
                 App.instance.player.applyScannedRg(it.uri, v)
@@ -692,7 +692,7 @@ object RgScanner {
                 if (tmp.length() > 512 * 1024) java.io.RandomAccessFile(tmp, "r").use { r -> r.seek(tmp.length() - 65536); ByteArray(65536).also { r.readFully(it) } } else ByteArray(0))
             if (check.trackGain == null) throw IllegalStateException("tag check failed")
             // The file the player has open is never rewritten under it: the tagged copy waits until the song is over.
-            if (App.instance.player.state.value.item?.uri == item.uri) {
+            if (sameSong(App.instance.player.state.value.item?.uri, item.uri)) {
                 RgStore.put(item.uri, values)
                 // Written later with the full swap: the copy is checked against the server now.
                 if (orig != null && !ParallelFetch.matchesRemote(item, item.uri, orig)) throw IllegalStateException("the copy read from the server didn't match it — nothing changed")
@@ -956,7 +956,7 @@ object RgScanner {
         // A newer copy for the same file replaces the older one.
         val keep = org.json.JSONArray()
         for (k in 0 until a.length()) { val o = a.getJSONObject(k)
-            if (o.optJSONObject("e")?.optString("uri") == item.uri) File(pendingDir(ctx), o.optString("f")).delete() else keep.put(o) }
+            if (sameSong(o.optJSONObject("e")?.optString("uri"), item.uri)) File(pendingDir(ctx), o.optString("f")).delete() else keep.put(o) }
         val name = "${java.util.UUID.randomUUID()}.${item.ext.lowercase().ifEmpty { "bin" }}"
         if (!tmp.renameTo(File(pendingDir(ctx), name))) { tmp.copyTo(File(pendingDir(ctx), name), true); tmp.delete() }
         keep.put(org.json.JSONObject().put("f", name).put("e", MusicLibrary.toPlEntry(item).toJson()).put("tries", 0))
@@ -981,7 +981,7 @@ object RgScanner {
                     val f = File(pendingDir(app), o.optString("f"))
                     val item = MusicLibrary.fromPlEntry(PlEntry.fromJson(o.getJSONObject("e")))
                     if (!f.exists()) continue
-                    if (item.uri == playing) { keep.put(o); continue }
+                    if (sameSong(item.uri, playing)) { keep.put(o); continue }
                     // Share read-only meanwhile: the values stay in the app, the waiting copy is dropped.
                     if (WriteGuard.isReadOnly(item)) { f.delete(); continue }
                     try {
@@ -1028,6 +1028,14 @@ object RgScanDates {
     fun isNetwork(uri: String) = uri.contains("://") && !uri.startsWith("content://") && !uri.startsWith("file://")
 }
 
+/**
+ * One form of a song's address for every ReplayGain lookup (2026-11-28 12:04): the scanner and the player can hold the
+ * same file's address written differently (e.g. "ÿ" as %C3%BF or as itself, %20 or a space), so a value the scan kept
+ * under one form was never found under the other — the playing song stayed at "No RG" even after it was measured.
+ */
+fun rgKey(uri: String): String = try { android.net.Uri.decode(uri) } catch (_: Exception) { uri }
+fun sameSong(a: String?, b: String?): Boolean = a != null && b != null && (a == b || rgKey(a) == rgKey(b))
+
 object RgStore {
     private lateinit var file: File
     private val map = HashMap<String, Map<String, String>>()
@@ -1036,21 +1044,21 @@ object RgStore {
         file = File(ctx.filesDir, "replaygain.json")
         try {
             if (file.exists()) JSONObject(file.readText()).let { o ->
-                o.keys().forEach { k -> val v = o.getJSONObject(k); map[k] = v.keys().asSequence().associateWith { v.getString(it) } }
+                o.keys().forEach { k -> val v = o.getJSONObject(k); map[rgKey(k)] = v.keys().asSequence().associateWith { v.getString(it) } }
             }
         } catch (_: Exception) {}
     }
 
     @Synchronized fun put(uri: String, values: Map<String, String>) {
-        map[uri] = values
+        map[rgKey(uri)] = values
         try { file.writeText(JSONObject(map.mapValues { JSONObject(it.value) }).toString()) } catch (_: Exception) {}
     }
 
     @Synchronized fun remove(uri: String) {
-        if (map.remove(uri) != null) try { file.writeText(JSONObject(map.mapValues { JSONObject(it.value) }).toString()) } catch (_: Exception) {}
+        if (map.remove(rgKey(uri)) != null) try { file.writeText(JSONObject(map.mapValues { JSONObject(it.value) }).toString()) } catch (_: Exception) {}
     }
 
-    @Synchronized fun get(uri: String): Rg? = map[uri]?.let { v ->
+    @Synchronized fun get(uri: String): Rg? = map[rgKey(uri)]?.let { v ->
         fun f(k: String) = v[k]?.replace("dB", "")?.trim()?.toFloatOrNull()
         Rg(f("REPLAYGAIN_TRACK_GAIN"), f("REPLAYGAIN_TRACK_PEAK"), f("REPLAYGAIN_ALBUM_GAIN"), f("REPLAYGAIN_ALBUM_PEAK"))
     }

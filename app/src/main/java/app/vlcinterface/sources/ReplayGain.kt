@@ -31,9 +31,9 @@ object ReplayGain {
         withContext(Dispatchers.IO) { try { fetch(ctx, uri, user, pass, domain, smbVersion)?.let { parse(it.first + it.second) } } catch (_: Exception) { null } }
 
     /** After a scan wrote new values. */
-    fun forget(uri: String) { cache.remove(uri) }
+    fun forget(uri: String) { cache.remove(rgKey(uri)) }
     /** What is already known without reading the file: read before, or kept in the app by a scan. */
-    fun known(uri: String): Rg? = cache[uri] ?: RgStore.get(uri)
+    fun known(uri: String): Rg? = cache[rgKey(uri)] ?: RgStore.get(uri)
     private const val TAIL = 64 * 1024
 
     /**
@@ -49,13 +49,13 @@ object ReplayGain {
 
     suspend fun read(ctx: Context, uri: String, user: String, pass: String, domain: String, smbVersion: String): Rg? =
         withContext(Dispatchers.IO) {
-            cache[uri]?.let { return@withContext it }
+            cache[rgKey(uri)]?.let { return@withContext it }
             val parts = try { fetch(ctx, uri, user, pass, domain, smbVersion) } catch (_: Exception) { null }
             // Tags in the file first; values the scanner kept in the app for files it couldn't (or wasn't asked to) write.
             val inFile = parts?.let { parse(it.first + it.second) }
             // Values the scanner kept in the app are newer than what's in the file (removed again when the file gets written).
             val rg = RgStore.get(uri) ?: inFile ?: return@withContext null
-            cache[uri] = rg
+            cache[rgKey(uri)] = rg
             rg
         }
 
