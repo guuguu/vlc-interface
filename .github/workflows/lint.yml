@@ -1,0 +1,40 @@
+name: Lint (check only)
+
+# Android lint over the whole app, run by hand: prints every warning and error (API level use, correctness,
+# threads, resources) in the log. Builds nothing to publish.
+on:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Settings search index
+        run: python3 tools/gen_settings_index.py
+      - name: Lint
+        run: gradle :app:lintRelease --continue -Pandroid.lint.abortOnError=false || true
+      - name: Print the findings
+        run: |
+          python3 - <<'PY'
+          import glob, xml.etree.ElementTree as ET
+          files = glob.glob('app/build/reports/lint-results*.xml') + glob.glob('app/build/intermediates/lint*/**/lint-results*.xml', recursive=True)
+          print("reports:", files)
+          seen = set()
+          for f in files:
+              for i in ET.parse(f).getroot().iter('issue'):
+                  loc = i.find('location')
+                  where = (loc.get('file','').split('/app/src/main/')[-1] + ':' + loc.get('line','')) if loc is not None else ''
+                  key = (i.get('id'), where, i.get('message'))
+                  if key in seen: continue
+                  seen.add(key)
+                  print(f"LINT|{i.get('severity')}|{i.get('id')}|{where}|{i.get('message')}")
+          print("total", len(seen))
+          PY
