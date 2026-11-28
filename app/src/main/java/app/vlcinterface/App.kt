@@ -37,9 +37,11 @@ class App : Application() {
             val exitAt = getSharedPreferences("volkeep", MODE_PRIVATE).getLong("exitAt", 0L)
             if (exitAt > 0 && System.currentTimeMillis() - exitAt < 30 * 60_000L) {
                 var why = "reason not given by Android before version 15"
+                var byHand = false
                 if (android.os.Build.VERSION.SDK_INT >= 35) try {
                     val am = getSystemService(android.app.ActivityManager::class.java)
                     am.getHistoricalProcessStartReasons(1).firstOrNull()?.let { r ->
+                        byHand = r.reason == 6 || r.reason == 7 || r.reason == 11
                         val names = mapOf(0 to "an alarm", 1 to "a backup", 2 to "the phone starting", 3 to "a broadcast", 4 to "a content provider",
                             5 to "a scheduled job", 6 to "the launcher (opened by hand)", 7 to "recent apps", 8 to "other", 9 to "a push message",
                             10 to "a service", 11 to "an activity being opened")
@@ -48,7 +50,8 @@ class App : Application() {
                     }
                 } catch (_: Throwable) {}
                 // An error entry, so it is in "Collect error logs" (2026-11-28 10:10: the process still seen after Exit).
-                ServerLog.log("player", "start", "", "", false, "App started again ${(System.currentTimeMillis() - exitAt) / 1000} s after Exit — $why")
+                // Only an unexpected start is written (13:28: no entry for each start — opened by hand isn't logged).
+                if (android.os.Build.VERSION.SDK_INT >= 35 && !byHand) ServerLog.log("player", "start", "", "", false, "App started again ${(System.currentTimeMillis() - exitAt) / 1000} s after Exit — $why")
             }
             getSharedPreferences("volkeep", MODE_PRIVATE).edit().remove("exitAt").apply()
         } catch (_: Exception) {}
@@ -109,7 +112,6 @@ class App : Application() {
                         app.vlcinterface.sources.RgScanner.state.value.running || app.vlcinterface.sources.RadioCapture.status.value.running
                 } catch (_: Exception) { true }
                 if (busy) { h.postDelayed(this, 60_000); return }
-                try { ServerLog.log("player", "start", "", "", true, "Started in the background with nothing to do (no screen, no playing, no alarm) — closed after 90 s") } catch (_: Exception) {}
                 android.os.Process.killProcess(android.os.Process.myPid())
             } }, 90_000)
         }
