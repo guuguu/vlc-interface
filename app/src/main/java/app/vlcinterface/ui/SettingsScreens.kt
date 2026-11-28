@@ -481,6 +481,15 @@ fun ColumnScope.SettingsGroupBody(nav: Navigator, id: String) {
                     }
                 }
                 Divider()
+                var idHelp by remember { mutableStateOf(false) }
+                // Identify song (button under play, radio and song players): how long the "replace the names?" question waits.
+                ValueRow("Identify song", "Song player: the \"replace the names?\" question closes after ${s.identifyAskSec} s with nothing written · radio: result in the log",
+                    "${s.identifyAskSec} s") {
+                    val opts = listOf(20, 30, 60, 10); set(s.copy(identifyAskSec = opts[(opts.indexOf(s.identifyAskSec) + 1).mod(opts.size)]))
+                    if (AutoHelp.ok("radio", "Identify song")) idHelp = true
+                }
+                if (idHelp) HelperDialog("Identify song", SettingHelp.text("Identify song", "")) { idHelp = false }
+                Divider()
                 var savedList by remember { mutableStateOf(false) }
                 if (savedList) SavedSongsDialog { savedList = false }
                 ValueRow("Saved songs", "Play or delete the songs saved from the radio", "Open") { savedList = true }

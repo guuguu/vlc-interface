@@ -1501,3 +1501,46 @@
 ## Radio skipped to the next station every 15 s (reported 2026-11-23 08:39)
 - **Cause:** the "no sound for 5 s" check read the app's sound-engine figures even when the sound wasn't going through the engine (libVLC's own output, e.g. after a fallback, or before the engine took over); those figures stood still, so every station looked silent after its 10 s to connect + 5 s.
 - **Now:** a station counts as playing while its stream moves (libVLC's play clock) or the engine's output moves; it counts as silent only when the engine is the output, has measured the level, and it stayed under −66 dBFS for more than 5 s. Short buffering no longer counts while the stream still moves. Each skip still goes to the Player log with its reason.
+
+# After 1.92.0 — the saved requests of 2026-11-28 (01:09–01:27)
+
+## NAS and network shares
+- **Several shares, some down (1):** each share is checked on its own; only the unreachable ones get the "missing share" handling, the reachable ones are used normally.
+- **"NAS not found" once (2):** the message shows at most once per app session, only on Songs or Video, never on the radio.
+- **False reachable / unreachable flapping (24):** a share is marked off only after 3 failed checks in a row (each retried with a 3 s timeout); checks failing while a ReplayGain scan or indexing is busy don't count. A NAS song whose play clock is moving is never cut from the queue.
+- **Back on line (11):** when a share comes back, the song that stopped on the error is opened again at its place (after a 1.5 s settle), with no app restart.
+- **Remembered IP addresses (9):** the servers found on the LAN are remembered; when one isn't found now it's still offered ("· not found now"), with an "invalid / not reachable" note if connecting fails.
+- **Delete a share (10):** 🗑 on each location row in the Library, with a confirmation.
+- **Label (26):** "NAS unreach" → "NAS unreachable".
+- **Throttled LAN transfers (6):** ReplayGain copies measure the link; once the rate stays within ±2 % for 60 s it is taken as the maximum and background transfers are held to 60 % of it for the session. Radio and playback are never throttled or counted.
+
+## Player and queue
+- **Exit closes everything (3):** all the app's notifications are removed on Exit; only alarm notifications may stay.
+- **Radio "no signal" (5):** a station is skipped only after 20 s with no sound (after its 15 s to connect); a moving stream clock counts as playing.
+- **Active buttons (13):** Random, Repeat All and RGain show in the accent colour when on.
+- **Radio favourites reorder (15):** ≡ handle on the radio player's favourites; drag to reorder.
+- **Add album to queue (17):** in a queue item's long-press menu; the song's folder goes in after it, without touching the song playing; Sequential when it's the playing song's album.
+- **Open song folder from the queue (18):** works with no playlist loaded.
+- **Queue changes never interrupt the song (19):** loading or changing the queue keeps the song playing (or paused); the radio player still starts a chosen station at once.
+- **Clock comes back after scrolling on the radio player (21):** only a real scroll counts.
+- **After a reboot (23):** the queue is saved to the phone (2 s after each change, every 20 s while playing) and loaded again.
+- **Identify song (25):** a small "♪ Identify" button under the play button, on the radio and song players, only when pressed (MusicBrainz, at most two tries, the second with a simpler search). Radio: the result goes to the Server log, no pop-ups (the button shows "Found · logged" / "Not found · logged"). Songs: the found title, artist and album are written to the file's tags (the same safe copy-and-check way as ReplayGain; a song playing gets them when it's over, together with any ReplayGain waiting). If the file already has other names, a Yes / No question shows the old and new names; it closes by itself with nothing written after Settings → Radio → Identify song (default 20 s). Helper on the setting.
+
+## Sound
+- **Start volume on a new output (8):** Settings → Audio → "Start volume on a new output" (on by default, helper): when the sound moves to another device it starts at the Start volume there; checked again 1.2 s later in case Android puts the device's own level back.
+
+## Alarms
+- **Flash light without notification spam (4):** the torch blinks by itself (brightness levels on Android 13+), no repeated notifications.
+- **Short notification alarms (16):** a second list of alarms for daily moments — a short vibration and a short sound, rings once, a notification you can swipe away; not in the calendar, never in front of the player. Section at the bottom of the global alarm settings, each with its own switch; a link at the top of every alarm settings page jumps there. Time and days set like the main alarms.
+
+## Helpers (12)
+- Each helper shows at most once per app session; Alarm settings → Helpers has a switch per settings page (Alarm page, Audio, Radio, Video, Look, Library & files, Visualisation, Clock aspect, File associations).
+
+## Export / import (7)
+- Exports carry the locations' indexes and each song's and station's Loudness / Treble / Preamp. After a reinstall or upgrade, importing brings the indexes back: the app only checks and updates them, no full re-indexing. A backup restore brings them back too.
+
+## Race conditions (28)
+- Small waits where things happen together: the queue is saved 2 s after changes settle, Exit clears the notifications again 250 ms later, a share back on line settles 1.5 s before the song is reopened, the start volume is checked again 1.2 s after a new output connects, the radio watchdog waits 15 s for a station to connect.
+
+## Not done in this release — see the notes
+- 14 (Huawei install), 20 (choose between two Bluetooth outputs), 22 (disconnect idle Bluetooth), 27 (Sleep / reset button: mock-up first).

@@ -84,6 +84,9 @@ object SettingHelp {
             "Useful when a save seems to be missing.",
         "MP3 encoder" to "The LAME MP3 encoder bundled with the app, used when the format is MP3. It runs on the phone, no internet needed.\n\n" +
             "LAME is free software (LGPL), included unchanged.",
+        "Identify song" to "The small ♪ Identify button under the play button looks the song up on MusicBrainz — only when you press it, with a second try with a simpler search when the first finds nothing.\n\n" +
+            "Radio: the station's song name is looked up and the result is written to the Server log (no pop-ups).\n\n" +
+            "Songs: the file's tags (or its name) are looked up and the found title, artist and album are written to the file. When the file already has other names, you're asked first; the question closes after this many seconds with nothing written. A song that is playing gets its new names when it's over.",
         "Radio buffer" to "How many minutes of the playing station are kept. A song that started up to this long ago can still be saved whole, and a connection lost and back within this time keeps the recording going.\n\n" +
             "Longer buffers use more phone storage (about 1 MB per minute for MP3 stations, much more for FLAC). The buffer is deleted when you stop the radio or clear caches.",
         // ---------------------------------------------------------------- Network & VPN

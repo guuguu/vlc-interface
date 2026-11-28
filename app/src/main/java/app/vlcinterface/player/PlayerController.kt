@@ -1279,12 +1279,15 @@ class PlayerController(private val context: Context, private val store: Store) {
     @Volatile private var nasDownNoted = false
 
     /** A NAS back on line: a NAS item that had stopped on an error is opened again at its place (no app restart needed). */
-    fun nasBack() = main.post {
+    // A short wait first: the share's connection settles before the song is opened again (no race with the monitor).
+    fun nasBack() = main.postDelayed({ nasBackNow() }, 1500)
+
+    private fun nasBackNow() = main.post {
         nasDownNoted = false
         val s = _state.value
         val item = s.item ?: return@post
         if (item.isRadio || item.uri.startsWith("content://") || item.uri.startsWith("file://")) return@post
-        if (s.error.isNotEmpty() && !s.userPaused) {
+        if (s.error.isNotEmpty() && !s.userPaused && !nasOff(item)) {
             ServerLog.log("player", "nas", "", "", true, "NAS back on line: \"${item.title}\" opened again")
             startItem(s.index, s.time.coerceAtLeast(0))
         }

@@ -60,6 +60,8 @@ import app.vlcinterface.alarm.AlarmGlobal
 import app.vlcinterface.alarm.AlarmScheduler
 import app.vlcinterface.alarm.Alarms
 import app.vlcinterface.alarm.ClockAspect
+import app.vlcinterface.alarm.ShortAlarm
+import app.vlcinterface.alarm.ShortAlarms
 import kotlinx.coroutines.launch
 
 // ---------------------------------------------------------------- player: button and clock area
@@ -226,6 +228,7 @@ fun AlarmEditScreen(nav: Navigator, id: String) {
     HelpHost {
     Column(Modifier.fillMaxSize()) {
         BackHeader(if (Alarms.get(id) == null) "New alarm" else "Alarm", nav)
+        Box(Modifier.padding(horizontal = 20.dp)) { ShortAlarmsLink(nav) }
         Column(Modifier.weight(1f).verticalScroll(scroll).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
             CardBox {
                 HToggleRow("Alarm on", "", a.on) { a = a.copy(on = it) }; Divider()
@@ -388,7 +391,9 @@ fun AlarmSettingsScreen(nav: Navigator) {
     Column(Modifier.fillMaxSize()) {
         BackHeader("Alarm clock", nav)
         Column(Modifier.weight(1f).anchorViewport(scroll, "alarm").verticalScroll(scroll).padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy((6 * sg()).dp)) {
+            ShortAlarmsLink(nav)
             AlarmSettingsBody(nav)
+            ShortAlarmsSection()
             Box(Modifier.height(24.dp))
         }
     }
@@ -1326,4 +1331,77 @@ fun AlarmSystemButton() {
         dismissButton = { STextButton({ confirm = false }) { Text("Cancel") } })
     // Turned on: what the alarms still need from Android, with Grant buttons.
     if (ask.isNotEmpty()) AlarmPermissionDialog(ask, onLater = { ask = emptyList() }, onClose = { ask = emptyList() })
+}
+
+
+/** At the top of the alarm settings pages (2026-11-28 01:17): the short notification alarms, linked to their section. */
+@Composable
+fun ShortAlarmsLink(nav: Navigator) {
+    val n = ShortAlarms.list.collectAsState().value.count { it.on }
+    Text("⏱ Short notification alarms" + (if (n > 0) " ($n on)" else "") + " — for daily moments: pills, exercises … ›", color = accent(), fontSize = 14.sp,
+        fontWeight = FontWeight.SemiBold, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).clickable {
+            SettingsAnchor.go("alarm", null, "Short notification alarms")
+            if (nav.top !is Screen.AlarmSettings) nav.go(Screen.AlarmSettings)
+        }.padding(vertical = 8.dp))
+}
+
+/** The list of short notification alarms, at the bottom of the alarm settings page. */
+@Composable
+fun ShortAlarmsSection() {
+    val ctx = LocalContext.current
+    LaunchedEffect(Unit) { if (ShortAlarms.list.value.isEmpty()) ShortAlarms.load(ctx) }
+    val list = ShortAlarms.list.collectAsState().value
+    var edit by remember { mutableStateOf<ShortAlarm?>(null) }
+    SectionTitle("Short notification alarms", Modifier.anchor("Short notification alarms"))
+    CardBox {
+        Text("For daily moments (taking pills, exercises …): a short vibration and a short notification sound, once, and a notification you can swipe away. Not in the calendar, not in front of the player.",
+            color = C.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        list.forEach { a ->
+            Row(Modifier.fillMaxWidth().clickable { edit = a }.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(a.timeText, color = if (a.on) C.text else C.muted, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text("  " + a.label.ifEmpty { "Reminder" } + " · " + (if (a.days == 0) "one time" else Alarm.daysText(a.days)), color = C.muted, fontSize = 14.sp,
+                    maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                AppSwitch(a.on, { ShortAlarms.put(ctx, a.copy(on = it)) })
+            }
+            Divider()
+        }
+        Text("+ Add a short alarm", color = accent(), fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.fillMaxWidth().clickable { edit = ShortAlarm(java.util.UUID.randomUUID().toString()) }.padding(16.dp))
+    }
+    edit?.let { e -> ShortAlarmDialog(e, onClose = { edit = null }) }
+}
+
+@Composable
+private fun ShortAlarmDialog(a0: ShortAlarm, onClose: () -> Unit) {
+    val ctx = LocalContext.current
+    var a by remember { mutableStateOf(a0) }
+    var hh by remember { mutableStateOf("%02d".format(a0.hour)) }
+    var mm by remember { mutableStateOf("%02d".format(a0.minute)) }
+    val exists = ShortAlarms.list.value.any { it.id == a0.id }
+    androidx.compose.material3.AlertDialog(onDismissRequest = onClose, containerColor = C.panel,
+        title = { Text(if (exists) "Short alarm" else "New short alarm", color = C.text) },
+        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Field("Name (e.g. Pills)", a.label) { a = a.copy(label = it) }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { DigitField(hh, "hh", 2, Modifier.fillMaxWidth()) { hh = it } }
+                Text(":", color = C.text, fontSize = 22.sp)
+                Box(Modifier.weight(1f)) { DigitField(mm, "mm", 2, Modifier.fillMaxWidth()) { mm = it } }
+            }
+            Text("Days (none = one time only)", color = C.muted, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                listOf("M", "T", "W", "T", "F", "S", "S").forEachIndexed { i, d ->
+                    val on = a.days and (1 shl i) != 0
+                    Box(Modifier.size(34.dp).clip(CircleShape).background(if (on) accent() else C.card).clickable { a = a.copy(days = a.days xor (1 shl i)) },
+                        contentAlignment = Alignment.Center) { Text(d, color = if (on) Color(0xFF1A0E05) else C.text, fontSize = 14.sp) }
+                }
+            }
+        } },
+        confirmButton = { STextButton({
+            val h = hh.toIntOrNull()?.coerceIn(0, 23) ?: a.hour; val m = mm.toIntOrNull()?.coerceIn(0, 59) ?: a.minute
+            ShortAlarms.put(ctx, a.copy(hour = h, minute = m, on = true)); onClose()
+        }) { Text("Save") } },
+        dismissButton = { Row {
+            if (exists) STextButton({ ShortAlarms.remove(ctx, a0.id); onClose() }) { Text("Delete", color = C.bad) }
+            STextButton(onClose) { Text("Cancel") }
+        } })
 }

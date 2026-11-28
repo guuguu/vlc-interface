@@ -199,12 +199,14 @@ class AlarmReceiver : BroadcastReceiver() {
                 AlarmEngine.startRing(ctx, id, intent.getBooleanExtra(AlarmScheduler.EXTRA_SNOOZED, false))
             }
             AlarmScheduler.ACTION_GUARD -> AlarmEngine.guardCheck(ctx)
+            ShortAlarms.ACTION -> intent.getStringExtra("id")?.let { ShortAlarms.fire(ctx, it) }
             AlarmScheduler.ACTION_SNOOZE -> AlarmEngine.snooze(ctx, intent.getIntExtra(AlarmScheduler.EXTRA_N, 0))
             AlarmScheduler.ACTION_AWAKE -> AlarmEngine.awake(ctx, "notification")
             AlarmScheduler.ACTION_RESHOW -> AlarmEngine.reshow(ctx)
             Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED,
             Intent.ACTION_TIME_CHANGED, Intent.ACTION_TIMEZONE_CHANGED, AlarmManager.ACTION_SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED -> {
                 AlarmScheduler.reschedule(ctx, checkMissed = true)
+                try { ShortAlarms.scheduleAll(ctx) } catch (_: Exception) {}
                 if (Alarms.active.isNotEmpty()) AlarmEngine.guardCheck(ctx)
             }
         }

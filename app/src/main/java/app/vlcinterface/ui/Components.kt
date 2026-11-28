@@ -1572,7 +1572,7 @@ fun rememberDebounced(value: String, ms: Long = 2000): String {
  * whose switch is on (Helpers per settings page), and each helper once per session — a long press still shows it any time.
  */
 object AutoHelp {
-    val PAGES = listOf("alarm" to "Alarm page", "audio" to "Audio", "video" to "Video", "look" to "Look", "library" to "Library & files",
+    val PAGES = listOf("alarm" to "Alarm page", "audio" to "Audio", "radio" to "Radio", "video" to "Video", "look" to "Look", "library" to "Library & files",
         "vis" to "Visualisation", "clock" to "Clock aspect", "assoc" to "File associations")
     private val shown = java.util.Collections.synchronizedSet(HashSet<String>())
     fun pageOn(page: String) = app.vlcinterface.alarm.Alarms.current.global.helpers &&

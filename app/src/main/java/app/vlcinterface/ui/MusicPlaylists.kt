@@ -140,6 +140,7 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
     val st by App.instance.store.state.collectAsState()
     val item = p.item
     if (item == null) { LaunchedEffect(Unit) { nav.back() }; return }
+    IdentifyAskDialog()
     LaunchedEffect(item.uri) { if (!item.isMusic && !item.isRadio) nav.replace(Screen.Player) }
     // Double tap on the Treble slider: Settings → Audio scrolled to the Treble band; Back returns here (21:50).
     LaunchedEffect(TrebleBandNav.want) { if (TrebleBandNav.want) { TrebleBandNav.want = false; SettingsAnchor.go("audio", null, "Treble band"); nav.go(Screen.SettingsGroup("audio")) } }
@@ -392,8 +393,18 @@ fun MusicScreen(nav: Navigator, openOutput: () -> Unit) {
                     Text(if (radio) "Prev\nstation" else "Prev in\n$within", color = C.muted, fontSize = 10.sp, textAlign = TextAlign.Center, lineHeight = 12.sp, modifier = Modifier.padding(top = 4.dp))
                 }
                 if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("−${st.settings.doubleTapSeekSec}", 44) { player.seekBy(-st.settings.doubleTapSeekSec * 1000L) } }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size((76 * btnScale()).dp).liteShadow(CircleShape).clip(CircleShape).background(accent()).clickable { player.togglePause() }, contentAlignment = Alignment.Center) {
                     Text(if (p.isPlaying) "❚❚" else "▶", color = Color(0xFF1A0E05), fontSize = (26 * btnScale()).sp, fontWeight = FontWeight.Bold)
+                }
+                // Identify song (MusicBrainz): only when pressed. Radio: the result goes to the log; songs: tags written.
+                val idCtx = androidx.compose.ui.platform.LocalContext.current
+                val idStatus by app.vlcinterface.sources.SongId.status.collectAsState()
+                Box(Modifier.padding(top = 6.dp).clip(RoundedCornerShape(10.dp)).background(Color(0x24FFFFFF))
+                    .clickable { sleepScope.launch { app.vlcinterface.sources.SongId.identify(idCtx, item, p.nowPlaying) } }
+                    .padding(horizontal = 8.dp, vertical = 3.dp)) {
+                    Text(idStatus.ifEmpty { "♪ Identify" }, color = if (idStatus.isEmpty()) C.muted else accent(), fontSize = 10.sp, maxLines = 1)
+                }
                 }
                 if (!radio) Box(Modifier.padding(top = 4.dp)) { CtlBtn("+${st.settings.doubleTapSeekSec}", 44) { player.seekBy(st.settings.doubleTapSeekSec * 1000L) } }
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(maxOf(62 * btnScale(), 46f).dp)) {
@@ -2435,4 +2446,40 @@ fun SaveQueueButton() {
             }) { Text("Save", color = accent()) } },
             dismissButton = { STextButton({ name = null }) { Text("Cancel") } })
     }
+}
+
+
+/** Identify song: the file already has other names — replace them? Closes by itself with nothing written. */
+@Composable
+private fun IdentifyAskDialog() {
+    val ask by app.vlcinterface.sources.SongId.ask.collectAsState()
+    val a = ask ?: return
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var left by remember(a) { mutableStateOf(((a.until - System.currentTimeMillis()) / 1000).coerceAtLeast(0)) }
+    LaunchedEffect(a) {
+        while (true) {
+            left = ((a.until - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
+            if (left <= 0) { app.vlcinterface.sources.SongId.decline(timedOut = true); break }
+            kotlinx.coroutines.delay(250)
+        }
+    }
+    val names = mapOf("TITLE" to "Title", "ARTIST" to "Artist", "ALBUM" to "Album")
+    androidx.compose.material3.AlertDialog(onDismissRequest = { app.vlcinterface.sources.SongId.decline(false) }, containerColor = C.panel,
+        title = { Text("Replace the song's names?", color = C.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("MusicBrainz found other names than the ones in the file.", color = C.muted, fontSize = 13.sp)
+                names.forEach { (k, l) ->
+                    val o = a.old[k].orEmpty(); val n = a.new[k].orEmpty()
+                    if (n.isNotEmpty() && o != n) {
+                        Text(l, color = accent(), fontSize = 13.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+                        Text("Now: ${o.ifEmpty { "—" }}", color = C.muted, fontSize = 13.sp)
+                        Text("New: $n", color = C.text, fontSize = 13.sp)
+                    }
+                }
+                Text("Closes in $left s with nothing written", color = C.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = { app.vlcinterface.sources.SongId.accept(ctx) }) { Text("Yes", color = accent()) } },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = { app.vlcinterface.sources.SongId.decline(false) }) { Text("No", color = C.muted) } })
 }

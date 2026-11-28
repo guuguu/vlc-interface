@@ -307,7 +307,8 @@ object ExportExtras {
         "videoFiles" to ExportCat.VIDEOS,             // per video: format, decoder, deinterlacing, tracks, colours, audio sync
         "rgScanDates2" to ExportCat.RG,               // when each network song was measured, and where its values went
         "netindex_at" to ExportCat.INDEX,
-        "lan_seen" to ExportCat.NAS,                  // servers once found on the LAN, with their addresses (01:13)             // when each indexed folder was indexed, and what its index holds (2026-11-28 01:12)
+        "lan_seen" to ExportCat.NAS,
+        "short_alarms" to ExportCat.ALARMS,           // the short notification alarms (2026-11-28 01:17)                  // servers once found on the LAN, with their addresses (01:13)             // when each indexed folder was indexed, and what its index holds (2026-11-28 01:12)
     )
     /** Data files in the app's storage → category. */
     val FILES = mapOf(

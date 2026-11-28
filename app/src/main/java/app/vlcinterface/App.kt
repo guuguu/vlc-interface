@@ -72,6 +72,7 @@ class App : Application() {
         // Phone videos deleted since last time: forget what was kept for them (a few seconds after start, off the main thread).
         Thread { try { Thread.sleep(5000); app.vlcinterface.player.VideoFileCleanup.checkPhone(this) } catch (_: Exception) {} }.start()
         app.vlcinterface.alarm.AlarmScheduler.reschedule(this, checkMissed = true)
+        try { app.vlcinterface.alarm.ShortAlarms.scheduleAll(this) } catch (_: Exception) {}
         if (app.vlcinterface.alarm.Alarms.active.isNotEmpty()) app.vlcinterface.alarm.AlarmEngine.guardCheck(this)
         app.vlcinterface.sources.VpnLink.init(this)          // home NAS over a VPN (ZeroTier …)   // radio: keeps the playing station ready to save songs
         player.currentOutputName = output.active?.name ?: ""
@@ -132,6 +133,17 @@ class App : Application() {
                 if (!output.overriding) player.setAppVolume(1f)
                 else player.setAppVolume(store.current.settings.startVolume / output.volumePercent().coerceAtLeast(1).toFloat())
                 ServerLog.log("player", "volume", "", "", true, "Output changed to " + after.name + ": set to the start volume (" + store.current.settings.startVolume + " %)")
+                // Android may put the device's own remembered level back a moment after it connects (Bluetooth absolute
+                // volume): checked again shortly after, and set once more if it was overwritten.
+                val dev = after.name
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    try {
+                        if (output.active?.name == dev && output.volumePercent() != store.current.settings.startVolume) {
+                            applyStartVolume()
+                            ServerLog.log("player", "volume", "", "", true, dev + ": level changed by Android after connecting — start volume set again")
+                        }
+                    } catch (_: Exception) {}
+                }, 1200)
             }
             // Picked in the app: the sound was already moved to it (outputChanged would send it back to Android's default).
             if (before?.name != after?.name && !picked) player.outputChanged()

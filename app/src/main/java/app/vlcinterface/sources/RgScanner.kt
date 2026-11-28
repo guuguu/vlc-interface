@@ -654,6 +654,42 @@ object RgScanner {
     }
 
     // ---------- saving ----------
+    /**
+     * Identify song: writes title / artist / album (standard tags) to the file, the same safe way as the ReplayGain
+     * values (copy → tag → check → upload; cached and written after the song when the player has it open).
+     */
+    suspend fun saveTags(ctx: Context, item: PlayItem, fields: Map<String, String>): String = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        if (item.uri.startsWith("content://") && !MusicFolderAccess.covered(ctx, item)) return@withContext "not written (no write access to its music folder)"
+        if (WriteGuard.isReadOnly(item)) return@withContext "not written (share is read-only)"
+        val src = App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }
+        val ext = item.ext.lowercase()
+        val tmp = File(ctx.cacheDir, "idtag-${java.util.UUID.randomUUID()}.${ext.ifEmpty { "bin" }}")
+        val net = item.uri.startsWith("smb://") || item.uri.startsWith("http")
+        val orig = if (net) File(tmp.path + ".orig") else null
+        try {
+            download(ctx, item, tmp)
+            orig?.let { tmp.copyTo(it, true) }
+            // A tagged copy already waiting for this file (ReplayGain): the names go onto it, so both are kept.
+            pendingCopyOf(ctx, item.uri)?.let { it.copyTo(tmp, true) }
+            TagWriter.writeNames(tmp, fields)
+            if (App.instance.player.state.value.item?.uri == item.uri) {
+                if (orig != null && !ParallelFetch.matchesRemote(item, item.uri, orig)) throw IllegalStateException("the copy read from the server didn't match it — nothing changed")
+                addPending(ctx, item, tmp, tagsOnly = true)
+                return@withContext "cached — written to the file after this song"
+            }
+            try { upload(ctx, item, src, tmp, orig) } catch (e: Exception) {
+                if (!inUse(e)) throw e
+                if (orig != null && !ParallelFetch.matchesRemote(item, item.uri, orig)) throw IllegalStateException("the copy read from the server didn't match it — nothing changed")
+                addPending(ctx, item, tmp, tagsOnly = true)
+                return@withContext "cached — written to the file once it is no longer playing"
+            }
+            "written to the file"
+        } catch (e: Exception) {
+            if (WriteGuard.isDenied(e)) { WriteGuard.markReadOnly(item.sourceId, item.uri, e.message ?: "refused"); "not written (share is read-only)" }
+            else "not written (${e.message ?: e.javaClass.simpleName})"
+        } finally { tmp.delete(); orig?.delete() }
+    }
+
 
     /** Where the values went, in words (starts with "not" when nothing could be saved). */
     private suspend fun save(ctx: Context, item: PlayItem, values: Map<String, String>, target: RgTarget): String {
@@ -671,6 +707,7 @@ object RgScanner {
         return try {
             download(ctx, item, tmp)
             orig?.let { tmp.copyTo(it, true) }                 // untagged, for the in-place update / the check
+            pendingCopyOf(ctx, item.uri)?.let { it.copyTo(tmp, true) }   // names from Identify song waiting: kept
             TagWriter.write(tmp, values)
             // Check the tagged copy before it replaces anything.
             val check = ReplayGain.parse(tmp.inputStream().use { s -> ByteArray(512 * 1024).let { b -> val n = s.read(b); b.copyOf(maxOf(n, 0)) } } +
@@ -936,18 +973,26 @@ object RgScanner {
         }
     }
 
-    @Synchronized private fun addPending(ctx: Context, item: PlayItem, tmp: File) {
+    @Synchronized private fun addPending(ctx: Context, item: PlayItem, tmp: File, tagsOnly: Boolean = false) {
         val a = readPending(ctx)
         // A newer copy for the same file replaces the older one.
         val keep = org.json.JSONArray()
+        var only = tagsOnly
         for (k in 0 until a.length()) { val o = a.getJSONObject(k)
-            if (o.optJSONObject("e")?.optString("uri") == item.uri) File(pendingDir(ctx), o.optString("f")).delete() else keep.put(o) }
+            if (o.optJSONObject("e")?.optString("uri") == item.uri) { if (!o.optBoolean("tagsOnly")) only = false; File(pendingDir(ctx), o.optString("f")).delete() } else keep.put(o) }
         val name = "${java.util.UUID.randomUUID()}.${item.ext.lowercase().ifEmpty { "bin" }}"
         if (!tmp.renameTo(File(pendingDir(ctx), name))) { tmp.copyTo(File(pendingDir(ctx), name), true); tmp.delete() }
-        keep.put(org.json.JSONObject().put("f", name).put("e", MusicLibrary.toPlEntry(item).toJson()).put("tries", 0))
+        keep.put(org.json.JSONObject().put("f", name).put("e", MusicLibrary.toPlEntry(item).toJson()).put("tries", 0).put("tagsOnly", only))
         writePending(ctx, keep)
         ServerLog.log(item.uri, "replaygain", item.uri.substringBefore("://").uppercase(), item.user, true,
             "${item.title}: file in use by the player — tagged copy cached, written when it is no longer playing")
+    }
+
+    @Synchronized private fun pendingCopyOf(ctx: Context, uri: String): File? {
+        val a = readPending(ctx)
+        for (k in 0 until a.length()) { val o = a.getJSONObject(k)
+            if (o.optJSONObject("e")?.optString("uri") == uri) return File(pendingDir(ctx), o.optString("f")).takeIf { it.exists() } }
+        return null
     }
 
     private val flushing = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -972,7 +1017,7 @@ object RgScanner {
                     try {
                         quietCopy.set(true)
                         upload(app, item, App.instance.store.current.sources.firstOrNull { it.id == item.sourceId }, f)
-                        RgStore.remove(item.uri); f.delete()
+                        if (!o.optBoolean("tagsOnly")) RgStore.remove(item.uri); f.delete()
                         ServerLog.log(item.uri, "replaygain", item.uri.substringBefore("://").uppercase(), item.user, true,
                             "${item.title}: cached ReplayGain written to the file")
                     } catch (e: Exception) {
@@ -1044,6 +1089,18 @@ object RgStore {
 /** Writes REPLAYGAIN_* tags with jaudiotagger: ID3v2 TXXX (MP3), Vorbis comments (FLAC, Ogg), iTunes freeform (M4A). */
 object TagWriter {
     init { Logger.getLogger("org.jaudiotagger").level = Level.OFF }
+
+    /** Standard name tags (TITLE / ARTIST / ALBUM) — Identify song. */
+    fun writeNames(f: File, fields: Map<String, String>) {
+        val af = org.jaudiotagger.audio.AudioFileIO.read(f)
+        val tag = af.tagOrCreateAndSetDefault
+        for ((k, v) in fields) {
+            val key = when (k) { "TITLE" -> org.jaudiotagger.tag.FieldKey.TITLE; "ARTIST" -> org.jaudiotagger.tag.FieldKey.ARTIST
+                "ALBUM" -> org.jaudiotagger.tag.FieldKey.ALBUM; else -> null } ?: continue
+            tag.setField(key, v)
+        }
+        af.commit()
+    }
 
     fun write(f: File, values: Map<String, String>) {
         val af = org.jaudiotagger.audio.AudioFileIO.read(f)

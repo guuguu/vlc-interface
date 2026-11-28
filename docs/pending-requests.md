@@ -44,3 +44,9 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
     - a slightly long press: Loudness, Treble and Preamp back to 0 and the sound profile kept for the song playing removed; a short press only shows a short helper for a moment;
     - show a mock-up when ready, before building.
 28. **2026-11-28 01:27 — Guard against race conditions everywhere:** across the whole program, wherever a small delay (or a wait for the previous step to finish) is needed to avoid a race condition, insert it.
+
+## Status — 1.93.0 (2026-11-28)
+- Done: 1–13, 15–19, 21, 23–26, 28.
+- 27: mock-up shown, waiting for approval before building.
+- 14: needs a decision — the app requires Android 12 (API 31); that Huawei's "12.0.0.2" is EMUI 12, which runs on Android 10.
+- 20, 22: Android doesn't let normal apps pick the active Bluetooth (A2DP) device or disconnect one; explained.

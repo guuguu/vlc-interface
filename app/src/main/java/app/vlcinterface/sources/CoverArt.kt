@@ -392,7 +392,7 @@ object CoverArt {
     private fun missed(k: String) = File(miss, "$k.none").let { it.exists() && System.currentTimeMillis() - it.lastModified() < 7L * 24 * 3600 * 1000 }
     private fun markMissed(k: String) { try { File(miss, "$k.none").writeText("") } catch (_: Exception) {} }
 
-    private suspend fun mb(url: String): JSONObject? {
+    internal suspend fun mb(url: String): JSONObject? {
         val wait = 1100 - (System.currentTimeMillis() - lastCall); if (wait > 0) delay(wait)   // MusicBrainz: 1 request/s
         lastCall = System.currentTimeMillis()
         // Always off the screen's thread, whoever asks.
