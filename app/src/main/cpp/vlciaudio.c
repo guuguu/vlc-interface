@@ -81,6 +81,8 @@ static peak_t g_ring[RING];
 
 /* Diagnostics, read by Kotlin (watchdog + Settings → Sound). */
 static atomic_long st_loudAt;      /* last time (µs) a block had sound above −66 dBFS (radio silence watchdog) */
+static atomic_long st_over;        /* frames that went over full scale before the limiter (clipping caught), total (2026-11-28) */
+static atomic_long st_overPeak;    /* highest level before the limiter since the last stats read, ×1e6 (1e6 = full scale) */
 static atomic_long st_gen;         /* streams opened so far (frames heard restart from 0 with each one) */
 static atomic_long st_setup, st_setupRes = -99, st_play, st_frames, st_lastWrite, st_startRes = -99, st_ptsDelta, st_rate, st_open = -99;
 static atomic_uint g_w, g_r, g_r2, g_r3;
@@ -593,6 +595,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
         long take = (long)count; if (take > g_capInMax - g_capInN) take = g_capInMax - g_capInN;
         if (take > 0) { memcpy(g_capIn + g_capInN * 2, samples, (size_t)take * 4); g_capInN += take; }
     }
+    long blkOver = 0; float blkPeak = 0.f;
     while (done < count) {
         unsigned n = count - done; if (n > 4096) n = 4096;
         for (unsigned i = 0; i < n; i++) {
@@ -606,6 +609,7 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
             if (g_trebleActive) { x = treble_run(x, 0); y = treble_run(y, 1); }
             float k = (float)(done + i);
             float l = x * (sl + dl * k), r = y * (sr + dr * k);
+            { float mo = fmaxf(fabsf(l), fabsf(r)); if (mo > 0.999f) { blkOver++; if (mo > blkPeak) blkPeak = mo; } }
             limit2(&l, &r, rel);                              /* only acts on overs */
             if (g_capArmed && g_lg < 1.f) g_capLimFrames++;
             buf[i * 2] = l; buf[i * 2 + 1] = r;
@@ -626,6 +630,11 @@ static void cb_play(void *d, const void *samples, unsigned count, int64_t pts) {
         if (w == 0 && !g_started) ensure_started();
         atomic_fetch_add(&st_frames, w);
         done += n;
+    }
+    if (blkOver) {
+        atomic_fetch_add(&st_over, blkOver);
+        long pk = (long)(blkPeak * 1e6f), cur = atomic_load(&st_overPeak);
+        while (pk > cur && !atomic_compare_exchange_weak(&st_overPeak, &cur, pk)) {}
     }
     unsigned wi = atomic_load(&g_w);
     int64_t when = (delta > -3000000 && delta < 3000000) ? pts : now_us() + latency_us();
@@ -809,11 +818,13 @@ Java_app_vlcinterface_player_NativeAudio_readPeaks(JNIEnv *env, jobject thiz, jf
     (*env)->SetFloatArrayRegion(env, out, 0, 2, v);
 }
 
+static long n_over_peak_take(void) { return atomic_exchange(&st_overPeak, 0); }
+
 /* [setup calls, setup result, play calls, frames written, last write, start result, frames heard, stream state, pts-now µs, rate, open result, volume×1000, mute, stream number, last sound µs (now_us clock), now µs] */
 JNIEXPORT void JNICALL
 Java_app_vlcinterface_player_NativeAudio_stats(JNIEnv *env, jobject thiz, jlongArray out) {
     (void)thiz;
-    jlong v[16];
+    jlong v[18];
     pthread_mutex_lock(&g_lock);
     v[6] = g_stream ? AAudioStream_getFramesRead(g_stream) : -1;
     v[7] = g_stream ? AAudioStream_getState(g_stream) : -1;
@@ -823,8 +834,10 @@ Java_app_vlcinterface_player_NativeAudio_stats(JNIEnv *env, jobject thiz, jlongA
     v[8] = atomic_load(&st_ptsDelta); v[9] = atomic_load(&st_rate); v[10] = atomic_load(&st_open);
     v[11] = (jlong)(atomic_load(&g_vol) * 1000.f); v[12] = atomic_load(&g_mute); v[13] = atomic_load(&st_gen);
     v[14] = atomic_load(&st_loudAt); v[15] = now_us();
+    v[16] = atomic_load(&st_over);
+    v[17] = n_over_peak_take();
     jsize n = (*env)->GetArrayLength(env, out);
-    (*env)->SetLongArrayRegion(env, out, 0, n < 16 ? n : 16, v);
+    (*env)->SetLongArrayRegion(env, out, 0, n < 18 ? n : 18, v);
 }
 
 /* Picture hue/saturation, live (libVLC "adjust" filter). Returns 0 when applied. */

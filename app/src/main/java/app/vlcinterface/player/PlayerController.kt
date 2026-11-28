@@ -454,6 +454,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         // never goes over full scale, so the limiter has nothing to do and the sound stays untouched.
         if (NativeAudio.active && st.settings.rgClipProtect && rgPeak > 0f && _state.value.item?.isMusic == true)
             total = minOf(total, -20f * log10(rgPeak))
+        lastTotalDb = total
         val bal = (st.deviceBalance[dev] ?: 0).coerceIn(-100, 100)
         fun att(f: Float): Float = if (f <= 0.001f) -60f else (20f * log10(f)).coerceAtLeast(-60f)
         val left = total + if (bal > 0) att(1f - bal / 100f) else 0f
@@ -530,6 +531,68 @@ class PlayerController(private val context: Context, private val store: Store) {
         val total = (t + dev).coerceIn(-10f, 10f)
         return bands + floatArrayOf(total * set.trebleMaxDb / 5f * trebleFlatten())
     }
+
+    // ---------- clipping log (2026-11-28 11:48) ----------
+    /** The item the clipping counts belong to, the engine's over count when it started, and what was found. */
+    private var clipItem: PlayItem? = null
+    private var clipBase = -1L
+    private var clipFrames = 0L
+    private var clipPeak = 0f
+    private var clipLogged = false
+    private var clipCheckAt = 0L
+
+    /** Songs / stations already logged for clipping while the app runs: one message each (11:49). */
+    private val clipDone = java.util.Collections.synchronizedSet(HashSet<String>())
+
+    /** Every second while playing: did the sound go over full scale before the limiter? One message per song / station. */
+    private fun clipTick(now: Long) {
+        if (now - clipCheckAt < 1_000L) return
+        clipCheckAt = now
+        val item = _state.value.item ?: return
+        val st = NativeAudio.stats() ?: return
+        if (clipItem !== item) { clipItem = item; clipBase = st.overFrames; clipFrames = 0L; clipPeak = 0f; clipLogged = false; return }
+        if (clipBase < 0L || st.overFrames < clipBase) { clipBase = st.overFrames; return }        // new engine: counts restarted
+        val n = st.overFrames - clipBase
+        if (st.overPeak > clipPeak) clipPeak = st.overPeak
+        if (n > clipFrames) {
+            clipFrames = n
+            // Logged a moment after the first over (2 s more of counting, so the line says how much), once per song / station.
+            if (!clipLogged && clipDone.add(item.uri.substringBefore('?') + "#" + item.startMs)) {
+                clipLogged = true
+                main.postDelayed({ if (clipItem === item) logClip(item, "Clipping: the sound went over full scale (the limiter caught it)") }, 2_000)
+            }
+        }
+    }
+
+    private fun logClip(item: PlayItem, what: String) {
+        val s = _state.value
+        val st = store.current
+        val set = st.settings
+        val dev = currentOutputName
+        fun db(v: Float) = (if (v > 0f) "+" else if (v < 0f) "−" else "") + "%.1f".format(java.util.Locale.US, kotlin.math.abs(v)) + " dB"
+        val rate = (NativeAudio.stats()?.rate ?: 0L).coerceAtLeast(1L)
+        val peakDb = if (clipPeak > 0f) 20f * log10(clipPeak) else 0f
+        val kind = when { item.isRadio -> "station"; item.isMusic -> "song"; else -> "video" }
+        val msg = "$what — $kind \"${item.title}\"" + (if (item.artist.isNotEmpty()) " · ${item.artist}" else "") +
+            " at ${s.time / 60_000}:${"%02d".format((s.time / 1000) % 60)}: over full scale ${"%.3f".format(java.util.Locale.US, clipFrames.toFloat() / rate)} s, highest ${db(peakDb)} over (once per ${if (item.isRadio) "station" else "song"} while the app runs)"
+        val ownPre = s.radioPreDb; val nr = s.noRgShownDb
+        val detail = buildString {
+            append("Item: ${item.uri.substringBefore('?')}\n")
+            append("Player (front): Loudness ${"%.1f".format(java.util.Locale.US, s.loudDb)}")
+            if (s.loudEffDb != s.loudDb) append(" (auto ${"%.1f".format(java.util.Locale.US, s.loudEffDb)})")
+            append(", Treble ${"%.1f".format(java.util.Locale.US, s.trebleDb)}, Preamp ${db(ownPre)}")
+            if (nr != 0f) append(" (shown with no-RG ${db(nr)})")
+            append(", RGain ${if (set.rgMode == "off") "off" else set.rgMode}${if (s.rgInfo.isNotEmpty()) " — ${s.rgInfo}" else ""}\n")
+            append("Settings (global): Preamp ${db(set.preampDb)}, ReplayGain pre-amp ${db(set.rgPreampDb)}, Prevent clipping ${if (set.rgClipProtect) "on" else "off"}, ")
+            append("Songs without ReplayGain ${db(set.noRgDb)}, Auto loudness ${if (set.autoLoud) "on" else "off"}, Tone sliders ${if (set.toneSliders) "on" else "off"}, ")
+            append("Treble band ${set.trebleType} ${set.trebleHz} Hz ±${"%.0f".format(java.util.Locale.US, set.trebleMaxDb)} dB, flatten ${set.trebleFlatPct} %\n")
+            append("Output \"$dev\": Preamp ${db(st.devicePreamp[dev] ?: 0f)}, Loudness ${"%+.1f".format(java.util.Locale.US, st.deviceLoud[dev] ?: 0f)}, ")
+            append("Treble ${"%+.1f".format(java.util.Locale.US, st.deviceTreble[dev] ?: 0f)}, Loudness flat from ${st.deviceLoudFrom[dev] ?: 50} %, Balance ${st.deviceBalance[dev] ?: 0}\n")
+            append("Total gain now ${db(lastTotalDb)}, phone volume ${try { am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) * 100 / am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC).coerceAtLeast(1) } catch (_: Exception) { -1 }} %")
+        }
+        ServerLog.log("sound-engine", "clip", "AAudio", "", false, msg, detail)
+    }
+    @Volatile private var lastTotalDb = 0f
 
     private fun deviceLoudNow(): Float = store.current.deviceLoud[currentOutputName] ?: 0f
     /**
@@ -3120,7 +3183,7 @@ class PlayerController(private val context: Context, private val store: Store) {
             MediaPlayer.Event.EndReached -> { adoptSessionSync(); handleEnd(s) }
             MediaPlayer.Event.TimeChanged -> {
                 lastTick = System.currentTimeMillis(); _state.value = s.copy(time = ev.timeChanged)
-                if (s.isPlaying) toneTick(lastTick)
+                if (s.isPlaying) { toneTick(lastTick); if (NativeAudio.active) clipTick(lastTick) }
                 // A NAS song playing on is proof its NAS answers (08:54): noted every 10 s, no network check needed.
                 val it0 = s.item
                 if (it0 != null && it0.uri.startsWith("smb://") && lastTick - nasSeenAt > 10_000) {

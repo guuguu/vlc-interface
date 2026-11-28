@@ -72,7 +72,11 @@ object NativeAudio {
                      val startResult: Long, val heard: Long, val state: Long, val ptsDeltaUs: Long, val rate: Long,
                      val openResult: Long, val volume: Float, val mute: Boolean, val stream: Long = 0,
                      /** Milliseconds since the sound last had a level above −66 dBFS (−1: never yet). */
-                     val quietMs: Long = -1) {
+                     val quietMs: Long = -1,
+                     /** Frames that went over full scale before the limiter (clipping it caught), total since start. */
+                     val overFrames: Long = 0,
+                     /** Highest level before the limiter since the last read (1.0 = full scale), 0 when none went over. */
+                     val overPeak: Float = 0f) {
         override fun toString() = "setup $setups/$setupResult, open $openResult, start $startResult, state $state, rate $rate, " +
             "blocks $plays, written $written, heard $heard, last write $lastWrite, pts−now ${ptsDeltaUs / 1000} ms, " +
             "volume ${"%.2f".format(volume)}${if (mute) " muted" else ""}, stream #$stream"
@@ -80,9 +84,9 @@ object NativeAudio {
 
     fun stats(): Stats? {
         if (!active) return null
-        val a = LongArray(16)
+        val a = LongArray(18)
         return try { stats(a); Stats(a[0], a[1], a[2], a[3], a[4], a[5], a[6], a[7], a[8], a[9], a[10], a[11] / 1000f, a[12] != 0L, a[13],
-            if (a[14] == 0L) -1L else (a[15] - a[14]) / 1000) } catch (_: Throwable) { null }
+            if (a[14] == 0L) -1L else (a[15] - a[14]) / 1000, a[16], a[17] / 1e6f) } catch (_: Throwable) { null }
     }
 
     /** Gives up on our output for this run; the player then uses libVLC's own output. */
