@@ -517,7 +517,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         // volume rule (Auto loudness). The player's label shows only what its own slider gives at this volume.
         val shown = if (on) autoLoudness(s.loudDb) else 0f
         if (shown != s.loudEffDb) _state.value = _state.value.copy(loudEffDb = shown)
-        val l = autoLoudness(((if (on) s.loudDb else 0f) + deviceLoudNow()).coerceIn(0f, 15f)); val t = if (on) s.trebleDb else 0f
+        // Independent of the slider (11:45): the device's part is added in full — the sum may go past the slider's 15.
+        val l = autoLoudness(((if (on) s.loudDb else 0f) + deviceLoudNow()).coerceIn(0f, 30f)); val t = if (on) s.trebleDb else 0f
         val bands = if (l == 0f) FloatArray(10) else toneGains(l, 0f)
         val set = store.current.settings
         NativeAudio.trebleBand(set.trebleType == "peak", set.trebleHz.toFloat(), if (set.trebleType == "peak") set.trebleQ else set.trebleSlope)
@@ -525,7 +526,8 @@ class PlayerController(private val context: Context, private val store: Store) {
         // Treble in the sound only — the players' Treble slider keeps showing the item's own value. Applied to every
         // item played on that device (songs, radio, videos); the sum stays within the slider's ±5.
         val dev = store.current.deviceTreble[currentOutputName] ?: 0f
-        val total = (t + dev).coerceIn(-5f, 5f)
+        // Independent of the slider (11:45): the device's part is added in full — the sum may go past the slider's ±5.
+        val total = (t + dev).coerceIn(-10f, 10f)
         return bands + floatArrayOf(total * set.trebleMaxDb / 5f * trebleFlatten())
     }
 
@@ -537,7 +539,7 @@ class PlayerController(private val context: Context, private val store: Store) {
     private fun deviceLoudComp(): Float {
         val d = deviceLoudNow(); if (d == 0f) return 0f
         val own = if (store.current.settings.toneSliders) _state.value.loudDb else 0f
-        return toneLevelDrop((own + d).coerceIn(0f, 15f), 0f) - toneLevelDrop(own, 0f)
+        return toneLevelDrop((own + d).coerceIn(0f, 30f), 0f) - toneLevelDrop(own, 0f)
     }
 
     /** Band gains (10 bands, all ≤ 0 dB) for loudness [l] and treble [t]. */
