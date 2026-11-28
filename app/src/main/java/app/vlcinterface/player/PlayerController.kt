@@ -147,6 +147,9 @@ class PlayerController(private val context: Context, private val store: Store) {
     private var offsetsApplied = false
     private var currentPfd: android.os.ParcelFileDescriptor? = null
     private var triedBridge = false
+    /** Network hiccup retries of the item playing (request 35): reopened at its place, silently, before any skip. */
+    private var netRetries = 0
+    private var netRetryUri: String? = null
     /** Phone file: retried once the other way (path ↔ file handle) after libVLC couldn't open it. */
     private var triedOtherWay = false
     private var phoneByPath = true
@@ -2187,6 +2190,7 @@ class PlayerController(private val context: Context, private val store: Store) {
         if (wanted != styleInUse || rgSignature() != rgInUse) recreateEngine(wanted)
         setCredentials(item.user, item.password)
         triedBridge = false
+        if (netRetryUri != item.uri) netRetries = 0
         triedOtherWay = false; phoneByPath = true
         val oldPfd = currentPfd
         currentPfd = null
@@ -2231,10 +2235,14 @@ class PlayerController(private val context: Context, private val store: Store) {
         // is skipped, instead of the player waiting on it.
         probeJob?.cancel()
         if (s0.queue.size > 1 && !item.isRadio) probeJob = bg.launch {
-            val ok = kotlinx.coroutines.withTimeoutOrNull(2_000) {
+            val ok = kotlinx.coroutines.withTimeoutOrNull(6_000) {
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { reachable(item) }
             }
             if (ok == true) return@launch
+            // 2026-11-28 08:35 (request 35): a slow answer is no reason to skip — a busy NAS answers late, and with the
+            // 8 s network buffer a song doesn't start within 2 s anyway. Only a file that is surely not there is skipped;
+            // a slow one is left to play (a real read failure is retried silently, then skipped, by the error handling).
+            if (ok == null) { ServerLog.log("player", "skip", item.uri.substringBefore("://"), "", true, "${item.title}: the server answers slowly — not skipped", item.uri); return@launch }
             if (_state.value.item !== item || endHandled || stopping) return@launch
             if (lastTick > 0 && _state.value.isPlaying) return@launch          // it started meanwhile: keep it
             ServerLog.log("player", "skip", item.uri.substringBefore("://"), "", false,
@@ -3044,6 +3052,16 @@ class PlayerController(private val context: Context, private val store: Store) {
                         mp.setMedia(m); m.release(); mp.play()
                         main.postDelayed({ stopping = false }, 500)
                     }
+                } else if (item != null && !item.isRadio && (item.uri.startsWith("smb://") || item.uri.startsWith("http")) && netRetries < 2 && !stopping) {
+                    // 2026-11-28 request 35: a network hiccup (NAS busy, Wi-Fi blip) is retried silently — the item is
+                    // reopened at its place after 2 s, then 5 s — before it counts as failed and the queue moves on.
+                    netRetries++; netRetryUri = item.uri
+                    val at = (_state.value.time).coerceAtLeast(0)
+                    ServerLog.log(item.uri, "play", item.uri.substringBefore("://").uppercase(), item.user, false,
+                        "${item.title}: read failed — trying again at ${at / 1000} s ($netRetries of 2, nothing shown)")
+                    main.postDelayed({
+                        if (_state.value.item?.uri == item.uri && !endHandled) startItem(_state.value.index, at)
+                    }, if (netRetries == 1) 2_000L else 5_000L)
                 } else if (item != null && item.uri.startsWith("content://") && !triedOtherWay) {
                     // Phone / SD card file libVLC couldn't open: once more the other way (path ↔ file handle).
                     triedOtherWay = true

@@ -49,7 +49,7 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
 - Done: 1–13, 15–19, 21, 23–26, 28 (1.93.0); 14, 27, 29–39 (1.94.0).
 - 27: mock-up approved 01:48 — done for the next release (after 1.93.0).
 - 14: decided 01:56 — support Android 10 (request 29).
-- 20, 22: Android doesn't let normal apps pick the active Bluetooth (A2DP) device or disconnect one; explained.
+- 20, 22: dropped by the user (2026-11-28 08:35) — Android doesn't let normal apps do them.
 
 29. **2026-11-28 01:56 — Install on Android 10 (for request 14, the Huawei):** lower the minimum Android version from 12 to 10 (minSdk 31 → 29) and guard the Android 12+ features so they're skipped or fall back on older phones: exact-alarm permission (not needed there), Bluetooth "Nearby devices" permission, Bluetooth LE output types, crash notices from Android's exit records (the app's own crash log stays), ReplayGain writes to phone files without createWriteRequest, full-screen bars and vibration with the older calls. Android 12+ phones unchanged. To confirm on the phone: Settings → About phone → Android version (10 expected; HarmonyOS counts as Android 10 level).
     - (02:29) Huawei compatibility too, beyond the Android version: the app uses no Google Play services (checked), so it runs on Huawei phones without them; Huawei's own battery manager (Phone Manager → App launch: "Manage manually", allow auto-launch / secondary launch / run in background) explained and linked from the battery / alarm permission prompts, so playback, alarms and indexing aren't stopped in the background; Huawei's notification and lock-screen settings linked the same way; HarmonyOS checked as Android 10 level; the install itself tested for the "problem parsing the package" message (Android version, 64-bit, signature).
@@ -88,3 +88,6 @@ Saved one by one as they come, to be done when asked ("comment" / go ahead).
     - A setting in Playback & gestures, "Touch guard" (Off … 300 ms, default 120 ms), with a helper; found by the Settings search; exported.
 40. **2026-11-28 02:50 — Helpers on their own settings page:** moved from the alarm settings page to a new sub-page of the main Settings page ("Helpers"). Done for the next release.
 41. **2026-11-28 02:55 — Identify by sound:** radio via AudD (12 s clip, user's token), songs via AcoustID (Chromaprint fingerprint, user's key); text lookup kept as the fallback. Done in 1.95.0.
+
+## Status — 2026-11-28 08:35
+- 20, 22 dropped. 35 finished for 1.96.0 (silent retry, no skip on a slow answer); left for later: closing the old network item off the screen's thread when switching items.
