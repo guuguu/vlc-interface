@@ -517,7 +517,12 @@ class PlayerController(private val context: Context, private val store: Store) {
         val bands = if (l == 0f) FloatArray(10) else toneGains(l, 0f)
         val set = store.current.settings
         NativeAudio.trebleBand(set.trebleType == "peak", set.trebleHz.toFloat(), if (set.trebleType == "peak") set.trebleQ else set.trebleSlope)
-        return bands + floatArrayOf(t * set.trebleMaxDb / 5f * trebleFlatten())
+        // The output device's own Treble (Settings → Audio → Per output device, 11:38): added to the song's / station's
+        // Treble in the sound only — the players' Treble slider keeps showing the item's own value. Applied to every
+        // item played on that device (songs, radio, videos); the sum stays within the slider's ±5.
+        val dev = store.current.deviceTreble[currentOutputName] ?: 0f
+        val total = (t + dev).coerceIn(-5f, 5f)
+        return bands + floatArrayOf(total * set.trebleMaxDb / 5f * trebleFlatten())
     }
 
     /** Band gains (10 bands, all ≤ 0 dB) for loudness [l] and treble [t]. */

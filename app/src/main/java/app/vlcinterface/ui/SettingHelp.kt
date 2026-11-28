@@ -56,6 +56,9 @@ object SettingHelp {
         "Songs without ReplayGain" to "The level a song is played at when it has no ReplayGain at all — and every radio station (a stream never has ReplayGain; nothing is read, scanned or written for it) — from −12 dB to 0 dB in half-dB steps (default −7 dB). It's added to the preamps and the player's Preamp slider as they are.\n\n" +
             "It lasts until the song's ReplayGain is measured (the automatic scan does the playing song first); then its own value is put on, once. One setting for every song with no ReplayGain tag: phone, home network and the home NAS over the VPN alike (over the VPN songs aren't measured, so they keep this level for the whole song).\n\n" +
             "0 dB plays such songs at the same level as the rest; lower values keep loud untagged songs from jumping out. A change applies at once to a song playing without ReplayGain.",
+        "Treble per device" to "Extra Treble for this output device only, on the players' Treble scale (−5 … +5, in half steps; 0 = none): e.g. a little more for dull headphones, less for bright speakers.\n\n" +
+            "It's added to the sound whenever this device plays — songs, radio and videos — on top of the song's or station's own Treble, with the Treble band's filter (Settings → Audio → Treble band). The players' Treble slider still shows only the song's or station's own value; the two together stay within ±5.\n\n" +
+            "App's own sound output only (libVLC's output doesn't apply it). Exported with \"Per output device sound\".",
         "Prevent clipping" to "Loud songs boosted by Preamp or ReplayGain can go beyond the maximum and distort ('clip'). This lowers the gain just enough that the song's loudest peak stays clean.\n\n" +
             "It uses the peak values stored in the song's tags (written by ReplayGain scans). Songs without peak tags play as they are.\n\n" +
             "No battery or data cost. Default: on.",

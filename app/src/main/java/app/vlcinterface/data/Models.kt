@@ -558,6 +558,8 @@ data class AppState(
     val deviceBalance: Map<String, Int> = emptyMap(),
     /** output device name -> phone volume % above which Auto loudness starts flattening (default 50) */
     val deviceLoudFrom: Map<String, Int> = emptyMap(),
+    /** output device name -> extra Treble (−5 … +5, the players' Treble scale), added to the sound only (2026-11-28 11:38) */
+    val deviceTreble: Map<String, Float> = emptyMap(),
 )
 
 fun JSONArray?.strings(): List<String> {

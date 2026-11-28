@@ -82,7 +82,7 @@ class Store(private val context: Context) {
             st.put("settings", o)
         }
         if (ExportCat.SETTINGS in c) st.put("lastOutput", full.get("lastOutput"))
-        if (ExportCat.DEVICES in c) listOf("devicePreamp", "deviceBalance", "deviceLoudFrom").forEach { st.put(it, full.get(it)) }
+        if (ExportCat.DEVICES in c) listOf("devicePreamp", "deviceBalance", "deviceLoudFrom", "deviceTreble").forEach { if (full.has(it)) st.put(it, full.get(it)) }
         val zones = buildSet { if (ExportCat.NAS in c) add(Zone.LAN); if (ExportCat.INTERNET in c) add(Zone.INTERNET) }
         if (zones.isNotEmpty()) st.put("sources", JSONArray(current.sources.filter { it.zone in zones }.map { it.toJson(transform) }))
         if (ExportCat.RADIO in c) st.put("stations", full.get("stations"))
@@ -175,6 +175,7 @@ class Store(private val context: Context) {
                 devicePreamp = if (replace) incoming.devicePreamp else incoming.devicePreamp + mine.devicePreamp,
                 deviceBalance = if (replace) incoming.deviceBalance else incoming.deviceBalance + mine.deviceBalance,
                 deviceLoudFrom = if (replace) incoming.deviceLoudFrom else incoming.deviceLoudFrom + mine.deviceLoudFrom,
+                deviceTreble = if (replace) incoming.deviceTreble else incoming.deviceTreble + mine.deviceTreble,
             )
             val zones = buildSet { if (ExportCat.NAS in c) add(Zone.LAN); if (ExportCat.INTERNET in c) add(Zone.INTERNET) }
             if (zones.isNotEmpty() && stJ.has("sources")) {
@@ -236,6 +237,7 @@ class Store(private val context: Context) {
             .put("devicePreamp", JSONObject().also { o -> s.devicePreamp.forEach { (k, v) -> o.put(k, v.toDouble()) } })
             .put("deviceBalance", JSONObject().also { o -> s.deviceBalance.forEach { (k, v) -> o.put(k, v) } })
             .put("deviceLoudFrom", JSONObject().also { o -> s.deviceLoudFrom.forEach { (k, v) -> o.put(k, v) } })
+            .put("deviceTreble", JSONObject().also { o -> s.deviceTreble.forEach { (k, v) -> o.put(k, v.toDouble()) } })
 
         fun fromJson(o: JSONObject, pw: (String) -> String): AppState {
             fun arr(name: String) = o.optJSONArray(name) ?: JSONArray()
@@ -256,6 +258,7 @@ class Store(private val context: Context) {
                 devicePreamp = o.optJSONObject("devicePreamp").let { d -> if (d == null) emptyMap() else d.keys().asSequence().associateWith { d.optDouble(it, 0.0).toFloat() } },
                 deviceBalance = o.optJSONObject("deviceBalance").let { d -> if (d == null) emptyMap() else d.keys().asSequence().associateWith { d.optInt(it, 0) } },
                 deviceLoudFrom = o.optJSONObject("deviceLoudFrom").let { d -> if (d == null) emptyMap() else d.keys().asSequence().associateWith { d.optInt(it, 50).coerceIn(0, 100) } },
+                deviceTreble = o.optJSONObject("deviceTreble").let { d -> if (d == null) emptyMap() else d.keys().asSequence().associateWith { d.optDouble(it, 0.0).toFloat().coerceIn(-5f, 5f) } },
             )
         }
     }

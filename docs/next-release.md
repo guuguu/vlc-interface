@@ -1704,3 +1704,8 @@
 - The same delay now applies to every settings page and sub-page: Settings and its pages, Sound settings, alarm settings and each alarm's page, Clock aspect, Visualisation, Logs, Export / import, Find media folders. A touch let go sooner than the delay doesn't press any button, switch, choice or link there; long presses, scrolling and sliders work as before.
 - The players keep their guard as before (the same delay, plus the same button ignored again within 0.4 s). Pop-up windows keep plain taps (a guard there made buttons seem not to work, 08:27).
 - Helper updated; the Settings search finds it on the main page.
+
+## Treble per output device (requested 2026-11-28 11:34 / 11:38, mock-up shown)
+- Settings → Audio → Per output device: each device found (and each with saved values) gets a Treble row, −5 … +5 in half steps (the players' Treble scale), default 0, between Preamp and Loudness.
+- Kept only there: it's added to the sound whenever that device plays (songs, radio, videos), on top of the song's / station's own Treble, with the Treble band's filter; the two together stay within ±5. The players' Treble slider is not moved by it — it shows 0 or the song's / station's own value only.
+- Switches by itself when the sound moves to another device. App's own sound output only. Helper on a long press; exported with "Per output device sound".
